@@ -1,0 +1,30 @@
+{
+  "name": "Codifai Monorepo",
+  "image": "mcr.microsoft.com/devcontainers/base:jammy",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "none",
+      "installGradle": false,
+      "installMaven": false
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "google.geminicodeassist",
+        "Catppuccin.catppuccin-vsc-icons",
+        "catppuccin.catppuccin-vsc",
+        "GitHub.github-vscode-theme"
+        // Add extension IDs here to ensure they are installed when the container is rebuilt
+        // "publisher.extension-name"
+      ],
+      "settings": {
+        "java.jdt.ls.java.home": "/usr/local/sdkman/candidates/java/current",
+        "workbench.colorTheme": "GitHub Dark",
+        "workbench.iconTheme": "catppuccin-mocha"
+      }
+    }
+  },
+  "postCreateCommand": "bash -c 'source /usr/local/sdkman/bin/sdkman-init.sh && sdk install java 25-tem && sdk default java 25-tem'"
+}
