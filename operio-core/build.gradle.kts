@@ -7,3 +7,7 @@
 plugins {
     id("buildlogic.java-library-conventions")
 }
+
+dependencies {
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+}

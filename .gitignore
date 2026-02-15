@@ -31,3 +31,5 @@ replay_pid*
 
 # Ignore Kotlin plugin data
 .kotlin
+
+**/bin/
