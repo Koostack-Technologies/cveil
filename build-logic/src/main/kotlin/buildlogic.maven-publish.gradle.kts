@@ -25,9 +25,9 @@ plugins.withId("java") {
                     }
                     developers {
                         developer {
-                            id.set("mariahgordon")
-                            name.set("Mariah Gordon")
-                            email.set("mariahgordon@koostacktech.com")
+                            id.set("koocodes")
+                            name.set("Koostack Technologies")
+                            email.set("koostacktech@gmail.com")
                         }
                     }
                     scm {

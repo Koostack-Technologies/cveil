@@ -1,4 +1,4 @@
-package com.operio.annotations;
+package com.koostack.operio.core.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

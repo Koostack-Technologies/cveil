@@ -1,6 +1,6 @@
-package com.koostack.operio.aspects;
+package com.koostack.operio.spring.aspect;
 
-import com.operio.annotations.ConsentRequired;
+import com.koostack.operio.core.annotation.ConsentRequired;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;

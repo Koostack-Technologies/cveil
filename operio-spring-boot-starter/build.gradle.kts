@@ -5,10 +5,14 @@
  */
 
 plugins {
-    id("buildlogic.java-application-conventions")
+    id("buildlogic.java-library-conventions")
+    id("org.springframework.boot") version "4.0.2"
+    // Still necessary for property overrides and better BOM handling
+    id("io.spring.dependency-management") version "1.1.7"
 }
 
 dependencies {
     implementation("org.apache.commons:commons-text")
-
+    implementation("org.springframework.boot:spring-boot-starter-aspectj")
+    implementation(project(":operio-core"))
 }

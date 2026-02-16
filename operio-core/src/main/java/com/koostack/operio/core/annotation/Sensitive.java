@@ -1,4 +1,4 @@
-package com.operio.annotations;
+package com.koostack.operio.core.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -6,12 +6,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Target({ElementType.METHOD, ElementType.FIELD})
 public @interface Sensitive {
-    Type value();
-
-    enum Type {
-    PII,
-    PARTIAL
-    }
+    String category();
+    
+    // Optional provider name to target a specific ConsentService
+    String provider() default "";
 }
