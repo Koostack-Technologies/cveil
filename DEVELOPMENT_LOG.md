@@ -1,0 +1,1 @@
+* 2/14/26 10:02 PM started development on operio in personal github account on personal hardware. Initial project setup started.

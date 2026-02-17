@@ -8,6 +8,9 @@
       "installMaven": false
     }
   },
+  "remoteEnv": {
+    "GOOGLE_CLOUD_PROJECT": null
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -22,7 +25,10 @@
       "settings": {
         "java.jdt.ls.java.home": "/usr/local/sdkman/candidates/java/current",
         "workbench.colorTheme": "GitHub Dark",
-        "workbench.iconTheme": "catppuccin-mocha"
+        "workbench.iconTheme": "catppuccin-mocha",
+        "geminicodeassist.project": "",
+        "java.import.gradle.wrapper.enabled": true,
+        "java.import.gradle.version": "9.3.1"
       }
     }
   },
