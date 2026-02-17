@@ -8,8 +8,14 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD, ElementType.FIELD})
 public @interface Sensitive {
-    String category();
-    
-    // Optional provider name to target a specific ConsentService
-    String provider() default "";
+   /** The category of data (e.g., "PII", "SSN", "HEALTH"). Defaults to PII. */
+    Type value() default Type.PII;
+    String fieldName() default "";
+    String purpose() default "";
+
+    static enum Type {
+        PII,
+        PARTIAL,
+        FULL
+    }
 }
