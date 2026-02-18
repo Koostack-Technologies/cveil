@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.consent.allow.all;
 
 import com.koostack.operio.core.service.SensitiveFieldResolver;
 
-public class ConsentAllowAll implements ConsentService {
+public class AllowAllConsentService implements ConsentService {
 
     @Override
     public String getName() {
