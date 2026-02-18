@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html","k":"18"},{"l":"com.koostack.operio.core.annotation"},{"l":"com.koostack.operio.core.service"}];updateSearchResults();
