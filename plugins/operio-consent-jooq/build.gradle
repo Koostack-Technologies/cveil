@@ -1,0 +1,14 @@
+plugins {
+    id("buildlogic.java-library-conventions")
+    id("buildlogic.maven-publish")
+}
+
+dependencies {
+    // Internal Project Dependency
+    api project(':operio-core')
+    // jOOQ Open Source Edition
+    // Note: Version is often managed in the root build.gradle or platform
+    implementation 'org.jooq:jooq:3.19.5' 
+    // Standard JDBC/Persistence API
+    implementation 'jakarta.persistence:jakarta.persistence-api:3.1.0'
+}

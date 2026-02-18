@@ -8,6 +8,7 @@ import com.koostack.operio.core.service.AuditLogger;
 import com.koostack.operio.core.service.ConsentService;
 import com.koostack.operio.core.service.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
+import com.koostack.operio.core.service.SensitiveFieldResolver;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -19,12 +20,15 @@ public class Operio {
     private final IdentityResolver identityResolver;
     private final AuditLogger auditLogger;
     private final MaskingStrategy maskingStrategy;
+    private final SensitiveFieldResolver sensitiveFieldResolver;
+
 
     public Operio(Builder builder) {
         this.consentService = builder.consentService;
         this.identityResolver = builder.identityResolver;
         this.auditLogger = builder.auditLogger;
         this.maskingStrategy = builder.maskingStrategy;
+        this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
     }
 
     public static Builder builder() {
@@ -37,9 +41,11 @@ public class Operio {
         private IdentityResolver identityResolver;
         private AuditLogger auditLogger;
         private MaskingStrategy maskingStrategy;
+        private SensitiveFieldResolver sensitiveFieldResolver;
+
 
         public Operio build() {
-            return new Operio(consentService, identityResolver, auditLogger, maskingStrategy);
+            return new Operio(consentService, identityResolver, auditLogger, maskingStrategy, sensitiveFieldResolver);
         }
         
         public Builder withConsentProvider(String name) {
@@ -61,6 +67,10 @@ public class Operio {
             this.maskingStrategy = PluginRegistry.resolve(MaskingStrategy.class, name);
             return this;
         }
+        public Builder withSensitiveFieldResolver(String name) {
+            this.sensitiveFieldResolver = PluginRegistry.resolve(SensitiveFieldResolver.class, name);
+            return this;
+        }
     }
 
     /**
@@ -68,7 +78,7 @@ public class Operio {
      */
     public Object access(Object rawData) {
         var identity = identityResolver.resolve();
-        var scopes = maskingStrategy.extractConsentScopes(rawData);
+        var scopes = sensitiveFieldResolver.resolveScopes(rawData);
         var response = consentService.evaluateConsent(identity.user(), scopes);
         for (ConsentScope scope : response.granted()) {
             auditLogger.logAccessGranted(identity.user(), scope);

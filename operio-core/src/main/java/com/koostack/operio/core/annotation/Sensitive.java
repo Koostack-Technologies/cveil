@@ -9,13 +9,8 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD, ElementType.FIELD})
 public @interface Sensitive {
    /** The category of data (e.g., "PII", "SSN", "HEALTH"). Defaults to PII. */
-    Type value() default Type.PII;
+    String category() default "";
     String fieldName() default "";
     String purpose() default "";
 
-    static enum Type {
-        PII,
-        PARTIAL,
-        FULL
-    }
 }
