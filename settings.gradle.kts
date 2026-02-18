@@ -18,3 +18,12 @@ plugins {
 
 rootProject.name = "operio"
 include("operio-spring-boot-starter", "operio-core")
+
+include("plugins:operio-audit-slf4j")
+include("plugins:operio-consent-jooq")
+include("plugins:operio-identity-http")
+include("plugins:operio-identity-spring-security")
+include("plugins:operio-masking-jackson")
+include("plugins:operio-resolver-sensitive-annotation")
+include("plugins:operio-audit-noop")
+include("plugins:operio-consent-allow-all")

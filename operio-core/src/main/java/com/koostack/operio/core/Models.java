@@ -8,12 +8,12 @@ public interface Models {
 
     public record IdentityContext(String user, String token) {}
 
-    public record ConsentScope(String fieldName, String purposeName) {
+    public record ConsentScope(String category, String fieldName, String purposeName) {
     /**
      * Factory method for cleaner syntax in the Aspect logic.
      */
-    public static ConsentScope to(String fieldName, String forPurpose) {
-        return new ConsentScope(fieldName, forPurpose);
+    public static ConsentScope to(String category,String fieldName, String forPurpose) {
+        return new ConsentScope(category, fieldName, forPurpose);
     }
 
 }
