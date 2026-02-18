@@ -1,7 +1,25 @@
 {
-    "folders": [
-        {
-            "path": "."
-        }
-    ]
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "operio-core"
+		},
+		{
+			"path": "operio-spring-boot-starter"
+		},
+		{
+			"path": "build-logic"
+		}
+	],
+	"settings": {
+		"java.compile.nullAnalysis.mode": "automatic",
+		"java.configuration.updateBuildConfiguration": "automatic",
+		"files.exclude": {
+			"operio-core": true,
+			"operio-spring-boot-starter": true,
+			"build-logic": true
+		}
+	}
 }
