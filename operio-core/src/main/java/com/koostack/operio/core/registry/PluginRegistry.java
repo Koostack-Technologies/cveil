@@ -1,11 +1,15 @@
 package com.koostack.operio.core.registry;
 
+import com.koostack.operio.core.spi.Configurable;
 import com.koostack.operio.core.spi.NamedPlugin;
+import com.koostack.operio.core.spi.Plugin;
+import com.koostack.operio.core.spi.PluginConfig;
 import com.koostack.operio.core.spi.Prioritized;
 
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class PluginRegistry {
@@ -20,10 +24,10 @@ public class PluginRegistry {
      * @return The resolved plugin instance
      * @throws IllegalStateException if no implementations are found
      */
-    public static <T extends NamedPlugin & Prioritized> T resolve(Class<T> serviceClass, String identifier) {
+    private static <T extends NamedPlugin & Prioritized> T loadPlugin(Class<T> serviceClass, String identifier) {
         // Load all available implementations via ServiceLoader
         ServiceLoader<T> loader = ServiceLoader.load(serviceClass);
-        
+
         // Convert to a List/Stream for multiple passes
         var implementations = loader.stream()
                 .map(ServiceLoader.Provider::get)
@@ -43,10 +47,33 @@ public class PluginRegistry {
             return exactMatch.get();
         }
 
+
         // 2. Tug-of-War Side B: Priority Fallback
         // If the requested name wasn't found, we return the "strongest" plugin available.
         return implementations.stream()
                 .max(Comparator.comparingInt(Prioritized::getPriority))
                 .orElseThrow(() -> new IllegalStateException("Failed to resolve valid priority fallback."));
     }
+
+        public static <T extends Plugin<C>, C extends PluginConfig> T resolve(
+                Class<T> serviceClass,
+                String identifier,
+                C config) {
+                    
+                    T plugin = loadPlugin(serviceClass, identifier);
+        
+                    // If this plugin needs configuration, inject it
+                    if (plugin instanceof Configurable<C> configurable) {
+                        configurable.configure(config);
+                    }
+
+            return plugin;
+        }
+        
+        public static <T extends NamedPlugin & Prioritized> T resolve(Class<T> serviceClass,
+        String identifier) {
+            return loadPlugin(serviceClass, identifier);
+        }
+
+
 }
