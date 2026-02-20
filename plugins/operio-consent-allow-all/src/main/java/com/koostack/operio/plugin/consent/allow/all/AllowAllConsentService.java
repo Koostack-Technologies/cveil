@@ -1,8 +1,14 @@
 package com.koostack.operio.plugin.consent.allow.all;
 
+import java.util.Collections;
+import java.util.Set;
+
+import com.koostack.operio.core.Models.ConsentResponse;
+import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.service.ConsentService;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
 
-public class AllowAllConsentService implements ConsentService {
+public class AllowAllConsentService implements ConsentService<AllowAllConsentServiceConfig> {
 
     @Override
     public String getName() {
@@ -29,4 +35,14 @@ public class AllowAllConsentService implements ConsentService {
     public void revokeConsent(String subject, ConsentScope accessRequest) {
         // No-op: Revocation isn't supported in a purely permissive implementation
     }
+
+	@Override
+	public Class<AllowAllConsentServiceConfig> getConfigurationType() {
+	    return AllowAllConsentServiceConfig.class;
+	}
+
+	@Override
+	public void configure(AllowAllConsentServiceConfig config) {
+		// Intentionally left blank
+	}
 }

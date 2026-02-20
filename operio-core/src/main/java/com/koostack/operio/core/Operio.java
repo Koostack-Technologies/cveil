@@ -16,11 +16,11 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Operio {
 
-    private final ConsentService consentService;
-    private final IdentityResolver identityResolver;
+    private final ConsentService<?> consentService;
+    private final IdentityResolver<?> identityResolver;
     private final AuditLogger auditLogger;
-    private final MaskingStrategy maskingStrategy;
-    private final SensitiveFieldResolver sensitiveFieldResolver;
+    private final MaskingStrategy<?> maskingStrategy;
+    private final SensitiveFieldResolver<?> sensitiveFieldResolver;
 
 
     public Operio(Builder builder) {
@@ -37,11 +37,11 @@ public class Operio {
 
     public static class Builder {
         // We override the Lombok methods to accept Strings
-        private ConsentService consentService;
-        private IdentityResolver identityResolver;
+        private ConsentService<?> consentService;
+        private IdentityResolver<?> identityResolver;
         private AuditLogger auditLogger;
-        private MaskingStrategy maskingStrategy;
-        private SensitiveFieldResolver sensitiveFieldResolver;
+        private MaskingStrategy<?> maskingStrategy;
+        private SensitiveFieldResolver<?> sensitiveFieldResolver;
 
 
         public Operio build() {

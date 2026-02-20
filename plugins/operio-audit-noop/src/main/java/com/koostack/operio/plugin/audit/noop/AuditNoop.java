@@ -2,10 +2,8 @@ package com.koostack.operio.plugin.audit.noop;
 
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.service.AuditLogger;
-import com.koostack.operio.core.service.SensitiveFieldResolver;
-import com.koostack.operio.core.spi.NamedPlugin;
 
-public class AuditNoop implements NamedPlugin, Pr {
+public class AuditNoop implements AuditLogger<AuditNoopConfig> {
 
     @Override
     public String getName() {
@@ -18,7 +16,11 @@ public class AuditNoop implements NamedPlugin, Pr {
     }
 
     @Override
-    public void logAccessDenied(String user, ConsentScope scope, String reason) {
+    public void logAccessDenied(
+        String user,
+        ConsentScope scope,
+        String reason
+    ) {
         // Intentionally left blank
     }
 
@@ -27,15 +29,18 @@ public class AuditNoop implements NamedPlugin, Pr {
         // Intentionally left blank
     }
 
+    @Override
+    public int getPriority() {
+        return 0;
+    }
+
 	@Override
-	public Class getConfigurationType() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'getConfigurationType'");
+	public Class<AuditNoopConfig> getConfigurationType() {
+	    return AuditNoopConfig.class;
 	}
 
 	@Override
-	public void configure(Object config) {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException("Unimplemented method 'configure'");
+	public void configure(AuditNoopConfig config) {
+	    // Intentionally left blank
 	}
 }

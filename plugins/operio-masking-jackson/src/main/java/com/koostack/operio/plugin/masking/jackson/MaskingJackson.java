@@ -1,5 +1,16 @@
 package com.koostack.operio.plugin.masking.jackson;
 
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
 
 public class MaskingJackson implements MaskingStrategy {
