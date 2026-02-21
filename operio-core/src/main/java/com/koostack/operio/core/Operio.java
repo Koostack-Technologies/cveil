@@ -5,7 +5,7 @@ import java.util.HashSet;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.registry.PluginRegistry;
 import com.koostack.operio.core.service.AuditLogger;
-import com.koostack.operio.core.service.ConsentService;
+import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.service.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
@@ -16,7 +16,7 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Operio {
 
-    private final ConsentService<?> consentService;
+    private final ConsentDecisionService<?> consentService;
     private final IdentityResolver<?> identityResolver;
     private final AuditLogger auditLogger;
     private final MaskingStrategy<?> maskingStrategy;
@@ -37,7 +37,7 @@ public class Operio {
 
     public static class Builder {
         // We override the Lombok methods to accept Strings
-        private ConsentService<?> consentService;
+        private ConsentDecisionService<?> consentService;
         private IdentityResolver<?> identityResolver;
         private AuditLogger auditLogger;
         private MaskingStrategy<?> maskingStrategy;
@@ -49,7 +49,7 @@ public class Operio {
         }
         
         public Builder withConsentProvider(String name) {
-            this.consentService = PluginRegistry.resolve(ConsentService.class, name);
+            this.consentService = PluginRegistry.resolve(ConsentDecisionService.class, name);
             return this;
         }
 

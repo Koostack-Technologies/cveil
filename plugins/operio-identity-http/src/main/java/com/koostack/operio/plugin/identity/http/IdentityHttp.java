@@ -1,8 +1,12 @@
 package com.koostack.operio.plugin.identity.http;
 
-import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.service.IdentityResolver;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
-public class IdentityHttp implements IdentityResolver {
+public class IdentityHttp implements IdentityResolver<IdentityHttpConfig> {
 
     private String userHeader = "X-User-Id";
     private String tokenHeader = "Authorization";
@@ -11,7 +15,7 @@ public class IdentityHttp implements IdentityResolver {
         // Fallback to system properties if instantiated purely via SPI without builder access
         String sysUser = System.getProperty("operio.header.user");
         if (sysUser != null) this.userHeader = sysUser;
-        
+
         String sysToken = System.getProperty("operio.header.token");
         if (sysToken != null) this.tokenHeader = sysToken;
     }
@@ -32,8 +36,9 @@ public class IdentityHttp implements IdentityResolver {
 
     @Override
     public IdentityContext resolve() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        
+        ServletRequestAttributes attributes =
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
         // If we aren't in an active web request thread, default to anonymous
         if (attributes == null) {
             return new IdentityContext("anonymous", null);
@@ -53,5 +58,15 @@ public class IdentityHttp implements IdentityResolver {
         }
 
         return new IdentityContext(user, token);
+    }
+
+    @Override
+    public Class<IdentityHttpConfig> getConfigurationType() {
+        return IdentityHttpConfig.class;
+    }
+
+    @Override
+    public void configure(IdentityHttpConfig config) {
+        // Intentionally left blank
     }
 }

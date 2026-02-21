@@ -2,7 +2,7 @@ package com.koostack.operio.spring.aspect;
 
 import com.koostack.operio.core.annotation.Sensitive;
 import com.koostack.operio.core.registry.PluginRegistry;
-import com.koostack.operio.core.service.ConsentService;
+import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.service.MaskingStrategy;
 
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -19,7 +19,7 @@ import java.util.Optional;
 public class SensitiveAspect {
 
     private final MaskingStrategy maskingService;
-    private final ConsentService consentService;
+    private final ConsentDecisionService consentService;
 
     @Around("@annotation(sensitive)")
     public Object sensitive(ProceedingJoinPoint joinPoint, Sensitive sensitive) throws Throwable {

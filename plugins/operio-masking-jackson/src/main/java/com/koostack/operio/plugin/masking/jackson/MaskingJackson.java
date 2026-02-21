@@ -1,9 +1,5 @@
 package com.koostack.operio.plugin.masking.jackson;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -11,9 +7,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.service.MaskingStrategy;
-import com.koostack.operio.core.service.SensitiveFieldResolver;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-public class MaskingJackson implements MaskingStrategy {
+public class MaskingJackson implements MaskingStrategy<MaskingJacksonConfig> {
 
     private final ObjectMapper mapper;
 
@@ -37,21 +36,25 @@ public class MaskingJackson implements MaskingStrategy {
         }
 
         // Extract just the field names we need to mask
-        Set<String> deniedFields = deniedScopes.stream()
-                .map(ConsentScope::fieldName)
-                .collect(Collectors.toSet());
+        Set<String> deniedFields = deniedScopes
+            .stream()
+            .map(ConsentScope::fieldName)
+            .collect(Collectors.toSet());
 
         try {
             // 1. Convert object to a mutable JSON tree
             JsonNode rootNode = mapper.valueToTree(obj);
-            
+
             // 2. Traverse and apply masking
             maskNode(rootNode, deniedFields);
-            
+
             // 3. Convert back to the original object type
             return mapper.treeToValue(rootNode, obj.getClass());
         } catch (Exception e) {
-            throw new RuntimeException("Operio Masking Failure: Unable to mask object via Jackson", e);
+            throw new RuntimeException(
+                "Operio Masking Failure: Unable to mask object via Jackson",
+                e
+            );
         }
     }
 
@@ -59,10 +62,10 @@ public class MaskingJackson implements MaskingStrategy {
         if (node.isObject()) {
             ObjectNode objNode = (ObjectNode) node;
             Iterator<Map.Entry<String, JsonNode>> fields = objNode.fields();
-            
+
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> entry = fields.next();
-                
+
                 if (deniedFields.contains(entry.getKey())) {
                     // TODO: Once AccessLevel is added to ConsentScope, evaluate PARTIAL vs FULL here.
                     // For now, default to FULL redaction.
@@ -78,5 +81,15 @@ public class MaskingJackson implements MaskingStrategy {
                 maskNode(childNode, deniedFields);
             }
         }
+    }
+
+    @Override
+    public Class<MaskingJacksonConfig> getConfigurationType() {
+        return MaskingJacksonConfig.class;
+    }
+
+    @Override
+    public void configure(MaskingJacksonConfig config) {
+        // Intentionally left blank
     }
 }

@@ -1,8 +1,13 @@
 package com.koostack.operio.plugin.identity.spring.security;
 
-import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.service.IdentityResolver;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
-public class IdentitySpringSecurity implements IdentityResolver {
+public class IdentitySpringSecurity
+    implements IdentityResolver<IdentitySpringSecurityConfig>
+{
 
     @Override
     public String getName() {
@@ -11,10 +16,15 @@ public class IdentitySpringSecurity implements IdentityResolver {
 
     @Override
     public IdentityContext resolve() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        
+        Authentication auth =
+            SecurityContextHolder.getContext().getAuthentication();
+
         // Handle unauthenticated states and Spring's default anonymous user
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+        if (
+            auth == null ||
+            !auth.isAuthenticated() ||
+            "anonymousUser".equals(auth.getPrincipal())
+        ) {
             return new IdentityContext("anonymous", null);
         }
 
@@ -27,5 +37,15 @@ public class IdentitySpringSecurity implements IdentityResolver {
         }
 
         return new IdentityContext(username, token);
+    }
+
+    @Override
+    public Class<IdentitySpringSecurityConfig> getConfigurationType() {
+        return IdentitySpringSecurityConfig.class;
+    }
+
+    @Override
+    public void configure(IdentitySpringSecurityConfig config) {
+        // Intentionally left blank
     }
 }
