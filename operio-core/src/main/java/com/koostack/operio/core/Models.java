@@ -3,6 +3,7 @@ package com.koostack.operio.core;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public interface Models {
@@ -11,17 +12,45 @@ public interface Models {
     public record ConsentScope(
         String category,
         String fieldName,
+        String entityName,
         String purposeName
     ) {
         /**
-         * Factory method for cleaner syntax in the Aspect logic.
+         * Backward-compatible factory — creates a scope with no entity
+         * context. Suitable when the caller does not know (or does not
+         * care about) which entity the field belongs to.
          */
         public static ConsentScope to(
             String category,
             String fieldName,
             String forPurpose
         ) {
-            return new ConsentScope(category, fieldName, forPurpose);
+            return new ConsentScope(category, fieldName, null, forPurpose);
+        }
+
+        /**
+         * Full factory including entity name for unambiguous field
+         * identification across entities.
+         *
+         * @param category   the consent category (e.g. {@code "PII"})
+         * @param fieldName  the field name (e.g. {@code "email"})
+         * @param entityName the owning entity (e.g. {@code "User"}), or
+         *                   {@code null} for entity-less fields
+         * @param forPurpose the purpose (e.g. {@code "marketing"})
+         * @return a fully qualified consent scope
+         */
+        public static ConsentScope to(
+            String category,
+            String fieldName,
+            String entityName,
+            String forPurpose
+        ) {
+            return new ConsentScope(
+                category,
+                fieldName,
+                entityName,
+                forPurpose
+            );
         }
     }
 
@@ -117,6 +146,127 @@ public interface Models {
                 denied,
                 reasons,
                 Collections.emptyMap()
+            );
+        }
+    }
+
+    // ===================================================================
+    // Sensitive Discovery models
+    // ===================================================================
+
+    /**
+     * A single sensitive field discovered by a {@link
+     * com.koostack.operio.core.service.SensitiveDiscovery} plugin.
+     *
+     * <p>Captures all the metadata needed to register the field in the
+     * consent admin schema: the field name, its owning entity (optional),
+     * the category it belongs to (optional), a default purpose, and a
+     * human-readable description.
+     *
+     * @param fieldName   the name of the sensitive field (e.g. {@code "email"},
+     *                    {@code "home.street"} for nested paths)
+     * @param entityName  the logical entity that owns this field (e.g.
+     *                    {@code "User"}, {@code "Patient"}), or {@code null}
+     *                    for entity-less fields
+     * @param category    the category this field belongs to (e.g.
+     *                    {@code "PII"}, {@code "HEALTH"}), or {@code null}
+     *                    if no category is declared
+     * @param purpose     the default purpose associated with this field
+     *                    (e.g. {@code "marketing"}), or {@code null} if no
+     *                    purpose is declared
+     * @param description optional human-readable description of the field,
+     *                    or {@code null}
+     */
+    public record DiscoveredField(
+        String fieldName,
+        String entityName,
+        String category,
+        String purpose,
+        String description
+    ) {
+        public DiscoveredField {
+            Objects.requireNonNull(fieldName, "fieldName must not be null");
+            if (fieldName.isBlank()) {
+                throw new IllegalArgumentException(
+                    "fieldName must not be blank"
+                );
+            }
+        }
+
+        /**
+         * Convenience factory for the common case where only the field name,
+         * entity, and category are known.
+         */
+        public static DiscoveredField of(
+            String fieldName,
+            String entityName,
+            String category
+        ) {
+            return new DiscoveredField(
+                fieldName,
+                entityName,
+                category,
+                null,
+                null
+            );
+        }
+
+        /**
+         * Full factory including purpose and description.
+         */
+        public static DiscoveredField of(
+            String fieldName,
+            String entityName,
+            String category,
+            String purpose,
+            String description
+        ) {
+            return new DiscoveredField(
+                fieldName,
+                entityName,
+                category,
+                purpose,
+                description
+            );
+        }
+    }
+
+    /**
+     * The result of a sensitive-field discovery scan.
+     *
+     * <p>Contains the full set of discovered fields (with their entity and
+     * category assignments) and a convenience set of all distinct category
+     * names found during the scan.
+     *
+     * <p>Consumers use this to register the discovered metadata into the
+     * consent admin schema via
+     * {@link com.koostack.operio.core.service.ConsentAdminService} registration
+     * methods.
+     *
+     * @param fields     every discovered sensitive field, possibly empty
+     * @param categories the distinct category names extracted from the
+     *                   discovered fields, possibly empty
+     */
+    public record DiscoveryResult(
+        Set<DiscoveredField> fields,
+        Set<String> categories
+    ) {
+        public DiscoveryResult {
+            fields =
+                fields != null
+                    ? Collections.unmodifiableSet(fields)
+                    : Collections.emptySet();
+            categories =
+                categories != null
+                    ? Collections.unmodifiableSet(categories)
+                    : Collections.emptySet();
+        }
+
+        /** Returns an empty discovery result. */
+        public static DiscoveryResult empty() {
+            return new DiscoveryResult(
+                Collections.emptySet(),
+                Collections.emptySet()
             );
         }
     }

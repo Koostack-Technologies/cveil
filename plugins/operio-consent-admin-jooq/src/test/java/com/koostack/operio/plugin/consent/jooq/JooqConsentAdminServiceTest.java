@@ -4,6 +4,7 @@ import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
@@ -146,10 +147,13 @@ class JooqConsentAdminServiceTest {
         @Test
         @DisplayName("grantConsent does not throw")
         void grantConsentDoesNotThrow() {
+            // Seed reference data now that upsert resolves names → IDs
+            fieldRepo.upsertByNameAndEntity("email", null, null, null);
+
             assertDoesNotThrow(() ->
                 service.grantConsent(
                     "subject-1",
-                    new ConsentScope("PII", "email", "marketing")
+                    ConsentScope.to("PII", "email", "marketing")
                 )
             );
         }
@@ -157,25 +161,30 @@ class JooqConsentAdminServiceTest {
         @Test
         @DisplayName("revokeConsent does not throw")
         void revokeConsentDoesNotThrow() {
+            // Seed reference data now that upsert resolves names → IDs
+            fieldRepo.upsertByNameAndEntity("email", null, null, null);
+
             assertDoesNotThrow(() ->
                 service.revokeConsent(
                     "subject-1",
-                    new ConsentScope("PII", "email", "marketing")
+                    ConsentScope.to("PII", "email", "marketing")
                 )
             );
         }
 
         @Test
-        @DisplayName("unconfigured service throws IllegalStateException")
+        @DisplayName("unconfigured service throws OperioConfigurationException")
         void unconfiguredServiceThrows() {
             JooqConsentAdminService unconfigured =
                 new JooqConsentAdminService();
-            // grantConsent internally calls getDsl() which should throw
-            // because configure() was never called.  The upsert method is
-            // currently stubbed (empty body), so it never reaches getDsl().
-            // This test documents the expected guard-rail for when the
-            // implementation is wired up.
-            assertNotNull(unconfigured);
+            // grantConsent internally calls getDsl() which throws because
+            // configure() was never called.
+            assertThrows(OperioConfigurationException.class, () ->
+                unconfigured.grantConsent(
+                    "subject-1",
+                    ConsentScope.to("PII", "email", "marketing")
+                )
+            );
         }
     }
 

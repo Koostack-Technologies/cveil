@@ -3,6 +3,8 @@ package com.koostack.operio.plugin.consent.redis;
 import com.koostack.operio.core.Models.ConsentResponse;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import java.util.Collections;
@@ -16,52 +18,52 @@ import redis.clients.jedis.JedisPooled;
  * Redis-backed {@link ConsentDecisionService} implementation.
  *
  * <p>Delegates all Redis interaction to {@link ConsentPolicyRedisRepository},
- * which stores consent in a single hash per subject with prefixed keys for
- * field-level ({@code f:}) and category-level ({@code c:}) entries. Evaluation
- * uses a single {@code HGETALL} regardless of batch size — see the repository
- * Javadoc for full schema details.
+ * which stores each consent decision as a standalone Redis string key:
+ * {@code operio:consent:{subject}:{fieldName}:{purposeName}} with value
+ * {@code STATUS|SOURCE} (e.g. {@code GRANTED|FIELD}).
  *
- * <h2>Evaluation Strategy (most-specific-wins)</h2>
- * <p>For each {@link ConsentScope} in the request:
+ * <h2>Evaluation Strategy</h2>
+ * <p>All consent policies — whether originally set at the field level or
+ * materialized from a category — are pre-resolved into individual field
+ * keys at write time. This means the read path is a single {@code MGET}
+ * with zero resolution logic:
  * <ol>
- *   <li>Check direct field-level consent ({@code f:{fieldName}:{purposeName}}).
- *       If a non-expired field-level entry exists ({@code GRANTED} or
- *       {@code REVOKED}), it is the effective status — field-level is the most
- *       specific and always takes precedence over category-level.</li>
- *   <li>Otherwise fall back to category-level consent
- *       ({@code c:{category}:{purposeName}}). If a non-expired category-level
- *       entry exists, it is the effective status.</li>
- *   <li>If neither level has a non-expired record, the scope is denied
- *       (effective status is {@code null}).</li>
+ *   <li>Build one Redis key per requested {@link ConsentScope}.</li>
+ *   <li>{@code MGET} all keys in one round trip.</li>
+ *   <li>For each response: non-null with status {@code GRANTED} → granted;
+ *       anything else → denied.</li>
  * </ol>
  *
  * <h2>Reason Messages</h2>
  * <p>Denied scopes are annotated with a human-readable reason in the
  * {@link ConsentResponse#reasons()} map, keyed by field name:
  * <ul>
- *   <li>{@code "Consent status is REVOKED"} — an explicit revocation was found
- *       at either the field or category level.</li>
- *   <li>{@code "No consent record found"} — no consent record exists at any
- *       level for the requested scope.</li>
+ *   <li>{@code "Consent explicitly revoked"} — an explicit {@code REVOKED}
+ *       entry exists for this field.</li>
+ *   <li>{@code "No consent record found"} — no Redis key exists for this
+ *       field (either never set or expired via TTL).</li>
  * </ul>
  *
  * <h2>Structured Audit Details</h2>
  * <p>Every evaluated scope — granted or denied — produces a
  * {@link DecisionDetail} in {@link ConsentResponse#details()}. The detail
- * captures the resolution level ({@code FIELD}, {@code CATEGORY}, or
- * {@code NONE}) and any associated expiration timestamp, enabling rich
- * audit trails and downstream analytics.
+ * captures the source ({@code FIELD} or {@code CATEGORY}) that produced
+ * the entry, enabling rich audit trails. The {@code expiresAt} field is
+ * {@code null} in Redis-sourced details — the relational
+ * {@code consent_policy.expires_at} column is the source of truth for
+ * expiration metadata.
  *
  * @see ConsentPolicyRedisRepository
  * @see ConsentPolicyRedisRepository#evaluateScopes(String, Set)
- * @see ConsentPolicyRedisRepository#resolveScopes(Map, Set, java.time.Instant)
  */
 public class RedisConsentDecisionService
-    implements ConsentDecisionService<RedisConsentDecisionServiceConfig>
+    implements
+        ConsentDecisionService<RedisConsentDecisionServiceConfig>,
+        Operio.AppNameAware
 {
 
     /** Reason message for scopes denied by an explicit REVOKED entry. */
-    static final String REASON_REVOKED = "Consent status is REVOKED";
+    static final String REASON_REVOKED = "Consent explicitly revoked";
 
     /** Reason message for scopes denied because no consent record exists. */
     static final String REASON_NO_RECORD = "No consent record found";
@@ -100,6 +102,26 @@ public class RedisConsentDecisionService
     }
 
     // -----------------------------------------------------------------------
+    // AppNameAware
+    // -----------------------------------------------------------------------
+
+    /**
+     * Propagates the application name to the underlying Redis repositories
+     * so that all keys are prefixed with the given name.
+     *
+     * @param appName the application name, never {@code null}
+     */
+    @Override
+    public void setAppName(String appName) {
+        if (consentPolicyRepository != null) {
+            consentPolicyRepository.setAppName(appName);
+        }
+        if (fieldCategoryMappingRepository != null) {
+            fieldCategoryMappingRepository.setAppName(appName);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // ConsentDecisionService
     // -----------------------------------------------------------------------
 
@@ -107,7 +129,7 @@ public class RedisConsentDecisionService
      * Evaluates consent for the given subject against a batch of scopes.
      *
      * <p>This is the primary entry point used by the framework. It performs
-     * exactly <strong>one Redis round trip</strong> ({@code HGETALL}) via
+     * exactly <strong>one Redis round trip</strong> ({@code MGET}) via
      * {@link ConsentPolicyRedisRepository#evaluateScopes(String, Set)}, then
      * partitions the results into granted/denied sets, builds human-readable
      * reason messages for every denial, and attaches structured
@@ -135,7 +157,7 @@ public class RedisConsentDecisionService
             );
         }
 
-        // Single Redis round trip — returns structured detail per scope
+        // Single MGET round trip — returns one DecisionDetail per scope
         Map<ConsentScope, DecisionDetail> details =
             consentPolicyRepository.evaluateScopes(subject, accessRequests);
 
@@ -213,7 +235,7 @@ public class RedisConsentDecisionService
      * Builds a human-readable denial reason from a {@link DecisionDetail}.
      *
      * @param detail the decision detail, or {@code null} if the scope was
-     *               somehow missing from the resolution map (defensive)
+     *               somehow missing from the evaluation map (defensive)
      * @return a reason string suitable for inclusion in
      *         {@link ConsentResponse#reasons()}
      */
@@ -223,7 +245,6 @@ public class RedisConsentDecisionService
         }
         String status = detail.effectiveStatus();
         if (status == null) {
-            // No consent record at any level
             return REASON_NO_RECORD;
         }
         // Explicit revocation (REVOKED) at field or category level
@@ -231,13 +252,35 @@ public class RedisConsentDecisionService
     }
 
     /**
+     * Returns {@code true} if this plugin is configured and Redis is
+     * reachable.
+     *
+     * <p>Performs a lightweight {@code PING} against the configured Redis
+     * instance. Returns {@code false} if the service has not been configured
+     * or if the check fails for any reason.
+     *
+     * @return {@code true} if the plugin is ready to serve requests
+     */
+    @Override
+    public boolean isReady() {
+        if (!configured || jedis == null) {
+            return false;
+        }
+        try {
+            return "PONG".equals(jedis.ping());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Guards against use before {@link #configure} has been called.
      *
-     * @throws IllegalStateException if the service is not yet configured
+     * @throws OperioConfigurationException if the service is not yet configured
      */
     private void ensureConfigured() {
         if (!configured) {
-            throw new IllegalStateException(
+            throw new OperioConfigurationException(
                 "RedisConsentDecisionService has not been configured. " +
                     "Call configure(RedisConsentDecisionServiceConfig) first."
             );

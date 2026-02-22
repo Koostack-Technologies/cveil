@@ -65,22 +65,22 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("creates a bidirectional mapping")
         void createsMapping() {
-            repo.addFieldToCategory("ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
 
-            Set<String> categories = repo.getCategoriesForField("ssn");
+            Set<String> categories = repo.getCategoriesForField(null, "ssn");
             Set<String> fields = repo.getFieldsForCategory("PII");
 
             assertEquals(Set.of("PII"), categories);
-            assertEquals(Set.of("ssn"), fields);
+            assertEquals(Set.of("_default_/ssn"), fields);
         }
 
         @Test
         @DisplayName("is idempotent — calling twice does not duplicate")
         void idempotent() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
 
-            Set<String> categories = repo.getCategoriesForField("ssn");
+            Set<String> categories = repo.getCategoriesForField(null, "ssn");
             Set<String> fields = repo.getFieldsForCategory("PII");
 
             assertEquals(1, categories.size());
@@ -90,59 +90,83 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("one field can belong to multiple categories")
         void fieldMultipleCategories() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("ssn", "Sensitive");
-            repo.addFieldToCategory("ssn", "Financial");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "Sensitive");
+            repo.addFieldToCategory(null, "ssn", "Financial");
 
-            Set<String> categories = repo.getCategoriesForField("ssn");
+            Set<String> categories = repo.getCategoriesForField(null, "ssn");
             assertEquals(Set.of("PII", "Sensitive", "Financial"), categories);
 
-            // Each category should contain ssn
-            assertEquals(Set.of("ssn"), repo.getFieldsForCategory("PII"));
-            assertEquals(Set.of("ssn"), repo.getFieldsForCategory("Sensitive"));
-            assertEquals(Set.of("ssn"), repo.getFieldsForCategory("Financial"));
+            // Each category should contain ssn (qualified)
+            assertEquals(
+                Set.of("_default_/ssn"),
+                repo.getFieldsForCategory("PII")
+            );
+            assertEquals(
+                Set.of("_default_/ssn"),
+                repo.getFieldsForCategory("Sensitive")
+            );
+            assertEquals(
+                Set.of("_default_/ssn"),
+                repo.getFieldsForCategory("Financial")
+            );
         }
 
         @Test
         @DisplayName("one category can contain multiple fields")
         void categoryMultipleFields() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("email", "PII");
-            repo.addFieldToCategory("phone", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "email", "PII");
+            repo.addFieldToCategory(null, "phone", "PII");
 
             Set<String> fields = repo.getFieldsForCategory("PII");
-            assertEquals(Set.of("ssn", "email", "phone"), fields);
+            assertEquals(
+                Set.of("_default_/ssn", "_default_/email", "_default_/phone"),
+                fields
+            );
 
             // Each field should list PII as a category
-            assertEquals(Set.of("PII"), repo.getCategoriesForField("ssn"));
-            assertEquals(Set.of("PII"), repo.getCategoriesForField("email"));
-            assertEquals(Set.of("PII"), repo.getCategoriesForField("phone"));
+            assertEquals(
+                Set.of("PII"),
+                repo.getCategoriesForField(null, "ssn")
+            );
+            assertEquals(
+                Set.of("PII"),
+                repo.getCategoriesForField(null, "email")
+            );
+            assertEquals(
+                Set.of("PII"),
+                repo.getCategoriesForField(null, "phone")
+            );
         }
 
         @Test
         @DisplayName("many-to-many: multiple fields across multiple categories")
         void manyToMany() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("ssn", "Financial");
-            repo.addFieldToCategory("email", "PII");
-            repo.addFieldToCategory("account_no", "Financial");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "Financial");
+            repo.addFieldToCategory(null, "email", "PII");
+            repo.addFieldToCategory(null, "account_no", "Financial");
 
             assertEquals(
                 Set.of("PII", "Financial"),
-                repo.getCategoriesForField("ssn")
+                repo.getCategoriesForField(null, "ssn")
             );
-            assertEquals(Set.of("PII"), repo.getCategoriesForField("email"));
+            assertEquals(
+                Set.of("PII"),
+                repo.getCategoriesForField(null, "email")
+            );
             assertEquals(
                 Set.of("Financial"),
-                repo.getCategoriesForField("account_no")
+                repo.getCategoriesForField(null, "account_no")
             );
 
             assertEquals(
-                Set.of("ssn", "email"),
+                Set.of("_default_/ssn", "_default_/email"),
                 repo.getFieldsForCategory("PII")
             );
             assertEquals(
-                Set.of("ssn", "account_no"),
+                Set.of("_default_/ssn", "_default_/account_no"),
                 repo.getFieldsForCategory("Financial")
             );
         }
@@ -159,23 +183,26 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("removes a single mapping from both directions")
         void removesSingleMapping() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("email", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "email", "PII");
 
-            repo.removeFieldFromCategory("ssn", "PII");
+            repo.removeFieldFromCategory(null, "ssn", "PII");
 
-            assertFalse(repo.isMapped("ssn", "PII"));
-            assertTrue(repo.isMapped("email", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
+            assertTrue(repo.isMapped(null, "email", "PII"));
 
-            assertTrue(repo.getCategoriesForField("ssn").isEmpty());
-            assertEquals(Set.of("email"), repo.getFieldsForCategory("PII"));
+            assertTrue(repo.getCategoriesForField(null, "ssn").isEmpty());
+            assertEquals(
+                Set.of("_default_/email"),
+                repo.getFieldsForCategory("PII")
+            );
         }
 
         @Test
         @DisplayName("is a no-op when the mapping does not exist")
         void noOpWhenMissing() {
             assertDoesNotThrow(() ->
-                repo.removeFieldFromCategory("ssn", "PII")
+                repo.removeFieldFromCategory(null, "ssn", "PII")
             );
         }
 
@@ -184,14 +211,14 @@ class FieldCategoryMappingRedisRepositoryTest {
             "removes only the targeted category, leaving others intact"
         )
         void removesOneCategory() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("ssn", "Sensitive");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "Sensitive");
 
-            repo.removeFieldFromCategory("ssn", "PII");
+            repo.removeFieldFromCategory(null, "ssn", "PII");
 
             assertEquals(
                 Set.of("Sensitive"),
-                repo.getCategoriesForField("ssn")
+                repo.getCategoriesForField(null, "ssn")
             );
             assertTrue(repo.getFieldsForCategory("PII").isEmpty());
         }
@@ -210,7 +237,7 @@ class FieldCategoryMappingRedisRepositoryTest {
             "getCategoriesForField returns empty set for unknown field"
         )
         void categoriesForUnknownField() {
-            Set<String> result = repo.getCategoriesForField("unknown");
+            Set<String> result = repo.getCategoriesForField(null, "unknown");
             assertNotNull(result);
             assertTrue(result.isEmpty());
         }
@@ -228,22 +255,22 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("isMapped returns true for existing mapping")
         void isMappedTrue() {
-            repo.addFieldToCategory("ssn", "PII");
-            assertTrue(repo.isMapped("ssn", "PII"));
+            repo.addFieldToCategory(null, "ssn", "PII");
+            assertTrue(repo.isMapped(null, "ssn", "PII"));
         }
 
         @Test
         @DisplayName("isMapped returns false for non-existent mapping")
         void isMappedFalse() {
-            assertFalse(repo.isMapped("ssn", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
         }
 
         @Test
         @DisplayName("isMapped returns false after removal")
         void isMappedAfterRemoval() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.removeFieldFromCategory("ssn", "PII");
-            assertFalse(repo.isMapped("ssn", "PII"));
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.removeFieldFromCategory(null, "ssn", "PII");
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
         }
     }
 
@@ -260,22 +287,25 @@ class FieldCategoryMappingRedisRepositoryTest {
             "removes field from all its categories and deletes its own set"
         )
         void removesFromAllCategories() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("ssn", "Sensitive");
-            repo.addFieldToCategory("ssn", "Financial");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "Sensitive");
+            repo.addFieldToCategory(null, "ssn", "Financial");
             // Another field in PII should remain
-            repo.addFieldToCategory("email", "PII");
+            repo.addFieldToCategory(null, "email", "PII");
 
-            int removed = repo.removeAllMappingsForField("ssn");
+            int removed = repo.removeAllMappingsForField(null, "ssn");
 
             assertEquals(3, removed);
-            assertTrue(repo.getCategoriesForField("ssn").isEmpty());
-            assertFalse(repo.isMapped("ssn", "PII"));
-            assertFalse(repo.isMapped("ssn", "Sensitive"));
-            assertFalse(repo.isMapped("ssn", "Financial"));
+            assertTrue(repo.getCategoriesForField(null, "ssn").isEmpty());
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "Sensitive"));
+            assertFalse(repo.isMapped(null, "ssn", "Financial"));
 
             // email should still be in PII
-            assertEquals(Set.of("email"), repo.getFieldsForCategory("PII"));
+            assertEquals(
+                Set.of("_default_/email"),
+                repo.getFieldsForCategory("PII")
+            );
             // Sensitive and Financial should now be empty
             assertTrue(repo.getFieldsForCategory("Sensitive").isEmpty());
             assertTrue(repo.getFieldsForCategory("Financial").isEmpty());
@@ -284,17 +314,17 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("returns 0 for an unknown field")
         void unknownFieldReturnsZero() {
-            int removed = repo.removeAllMappingsForField("unknown");
+            int removed = repo.removeAllMappingsForField(null, "unknown");
             assertEquals(0, removed);
         }
 
         @Test
         @DisplayName("returns 0 for a field with no mappings after removal")
         void alreadyClearedFieldReturnsZero() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.removeFieldFromCategory("ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.removeFieldFromCategory(null, "ssn", "PII");
 
-            int removed = repo.removeAllMappingsForField("ssn");
+            int removed = repo.removeAllMappingsForField(null, "ssn");
             assertEquals(0, removed);
         }
     }
@@ -312,28 +342,28 @@ class FieldCategoryMappingRedisRepositoryTest {
             "removes category from all its fields and deletes its own set"
         )
         void removesFromAllFields() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.addFieldToCategory("email", "PII");
-            repo.addFieldToCategory("phone", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.addFieldToCategory(null, "email", "PII");
+            repo.addFieldToCategory(null, "phone", "PII");
             // ssn is also in Sensitive — should remain
-            repo.addFieldToCategory("ssn", "Sensitive");
+            repo.addFieldToCategory(null, "ssn", "Sensitive");
 
             int removed = repo.removeAllMappingsForCategory("PII");
 
             assertEquals(3, removed);
             assertTrue(repo.getFieldsForCategory("PII").isEmpty());
-            assertFalse(repo.isMapped("ssn", "PII"));
-            assertFalse(repo.isMapped("email", "PII"));
-            assertFalse(repo.isMapped("phone", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
+            assertFalse(repo.isMapped(null, "email", "PII"));
+            assertFalse(repo.isMapped(null, "phone", "PII"));
 
             // ssn should still be in Sensitive
             assertEquals(
                 Set.of("Sensitive"),
-                repo.getCategoriesForField("ssn")
+                repo.getCategoriesForField(null, "ssn")
             );
             // email and phone should now have no categories
-            assertTrue(repo.getCategoriesForField("email").isEmpty());
-            assertTrue(repo.getCategoriesForField("phone").isEmpty());
+            assertTrue(repo.getCategoriesForField(null, "email").isEmpty());
+            assertTrue(repo.getCategoriesForField(null, "phone").isEmpty());
         }
 
         @Test
@@ -346,8 +376,8 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("returns 0 for a category with no mappings after removal")
         void alreadyClearedCategoryReturnsZero() {
-            repo.addFieldToCategory("ssn", "PII");
-            repo.removeFieldFromCategory("ssn", "PII");
+            repo.addFieldToCategory(null, "ssn", "PII");
+            repo.removeFieldFromCategory(null, "ssn", "PII");
 
             int removed = repo.removeAllMappingsForCategory("PII");
             assertEquals(0, removed);
@@ -366,8 +396,8 @@ class FieldCategoryMappingRedisRepositoryTest {
         @DisplayName("fieldToCatKey uses correct prefix")
         void fieldToCatKey() {
             assertEquals(
-                "operio:meta:field2cat:ssn",
-                FieldCategoryMappingRedisRepository.fieldToCatKey("ssn")
+                "operio:meta:field2cat:_default_/ssn",
+                repo.fieldToCatKey("_default_/ssn")
             );
         }
 
@@ -376,7 +406,7 @@ class FieldCategoryMappingRedisRepositoryTest {
         void catToFieldKey() {
             assertEquals(
                 "operio:meta:cat2field:PII",
-                FieldCategoryMappingRedisRepository.catToFieldKey("PII")
+                repo.catToFieldKey("PII")
             );
         }
     }
@@ -392,15 +422,15 @@ class FieldCategoryMappingRedisRepositoryTest {
         @Test
         @DisplayName("Redis is empty at test start — run 1")
         void emptyRun1() {
-            assertFalse(repo.isMapped("ssn", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
         }
 
         @Test
         @DisplayName("Redis is empty at test start — run 2")
         void emptyRun2() {
             // Write something — next test should still see empty DB
-            repo.addFieldToCategory("ssn", "PII");
-            assertTrue(repo.isMapped("ssn", "PII"));
+            repo.addFieldToCategory(null, "ssn", "PII");
+            assertTrue(repo.isMapped(null, "ssn", "PII"));
         }
 
         @Test
@@ -408,7 +438,7 @@ class FieldCategoryMappingRedisRepositoryTest {
             "Redis is empty at test start — run 3 (proves run 2 was cleaned)"
         )
         void emptyRun3() {
-            assertFalse(repo.isMapped("ssn", "PII"));
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
         }
     }
 }

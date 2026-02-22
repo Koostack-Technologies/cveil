@@ -5,7 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.github.fppt.jedismock.RedisServer;
 import com.koostack.operio.core.Models.ConsentResponse;
 import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.exception.OperioConfigurationException;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
@@ -24,6 +28,10 @@ import redis.clients.jedis.JedisPooled;
  *
  * <p>Uses an embedded {@link RedisServer} (jedis-mock) — no Docker required.
  * Each test starts with a freshly flushed database.
+ *
+ * <p>The underlying schema is flat key-per-field:
+ * {@code operio:consent:{subject}:{field}:{purpose}} → {@code STATUS|SOURCE}.
+ * Evaluation uses a single {@code MGET} round trip.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("RedisConsentDecisionService")
@@ -95,12 +103,12 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
-        @DisplayName("unconfigured service throws IllegalStateException")
+        @DisplayName("unconfigured service throws OperioConfigurationException")
         void unconfiguredServiceThrows() {
             var unconfigured = new RedisConsentDecisionService();
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
 
-            assertThrows(IllegalStateException.class, () ->
+            assertThrows(OperioConfigurationException.class, () ->
                 unconfigured.evaluateConsent("user-1", Set.of(scope))
             );
         }
@@ -114,6 +122,14 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
+        @DisplayName(
+            "fieldCategoryMappingRepository() is accessible after configure()"
+        )
+        void mappingRepoAccessible() {
+            assertNotNull(service.fieldCategoryMappingRepository());
+        }
+
+        @Test
         @DisplayName("jedis() is accessible after configure()")
         void jedisAccessible() {
             assertNotNull(service.jedis());
@@ -121,7 +137,7 @@ class RedisConsentDecisionServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // evaluateConsent — field-level only
+    // evaluateConsent — field-level
     // -----------------------------------------------------------------------
 
     @Nested
@@ -131,7 +147,13 @@ class RedisConsentDecisionServiceTest {
         @Test
         @DisplayName("single field GRANTED")
         void singleFieldGranted() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
             ConsentResponse response = service.evaluateConsent(
@@ -143,12 +165,31 @@ class RedisConsentDecisionServiceTest {
             assertEquals(Set.of(scope), response.granted());
             assertTrue(response.denied().isEmpty());
             assertTrue(response.reasons().isEmpty());
+
+            // Structured detail
+            DecisionDetail detail = response.details().get(scope);
+            assertNotNull(detail);
+            assertEquals(
+                ConsentPolicyRedisRepository.GRANTED,
+                detail.effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                detail.resolvedBy()
+            );
+            assertNull(detail.expiresAt());
         }
 
         @Test
         @DisplayName("single field REVOKED")
         void singleFieldRevoked() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", false);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                false
+            );
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
             ConsentResponse response = service.evaluateConsent(
@@ -158,7 +199,20 @@ class RedisConsentDecisionServiceTest {
 
             assertTrue(response.granted().isEmpty());
             assertEquals(Set.of(scope), response.denied());
-            assertTrue(response.reasons().containsKey("ssn"));
+            assertEquals(
+                RedisConsentDecisionService.REASON_REVOKED,
+                response.reasons().get("ssn")
+            );
+
+            DecisionDetail detail = response.details().get(scope);
+            assertEquals(
+                ConsentPolicyRedisRepository.REVOKED,
+                detail.effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                detail.resolvedBy()
+            );
         }
 
         @Test
@@ -173,16 +227,32 @@ class RedisConsentDecisionServiceTest {
             assertTrue(response.granted().isEmpty());
             assertEquals(Set.of(scope), response.denied());
             assertEquals(
-                "No consent record found",
+                RedisConsentDecisionService.REASON_NO_RECORD,
                 response.reasons().get("ssn")
             );
+
+            DecisionDetail detail = response.details().get(scope);
+            assertNull(detail.effectiveStatus());
+            assertEquals(DecisionDetail.RESOLVED_BY_NONE, detail.resolvedBy());
         }
 
         @Test
         @DisplayName("multiple fields — mixed outcomes")
         void multipleFieldsMixed() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
-            consentRepo.setFieldConsent("user-1", "email", "marketing", false);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "email",
+                "marketing",
+                false
+            );
             // phone has no record
 
             ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
@@ -199,21 +269,31 @@ class RedisConsentDecisionServiceTest {
             assertTrue(response.reasons().containsKey("email"));
             assertTrue(response.reasons().containsKey("phone"));
             assertFalse(response.reasons().containsKey("ssn"));
+
+            // All three have detail entries
+            assertEquals(3, response.details().size());
         }
     }
 
     // -----------------------------------------------------------------------
-    // evaluateConsent — category-level fallback
+    // evaluateConsent — category-sourced entries
     // -----------------------------------------------------------------------
 
     @Nested
-    @DisplayName("evaluateConsent — category-level fallback")
-    class CategoryFallback {
+    @DisplayName("evaluateConsent — category-sourced entries")
+    class CategorySourced {
 
         @Test
-        @DisplayName("category GRANTED covers field with no direct consent")
-        void categoryGrantCoversField() {
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
+        @DisplayName("category-sourced GRANTED is treated as granted")
+        void categorySourcedGranted() {
+            consentRepo.setConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true,
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY
+            );
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
             ConsentResponse response = service.evaluateConsent(
@@ -223,12 +303,27 @@ class RedisConsentDecisionServiceTest {
 
             assertEquals(Set.of(scope), response.granted());
             assertTrue(response.denied().isEmpty());
+
+            DecisionDetail detail = response.details().get(scope);
+            assertEquals(
+                ConsentPolicyRedisRepository.GRANTED,
+                detail.effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                detail.resolvedBy()
+            );
         }
 
         @Test
-        @DisplayName("category GRANTED covers multiple fields in same category")
-        void categoryGrantCoversMultipleFields() {
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
+        @DisplayName("fan-out covers multiple fields")
+        void fanOutCoversMultipleFields() {
+            consentRepo.setCategoryConsentForFields(
+                "user-1",
+                "marketing",
+                true,
+                Set.of("_default_/ssn", "_default_/email", "_default_/phone")
+            );
 
             ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
             ConsentScope email = ConsentScope.to("PII", "email", "marketing");
@@ -241,50 +336,26 @@ class RedisConsentDecisionServiceTest {
 
             assertEquals(Set.of(ssn, email, phone), response.granted());
             assertTrue(response.denied().isEmpty());
+
+            for (ConsentScope scope : Set.of(ssn, email, phone)) {
+                assertEquals(
+                    ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                    response.details().get(scope).resolvedBy()
+                );
+            }
         }
 
         @Test
-        @DisplayName(
-            "field-level GRANTED takes priority over category-level REVOKED"
-        )
-        void fieldGrantOverridesCategoryRevoke() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", false);
-
-            ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
-            ConsentResponse response = service.evaluateConsent(
+        @DisplayName("category-sourced REVOKED denies the field")
+        void categorySourcedRevoked() {
+            consentRepo.setConsent(
                 "user-1",
-                Set.of(scope)
+                null,
+                "ssn",
+                "marketing",
+                false,
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY
             );
-
-            assertEquals(Set.of(scope), response.granted());
-            assertTrue(response.denied().isEmpty());
-        }
-
-        @Test
-        @DisplayName(
-            "field-level REVOKED takes precedence over category-level GRANTED"
-        )
-        void fieldRevokedTakesPrecedenceOverCategoryGrant() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", false);
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
-
-            ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
-            ConsentResponse response = service.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
-
-            // Most-specific-wins: field-level REVOKED cannot be overridden
-            // by a broader category-level GRANTED
-            assertTrue(response.granted().isEmpty());
-            assertEquals(Set.of(scope), response.denied());
-        }
-
-        @Test
-        @DisplayName("category REVOKED denies when no field-level exists")
-        void categoryRevokedDenies() {
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", false);
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
             ConsentResponse response = service.evaluateConsent(
@@ -297,30 +368,234 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
-        @DisplayName("different categories evaluated independently")
-        void differentCategoriesIndependent() {
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
-            consentRepo.setCategoryConsent(
+        @DisplayName("mixed field-sourced and category-sourced entries")
+        void mixedSources() {
+            consentRepo.setFieldConsent(
                 "user-1",
-                "Financial",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            consentRepo.setConsent(
+                "user-1",
+                null,
+                "email",
+                "marketing",
+                true,
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY
+            );
+
+            ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentScope email = ConsentScope.to("PII", "email", "marketing");
+
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(ssn, email)
+            );
+
+            assertEquals(Set.of(ssn, email), response.granted());
+
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(ssn).resolvedBy()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                response.details().get(email).resolvedBy()
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // evaluateConsent — category fan-out precedence
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("evaluateConsent — category fan-out precedence")
+    class CategoryFanOutPrecedence {
+
+        @Test
+        @DisplayName(
+            "field-level entry survives category fan-out during evaluation"
+        )
+        void fieldLevelSurvivesCategoryFanOut() {
+            // Explicit field-level GRANT for ssn
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+
+            // Category fan-out tries to REVOKE across ssn + email + phone
+            consentRepo.setCategoryConsentForFields(
+                "user-1",
+                "marketing",
+                false,
+                Set.of("_default_/ssn", "_default_/email", "_default_/phone")
+            );
+
+            ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentScope email = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope phone = ConsentScope.to("PII", "phone", "marketing");
+
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(ssn, email, phone)
+            );
+
+            // ssn was FIELD-sourced GRANTED — must survive the category REVOKE
+            assertEquals(Set.of(ssn), response.granted());
+            assertTrue(response.denied().contains(email));
+            assertTrue(response.denied().contains(phone));
+
+            // ssn detail: still FIELD-sourced
+            DecisionDetail ssnDetail = response.details().get(ssn);
+            assertEquals(
+                ConsentPolicyRedisRepository.GRANTED,
+                ssnDetail.effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                ssnDetail.resolvedBy()
+            );
+
+            // email detail: CATEGORY-sourced REVOKED
+            DecisionDetail emailDetail = response.details().get(email);
+            assertEquals(
+                ConsentPolicyRedisRepository.REVOKED,
+                emailDetail.effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                emailDetail.resolvedBy()
+            );
+        }
+
+        @Test
+        @DisplayName(
+            "category fan-out overwrites prior CATEGORY entry but not FIELD entry"
+        )
+        void mixedPrecedenceDuringEvaluation() {
+            // ssn: explicit field-level REVOKE
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                false
+            );
+            // email: category-sourced REVOKE (will be overwritten)
+            consentRepo.setConsent(
+                "user-1",
+                null,
+                "email",
+                "marketing",
+                false,
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY
+            );
+            // phone: no prior entry
+
+            // Category fan-out GRANTs all three fields
+            consentRepo.setCategoryConsentForFields(
+                "user-1",
+                "marketing",
+                true,
+                Set.of("_default_/ssn", "_default_/email", "_default_/phone")
+            );
+
+            ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentScope email = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope phone = ConsentScope.to("PII", "phone", "marketing");
+
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(ssn, email, phone)
+            );
+
+            // ssn: still REVOKED|FIELD — denied
+            assertTrue(response.denied().contains(ssn));
+            assertEquals(
+                ConsentPolicyRedisRepository.REVOKED,
+                response.details().get(ssn).effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(ssn).resolvedBy()
+            );
+
+            // email: overwritten to GRANTED|CATEGORY — granted
+            assertTrue(response.granted().contains(email));
+            assertEquals(
+                ConsentPolicyRedisRepository.GRANTED,
+                response.details().get(email).effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                response.details().get(email).resolvedBy()
+            );
+
+            // phone: new GRANTED|CATEGORY — granted
+            assertTrue(response.granted().contains(phone));
+            assertEquals(
+                ConsentPolicyRedisRepository.GRANTED,
+                response.details().get(phone).effectiveStatus()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_CATEGORY,
+                response.details().get(phone).resolvedBy()
+            );
+        }
+
+        @Test
+        @DisplayName("all fields FIELD-sourced — category fan-out is a no-op")
+        void allFieldSourcedNoop() {
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "email",
                 "marketing",
                 false
             );
 
-            ConsentScope piiField = ConsentScope.to("PII", "ssn", "marketing");
-            ConsentScope finField = ConsentScope.to(
-                "Financial",
-                "account_no",
-                "marketing"
+            // Attempt category REVOKE on both
+            consentRepo.setCategoryConsentForFields(
+                "user-1",
+                "marketing",
+                false,
+                Set.of("_default_/ssn", "_default_/email")
             );
+
+            ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentScope email = ConsentScope.to("PII", "email", "marketing");
 
             ConsentResponse response = service.evaluateConsent(
                 "user-1",
-                Set.of(piiField, finField)
+                Set.of(ssn, email)
             );
 
-            assertEquals(Set.of(piiField), response.granted());
-            assertEquals(Set.of(finField), response.denied());
+            // ssn still GRANTED|FIELD
+            assertTrue(response.granted().contains(ssn));
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(ssn).resolvedBy()
+            );
+
+            // email still REVOKED|FIELD
+            assertTrue(response.denied().contains(email));
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(email).resolvedBy()
+            );
         }
     }
 
@@ -337,7 +612,13 @@ class RedisConsentDecisionServiceTest {
             "same field, different purposes are evaluated independently"
         )
         void fieldPurposeIsolation() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
             // ssn for analytics has no consent
 
             ConsentScope marketing = ConsentScope.to("PII", "ssn", "marketing");
@@ -353,12 +634,22 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "same category, different purposes are evaluated independently"
-        )
-        void categoryPurposeIsolation() {
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
-            // PII for analytics has no consent
+        @DisplayName("same field, multiple purposes all granted independently")
+        void multiplePurposesGranted() {
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "analytics",
+                true
+            );
 
             ConsentScope marketing = ConsentScope.to("PII", "ssn", "marketing");
             ConsentScope analytics = ConsentScope.to("PII", "ssn", "analytics");
@@ -368,8 +659,8 @@ class RedisConsentDecisionServiceTest {
                 Set.of(marketing, analytics)
             );
 
-            assertEquals(Set.of(marketing), response.granted());
-            assertEquals(Set.of(analytics), response.denied());
+            assertEquals(Set.of(marketing, analytics), response.granted());
+            assertTrue(response.denied().isEmpty());
         }
     }
 
@@ -384,7 +675,13 @@ class RedisConsentDecisionServiceTest {
         @Test
         @DisplayName("consent for one subject does not affect another")
         void subjectIsolation() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
 
@@ -410,8 +707,20 @@ class RedisConsentDecisionServiceTest {
             "two subjects can have different consent for the same scope"
         )
         void twoSubjectsDifferentConsent() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
-            consentRepo.setFieldConsent("user-2", "ssn", "marketing", false);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            consentRepo.setFieldConsent(
+                "user-2",
+                null,
+                "ssn",
+                "marketing",
+                false
+            );
 
             ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
 
@@ -449,6 +758,19 @@ class RedisConsentDecisionServiceTest {
             assertTrue(response.granted().isEmpty());
             assertTrue(response.denied().isEmpty());
             assertTrue(response.reasons().isEmpty());
+            assertTrue(response.details().isEmpty());
+        }
+
+        @Test
+        @DisplayName("null request set returns empty response")
+        void nullRequestSet() {
+            ConsentResponse response = service.evaluateConsent("user-1", null);
+
+            assertEquals("user-1", response.subject());
+            assertTrue(response.granted().isEmpty());
+            assertTrue(response.denied().isEmpty());
+            assertTrue(response.reasons().isEmpty());
+            assertTrue(response.details().isEmpty());
         }
 
         @Test
@@ -463,7 +785,7 @@ class RedisConsentDecisionServiceTest {
             assertTrue(response.granted().isEmpty());
             assertEquals(Set.of(scope), response.denied());
             assertEquals(
-                "No consent record found",
+                RedisConsentDecisionService.REASON_NO_RECORD,
                 response.reasons().get("ssn")
             );
         }
@@ -473,7 +795,13 @@ class RedisConsentDecisionServiceTest {
             "reason message distinguishes no-record from explicit revocation"
         )
         void reasonMessages() {
-            consentRepo.setFieldConsent("user-1", "email", "marketing", false);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "email",
+                "marketing",
+                false
+            );
             // ssn has no record at all
 
             ConsentScope email = ConsentScope.to("PII", "email", "marketing");
@@ -485,11 +813,75 @@ class RedisConsentDecisionServiceTest {
             );
 
             assertEquals(
-                "Consent status is REVOKED",
+                RedisConsentDecisionService.REASON_REVOKED,
                 response.reasons().get("email")
             );
             assertEquals(
-                "No consent record found",
+                RedisConsentDecisionService.REASON_NO_RECORD,
+                response.reasons().get("ssn")
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // evaluateConsent — TTL / expiry
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("evaluateConsent — TTL / expiry")
+    class TtlExpiry {
+
+        @Test
+        @DisplayName("entry with future expiresAt is evaluated normally")
+        void futureExpiryGranted() {
+            Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true,
+                expiresAt
+            );
+
+            ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(scope)
+            );
+
+            assertEquals(Set.of(scope), response.granted());
+
+            // expiresAt is null in the detail — Redis manages TTL natively
+            assertNull(response.details().get(scope).expiresAt());
+        }
+
+        @Test
+        @DisplayName(
+            "entry with past expiresAt was never written — treated as no record"
+        )
+        void pastExpiryNotWritten() {
+            Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true,
+                past
+            );
+
+            ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(scope)
+            );
+
+            // Key was never written because TTL was non-positive
+            assertTrue(response.granted().isEmpty());
+            assertEquals(Set.of(scope), response.denied());
+            assertEquals(
+                RedisConsentDecisionService.REASON_NO_RECORD,
                 response.reasons().get("ssn")
             );
         }
@@ -506,29 +898,36 @@ class RedisConsentDecisionServiceTest {
         @Test
         @DisplayName("evaluates 100 scopes in a single call")
         void hundredScopes() {
-            // Grant category-level consent for PII:marketing
-            consentRepo.setCategoryConsent("user-1", "PII", "marketing", true);
-
-            // Grant field-level consent for 50 fields under Financial:analytics
+            // Grant field-level consent for 50 fields
             for (int i = 0; i < 50; i++) {
                 consentRepo.setFieldConsent(
                     "user-1",
+                    null,
                     "field_" + i,
-                    "analytics",
+                    "marketing",
                     true
                 );
             }
 
-            // Build 100 scopes: 50 PII/marketing (category-granted),
-            // 50 Financial/analytics (field-granted)
+            // Grant category-sourced consent for another 50 fields
+            Set<String> catFields = new java.util.HashSet<>();
+            for (int i = 50; i < 100; i++) {
+                catFields.add("_default_/field_" + i);
+            }
+            consentRepo.setCategoryConsentForFields(
+                "user-1",
+                "analytics",
+                true,
+                catFields
+            );
+
+            // Build 100 scopes
             Set<ConsentScope> scopes = new java.util.HashSet<>();
             for (int i = 0; i < 50; i++) {
-                scopes.add(
-                    ConsentScope.to("PII", "pii_field_" + i, "marketing")
-                );
-                scopes.add(
-                    ConsentScope.to("Financial", "field_" + i, "analytics")
-                );
+                scopes.add(ConsentScope.to("PII", "field_" + i, "marketing"));
+            }
+            for (int i = 50; i < 100; i++) {
+                scopes.add(ConsentScope.to("PII", "field_" + i, "analytics"));
             }
 
             ConsentResponse response = service.evaluateConsent(
@@ -538,6 +937,86 @@ class RedisConsentDecisionServiceTest {
 
             assertEquals(100, response.granted().size());
             assertTrue(response.denied().isEmpty());
+            assertEquals(100, response.details().size());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // evaluateConsent — details map completeness
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("evaluateConsent — details map")
+    class DetailsMap {
+
+        @Test
+        @DisplayName("details map contains an entry for every requested scope")
+        void detailsForAllScopes() {
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            // email is revoked, phone has no record
+
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "email",
+                "marketing",
+                false
+            );
+
+            ConsentScope ssn = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentScope email = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope phone = ConsentScope.to("PII", "phone", "marketing");
+
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(ssn, email, phone)
+            );
+
+            assertEquals(3, response.details().size());
+            assertNotNull(response.details().get(ssn));
+            assertNotNull(response.details().get(email));
+            assertNotNull(response.details().get(phone));
+
+            // Verify resolvedBy values
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(ssn).resolvedBy()
+            );
+            assertEquals(
+                ConsentPolicyRedisRepository.SOURCE_FIELD,
+                response.details().get(email).resolvedBy()
+            );
+            assertEquals(
+                DecisionDetail.RESOLVED_BY_NONE,
+                response.details().get(phone).resolvedBy()
+            );
+        }
+
+        @Test
+        @DisplayName("detail scope field matches the original request scope")
+        void detailScopeMatchesRequest() {
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+
+            ConsentScope scope = ConsentScope.to("PII", "ssn", "marketing");
+            ConsentResponse response = service.evaluateConsent(
+                "user-1",
+                Set.of(scope)
+            );
+
+            DecisionDetail detail = response.details().get(scope);
+            assertEquals(scope, detail.scope());
         }
     }
 
@@ -552,14 +1031,20 @@ class RedisConsentDecisionServiceTest {
         @Test
         @DisplayName("Redis is empty at test start — run 1")
         void emptyRun1() {
-            assertFalse(consentRepo.exists("user-1"));
+            assertFalse(consentRepo.exists("user-1", null, "ssn", "marketing"));
         }
 
         @Test
         @DisplayName("Redis is empty at test start — run 2")
         void emptyRun2() {
-            consentRepo.setFieldConsent("user-1", "ssn", "marketing", true);
-            assertTrue(consentRepo.exists("user-1"));
+            consentRepo.setFieldConsent(
+                "user-1",
+                null,
+                "ssn",
+                "marketing",
+                true
+            );
+            assertTrue(consentRepo.exists("user-1", null, "ssn", "marketing"));
         }
 
         @Test
@@ -567,7 +1052,7 @@ class RedisConsentDecisionServiceTest {
             "Redis is empty at test start — run 3 (proves run 2 was cleaned)"
         )
         void emptyRun3() {
-            assertFalse(consentRepo.exists("user-1"));
+            assertFalse(consentRepo.exists("user-1", null, "ssn", "marketing"));
         }
     }
 }
