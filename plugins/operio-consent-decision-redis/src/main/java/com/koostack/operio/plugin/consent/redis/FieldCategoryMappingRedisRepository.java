@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.redis;
 
+import com.koostack.operio.core.TenantContext;
 import java.util.Collections;
 import java.util.Set;
 import redis.clients.jedis.JedisPooled;
@@ -11,8 +12,10 @@ import redis.clients.jedis.Pipeline;
  *
  * <h2>Redis Key Schema</h2>
  * <pre>
- *   {appName}:meta:field2cat:{entity}/{fieldName}    → Set of category names
- *   {appName}:meta:cat2field:{categoryName}          → Set of qualified field names ({entity}/{fieldName})
+ *   Single-tenant: {appName}:meta:field2cat:{entity}/{fieldName}    → Set of category names
+ *                  {appName}:meta:cat2field:{categoryName}          → Set of qualified field names
+ *   Multi-tenant:  {appName}:{tenantId}:meta:field2cat:{entity}/{fieldName}    → Set of category names
+ *                  {appName}:{tenantId}:meta:cat2field:{categoryName}          → Set of qualified field names
  * </pre>
  *
  * <p>Field names stored in the sets are <strong>entity-qualified</strong>
@@ -26,6 +29,15 @@ import redis.clients.jedis.Pipeline;
  * share the same Redis server. It defaults to
  * {@value ConsentPolicyRedisRepository#DEFAULT_APP_NAME} and can be changed
  * at any time via {@link #setAppName(String)}.
+ *
+ * <h2>Multi-Tenancy</h2>
+ * <p>When a {@link TenantContext} is active (i.e.
+ * {@code TenantContext.get()} returns a non-null tenant ID), all keys
+ * include a {@code {tenantId}} segment immediately after the
+ * {@code {appName}} prefix. This provides namespace isolation between
+ * tenants sharing the same Redis instance. When no tenant context is
+ * active the segment is omitted — backward compatible with existing
+ * single-tenant deployments.
  *
  * <p>Both directions are maintained atomically so that lookups from either
  * side are always consistent.
@@ -285,23 +297,41 @@ public class FieldCategoryMappingRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
+     * Computes the key prefix for all Redis keys, incorporating the
+     * current tenant context when present.
+     *
+     * <p>When {@link TenantContext#get()} returns a non-null tenant ID
+     * the prefix is {@code {appName}:{tenantId}}. When no tenant context
+     * is active the prefix is just {@code {appName}} — backward compatible
+     * with existing single-tenant keys.
+     *
+     * @return the key prefix, never {@code null}
+     */
+    String keyPrefix() {
+        String tenant = TenantContext.get();
+        return tenant != null ? appName + ":" + tenant : appName;
+    }
+
+    /**
      * Builds the forward-direction key for a qualified field.
      *
      * @param qualifiedField the qualified field string
      *                       ({@code entity/fieldName})
-     * @return {@code {appName}:meta:field2cat:{qualifiedField}}
+     * @return {@code {prefix}:meta:field2cat:{qualifiedField}}
+     *         where {@code {prefix}} is {@link #keyPrefix()}
      */
     String fieldToCatKey(String qualifiedField) {
-        return appName + FIELD_TO_CAT_INFIX + qualifiedField;
+        return keyPrefix() + FIELD_TO_CAT_INFIX + qualifiedField;
     }
 
     /**
      * Builds the reverse-direction key for a category.
      *
      * @param categoryName the category name
-     * @return {@code {appName}:meta:cat2field:{categoryName}}
+     * @return {@code {prefix}:meta:cat2field:{categoryName}}
+     *         where {@code {prefix}} is {@link #keyPrefix()}
      */
     String catToFieldKey(String categoryName) {
-        return appName + CAT_TO_FIELD_INFIX + categoryName;
+        return keyPrefix() + CAT_TO_FIELD_INFIX + categoryName;
     }
 }

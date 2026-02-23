@@ -5,5 +5,13 @@ plugins {
 
 dependencies {
     implementation(project(":operio-core"))
-    // TODO: Add specific implementation dependencies (e.g., Jackson, Spring Security, SLF4J)
+
+    // Spring Boot BOM for version management (matches operio-spring-boot-starter)
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.2"))
+
+    // Spring Web for RequestContextHolder / ServletRequestAttributes
+    implementation("org.springframework:spring-web")
+
+    // Servlet API for HttpServletRequest
+    compileOnly("jakarta.servlet:jakarta.servlet-api")
 }

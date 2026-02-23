@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.caffeine;
 
+import com.koostack.operio.core.TenantContext;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +55,49 @@ public class CaffeineFieldCategoryMappingRepository {
         new ConcurrentHashMap<>();
 
     // -----------------------------------------------------------------------
+    // Key helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Computes the key prefix for all map keys, incorporating the current
+     * tenant context when present.
+     *
+     * <p>When {@link TenantContext#get()} returns a non-null tenant ID
+     * the prefix is {@code {tenantId}:}. When no tenant context is active
+     * the prefix is empty — backward compatible with existing
+     * single-tenant keys.
+     *
+     * @return the key prefix (empty string when no tenant, otherwise
+     *         {@code {tenantId}:})
+     */
+    String keyPrefix() {
+        String tenant = TenantContext.get();
+        return tenant != null ? tenant + ":" : "";
+    }
+
+    /**
+     * Builds the tenant-aware map key for a qualified field.
+     *
+     * @param qualifiedField the qualified field ({@code entity/fieldName})
+     * @return {@code {tenantId}:{qualifiedField}} when tenant is active,
+     *         otherwise just {@code {qualifiedField}}
+     */
+    private String fieldMapKey(String qualifiedField) {
+        return keyPrefix() + qualifiedField;
+    }
+
+    /**
+     * Builds the tenant-aware map key for a category name.
+     *
+     * @param categoryName the category name
+     * @return {@code {tenantId}:{categoryName}} when tenant is active,
+     *         otherwise just {@code {categoryName}}
+     */
+    private String categoryMapKey(String categoryName) {
+        return keyPrefix() + categoryName;
+    }
+
+    // -----------------------------------------------------------------------
     // Link / Unlink
     // -----------------------------------------------------------------------
 
@@ -74,13 +118,16 @@ public class CaffeineFieldCategoryMappingRepository {
         String categoryName
     ) {
         String qf = CaffeineConsentRepository.qualifyField(
-            entityName, fieldName
+            entityName,
+            fieldName
         );
+        String fKey = fieldMapKey(qf);
+        String cKey = categoryMapKey(categoryName);
         field2cat
-            .computeIfAbsent(qf, k -> ConcurrentHashMap.newKeySet())
+            .computeIfAbsent(fKey, k -> ConcurrentHashMap.newKeySet())
             .add(categoryName);
         cat2field
-            .computeIfAbsent(categoryName, k -> ConcurrentHashMap.newKeySet())
+            .computeIfAbsent(cKey, k -> ConcurrentHashMap.newKeySet())
             .add(qf);
     }
 
@@ -99,20 +146,23 @@ public class CaffeineFieldCategoryMappingRepository {
         String categoryName
     ) {
         String qf = CaffeineConsentRepository.qualifyField(
-            entityName, fieldName
+            entityName,
+            fieldName
         );
-        Set<String> categories = field2cat.get(qf);
+        String fKey = fieldMapKey(qf);
+        String cKey = categoryMapKey(categoryName);
+        Set<String> categories = field2cat.get(fKey);
         if (categories != null) {
             categories.remove(categoryName);
             if (categories.isEmpty()) {
-                field2cat.remove(qf, Collections.emptySet());
+                field2cat.remove(fKey, Collections.emptySet());
             }
         }
-        Set<String> fields = cat2field.get(categoryName);
+        Set<String> fields = cat2field.get(cKey);
         if (fields != null) {
             fields.remove(qf);
             if (fields.isEmpty()) {
-                cat2field.remove(categoryName, Collections.emptySet());
+                cat2field.remove(cKey, Collections.emptySet());
             }
         }
     }
@@ -133,9 +183,10 @@ public class CaffeineFieldCategoryMappingRepository {
         String fieldName
     ) {
         String qf = CaffeineConsentRepository.qualifyField(
-            entityName, fieldName
+            entityName,
+            fieldName
         );
-        Set<String> result = field2cat.get(qf);
+        Set<String> result = field2cat.get(fieldMapKey(qf));
         return result != null
             ? Collections.unmodifiableSet(result)
             : Collections.emptySet();
@@ -155,7 +206,7 @@ public class CaffeineFieldCategoryMappingRepository {
      *         empty
      */
     public Set<String> getFieldsForCategory(String categoryName) {
-        Set<String> result = cat2field.get(categoryName);
+        Set<String> result = cat2field.get(categoryMapKey(categoryName));
         return result != null
             ? Collections.unmodifiableSet(result)
             : Collections.emptySet();
@@ -175,9 +226,10 @@ public class CaffeineFieldCategoryMappingRepository {
         String categoryName
     ) {
         String qf = CaffeineConsentRepository.qualifyField(
-            entityName, fieldName
+            entityName,
+            fieldName
         );
-        Set<String> categories = field2cat.get(qf);
+        Set<String> categories = field2cat.get(fieldMapKey(qf));
         return categories != null && categories.contains(categoryName);
     }
 
@@ -197,18 +249,23 @@ public class CaffeineFieldCategoryMappingRepository {
      */
     public int removeAllMappingsForField(String entityName, String fieldName) {
         String qf = CaffeineConsentRepository.qualifyField(
-            entityName, fieldName
+            entityName,
+            fieldName
         );
-        Set<String> categories = field2cat.remove(qf);
+        String fKey = fieldMapKey(qf);
+        Set<String> categories = field2cat.remove(fKey);
         if (categories == null || categories.isEmpty()) {
             return 0;
         }
         for (String category : categories) {
-            Set<String> fields = cat2field.get(category);
+            Set<String> fields = cat2field.get(categoryMapKey(category));
             if (fields != null) {
                 fields.remove(qf);
                 if (fields.isEmpty()) {
-                    cat2field.remove(category, Collections.emptySet());
+                    cat2field.remove(
+                        categoryMapKey(category),
+                        Collections.emptySet()
+                    );
                 }
             }
         }
@@ -225,16 +282,17 @@ public class CaffeineFieldCategoryMappingRepository {
      * @return the number of fields that were unlinked
      */
     public int removeAllMappingsForCategory(String categoryName) {
-        Set<String> qualifiedFields = cat2field.remove(categoryName);
+        String cKey = categoryMapKey(categoryName);
+        Set<String> qualifiedFields = cat2field.remove(cKey);
         if (qualifiedFields == null || qualifiedFields.isEmpty()) {
             return 0;
         }
         for (String qf : qualifiedFields) {
-            Set<String> categories = field2cat.get(qf);
+            Set<String> categories = field2cat.get(fieldMapKey(qf));
             if (categories != null) {
                 categories.remove(categoryName);
                 if (categories.isEmpty()) {
-                    field2cat.remove(qf, Collections.emptySet());
+                    field2cat.remove(fieldMapKey(qf), Collections.emptySet());
                 }
             }
         }

@@ -589,11 +589,11 @@ class EmbeddedConsentBundleTest {
     }
 
     // =======================================================================
-    // Comparison with self-hosted bundle behavior
+    // Comparison with core bundle behavior
     // =======================================================================
 
     @Nested
-    @DisplayName("Behavioral Parity with Self-Hosted")
+    @DisplayName("Behavioral Parity with Core")
     @TestInstance(TestInstance.Lifecycle.PER_CLASS)
     class BehavioralParity {
 
@@ -820,6 +820,7 @@ class EmbeddedConsentBundleTest {
             operio
                 .consentAdminService()
                 .linkFieldToCategory("lastName", "Employee", "PII");
+            operio.consentAdminService().registerPurpose("reporting", null);
 
             var scope = ConsentScope.to(
                 "PII",

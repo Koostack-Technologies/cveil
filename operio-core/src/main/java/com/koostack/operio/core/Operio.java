@@ -1,5 +1,8 @@
 package com.koostack.operio.core;
 
+import com.koostack.operio.core.Models.BatchConsentEntry;
+import com.koostack.operio.core.Models.BatchConsentResult;
+import com.koostack.operio.core.Models.BatchConsentResult.BatchItemError;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DiscoveredField;
 import com.koostack.operio.core.Models.DiscoveryResult;
@@ -11,8 +14,10 @@ import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.service.ConsentSyncService;
 import com.koostack.operio.core.service.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
+import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.service.SensitiveDiscovery;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.service.TokenVerifier;
 import com.koostack.operio.core.spi.Plugin;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.core.spi.PluginConfig;
@@ -64,13 +69,17 @@ public class Operio {
     // -- Read-path plugins ----------------------------------------------------
     private final ConsentDecisionService<?> consentService;
     private final IdentityResolver<?> identityResolver;
-    private final AuditLogger auditLogger;
+    private final AuditLogger<?> auditLogger;
     private final MaskingStrategy<?> maskingStrategy;
     private final SensitiveFieldResolver<?> sensitiveFieldResolver;
 
     // -- Write-path plugins ---------------------------------------------------
     private final ConsentAdminService<?> consentAdminService;
     private final ConsentSyncService<?> consentSyncService;
+
+    // -- Platform plugins -----------------------------------------------------
+    private final TokenVerifier<?> tokenVerifier;
+    private final PlatformAdminService<?> platformAdminService;
 
     // -- Discovery plugins ----------------------------------------------------
     private final SensitiveDiscovery<?> sensitiveDiscovery;
@@ -85,6 +94,8 @@ public class Operio {
         this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
         this.consentAdminService = builder.consentAdminService;
         this.consentSyncService = builder.consentSyncService;
+        this.tokenVerifier = builder.tokenVerifier;
+        this.platformAdminService = builder.platformAdminService;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
         // Propagate appName to any service that supports namespacing
@@ -146,13 +157,16 @@ public class Operio {
     public Object access(Object rawData) {
         var identity = identityResolver.resolve();
         var scopes = sensitiveFieldResolver.resolveScopes(rawData);
-        var response = consentService.evaluateConsent(identity.user(), scopes);
+        var response = consentService.evaluateConsent(
+            identity.subject(),
+            scopes
+        );
         for (ConsentScope scope : response.granted()) {
-            auditLogger.logAccessGranted(identity.user(), scope);
+            auditLogger.logAccessGranted(identity.subject(), scope);
         }
         for (ConsentScope scope : response.denied()) {
             auditLogger.logAccessDenied(
-                identity.user(),
+                identity.subject(),
                 scope,
                 response.reasons().get(scope.fieldName())
             );
@@ -257,6 +271,92 @@ public class Operio {
     }
 
     // =======================================================================
+    // Write path — batch grant
+    // =======================================================================
+
+    /**
+     * Grants consent for multiple scopes in a single call.
+     *
+     * <p>Each grant is atomic individually — partial success is possible.
+     * Failed items are caught and collected; the batch continues processing
+     * remaining items. This is <em>not</em> a DB transaction wrapping all
+     * items; each item is independently atomic.
+     *
+     * <p>Each item delegates to the same {@link #grantConsent} path (sync
+     * service if configured, else admin).
+     *
+     * @param subject the data subject identifier
+     * @param entries the list of scopes (with optional expiration) to grant
+     * @return a result summarising successes, failures, and per-item errors
+     */
+    public BatchConsentResult grantConsentBatch(
+        String subject,
+        List<BatchConsentEntry> entries
+    ) {
+        int succeeded = 0;
+        List<BatchItemError> errors = new ArrayList<>();
+
+        for (int i = 0; i < entries.size(); i++) {
+            BatchConsentEntry entry = entries.get(i);
+            try {
+                grantConsent(subject, entry.scope(), entry.expiresAt());
+                succeeded++;
+            } catch (Exception e) {
+                errors.add(
+                    new BatchItemError(i, entry.scope(), e.getMessage())
+                );
+            }
+        }
+
+        return new BatchConsentResult(
+            succeeded,
+            errors.size(),
+            List.copyOf(errors)
+        );
+    }
+
+    // =======================================================================
+    // Write path — batch revoke
+    // =======================================================================
+
+    /**
+     * Revokes consent for multiple scopes in a single call.
+     *
+     * <p>Same semantics as {@link #grantConsentBatch} — each revocation is
+     * independently atomic, partial success is possible, and failed items
+     * are collected in the result.
+     *
+     * @param subject the data subject identifier
+     * @param entries the list of scopes (with optional expiration) to revoke
+     * @return a result summarising successes, failures, and per-item errors
+     */
+    public BatchConsentResult revokeConsentBatch(
+        String subject,
+        List<BatchConsentEntry> entries
+    ) {
+        int succeeded = 0;
+        List<BatchItemError> errors = new ArrayList<>();
+
+        for (int i = 0; i < entries.size(); i++) {
+            BatchConsentEntry entry = entries.get(i);
+            try {
+                revokeConsent(subject, entry.scope(), entry.expiresAt());
+                succeeded++;
+            } catch (Exception e) {
+                errors.add(
+                    new BatchItemError(i, entry.scope(), e.getMessage())
+                );
+            }
+        }
+
+        return new BatchConsentResult(
+            succeeded,
+            errors.size(),
+            List.copyOf(errors)
+        );
+    }
+
+    // =======================================================================
     // Accessors
     // =======================================================================
 
@@ -300,6 +400,55 @@ public class Operio {
      */
     public ConsentSyncService<?> consentSyncService() {
         return consentSyncService;
+    }
+
+    /**
+     * Returns the configured {@link TokenVerifier}, or {@code null}
+     * if none was registered.
+     */
+    public TokenVerifier<?> tokenVerifier() {
+        return tokenVerifier;
+    }
+
+    /**
+     * Returns the configured {@link PlatformAdminService}, or {@code null}
+     * if none was registered.
+     */
+    public PlatformAdminService<?> platformAdminService() {
+        return platformAdminService;
+    }
+
+    /**
+     * Returns the configured {@link IdentityResolver}, or {@code null}
+     * if none was registered.
+     *
+     * <p>Used by the Spring Boot starter's AOP aspects to resolve the
+     * current subject's identity for annotation-driven consent checks.
+     */
+    public IdentityResolver<?> identityResolver() {
+        return identityResolver;
+    }
+
+    /**
+     * Returns the configured {@link MaskingStrategy}, or {@code null}
+     * if none was registered.
+     *
+     * <p>Used by the Spring Boot starter's {@code @Sensitive} aspect to
+     * mask return values when consent has not been granted.
+     */
+    public MaskingStrategy<?> maskingStrategy() {
+        return maskingStrategy;
+    }
+
+    /**
+     * Returns the configured {@link AuditLogger}, or {@code null}
+     * if none was registered.
+     *
+     * <p>Used by the Spring Boot starter's AOP aspects to log consent
+     * evaluation outcomes (granted / denied) for each intercepted call.
+     */
+    public AuditLogger<?> auditLogger() {
+        return auditLogger;
     }
 
     /**
@@ -473,6 +622,10 @@ public class Operio {
         // -- Write-path -------------------------------------------------------
         private ConsentAdminService<?> consentAdminService;
         private ConsentSyncService<?> consentSyncService;
+
+        // -- Platform ---------------------------------------------------------
+        private TokenVerifier<?> tokenVerifier;
+        private PlatformAdminService<?> platformAdminService;
 
         // -- Discovery --------------------------------------------------------
         private SensitiveDiscovery<?> sensitiveDiscovery;
@@ -752,6 +905,84 @@ public class Operio {
          */
         public Builder withConsentSyncProvider(ConsentSyncService<?> service) {
             this.consentSyncService = service;
+            return this;
+        }
+
+        // -- Platform wiring --------------------------------------------------
+
+        /**
+         * Resolves a {@link TokenVerifier} by name via
+         * {@link PluginRegistry} (no configuration).
+         */
+        public Builder withTokenVerifier(String name) {
+            this.tokenVerifier = PluginRegistry.resolve(
+                TokenVerifier.class,
+                name
+            );
+            return this;
+        }
+
+        /**
+         * Resolves and configures a {@link TokenVerifier} by name.
+         */
+        public <C extends PluginConfig> Builder withTokenVerifier(
+            String name,
+            C config
+        ) {
+            this.tokenVerifier = PluginRegistry.resolve(
+                TokenVerifier.class,
+                name,
+                config
+            );
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link TokenVerifier} instance.
+         *
+         * @param service the pre-built token verifier
+         * @return this builder
+         */
+        public Builder withTokenVerifier(TokenVerifier<?> service) {
+            this.tokenVerifier = service;
+            return this;
+        }
+
+        /**
+         * Resolves a {@link PlatformAdminService} by name via
+         * {@link PluginRegistry} (no configuration).
+         */
+        public Builder withPlatformAdmin(String name) {
+            this.platformAdminService = PluginRegistry.resolve(
+                PlatformAdminService.class,
+                name
+            );
+            return this;
+        }
+
+        /**
+         * Resolves and configures a {@link PlatformAdminService} by name.
+         */
+        public <C extends PluginConfig> Builder withPlatformAdmin(
+            String name,
+            C config
+        ) {
+            this.platformAdminService = PluginRegistry.resolve(
+                PlatformAdminService.class,
+                name,
+                config
+            );
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link PlatformAdminService} instance.
+         *
+         * @param service the pre-built platform admin service
+         * @return this builder
+         */
+        public Builder withPlatformAdmin(PlatformAdminService<?> service) {
+            this.platformAdminService = service;
             return this;
         }
 

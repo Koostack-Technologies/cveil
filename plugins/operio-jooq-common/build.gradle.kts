@@ -21,4 +21,8 @@ dependencies {
     implementation("jakarta.xml.bind:jakarta.xml.bind-api:4.0.2")
     implementation("org.glassfish.jaxb:jaxb-runtime:4.0.5")
     implementation("org.slf4j:slf4j-simple:2.0.16")
+
+    // --- Test ----------------------------------------------------------------
+    testImplementation("com.h2database:h2:2.2.224")
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.16")
 }

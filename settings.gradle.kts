@@ -12,7 +12,7 @@ pluginManagement {
 }
 
 rootProject.name = "operio"
-include("operio-spring-boot-starter", "operio-core")
+include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
 
 include("plugins:operio-audit-slf4j")
 include("plugins:operio-consent-admin-jooq")
@@ -25,7 +25,8 @@ include("plugins:operio-masking-jackson")
 include("plugins:operio-resolver-sensitive-annotation")
 include("plugins:operio-consent-sync")
 include("plugins:operio-discovery-sensitive-annotation")
-include("operio-bundle-self-hosted")
+include("operio-bundle-core")
 include("plugins:operio-consent-decision-caffeine")
 include("plugins:operio-consent-sync-embedded")
 include("operio-bundle-embedded")
+include("plugins:operio-platform-jooq")

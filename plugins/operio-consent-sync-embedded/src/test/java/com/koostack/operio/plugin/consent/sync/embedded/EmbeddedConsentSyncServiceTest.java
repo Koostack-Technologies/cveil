@@ -819,6 +819,7 @@ class EmbeddedConsentSyncServiceTest {
             admin.registerCategory("PII", null);
             admin.registerField("firstName", "Person", null);
             admin.linkFieldToCategory("firstName", "Person", "PII");
+            admin.registerPurpose("analytics", null);
 
             // Also populate Caffeine mapping repo so cache fan-out works
             strictService

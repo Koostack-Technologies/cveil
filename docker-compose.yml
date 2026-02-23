@@ -1,0 +1,171 @@
+# =============================================================================
+# Operio REST API — Local Development Docker Compose
+#
+# Spins up the full Operio stack for local development and testing:
+#
+#   - operio-api:  Quarkus REST API (built from source)
+#   - postgres:    PostgreSQL 16 (consent + platform schemas)
+#   - redis:       Redis 7 (consent decision cache + rate limiting)
+#
+# Usage:
+#
+#   # Build and start all services:
+#   docker compose up --build
+#
+#   # Start infrastructure only (run the API from your IDE):
+#   docker compose up postgres redis
+#
+#   # Tear down and remove volumes:
+#   docker compose down -v
+#
+# The bootstrap key is pre-configured for local development.  Use it to
+# create the first tenant and API key:
+#
+#   curl -X POST http://localhost:8080/api/v1/platform/tenants \
+#     -H "Authorization: Bearer opr_bootstrap_localdev_do_not_use_in_prod" \
+#     -H "Content-Type: application/json" \
+#     -d '{"tenantId": "dev_tenant", "displayName": "Dev Tenant", "plan": "free"}'
+#
+#   curl -X POST http://localhost:8080/api/v1/platform/api-keys \
+#     -H "Authorization: Bearer opr_bootstrap_localdev_do_not_use_in_prod" \
+#     -H "Content-Type: application/json" \
+#     -d '{"tenantId": "dev_tenant", "subject": "dev-admin", "roles": ["admin", "consent-writer"]}'
+#
+# =============================================================================
+
+name: operio
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — consent schema + platform schema
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: operio
+      POSTGRES_USER: operio
+      POSTGRES_PASSWORD: operio_local_dev
+      # Performance tuning for local dev (not production values)
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U operio -d operio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis — consent decision cache + rate limiting
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - ""
+      - "--appendonly"
+      - "no"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Operio REST API — Quarkus application
+  # ---------------------------------------------------------------------------
+  operio-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Use the Gradle application distribution (works with Gradle 9.x
+        # where the Quarkus Gradle plugin is not yet compatible).
+        # Change to "quarkus" once the plugin is re-enabled.
+        BUILD_STRATEGY: dist
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # -- Quarkus runtime configuration -----------------------------------
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_VIRTUAL_THREADS_ENABLED: "true"
+
+      # -- CORS (allow local dashboard development) ------------------------
+      QUARKUS_HTTP_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+      QUARKUS_HTTP_CORS_METHODS: "GET,POST,DELETE,OPTIONS"
+      QUARKUS_HTTP_CORS_HEADERS: "Authorization,Content-Type,X-Request-Id"
+      QUARKUS_HTTP_CORS_EXPOSED_HEADERS: "X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning"
+
+      # -- Operio SDK configuration ----------------------------------------
+      OPERIO_MODE: "production"
+      OPERIO_APP_NAME: "operio-local"
+
+      # -- Consent database (jOOQ admin + sync layer) ----------------------
+      OPERIO_DB_URL: "jdbc:postgresql://postgres:5432/operio"
+      OPERIO_DB_DIALECT: "POSTGRES"
+
+      # -- Platform database (tenant management, API keys) -----------------
+      # Same Postgres instance for local dev; separate in production.
+      OPERIO_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/operio"
+      OPERIO_PLATFORM_DB_DIALECT: "POSTGRES"
+
+      # -- Redis (consent decision cache + rate limiting) ------------------
+      OPERIO_REDIS_HOST: "redis"
+      OPERIO_REDIS_PORT: "6379"
+      # No password for local dev Redis.  In production, set OPERIO_REDIS_PASSWORD.
+
+      # -- Bootstrap key (local development only!) -------------------------
+      # This key allows initial tenant and API key creation before any
+      # real credentials exist.  NEVER use this value in production.
+      OPERIO_BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
+
+      # -- Force bootstrap OFF by default ----------------------------------
+      # Set to "true" only for disaster recovery.
+      OPERIO_FORCE_BOOTSTRAP: "false"
+
+      # -- JVM tuning (local dev — generous limits) ------------------------
+      JAVA_OPTS: >-
+        -XX:+UseZGC
+        -XX:+ZGenerational
+        -Xms256m
+        -Xmx1g
+        --enable-preview
+        -Dquarkus.log.level=INFO
+        -Dquarkus.log.category."com.koostack.operio".level=DEBUG
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/q/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

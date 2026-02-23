@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.redis;
 
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.TenantContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,8 +23,9 @@ import redis.clients.jedis.Pipeline;
  * <h2>Redis Key Schema</h2>
  * <p>Each consent decision is stored as a standalone Redis string key:
  * <pre>
- *   Key:   {appName}:consent:{subject}:{entity}/{fieldName}:{purposeName}
- *   Value: GRANTED|FIELD  |  REVOKED|FIELD  |  GRANTED|CATEGORY  |  REVOKED|CATEGORY
+ *   Single-tenant: {appName}:consent:{subject}:{entity}/{fieldName}:{purposeName}
+ *   Multi-tenant:  {appName}:{tenantId}:consent:{subject}:{entity}/{fieldName}:{purposeName}
+ *   Value:         GRANTED|FIELD  |  REVOKED|FIELD  |  GRANTED|CATEGORY  |  REVOKED|CATEGORY
  * </pre>
  *
  * <p>The {@code entity} component prevents field-name collisions across
@@ -35,6 +37,15 @@ import redis.clients.jedis.Pipeline;
  * <p>The {@code appName} prefix isolates different Operio instances that
  * share the same Redis server. It defaults to {@value #DEFAULT_APP_NAME}
  * and can be changed at any time via {@link #setAppName(String)}.
+ *
+ * <h2>Multi-Tenancy</h2>
+ * <p>When a {@link TenantContext} is active (i.e.
+ * {@code TenantContext.get()} returns a non-null tenant ID), all keys
+ * include a {@code {tenantId}} segment immediately after the
+ * {@code {appName}} prefix. This provides namespace isolation between
+ * tenants sharing the same Redis instance. When no tenant context is
+ * active the segment is omitted — backward compatible with existing
+ * single-tenant deployments.
  *
  * <p>Values are pipe-delimited: the first segment is the consent status
  * ({@value #GRANTED} or {@value #REVOKED}), the second is the source that
@@ -228,17 +239,34 @@ public class ConsentPolicyRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
+     * Computes the key prefix for all Redis keys, incorporating the
+     * current tenant context when present.
+     *
+     * <p>When {@link TenantContext#get()} returns a non-null tenant ID
+     * the prefix is {@code {appName}:{tenantId}}. When no tenant context
+     * is active the prefix is just {@code {appName}} — backward compatible
+     * with existing single-tenant keys.
+     *
+     * @return the key prefix, never {@code null}
+     */
+    String keyPrefix() {
+        String tenant = TenantContext.get();
+        return tenant != null ? appName + ":" + tenant : appName;
+    }
+
+    /**
      * Builds the Redis key for a specific consent entry using a
      * pre-qualified field string.
      *
      * @param subject        the subject identifier
      * @param qualifiedField the qualified field ({@code entity/field})
      * @param purpose        the purpose name
-     * @return {@code {appName}:consent:{subject}:{qualifiedField}:{purpose}}
+     * @return {@code {prefix}:consent:{subject}:{qualifiedField}:{purpose}}
+     *         where {@code {prefix}} is {@link #keyPrefix()}
      */
     String consentKey(String subject, String qualifiedField, String purpose) {
         return (
-            appName +
+            keyPrefix() +
             ":consent:" +
             subject +
             ":" +
@@ -255,7 +283,8 @@ public class ConsentPolicyRedisRepository {
      * @param entity  the entity name, or {@code null} for the default entity
      * @param field   the field name
      * @param purpose the purpose name
-     * @return {@code {appName}:consent:{subject}:{entity}/{field}:{purpose}}
+     * @return {@code {prefix}:consent:{subject}:{entity}/{field}:{purpose}}
+     *         where {@code {prefix}} is {@link #keyPrefix()}
      */
     String consentKey(
         String subject,
@@ -267,13 +296,14 @@ public class ConsentPolicyRedisRepository {
     }
 
     /**
-     * Returns the SCAN pattern that matches all consent keys for a subject.
+     * Returns the SCAN pattern that matches all consent keys for a subject
+     * within the current tenant context.
      *
      * @param subject the subject identifier
      * @return the glob pattern
      */
     private String subjectPattern(String subject) {
-        return appName + ":consent:" + subject + ":*";
+        return keyPrefix() + ":consent:" + subject + ":*";
     }
 
     // -----------------------------------------------------------------------

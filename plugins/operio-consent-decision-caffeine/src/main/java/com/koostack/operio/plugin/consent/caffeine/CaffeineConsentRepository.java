@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.TenantContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -152,8 +153,27 @@ public class CaffeineConsentRepository {
      * @param purpose        the purpose name
      * @return {@code {subject}:{qualifiedField}:{purpose}}
      */
+    /**
+     * Computes the key prefix for all cache keys, incorporating the
+     * current tenant context when present.
+     *
+     * <p>When {@link TenantContext#get()} returns a non-null tenant ID
+     * the prefix is {@code {tenantId}:}. When no tenant context is active
+     * the prefix is empty — backward compatible with existing
+     * single-tenant keys.
+     *
+     * @return the key prefix (empty string when no tenant, otherwise
+     *         {@code {tenantId}:})
+     */
+    String keyPrefix() {
+        String tenant = TenantContext.get();
+        return tenant != null ? tenant + KEY_SEP : "";
+    }
+
     String consentKey(String subject, String qualifiedField, String purpose) {
-        return subject + KEY_SEP + qualifiedField + KEY_SEP + purpose;
+        return (
+            keyPrefix() + subject + KEY_SEP + qualifiedField + KEY_SEP + purpose
+        );
     }
 
     /**
@@ -224,19 +244,17 @@ public class CaffeineConsentRepository {
         Instant expiresAt
     ) {
         if (expiresAt != null) {
-            long ttlSeconds = Duration.between(Instant.now(), expiresAt)
-                .getSeconds();
+            long ttlSeconds = Duration.between(
+                Instant.now(),
+                expiresAt
+            ).getSeconds();
             if (ttlSeconds <= 0) {
                 return; // already expired — nothing to write
             }
         }
         cache.put(
             consentKey(subject, entity, field, purpose),
-            new ConsentEntry(
-                granted ? GRANTED : REVOKED,
-                source,
-                expiresAt
-            )
+            new ConsentEntry(granted ? GRANTED : REVOKED, source, expiresAt)
         );
     }
 
@@ -287,7 +305,13 @@ public class CaffeineConsentRepository {
         Instant expiresAt
     ) {
         setConsent(
-            subject, entity, field, purpose, granted, SOURCE_FIELD, expiresAt
+            subject,
+            entity,
+            field,
+            purpose,
+            granted,
+            SOURCE_FIELD,
+            expiresAt
         );
     }
 
@@ -322,7 +346,11 @@ public class CaffeineConsentRepository {
         Set<String> qualifiedFields
     ) {
         setCategoryConsentForFields(
-            subject, purpose, granted, null, qualifiedFields
+            subject,
+            purpose,
+            granted,
+            null,
+            qualifiedFields
         );
     }
 
@@ -356,15 +384,19 @@ public class CaffeineConsentRepository {
             return;
         }
         if (expiresAt != null) {
-            long ttlSeconds = Duration.between(Instant.now(), expiresAt)
-                .getSeconds();
+            long ttlSeconds = Duration.between(
+                Instant.now(),
+                expiresAt
+            ).getSeconds();
             if (ttlSeconds <= 0) {
                 return; // already expired
             }
         }
 
         Set<String> writeable = filterFieldSourcedEntries(
-            subject, purpose, qualifiedFields
+            subject,
+            purpose,
+            qualifiedFields
         );
 
         String status = granted ? GRANTED : REVOKED;
@@ -419,9 +451,7 @@ public class CaffeineConsentRepository {
         String purpose
     ) {
         return Optional.ofNullable(
-            cache.getIfPresent(
-                consentKey(subject, entity, field, purpose)
-            )
+            cache.getIfPresent(consentKey(subject, entity, field, purpose))
         );
     }
 
@@ -497,7 +527,12 @@ public class CaffeineConsentRepository {
 
             result.put(
                 scope,
-                new DecisionDetail(scope, effectiveStatus, resolvedBy, expiresAt)
+                new DecisionDetail(
+                    scope,
+                    effectiveStatus,
+                    resolvedBy,
+                    expiresAt
+                )
             );
         }
 
@@ -523,9 +558,10 @@ public class CaffeineConsentRepository {
         String field,
         String purpose
     ) {
-        return cache.getIfPresent(
-            consentKey(subject, entity, field, purpose)
-        ) != null;
+        return (
+            cache.getIfPresent(consentKey(subject, entity, field, purpose)) !=
+            null
+        );
     }
 
     /**
@@ -540,7 +576,7 @@ public class CaffeineConsentRepository {
      * @return the number of entries removed
      */
     public long removeAllConsent(String subject) {
-        String prefix = subject + KEY_SEP;
+        String prefix = keyPrefix() + subject + KEY_SEP;
         List<String> toRemove = new ArrayList<>();
         for (String key : cache.asMap().keySet()) {
             if (key.startsWith(prefix)) {
@@ -628,6 +664,7 @@ public class CaffeineConsentRepository {
     private static final class ConsentEntryExpiry
         implements Expiry<String, ConsentEntry>
     {
+
         @Override
         public long expireAfterCreate(
             String key,
@@ -663,8 +700,10 @@ public class CaffeineConsentRepository {
             if (value.expiresAt() == null) {
                 return Long.MAX_VALUE;
             }
-            long nanos = Duration.between(Instant.now(), value.expiresAt())
-                .toNanos();
+            long nanos = Duration.between(
+                Instant.now(),
+                value.expiresAt()
+            ).toNanos();
             return Math.max(nanos, 0);
         }
     }

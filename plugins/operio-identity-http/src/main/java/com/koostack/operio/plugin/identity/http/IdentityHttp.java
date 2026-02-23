@@ -41,7 +41,7 @@ public class IdentityHttp implements IdentityResolver<IdentityHttpConfig> {
 
         // If we aren't in an active web request thread, default to anonymous
         if (attributes == null) {
-            return new IdentityContext("anonymous", null);
+            return IdentityContext.anonymous();
         }
 
         HttpServletRequest request = attributes.getRequest();
@@ -57,7 +57,7 @@ public class IdentityHttp implements IdentityResolver<IdentityHttpConfig> {
             token = token.substring(7);
         }
 
-        return new IdentityContext(user, token);
+        return IdentityContext.of(user, token);
     }
 
     @Override

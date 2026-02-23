@@ -2,12 +2,56 @@ package com.koostack.operio.core;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 public interface Models {
-    public record IdentityContext(String user, String token) {}
+    /**
+     * Identity information resolved from the current request or execution context.
+     *
+     * @param subject   unique user ID (OIDC terminology, replaces former {@code user})
+     * @param token     raw bearer token, nullable
+     * @param email     user email, nullable
+     * @param roles     authorities/roles from the IdP
+     * @param claims    arbitrary IdP claims (OIDC, SAML, etc.)
+     * @param tenantId  nullable — for multi-tenancy routing
+     * @param provider  which IdP issued this (e.g. {@code "spring-security"}, {@code "okta"})
+     */
+    public record IdentityContext(
+        String subject,
+        String token,
+        String email,
+        Set<String> roles,
+        Map<String, Object> claims,
+        String tenantId,
+        String provider
+    ) {
+        public static IdentityContext of(String subject, String token) {
+            return new IdentityContext(
+                subject,
+                token,
+                null,
+                Set.of(),
+                Map.of(),
+                null,
+                null
+            );
+        }
+
+        public static IdentityContext anonymous() {
+            return new IdentityContext(
+                "anonymous",
+                null,
+                null,
+                Set.of(),
+                Map.of(),
+                null,
+                null
+            );
+        }
+    }
 
     public record ConsentScope(
         String category,
@@ -269,5 +313,257 @@ public interface Models {
                 Collections.emptySet()
             );
         }
+    }
+
+    // ===================================================================
+    // Platform Admin DTOs
+    // ===================================================================
+
+    /**
+     * Immutable snapshot of a tenant's metadata.
+     *
+     * <p>Returned by {@link com.koostack.operio.core.service.PlatformAdminService}
+     * query methods. Contains plan-level limits used for rate limiting and
+     * quota enforcement at the REST layer.
+     *
+     * @param tenantId          unique tenant identifier (e.g. {@code "acme_corp"})
+     * @param displayName       human-readable tenant name
+     * @param plan              subscription plan ({@code "free"}, {@code "pro"},
+     *                          {@code "enterprise"})
+     * @param status            tenant status ({@code "ACTIVE"}, {@code "SUSPENDED"},
+     *                          {@code "DELETED"})
+     * @param evalLimitMonthly  maximum consent evaluations per calendar month
+     * @param subjectLimit      maximum distinct data subjects
+     * @param burstLimitPerMin  maximum requests per minute (burst cap)
+     * @param createdAt         when the tenant was provisioned
+     */
+    public record TenantInfo(
+        String tenantId,
+        String displayName,
+        String plan,
+        String status,
+        long evalLimitMonthly,
+        long subjectLimit,
+        int burstLimitPerMin,
+        Instant createdAt
+    ) {}
+
+    /**
+     * Immutable snapshot of an API key's metadata.
+     *
+     * <p>Returned by {@link com.koostack.operio.core.service.PlatformAdminService}
+     * list/query methods. Never contains the raw key or its hash — only the
+     * non-sensitive prefix and associated metadata.
+     *
+     * @param keyPrefix  the first 8 characters of the raw key (used for
+     *                   display and revocation)
+     * @param tenantId   the owning tenant
+     * @param subject    the subject (user/service account) this key represents
+     * @param roles      the roles/authorities granted to this key
+     * @param status     key status ({@code "ACTIVE"}, {@code "REVOKED"})
+     * @param createdAt  when the key was created
+     */
+    public record ApiKeyInfo(
+        String keyPrefix,
+        String tenantId,
+        String subject,
+        Set<String> roles,
+        String status,
+        Instant createdAt
+    ) {}
+
+    /**
+     * Immutable snapshot of an external IdP configuration for a tenant.
+     *
+     * <p>Returned by {@link com.koostack.operio.core.service.PlatformAdminService}
+     * IdP query methods. Contains the provider-specific configuration map
+     * (e.g. {@code issuerUri}, {@code clientId}, {@code jwksUri}).
+     *
+     * @param tenantId  the owning tenant
+     * @param provider  the IdP identifier (e.g. {@code "okta"}, {@code "auth0"},
+     *                  {@code "azure-ad"}, {@code "keycloak"})
+     * @param config    provider-specific configuration key-value pairs
+     * @param createdAt when the configuration was created or last updated
+     */
+    public record IdpConfigInfo(
+        String tenantId,
+        String provider,
+        Map<String, Object> config,
+        Instant createdAt
+    ) {}
+
+    // ===================================================================
+    // Consent Admin Query DTOs
+    // ===================================================================
+
+    /**
+     * Immutable snapshot of a registered sensitive field.
+     *
+     * @param fieldName   the field name (e.g. {@code "email"}, {@code "home.street"})
+     * @param entityName  the owning entity (e.g. {@code "User"}), or {@code null}
+     *                    for entity-less fields
+     * @param description optional human-readable description, or {@code null}
+     */
+    public record FieldInfo(
+        String fieldName,
+        String entityName,
+        String description
+    ) {}
+
+    /**
+     * Immutable snapshot of a registered consent category.
+     *
+     * @param categoryName the category name (e.g. {@code "PII"}, {@code "HEALTH"})
+     * @param description  optional human-readable description, or {@code null}
+     */
+    public record CategoryInfo(String categoryName, String description) {}
+
+    /**
+     * Immutable snapshot of a registered entity.
+     *
+     * @param entityName  the entity name (e.g. {@code "User"}, {@code "Patient"})
+     * @param description optional human-readable description, or {@code null}
+     */
+    public record EntityInfo(String entityName, String description) {}
+
+    /**
+     * Immutable snapshot of a registered consent purpose.
+     *
+     * @param purposeName the purpose identifier (e.g. {@code "marketing"},
+     *                    {@code "analytics"})
+     * @param description optional human-readable description, or {@code null}
+     */
+    public record PurposeInfo(String purposeName, String description) {}
+
+    /**
+     * Immutable snapshot of a registered regulation.
+     *
+     * @param regulationName short identifier (e.g. {@code "GDPR"}, {@code "CCPA"})
+     * @param fullName       full legal name (e.g. {@code "General Data Protection
+     *                       Regulation"})
+     * @param jurisdiction   geographic jurisdiction (e.g. {@code "EU"}, {@code "US-CA"})
+     * @param description    optional human-readable description, or {@code null}
+     * @param url            optional URL to the regulation text, or {@code null}
+     */
+    public record RegulationInfo(
+        String regulationName,
+        String fullName,
+        String jurisdiction,
+        String description,
+        String url
+    ) {}
+
+    /**
+     * Summary of a single consent policy row for a given subject.
+     *
+     * <p>Returned by
+     * {@link com.koostack.operio.core.service.ConsentAdminService#findPoliciesBySubject}.
+     * Provides a flat view of the policy without joining into the full
+     * field/category/entity graph.
+     *
+     * @param subject      the data subject identifier
+     * @param fieldName    the field name this policy applies to
+     * @param entityName   the entity name, or {@code null}
+     * @param categoryName the category name, or {@code null}
+     * @param purposeName  the purpose name, or {@code null}
+     * @param status       the consent status ({@code "GRANTED"} or {@code "REVOKED"})
+     * @param expiresAt    when the consent expires, or {@code null} for no expiration
+     * @param createdAt    when the policy row was created
+     */
+    public record PolicySummaryEntry(
+        String subject,
+        String fieldName,
+        String entityName,
+        String categoryName,
+        String purposeName,
+        String status,
+        Instant expiresAt,
+        Instant createdAt
+    ) {}
+
+    /**
+     * A single entry in the append-only consent audit log.
+     *
+     * <p>Each entry represents one grant or revoke event, capturing the full
+     * context required by regulators: who performed the action, when, from
+     * where, and any additional request metadata.
+     *
+     * <p>Returned by
+     * {@link com.koostack.operio.core.service.ConsentAdminService#getConsentHistory}.
+     *
+     * @param subject      the data subject identifier
+     * @param fieldName    the field this event applies to
+     * @param entityName   the entity name, or {@code null}
+     * @param categoryName the category name, or {@code null}
+     * @param purposeName  the purpose name, or {@code null}
+     * @param action       the action performed ({@code "GRANTED"} or
+     *                     {@code "REVOKED"})
+     * @param expiresAt    when the consent expires, or {@code null} for no
+     *                     expiration
+     * @param actor        the identity that performed the action (e.g. the
+     *                     admin user or the subject themselves)
+     * @param ipAddress    the originating IP address, or {@code null}
+     * @param userAgent    the originating User-Agent header, or {@code null}
+     * @param metadata     additional request metadata key-value pairs,
+     *                     possibly empty
+     * @param timestamp    when the event occurred
+     */
+    public record ConsentAuditEntry(
+        String subject,
+        String fieldName,
+        String entityName,
+        String categoryName,
+        String purposeName,
+        String action,
+        Instant expiresAt,
+        String actor,
+        String ipAddress,
+        String userAgent,
+        Map<String, String> metadata,
+        Instant timestamp
+    ) {}
+
+    // ===================================================================
+    // Batch Consent DTOs
+    // ===================================================================
+
+    /**
+     * A single entry in a batch consent grant or revoke request.
+     *
+     * @param scope     the consent scope to grant or revoke
+     * @param expiresAt when the consent expires, or {@code null} for no
+     *                  expiration
+     */
+    public record BatchConsentEntry(ConsentScope scope, Instant expiresAt) {}
+
+    /**
+     * The result of a batch consent operation (grant or revoke).
+     *
+     * <p>Each item in the batch is independently atomic — partial success is
+     * possible. Failed items are captured in {@link #errors} with the
+     * original index, scope, and error message.
+     *
+     * @param succeeded the number of items that completed successfully
+     * @param failed    the number of items that failed
+     * @param errors    details for each failed item, possibly empty
+     */
+    public record BatchConsentResult(
+        int succeeded,
+        int failed,
+        List<BatchItemError> errors
+    ) {
+        /**
+         * Describes a single failed item within a batch consent operation.
+         *
+         * @param index   the zero-based index of the failed item in the
+         *                original request list
+         * @param scope   the consent scope that failed
+         * @param message a human-readable error message
+         */
+        public record BatchItemError(
+            int index,
+            ConsentScope scope,
+            String message
+        ) {}
     }
 }

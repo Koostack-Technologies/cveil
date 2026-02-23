@@ -1,8 +1,16 @@
 package com.koostack.operio.core.service;
 
+import com.koostack.operio.core.Models.CategoryInfo;
+import com.koostack.operio.core.Models.ConsentAuditEntry;
 import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.Models.EntityInfo;
+import com.koostack.operio.core.Models.FieldInfo;
+import com.koostack.operio.core.Models.PolicySummaryEntry;
+import com.koostack.operio.core.Models.PurposeInfo;
+import com.koostack.operio.core.Models.RegulationInfo;
 import com.koostack.operio.core.spi.Plugin;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Policy administration service — grants, revokes, and manages consent.
@@ -143,6 +151,249 @@ public interface ConsentAdminService<T> extends Plugin<T> {
     ) {
         throw new UnsupportedOperationException(
             "Schema registration not supported by " + getName()
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Purpose & regulation registration
+    // -----------------------------------------------------------------------
+
+    /**
+     * Registers a consent purpose in the consent admin schema.
+     *
+     * <p>Uses upsert semantics — if a purpose with the same name already
+     * exists, its description is updated but the row is preserved.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema registration should override this.
+     *
+     * @param purposeName the purpose identifier (e.g. {@code "marketing"},
+     *                    {@code "analytics"})
+     * @param description optional human-readable description, or {@code null}
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema registration
+     */
+    default void registerPurpose(String purposeName, String description) {
+        throw new UnsupportedOperationException(
+            "Schema registration not supported by " + getName()
+        );
+    }
+
+    /**
+     * Registers a regulation in the consent admin schema.
+     *
+     * <p>Uses upsert semantics — if a regulation with the same name already
+     * exists, its fields are updated but the row is preserved.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema registration should override this.
+     *
+     * @param regulationName short identifier (e.g. {@code "GDPR"}, {@code "CCPA"})
+     * @param fullName       full legal name (e.g. {@code "General Data Protection
+     *                       Regulation"})
+     * @param jurisdiction   geographic jurisdiction (e.g. {@code "EU"}, {@code "US-CA"})
+     * @param description    optional human-readable description, or {@code null}
+     * @param url            optional URL to the regulation text, or {@code null}
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema registration
+     */
+    default void registerRegulation(
+        String regulationName,
+        String fullName,
+        String jurisdiction,
+        String description,
+        String url
+    ) {
+        throw new UnsupportedOperationException(
+            "Schema registration not supported by " + getName()
+        );
+    }
+
+    /**
+     * Links a purpose to a regulation with a legal basis in the consent
+     * admin schema.
+     *
+     * <p>Uses idempotent semantics — if the link already exists, this is a
+     * no-op. Both the purpose and the regulation must already be registered
+     * (via {@link #registerPurpose} and {@link #registerRegulation}).
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema registration should override this.
+     *
+     * @param purposeName    the purpose to link
+     * @param regulationName the regulation to link to
+     * @param legalBasis     the legal basis for processing under this
+     *                       regulation (e.g. {@code "consent"},
+     *                       {@code "legitimate_interest"}, {@code "contract"})
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema registration
+     * @throws IllegalArgumentException if the purpose or regulation does not
+     *                                  exist
+     */
+    default void linkPurposeToRegulation(
+        String purposeName,
+        String regulationName,
+        String legalBasis
+    ) {
+        throw new UnsupportedOperationException(
+            "Schema registration not supported by " + getName()
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Schema query — used by REST API and admin dashboards
+    // -----------------------------------------------------------------------
+
+    /**
+     * Lists all registered sensitive fields.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries (e.g. jOOQ-backed) should
+     * override this method.
+     *
+     * @return an unmodifiable list of all registered fields, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<FieldInfo> listFields() {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    /**
+     * Lists all registered consent categories.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @return an unmodifiable list of all registered categories, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<CategoryInfo> listCategories() {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    /**
+     * Lists all distinct entities that have registered fields.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @return an unmodifiable list of all entities, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<EntityInfo> listEntities() {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    /**
+     * Lists all registered consent purposes.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @return an unmodifiable list of all registered purposes, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<PurposeInfo> listPurposes() {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    /**
+     * Lists all registered regulations.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @return an unmodifiable list of all registered regulations, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<RegulationInfo> listRegulations() {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    /**
+     * Finds all consent policy entries for a given data subject.
+     *
+     * <p>Returns a flat summary of every policy row matching the subject,
+     * including field, entity, category, purpose, status, and expiration.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @param subjectId the data subject identifier to search for
+     * @return an unmodifiable list of matching policy summaries, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support schema queries
+     */
+    default List<PolicySummaryEntry> findPoliciesBySubject(String subjectId) {
+        throw new UnsupportedOperationException(
+            "Schema query not supported by " + getName()
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Consent audit history
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns the full consent change history for a subject, ordered by
+     * timestamp descending (most recent first).
+     *
+     * <p>Each entry represents a single grant or revoke event with the
+     * actor, timestamp, and request metadata. The audit log is append-only
+     * — it captures the full history even when the current-state
+     * {@code consent_policy} row has been overwritten.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support audit history should override this.
+     *
+     * @param subjectId the data subject identifier to retrieve history for
+     * @return an unmodifiable list of audit entries, most recent first,
+     *         possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support audit history
+     */
+    default List<ConsentAuditEntry> getConsentHistory(String subjectId) {
+        throw new UnsupportedOperationException(
+            "Consent audit history not supported by " + getName()
+        );
+    }
+
+    /**
+     * Returns the consent change history for a subject filtered to a
+     * specific scope (field + entity + purpose combination), ordered by
+     * timestamp descending (most recent first).
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support audit history should override this.
+     *
+     * @param subjectId the data subject identifier to retrieve history for
+     * @param scope     the consent scope to filter by
+     * @return an unmodifiable list of matching audit entries, most recent
+     *         first, possibly empty
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support audit history
+     */
+    default List<ConsentAuditEntry> getConsentHistory(
+        String subjectId,
+        ConsentScope scope
+    ) {
+        throw new UnsupportedOperationException(
+            "Consent audit history not supported by " + getName()
         );
     }
 }

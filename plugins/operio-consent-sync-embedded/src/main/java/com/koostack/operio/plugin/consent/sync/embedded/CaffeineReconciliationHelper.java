@@ -8,11 +8,13 @@ import com.koostack.operio.plugin.consent.jooq.EntityRepository;
 import com.koostack.operio.plugin.consent.jooq.FieldCategoryRepository;
 import com.koostack.operio.plugin.consent.jooq.FieldRepository;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminService;
+import com.koostack.operio.plugin.consent.jooq.PurposeRepository;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.FieldCategory;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -100,6 +102,7 @@ public class CaffeineReconciliationHelper {
     private final EntityRepository entityRepo;
     private final CategoryRepository categoryRepo;
     private final FieldCategoryRepository fieldCategoryRepo;
+    private final PurposeRepository purposeRepo;
     private final CaffeineConsentRepository caffeineConsentRepo;
     private final CaffeineFieldCategoryMappingRepository caffeineMappingRepo;
 
@@ -128,10 +131,12 @@ public class CaffeineReconciliationHelper {
     ) {
         Objects.requireNonNull(jooqAdmin, "jooqAdmin must not be null");
         Objects.requireNonNull(
-            caffeineConsentRepo, "caffeineConsentRepo must not be null"
+            caffeineConsentRepo,
+            "caffeineConsentRepo must not be null"
         );
         Objects.requireNonNull(
-            caffeineMappingRepo, "caffeineMappingRepo must not be null"
+            caffeineMappingRepo,
+            "caffeineMappingRepo must not be null"
         );
 
         this.consentPolicyRepo = jooqAdmin.consentPolicyRepository();
@@ -139,6 +144,7 @@ public class CaffeineReconciliationHelper {
         this.entityRepo = jooqAdmin.entityRepository();
         this.categoryRepo = jooqAdmin.categoryRepository();
         this.fieldCategoryRepo = jooqAdmin.fieldCategoryRepository();
+        this.purposeRepo = jooqAdmin.purposeRepository();
         this.caffeineConsentRepo = caffeineConsentRepo;
         this.caffeineMappingRepo = caffeineMappingRepo;
     }
@@ -184,8 +190,9 @@ public class CaffeineReconciliationHelper {
             strategy
         );
 
-        ReconciliationResult.Builder result =
-            new ReconciliationResult.Builder(strategy);
+        ReconciliationResult.Builder result = new ReconciliationResult.Builder(
+            strategy
+        );
 
         // Step 0: optionally clear caches
         if (strategy == ReconciliationStrategy.FULL_REBUILD) {
@@ -198,10 +205,13 @@ public class CaffeineReconciliationHelper {
         Map<Long, String> entityNames = buildEntityNameMap();
         Map<Long, Field> fieldMap = buildFieldMap();
         Map<Long, String> categoryNames = buildCategoryNameMap();
+        Map<Long, String> purposeNames = buildPurposeNameMap();
 
         // Step 2: rebuild field↔category mappings
         int mappingsLoaded = rebuildMappings(
-            fieldMap, entityNames, categoryNames
+            fieldMap,
+            entityNames,
+            categoryNames
         );
         result.addMappingsLoaded(mappingsLoaded);
 
@@ -214,7 +224,14 @@ public class CaffeineReconciliationHelper {
         );
 
         for (ConsentPolicy policy : policies) {
-            processPolicy(policy, fieldMap, entityNames, categoryNames, result);
+            processPolicy(
+                policy,
+                fieldMap,
+                entityNames,
+                categoryNames,
+                purposeNames,
+                result
+            );
         }
 
         ReconciliationResult finalResult = result.build();
@@ -281,8 +298,9 @@ public class CaffeineReconciliationHelper {
             new Object[] { subjectId, strategy }
         );
 
-        ReconciliationResult.Builder result =
-            new ReconciliationResult.Builder(strategy);
+        ReconciliationResult.Builder result = new ReconciliationResult.Builder(
+            strategy
+        );
 
         // Step 0: optionally clear the subject's consent entries
         if (strategy == ReconciliationStrategy.FULL_REBUILD) {
@@ -298,16 +316,20 @@ public class CaffeineReconciliationHelper {
         Map<Long, String> entityNames = buildEntityNameMap();
         Map<Long, Field> fieldMap = buildFieldMap();
         Map<Long, String> categoryNames = buildCategoryNameMap();
+        Map<Long, String> purposeNames = buildPurposeNameMap();
 
         // Step 2: rebuild mappings (additive — global, not per-subject)
         int mappingsLoaded = rebuildMappings(
-            fieldMap, entityNames, categoryNames
+            fieldMap,
+            entityNames,
+            categoryNames
         );
         result.addMappingsLoaded(mappingsLoaded);
 
         // Step 3: load and process the subject's policies
-        List<ConsentPolicy> policies =
-            consentPolicyRepo.findAllBySubject(subjectId);
+        List<ConsentPolicy> policies = consentPolicyRepo.findAllBySubject(
+            subjectId
+        );
         log.log(
             Level.FINE,
             "Loaded {0} consent policy rows for subject={1}",
@@ -315,7 +337,14 @@ public class CaffeineReconciliationHelper {
         );
 
         for (ConsentPolicy policy : policies) {
-            processPolicy(policy, fieldMap, entityNames, categoryNames, result);
+            processPolicy(
+                policy,
+                fieldMap,
+                entityNames,
+                categoryNames,
+                purposeNames,
+                result
+            );
         }
 
         ReconciliationResult finalResult = result.build();
@@ -356,6 +385,17 @@ public class CaffeineReconciliationHelper {
         Map<Long, String> map = new HashMap<>();
         for (Category category : categoryRepo.findAll()) {
             map.put(category.getCategoryId(), category.getCategoryName());
+        }
+        return map;
+    }
+
+    /**
+     * Builds a map of purpose_id → purpose_name for all purposes.
+     */
+    private Map<Long, String> buildPurposeNameMap() {
+        Map<Long, String> map = new HashMap<>();
+        for (Purpose purpose : purposeRepo.findAll()) {
+            map.put(purpose.getPurposeId(), purpose.getPurposeName());
         }
         return map;
     }
@@ -401,15 +441,16 @@ public class CaffeineReconciliationHelper {
                             link.getFieldId(),
                             link.getCategoryId(),
                             field != null ? field.getFieldName() : "null",
-                            categoryName
+                            categoryName,
                         }
                     );
                     continue;
                 }
 
-                String entityName = field.getEntityId() != null
-                    ? entityNames.get(field.getEntityId())
-                    : null;
+                String entityName =
+                    field.getEntityId() != null
+                        ? entityNames.get(field.getEntityId())
+                        : null;
 
                 caffeineMappingRepo.addFieldToCategory(
                     entityName,
@@ -425,7 +466,7 @@ public class CaffeineReconciliationHelper {
                     new Object[] {
                         link.getFieldId(),
                         link.getCategoryId(),
-                        e.getMessage()
+                        e.getMessage(),
                     }
                 );
             }
@@ -466,25 +507,37 @@ public class CaffeineReconciliationHelper {
         Map<Long, Field> fieldMap,
         Map<Long, String> entityNames,
         Map<Long, String> categoryNames,
+        Map<Long, String> purposeNames,
         ReconciliationResult.Builder result
     ) {
         try {
             Instant expiresAt = toInstant(policy.getExpiresAt());
             boolean granted = Boolean.TRUE.equals(policy.getGranted());
             String subjectId = policy.getSubjectId();
-            String purposeName = policy.getPurposeName();
+            String purposeName = purposeNames.get(policy.getPurposeId());
 
             if (policy.getFieldId() != null) {
                 // -- Field-level policy --
                 processFieldPolicy(
-                    policy, fieldMap, entityNames,
-                    subjectId, purposeName, granted, expiresAt, result
+                    policy,
+                    fieldMap,
+                    entityNames,
+                    subjectId,
+                    purposeName,
+                    granted,
+                    expiresAt,
+                    result
                 );
             } else if (policy.getCategoryId() != null) {
                 // -- Category-level policy --
                 processCategoryPolicy(
-                    policy, categoryNames,
-                    subjectId, purposeName, granted, expiresAt, result
+                    policy,
+                    categoryNames,
+                    subjectId,
+                    purposeName,
+                    granted,
+                    expiresAt,
+                    result
                 );
             } else {
                 // Neither field nor category — should not happen given the
@@ -528,16 +581,17 @@ public class CaffeineReconciliationHelper {
                     "found in field table",
                 new Object[] {
                     policy.getConsentPolicyId(),
-                    policy.getFieldId()
+                    policy.getFieldId(),
                 }
             );
             result.addSkipped();
             return;
         }
 
-        String entityName = field.getEntityId() != null
-            ? entityNames.get(field.getEntityId())
-            : null;
+        String entityName =
+            field.getEntityId() != null
+                ? entityNames.get(field.getEntityId())
+                : null;
 
         caffeineConsentRepo.setConsent(
             subjectId,
@@ -573,25 +627,23 @@ public class CaffeineReconciliationHelper {
                     "not found in category table",
                 new Object[] {
                     policy.getConsentPolicyId(),
-                    policy.getCategoryId()
+                    policy.getCategoryId(),
                 }
             );
             result.addSkipped();
             return;
         }
 
-        Set<String> qualifiedFields =
-            caffeineMappingRepo.getFieldsForCategory(categoryName);
+        Set<String> qualifiedFields = caffeineMappingRepo.getFieldsForCategory(
+            categoryName
+        );
 
         if (qualifiedFields.isEmpty()) {
             log.log(
                 Level.FINE,
                 "Category-level policy id={0} for category ''{1}'' has " +
                     "no mapped fields — writing 0 fan-out entries",
-                new Object[] {
-                    policy.getConsentPolicyId(),
-                    categoryName
-                }
+                new Object[] { policy.getConsentPolicyId(), categoryName }
             );
             // Still count it as a processed category policy with 0 fan-out
             result.addCategoryPolicy(0);

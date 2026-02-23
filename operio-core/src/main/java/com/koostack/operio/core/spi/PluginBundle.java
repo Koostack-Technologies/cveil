@@ -8,7 +8,7 @@ import com.koostack.operio.core.Operio;
  *
  * <p>Bundles encapsulate plugin selection, configuration, and compatibility
  * constraints. They are the recommended unit of distribution for coherent
- * plugin stacks (e.g. "self-hosted consent", "managed consent").
+ * plugin stacks (e.g. "core consent", "embedded consent", "cloud consent").
  *
  * <h2>Composition</h2>
  * <p>Multiple bundles can be applied to the same builder. Each bundle sets
@@ -23,13 +23,12 @@ import com.koostack.operio.core.Operio;
  * <p>Example:
  * <pre>{@code
  * Operio.builder()
- *     .withBundle(new SelfHostedConsentBundle(jooqConfig, redisConfig))
+ *     .withBundle(new CoreConsentBundle(jooqConfig, redisConfig))
  *     .withAuditProvider("custom", customAuditConfig)  // override
  *     .build();
  * }</pre>
  */
 public interface PluginBundle {
-
     /**
      * Applies this bundle's plugins to the given builder.
      *
@@ -45,7 +44,7 @@ public interface PluginBundle {
     /**
      * Human-readable name for logging and diagnostics.
      *
-     * @return the bundle name (e.g. "self-hosted", "managed")
+     * @return the bundle name (e.g. "core", "embedded", "cloud")
      */
     String name();
 }

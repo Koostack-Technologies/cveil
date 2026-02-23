@@ -274,6 +274,13 @@ public class ConsentSyncServiceImpl
      */
     private void ensureMetadataRegistered(ConsentScope scope) {
         try {
+            // Register purpose if present — required since V4 made
+            // purpose_id NOT NULL on consent_policy. Without this,
+            // resolvePurposeId() would throw on unknown purpose names.
+            if (scope.purposeName() != null && !scope.purposeName().isBlank()) {
+                jooqAdmin.registerPurpose(scope.purposeName(), null);
+            }
+
             // Register category if present
             if (scope.category() != null && !scope.category().isBlank()) {
                 jooqAdmin.registerCategory(scope.category(), null);

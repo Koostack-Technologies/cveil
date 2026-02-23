@@ -13,7 +13,7 @@ Operio is a library that gives your application a complete consent management sy
 
 - **Library, not a service** — runs inside your JVM. No sidecar, no network hop for consent evaluation.
 - **Plugin architecture** — every capability (storage, caching, identity, auditing, masking, discovery) is an SPI you can implement or swap.
-- **Bundles for common topologies** — one-liner setup for embedded (H2 + Caffeine) or self-hosted (Postgres + Redis) deployments.
+- **Bundles for common topologies** — one-liner setup for embedded (H2 + Caffeine) or production (Postgres + Redis) deployments.
 - **Entity-aware scoping** — `User.email` and `Contact.email` are distinct consent targets, not a naming collision.
 - **Field-level precedence** — explicit field-level consent always wins over category-level policies.
 - **Expiration & TTL** — consent grants and revocations can carry an `expiresAt` timestamp, enforced natively in Redis (TTL) and Caffeine (variable expiry).
@@ -86,9 +86,9 @@ ConsentResponse response = operio.consentService()
 implementation 'com.koostack:operio-bundle-embedded:<version>'
 ```
 
-### Self-Hosted (Postgres + Redis)
+### Production (Postgres + Redis)
 
-Production topology: Postgres as the relational source of truth, Redis for sub-millisecond consent evaluation via single-`MGET` lookups.
+Production topology: Postgres as the relational source of truth, Redis for sub-millisecond consent evaluation via single-`MGET` lookups. This is the `CoreConsentBundle` — the backbone of the Operio cloud REST API.
 
 ```java
 var jooqConfig = new JooqConsentAdminServiceConfig(
@@ -100,7 +100,7 @@ var discoveryConfig = AnnotationDiscoveryConfig.of(
 
 Operio operio = Operio.builder()
     .withAppName("my-healthcare-app")
-    .withBundle(new SelfHostedConsentBundle(
+    .withBundle(new CoreConsentBundle(
         jooqConfig, redisConfig, discoveryConfig))
     .verifyOnBuild()   // fail-fast if DB or Redis is unreachable
     .build();
@@ -121,7 +121,7 @@ operio.revokeConsent("patient-42",
 **Dependencies** (Gradle):
 
 ```groovy
-implementation 'com.koostack:operio-bundle-self-hosted:<version>'
+implementation 'com.koostack:operio-bundle-core:<version>'
 runtimeOnly    'org.postgresql:postgresql:42.7.3'
 ```
 
@@ -232,7 +232,7 @@ A direct field-level policy (`SOURCE_FIELD`) always wins over a category-materia
 | Plugin | Name | Description |
 |--------|------|-------------|
 | `operio-bundle-embedded` | `"embedded"` | Zero-config: H2 + Caffeine, no external infrastructure |
-| `operio-bundle-self-hosted` | `"self-hosted"` | Production: jOOQ (Postgres/H2/etc.) + Redis |
+| `operio-bundle-core` | `"core"` | Production: jOOQ (Postgres/H2/etc.) + Redis — powers the Operio cloud |
 
 ### Consent Admin (Write Path)
 
@@ -314,7 +314,7 @@ Every plugin has an `isReady()` method. Call `Operio.verifyReady()` to check all
 
 ```java
 Operio operio = Operio.builder()
-    .withBundle(new SelfHostedConsentBundle(jooqConfig, redisConfig))
+    .withBundle(new CoreConsentBundle(jooqConfig, redisConfig))
     .verifyOnBuild()  // throws OperioConfigurationException if unhealthy
     .build();
 ```
@@ -376,7 +376,7 @@ operio/
 ├── operio-core                          # Core SPIs, models, Operio builder
 ├── operio-spring-boot-starter           # Spring Boot auto-configuration
 ├── operio-bundle-embedded               # Embedded bundle (H2 + Caffeine)
-├── operio-bundle-self-hosted            # Self-hosted bundle (DB + Redis)
+├── operio-bundle-core                   # Core production bundle (DB + Redis)
 └── plugins/
     ├── operio-jooq-common               # Shared jOOQ/Flyway/HikariCP infra
     ├── operio-redis-common              # Shared Jedis infra

@@ -4,7 +4,6 @@ import static com.koostack.operio.plugin.consent.jooq.generated.Tables.CONSENT_P
 
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.ConsentPolicyDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.records.ConsentPolicyRecord;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -17,13 +16,16 @@ import org.jooq.DSLContext;
  *
  * <p>Wraps the generated {@link ConsentPolicyDao} for standard CRUD and adds
  * domain-specific operations — primarily upserts keyed on the
- * {@code (subject_id, field_id, purpose_name)} and
- * {@code (subject_id, category_id, purpose_name)} unique constraints.
+ * {@code (subject_id, field_id, purpose_id)} and
+ * {@code (subject_id, category_id, purpose_id)} unique constraints.
  *
- * <p>Every consent decision is now scoped to a specific purpose (e.g.
- * {@code "marketing"}, {@code "analytics"}, {@code "operations"}). This
+ * <p>Every consent decision is now scoped to a specific purpose via its
+ * relational {@code purpose_id} (foreign key to the {@code purpose} table).
+ * This replaces the earlier string-based {@code purpose_name} column and
  * aligns the relational admin schema with the Redis decision layer's
- * {@code ConsentScope(category, fieldName, purposeName)} model.
+ * {@code ConsentScope(category, fieldName, purposeName)} model — the
+ * resolution from {@code purposeName} to {@code purposeId} is performed
+ * upstream by {@link JooqConsentAdminService}.
  */
 public class ConsentPolicyRepository {
 
@@ -48,24 +50,24 @@ public class ConsentPolicyRepository {
      * Upserts a field-level consent policy with no expiration.
      *
      * <p>Convenience overload that delegates to
-     * {@link #upsertByField(String, Long, String, boolean, LocalDateTime)}
+     * {@link #upsertByField(String, Long, Long, boolean, LocalDateTime)}
      * with a {@code null} expiration.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param fieldId     the field the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
+     * @param subjectId the subject whose consent is being recorded
+     * @param fieldId   the field the consent decision applies to
+     * @param purposeId the purpose this consent is scoped to
+     * @param granted   {@code true} to grant, {@code false} to revoke
      */
     public void upsertByField(
         String subjectId,
         Long fieldId,
-        String purposeName,
+        Long purposeId,
         boolean granted
     ) {
         upsertByField(
             subjectId,
             fieldId,
-            purposeName,
+            purposeId,
             granted,
             (LocalDateTime) null
         );
@@ -77,24 +79,24 @@ public class ConsentPolicyRepository {
      * <p>Convenience overload that converts the {@code Instant} to a
      * {@code LocalDateTime} in UTC before delegating.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param fieldId     the field the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
-     * @param expiresAt   when this consent expires, or {@code null} for no
-     *                    expiration
+     * @param subjectId the subject whose consent is being recorded
+     * @param fieldId   the field the consent decision applies to
+     * @param purposeId the purpose this consent is scoped to
+     * @param granted   {@code true} to grant, {@code false} to revoke
+     * @param expiresAt when this consent expires, or {@code null} for no
+     *                  expiration
      */
     public void upsertByField(
         String subjectId,
         Long fieldId,
-        String purposeName,
+        Long purposeId,
         boolean granted,
         Instant expiresAt
     ) {
         upsertByField(
             subjectId,
             fieldId,
-            purposeName,
+            purposeId,
             granted,
             expiresAt != null
                 ? LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC)
@@ -106,24 +108,24 @@ public class ConsentPolicyRepository {
      * Upserts a field-level consent policy.
      *
      * <p>If no row exists for the given {@code (subjectId, fieldId,
-     * purposeName)} triple one is inserted; otherwise the existing row is
+     * purposeId)} triple one is inserted; otherwise the existing row is
      * updated in place.
      *
      * <p>When {@code granted} is {@code true} the {@code granted_at} timestamp
      * is set and any previous revocation is cleared. When {@code false} the
      * {@code revoked_at} timestamp is set and the grant flag is flipped.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param fieldId     the field the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
-     * @param expiresAt   when this consent expires, or {@code null} for no
-     *                    expiration
+     * @param subjectId the subject whose consent is being recorded
+     * @param fieldId   the field the consent decision applies to
+     * @param purposeId the purpose this consent is scoped to
+     * @param granted   {@code true} to grant, {@code false} to revoke
+     * @param expiresAt when this consent expires, or {@code null} for no
+     *                  expiration
      */
     public void upsertByField(
         String subjectId,
         Long fieldId,
-        String purposeName,
+        Long purposeId,
         boolean granted,
         LocalDateTime expiresAt
     ) {
@@ -133,7 +135,7 @@ public class ConsentPolicyRepository {
             .insertInto(CONSENT_POLICY)
             .set(CONSENT_POLICY.SUBJECT_ID, subjectId)
             .set(CONSENT_POLICY.FIELD_ID, fieldId)
-            .set(CONSENT_POLICY.PURPOSE_NAME, purposeName)
+            .set(CONSENT_POLICY.PURPOSE_ID, purposeId)
             .set(CONSENT_POLICY.GRANTED, granted)
             .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
             .set(CONSENT_POLICY.GRANTED_AT, granted ? now : null)
@@ -143,7 +145,7 @@ public class ConsentPolicyRepository {
             .onConflict(
                 CONSENT_POLICY.SUBJECT_ID,
                 CONSENT_POLICY.FIELD_ID,
-                CONSENT_POLICY.PURPOSE_NAME
+                CONSENT_POLICY.PURPOSE_ID
             )
             .doUpdate()
             .set(CONSENT_POLICY.GRANTED, granted)
@@ -158,24 +160,24 @@ public class ConsentPolicyRepository {
      * Upserts a category-level consent policy with no expiration.
      *
      * <p>Convenience overload that delegates to
-     * {@link #upsertByCategory(String, Long, String, boolean, LocalDateTime)}
+     * {@link #upsertByCategory(String, Long, Long, boolean, LocalDateTime)}
      * with a {@code null} expiration.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param categoryId  the category the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
+     * @param subjectId  the subject whose consent is being recorded
+     * @param categoryId the category the consent decision applies to
+     * @param purposeId  the purpose this consent is scoped to
+     * @param granted    {@code true} to grant, {@code false} to revoke
      */
     public void upsertByCategory(
         String subjectId,
         Long categoryId,
-        String purposeName,
+        Long purposeId,
         boolean granted
     ) {
         upsertByCategory(
             subjectId,
             categoryId,
-            purposeName,
+            purposeId,
             granted,
             (LocalDateTime) null
         );
@@ -188,24 +190,24 @@ public class ConsentPolicyRepository {
      * <p>Convenience overload that converts the {@code Instant} to a
      * {@code LocalDateTime} in UTC before delegating.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param categoryId  the category the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
-     * @param expiresAt   when this consent expires, or {@code null} for no
-     *                    expiration
+     * @param subjectId  the subject whose consent is being recorded
+     * @param categoryId the category the consent decision applies to
+     * @param purposeId  the purpose this consent is scoped to
+     * @param granted    {@code true} to grant, {@code false} to revoke
+     * @param expiresAt  when this consent expires, or {@code null} for no
+     *                   expiration
      */
     public void upsertByCategory(
         String subjectId,
         Long categoryId,
-        String purposeName,
+        Long purposeId,
         boolean granted,
         Instant expiresAt
     ) {
         upsertByCategory(
             subjectId,
             categoryId,
-            purposeName,
+            purposeId,
             granted,
             expiresAt != null
                 ? LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC)
@@ -217,20 +219,20 @@ public class ConsentPolicyRepository {
      * Upserts a category-level consent policy.
      *
      * <p>Behaves identically to {@link #upsertByField} but targets the
-     * {@code (subject_id, category_id, purpose_name)} unique constraint
+     * {@code (subject_id, category_id, purpose_id)} unique constraint
      * instead.
      *
-     * @param subjectId   the subject whose consent is being recorded
-     * @param categoryId  the category the consent decision applies to
-     * @param purposeName the purpose this consent is scoped to
-     * @param granted     {@code true} to grant, {@code false} to revoke
-     * @param expiresAt   when this consent expires, or {@code null} for no
-     *                    expiration
+     * @param subjectId  the subject whose consent is being recorded
+     * @param categoryId the category the consent decision applies to
+     * @param purposeId  the purpose this consent is scoped to
+     * @param granted    {@code true} to grant, {@code false} to revoke
+     * @param expiresAt  when this consent expires, or {@code null} for no
+     *                   expiration
      */
     public void upsertByCategory(
         String subjectId,
         Long categoryId,
-        String purposeName,
+        Long purposeId,
         boolean granted,
         LocalDateTime expiresAt
     ) {
@@ -240,7 +242,7 @@ public class ConsentPolicyRepository {
             .insertInto(CONSENT_POLICY)
             .set(CONSENT_POLICY.SUBJECT_ID, subjectId)
             .set(CONSENT_POLICY.CATEGORY_ID, categoryId)
-            .set(CONSENT_POLICY.PURPOSE_NAME, purposeName)
+            .set(CONSENT_POLICY.PURPOSE_ID, purposeId)
             .set(CONSENT_POLICY.GRANTED, granted)
             .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
             .set(CONSENT_POLICY.GRANTED_AT, granted ? now : null)
@@ -250,7 +252,7 @@ public class ConsentPolicyRepository {
             .onConflict(
                 CONSENT_POLICY.SUBJECT_ID,
                 CONSENT_POLICY.CATEGORY_ID,
-                CONSENT_POLICY.PURPOSE_NAME
+                CONSENT_POLICY.PURPOSE_ID
             )
             .doUpdate()
             .set(CONSENT_POLICY.GRANTED, granted)
@@ -282,18 +284,18 @@ public class ConsentPolicyRepository {
      * Returns every consent policy for the given subject scoped to the
      * specified purpose.
      *
-     * @param subjectId   the subject identifier
-     * @param purposeName the purpose to filter by
+     * @param subjectId the subject identifier
+     * @param purposeId the purpose to filter by
      * @return all matching policies, possibly empty
      */
     public List<ConsentPolicy> findBySubjectAndPurpose(
         String subjectId,
-        String purposeName
+        Long purposeId
     ) {
         return dsl
             .selectFrom(CONSENT_POLICY)
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
-            .and(CONSENT_POLICY.PURPOSE_NAME.eq(purposeName))
+            .and(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
             .fetchInto(ConsentPolicy.class);
     }
 
@@ -301,21 +303,21 @@ public class ConsentPolicyRepository {
      * Looks up the field-level policy for a specific subject, field, and
      * purpose.
      *
-     * @param subjectId   the subject identifier
-     * @param fieldId     the field identifier
-     * @param purposeName the purpose name
+     * @param subjectId the subject identifier
+     * @param fieldId   the field identifier
+     * @param purposeId the purpose identifier
      * @return the matching policy, or empty if none exists
      */
     public Optional<ConsentPolicy> findBySubjectAndFieldAndPurpose(
         String subjectId,
         Long fieldId,
-        String purposeName
+        Long purposeId
     ) {
         return dsl
             .selectFrom(CONSENT_POLICY)
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
             .and(CONSENT_POLICY.FIELD_ID.eq(fieldId))
-            .and(CONSENT_POLICY.PURPOSE_NAME.eq(purposeName))
+            .and(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
             .fetchOptionalInto(ConsentPolicy.class);
     }
 
@@ -323,21 +325,21 @@ public class ConsentPolicyRepository {
      * Looks up the category-level policy for a specific subject, category,
      * and purpose.
      *
-     * @param subjectId   the subject identifier
-     * @param categoryId  the category identifier
-     * @param purposeName the purpose name
+     * @param subjectId  the subject identifier
+     * @param categoryId the category identifier
+     * @param purposeId  the purpose identifier
      * @return the matching policy, or empty if none exists
      */
     public Optional<ConsentPolicy> findBySubjectAndCategoryAndPurpose(
         String subjectId,
         Long categoryId,
-        String purposeName
+        Long purposeId
     ) {
         return dsl
             .selectFrom(CONSENT_POLICY)
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
             .and(CONSENT_POLICY.CATEGORY_ID.eq(categoryId))
-            .and(CONSENT_POLICY.PURPOSE_NAME.eq(purposeName))
+            .and(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
             .fetchOptionalInto(ConsentPolicy.class);
     }
 
@@ -368,20 +370,20 @@ public class ConsentPolicyRepository {
      * Returns all <em>currently granted</em> policies for a subject and
      * a specific purpose.
      *
-     * @param subjectId   the subject identifier
-     * @param purposeName the purpose to filter by
+     * @param subjectId the subject identifier
+     * @param purposeId the purpose to filter by
      * @return active granted policies for that purpose, possibly empty
      */
     public List<ConsentPolicy> findActiveGrantsBySubjectAndPurpose(
         String subjectId,
-        String purposeName
+        Long purposeId
     ) {
         LocalDateTime now = LocalDateTime.now();
 
         return dsl
             .selectFrom(CONSENT_POLICY)
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
-            .and(CONSENT_POLICY.PURPOSE_NAME.eq(purposeName))
+            .and(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
             .and(CONSENT_POLICY.GRANTED.isTrue())
             .and(
                 CONSENT_POLICY.EXPIRES_AT.isNull().or(

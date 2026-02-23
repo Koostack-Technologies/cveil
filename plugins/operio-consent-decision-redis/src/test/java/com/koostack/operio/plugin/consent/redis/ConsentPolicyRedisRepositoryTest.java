@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.github.fppt.jedismock.RedisServer;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.TenantContext;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository.ConsentValue;
 import java.io.IOException;
 import java.time.Instant;
@@ -1328,6 +1329,259 @@ class ConsentPolicyRedisRepositoryTest {
                 fields.add("_default_/field_" + i);
             }
             return fields;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test isolation verification
+    // -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // Tenant-aware keys (Task 2.6)
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Tenant-aware keys")
+    class TenantAwareKeys {
+
+        @Test
+        @DisplayName("keyPrefix includes tenantId when TenantContext is active")
+        void keyPrefixWithTenant() throws Exception {
+            TenantContext.callWhere("acme", () -> {
+                assertEquals("operio:acme", repo.keyPrefix());
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "keyPrefix is just appName when no TenantContext is active"
+        )
+        void keyPrefixWithoutTenant() {
+            assertEquals("operio", repo.keyPrefix());
+        }
+
+        @Test
+        @DisplayName(
+            "consentKey includes tenant segment when TenantContext is active"
+        )
+        void consentKeyWithTenant() throws Exception {
+            TenantContext.callWhere("acme", () -> {
+                assertEquals(
+                    "operio:acme:consent:user-1:_default_/ssn:marketing",
+                    repo.consentKey("user-1", null, "ssn", "marketing")
+                );
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "consentKey omits tenant segment when no TenantContext is active"
+        )
+        void consentKeyWithoutTenant() {
+            assertEquals(
+                "operio:consent:user-1:_default_/ssn:marketing",
+                repo.consentKey("user-1", null, "ssn", "marketing")
+            );
+        }
+
+        @Test
+        @DisplayName(
+            "write and read within a tenant context are isolated from default namespace"
+        )
+        void tenantWriteReadIsolation() throws Exception {
+            // Write in tenant "acme"
+            TenantContext.callWhere("acme", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", true);
+                return null;
+            });
+
+            // Read outside tenant context — should NOT see acme's data
+            assertFalse(repo.exists("user-1", null, "ssn", "marketing"));
+            assertTrue(
+                repo.getConsent("user-1", null, "ssn", "marketing").isEmpty()
+            );
+
+            // Read inside tenant "acme" — should see the data
+            TenantContext.callWhere("acme", () -> {
+                assertTrue(repo.exists("user-1", null, "ssn", "marketing"));
+                Optional<String> status = repo.getConsent(
+                    "user-1",
+                    null,
+                    "ssn",
+                    "marketing"
+                );
+                assertTrue(status.isPresent());
+                assertEquals("GRANTED", status.get());
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName("different tenants do not see each other's data")
+        void crossTenantIsolation() throws Exception {
+            // Tenant "acme" grants consent
+            TenantContext.callWhere("acme", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", true);
+                return null;
+            });
+
+            // Tenant "globex" revokes same scope
+            TenantContext.callWhere("globex", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", false);
+                return null;
+            });
+
+            // Each tenant sees only its own decision
+            TenantContext.callWhere("acme", () -> {
+                Optional<String> status = repo.getConsent(
+                    "user-1",
+                    null,
+                    "ssn",
+                    "marketing"
+                );
+                assertEquals("GRANTED", status.orElse(null));
+                return null;
+            });
+
+            TenantContext.callWhere("globex", () -> {
+                Optional<String> status = repo.getConsent(
+                    "user-1",
+                    null,
+                    "ssn",
+                    "marketing"
+                );
+                assertEquals("REVOKED", status.orElse(null));
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName("evaluateScopes respects tenant context")
+        void evaluateScopesWithTenant() throws Exception {
+            ConsentScope scope = new ConsentScope(
+                null,
+                "ssn",
+                null,
+                "marketing"
+            );
+
+            // Grant in tenant "acme"
+            TenantContext.callWhere("acme", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", true);
+                return null;
+            });
+
+            // Evaluate inside "acme" — should be granted
+            TenantContext.callWhere("acme", () -> {
+                Map<ConsentScope, DecisionDetail> result = repo.evaluateScopes(
+                    "user-1",
+                    Set.of(scope)
+                );
+                DecisionDetail detail = result.get(scope);
+                assertNotNull(detail);
+                assertEquals("GRANTED", detail.effectiveStatus());
+                return null;
+            });
+
+            // Evaluate inside "globex" — no record
+            TenantContext.callWhere("globex", () -> {
+                Map<ConsentScope, DecisionDetail> result = repo.evaluateScopes(
+                    "user-1",
+                    Set.of(scope)
+                );
+                DecisionDetail detail = result.get(scope);
+                assertNotNull(detail);
+                assertNull(detail.effectiveStatus());
+                return null;
+            });
+
+            // Evaluate outside tenant context — no record
+            Map<ConsentScope, DecisionDetail> result = repo.evaluateScopes(
+                "user-1",
+                Set.of(scope)
+            );
+            DecisionDetail detail = result.get(scope);
+            assertNotNull(detail);
+            assertNull(detail.effectiveStatus());
+        }
+
+        @Test
+        @DisplayName("removeAllConsent only removes keys for the active tenant")
+        void removeAllConsentTenantIsolation() throws Exception {
+            // Write data in two tenants
+            TenantContext.callWhere("acme", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", true);
+                repo.setFieldConsent(
+                    "user-1",
+                    null,
+                    "email",
+                    "marketing",
+                    true
+                );
+                return null;
+            });
+
+            TenantContext.callWhere("globex", () -> {
+                repo.setFieldConsent("user-1", null, "ssn", "marketing", true);
+                return null;
+            });
+
+            // Remove all for user-1 in "acme" only
+            TenantContext.callWhere("acme", () -> {
+                long removed = repo.removeAllConsent("user-1");
+                assertEquals(2, removed);
+                return null;
+            });
+
+            // "acme" data is gone
+            TenantContext.callWhere("acme", () -> {
+                assertFalse(repo.exists("user-1", null, "ssn", "marketing"));
+                assertFalse(repo.exists("user-1", null, "email", "marketing"));
+                return null;
+            });
+
+            // "globex" data is untouched
+            TenantContext.callWhere("globex", () -> {
+                assertTrue(repo.exists("user-1", null, "ssn", "marketing"));
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName("category fan-out writes are tenant-scoped")
+        void categoryFanOutWithTenant() throws Exception {
+            Set<String> fields = Set.of("_default_/ssn", "_default_/email");
+
+            // Fan out in tenant "acme"
+            TenantContext.callWhere("acme", () -> {
+                repo.setCategoryConsentForFields(
+                    "user-1",
+                    "marketing",
+                    true,
+                    fields
+                );
+                return null;
+            });
+
+            // Verify keys exist in "acme"
+            TenantContext.callWhere("acme", () -> {
+                assertTrue(repo.exists("user-1", null, "ssn", "marketing"));
+                assertTrue(repo.exists("user-1", null, "email", "marketing"));
+                return null;
+            });
+
+            // Verify keys do NOT exist outside tenant context
+            assertFalse(repo.exists("user-1", null, "ssn", "marketing"));
+            assertFalse(repo.exists("user-1", null, "email", "marketing"));
+
+            // Verify keys do NOT exist in a different tenant
+            TenantContext.callWhere("globex", () -> {
+                assertFalse(repo.exists("user-1", null, "ssn", "marketing"));
+                assertFalse(repo.exists("user-1", null, "email", "marketing"));
+                return null;
+            });
         }
     }
 

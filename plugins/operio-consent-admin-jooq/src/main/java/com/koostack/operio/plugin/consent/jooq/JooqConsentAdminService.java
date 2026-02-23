@@ -1,14 +1,29 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.Models.CategoryInfo;
+import com.koostack.operio.core.Models.ConsentAuditEntry;
 import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.Models.EntityInfo;
+import com.koostack.operio.core.Models.FieldInfo;
+import com.koostack.operio.core.Models.PolicySummaryEntry;
+import com.koostack.operio.core.Models.PurposeInfo;
+import com.koostack.operio.core.Models.RegulationInfo;
+import com.koostack.operio.core.RequestContext;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.service.ConsentAdminService;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentAuditLog;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Regulation;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.jooq.DSLContext;
 
@@ -16,8 +31,8 @@ import org.jooq.DSLContext;
  * jOOQ-backed {@link ConsentAdminService} implementation.
  *
  * <p>Resolves string-based {@link ConsentScope} names (field name, category
- * name) into relational IDs and delegates to
- * {@link ConsentPolicyRepository} for the actual upsert.
+ * name, purpose name) into relational IDs and delegates to the appropriate
+ * repository for the actual upsert.
  *
  * <h2>Field-level vs Category-level Convention</h2>
  * <ul>
@@ -29,6 +44,12 @@ import org.jooq.DSLContext;
  * </ul>
  * This mirrors the relational schema's XOR constraint
  * ({@code field_id IS NOT NULL XOR category_id IS NOT NULL}).
+ *
+ * <h2>Purpose Resolution</h2>
+ * <p>All consent writes resolve {@code scope.purposeName()} into a
+ * relational {@code purpose_id} via the {@code purpose} table. This
+ * replaced the earlier string-based {@code purpose_name} column on
+ * {@code consent_policy} (removed in V4).
  */
 public class JooqConsentAdminService
     implements ConsentAdminService<JooqConsentAdminServiceConfig>
@@ -40,6 +61,10 @@ public class JooqConsentAdminService
     private CategoryRepository categoryRepository;
     private FieldCategoryRepository fieldCategoryRepository;
     private ConsentPolicyRepository consentPolicyRepository;
+    private PurposeRepository purposeRepository;
+    private RegulationRepository regulationRepository;
+    private PurposeRegulationRepository purposeRegulationRepository;
+    private ConsentAuditLogRepository consentAuditLogRepository;
 
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -99,7 +124,7 @@ public class JooqConsentAdminService
 
     @Override
     public void configure(JooqConsentAdminServiceConfig config) {
-        this.dslContext = JooqContextFactory.createContext(
+        this.dslContext = JooqContextFactory.createTenantAwareContext(
             config,
             "operio-consent-admin-jooq",
             "classpath:db/migration/consent"
@@ -109,6 +134,14 @@ public class JooqConsentAdminService
         this.categoryRepository = new CategoryRepository(dslContext);
         this.fieldCategoryRepository = new FieldCategoryRepository(dslContext);
         this.consentPolicyRepository = new ConsentPolicyRepository(dslContext);
+        this.purposeRepository = new PurposeRepository(dslContext);
+        this.regulationRepository = new RegulationRepository(dslContext);
+        this.purposeRegulationRepository = new PurposeRegulationRepository(
+            dslContext
+        );
+        this.consentAuditLogRepository = new ConsentAuditLogRepository(
+            dslContext
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -207,6 +240,50 @@ public class JooqConsentAdminService
     public FieldCategoryRepository fieldCategoryRepository() {
         getDsl(); // guard
         return fieldCategoryRepository;
+    }
+
+    /**
+     * Returns the underlying {@link PurposeRepository}.
+     *
+     * @return the purpose repository
+     * @throws IllegalStateException if not yet configured
+     */
+    public PurposeRepository purposeRepository() {
+        getDsl(); // guard
+        return purposeRepository;
+    }
+
+    /**
+     * Returns the underlying {@link RegulationRepository}.
+     *
+     * @return the regulation repository
+     * @throws IllegalStateException if not yet configured
+     */
+    public RegulationRepository regulationRepository() {
+        getDsl(); // guard
+        return regulationRepository;
+    }
+
+    /**
+     * Returns the underlying {@link PurposeRegulationRepository}.
+     *
+     * @return the purpose-regulation repository
+     * @throws IllegalStateException if not yet configured
+     */
+    public PurposeRegulationRepository purposeRegulationRepository() {
+        getDsl(); // guard
+        return purposeRegulationRepository;
+    }
+
+    /**
+     * Returns the underlying {@link ConsentAuditLogRepository}.
+     *
+     * @return the consent audit log repository — never {@code null} once configured
+     * @throws OperioConfigurationException if the service has not been configured
+     */
+    public ConsentAuditLogRepository consentAuditLogRepository() {
+        getDsl(); // guard
+        return consentAuditLogRepository;
     }
 
     // -----------------------------------------------------------------------
@@ -340,6 +417,290 @@ public class JooqConsentAdminService
     }
 
     // -----------------------------------------------------------------------
+    // Schema registration — Purpose & Regulation
+    // -----------------------------------------------------------------------
+
+    /**
+     * Registers a consent purpose in the consent admin schema.
+     *
+     * <p>Uses upsert semantics — re-registering an existing purpose
+     * updates its description.
+     *
+     * @param purposeName the purpose name (e.g. "marketing", "analytics")
+     * @param description optional description, or {@code null}
+     */
+    @Override
+    public void registerPurpose(String purposeName, String description) {
+        getDsl(); // guard
+        purposeRepository.upsertByName(purposeName, description, null);
+    }
+
+    /**
+     * Registers a regulation in the consent admin schema.
+     *
+     * <p>Uses upsert semantics — re-registering an existing regulation
+     * updates its fields.
+     *
+     * @param regulationName the regulation short name (e.g. "GDPR", "CCPA")
+     * @param fullName       the full legal name, or {@code null}
+     * @param jurisdiction   the geographic jurisdiction (e.g. "EU"), or {@code null}
+     * @param description    optional description, or {@code null}
+     * @param url            a reference URL to the regulation text, or {@code null}
+     */
+    @Override
+    public void registerRegulation(
+        String regulationName,
+        String fullName,
+        String jurisdiction,
+        String description,
+        String url
+    ) {
+        getDsl(); // guard
+        regulationRepository.upsertByName(
+            regulationName,
+            fullName,
+            jurisdiction,
+            description,
+            url,
+            null
+        );
+    }
+
+    /**
+     * Links a purpose to a regulation with an optional legal basis.
+     *
+     * <p>Both the purpose and regulation must already be registered.
+     * Idempotent — if the link already exists, the legal basis is updated.
+     *
+     * @param purposeName    the purpose name
+     * @param regulationName the regulation name
+     * @param legalBasis     the legal basis (e.g. "consent", "legitimate interest"),
+     *                       or {@code null}
+     * @throws IllegalArgumentException if the purpose or regulation is not found
+     */
+    @Override
+    public void linkPurposeToRegulation(
+        String purposeName,
+        String regulationName,
+        String legalBasis
+    ) {
+        getDsl(); // guard
+
+        Purpose purpose = purposeRepository
+            .findByName(purposeName)
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    "No purpose found with name: " + purposeName
+                )
+            );
+
+        Regulation regulation = regulationRepository
+            .findByName(regulationName)
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    "No regulation found with name: " + regulationName
+                )
+            );
+
+        purposeRegulationRepository.link(
+            purpose.getPurposeId(),
+            regulation.getRegulationId(),
+            legalBasis,
+            null
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Query methods — SPI overrides
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns all registered fields.
+     *
+     * @return every field as a {@link FieldInfo} DTO, possibly empty
+     */
+    @Override
+    public List<FieldInfo> listFields() {
+        getDsl(); // guard
+        return fieldRepository
+            .findAll()
+            .stream()
+            .map(f -> {
+                String entityName = null;
+                if (f.getEntityId() != null) {
+                    entityName = entityRepository
+                        .dao()
+                        .findOptionalById(f.getEntityId())
+                        .map(Entity::getEntityName)
+                        .orElse(null);
+                }
+                return new FieldInfo(
+                    f.getFieldName(),
+                    entityName,
+                    f.getDescription()
+                );
+            })
+            .toList();
+    }
+
+    /**
+     * Returns all registered categories.
+     *
+     * @return every category as a {@link CategoryInfo} DTO, possibly empty
+     */
+    @Override
+    public List<CategoryInfo> listCategories() {
+        getDsl(); // guard
+        return categoryRepository
+            .findAll()
+            .stream()
+            .map(c -> new CategoryInfo(c.getCategoryName(), c.getDescription()))
+            .toList();
+    }
+
+    /**
+     * Returns all registered entities.
+     *
+     * @return every entity as an {@link EntityInfo} DTO, possibly empty
+     */
+    @Override
+    public List<EntityInfo> listEntities() {
+        getDsl(); // guard
+        return entityRepository
+            .findAll()
+            .stream()
+            .map(e -> new EntityInfo(e.getEntityName(), e.getDescription()))
+            .toList();
+    }
+
+    /**
+     * Returns all registered purposes.
+     *
+     * @return every purpose as a {@link PurposeInfo} DTO, possibly empty
+     */
+    @Override
+    public List<PurposeInfo> listPurposes() {
+        getDsl(); // guard
+        return purposeRepository
+            .findAll()
+            .stream()
+            .map(p -> new PurposeInfo(p.getPurposeName(), p.getDescription()))
+            .toList();
+    }
+
+    /**
+     * Returns all registered regulations.
+     *
+     * @return every regulation as a {@link RegulationInfo} DTO, possibly empty
+     */
+    @Override
+    public List<RegulationInfo> listRegulations() {
+        getDsl(); // guard
+        return regulationRepository
+            .findAll()
+            .stream()
+            .map(r ->
+                new RegulationInfo(
+                    r.getRegulationName(),
+                    r.getFullName(),
+                    r.getJurisdiction(),
+                    r.getDescription(),
+                    r.getUrl()
+                )
+            )
+            .toList();
+    }
+
+    /**
+     * Returns all consent policies for the given subject, mapped to
+     * {@link PolicySummaryEntry} DTOs that include resolved names for
+     * fields, categories, entities, and purposes.
+     *
+     * @param subject the data subject identifier
+     * @return every policy for the subject as a summary DTO, possibly empty
+     */
+    @Override
+    public List<PolicySummaryEntry> findPoliciesBySubject(String subject) {
+        getDsl(); // guard
+        List<ConsentPolicy> policies = consentPolicyRepository.findBySubject(
+            subject
+        );
+        return policies.stream().map(this::toPolicySummary).toList();
+    }
+
+    /**
+     * Returns the full consent audit history for the given subject,
+     * ordered by timestamp descending (most recent first).
+     *
+     * <p>Delegates to {@link ConsentAuditLogRepository#findBySubject} and
+     * maps each {@code consent_audit_log} row to a
+     * {@link ConsentAuditEntry} DTO.
+     *
+     * @param subject the data subject identifier
+     * @return audit history entries, most recent first, possibly empty
+     */
+    @Override
+    public List<ConsentAuditEntry> getConsentHistory(String subject) {
+        getDsl(); // guard
+        List<ConsentAuditLog> logs = consentAuditLogRepository.findBySubject(
+            subject
+        );
+        return logs.stream().map(this::toAuditEntry).toList();
+    }
+
+    /**
+     * Returns the consent audit history for the given subject filtered
+     * by scope (field + entity + purpose combination), ordered by
+     * timestamp descending (most recent first).
+     *
+     * <p>Resolves scope names to relational IDs using the same
+     * field-vs-category priority as {@link #upsert}: if
+     * {@code scope.fieldName()} is present it takes precedence and
+     * {@code categoryId} is left {@code null} (field-level audit entries
+     * have {@code categoryId = null}). Only non-null IDs are included in
+     * the WHERE clause.
+     *
+     * @param subject the data subject identifier
+     * @param scope   the consent scope to filter by
+     * @return filtered audit history entries, most recent first,
+     *         possibly empty
+     */
+    @Override
+    public List<ConsentAuditEntry> getConsentHistory(
+        String subject,
+        ConsentScope scope
+    ) {
+        getDsl(); // guard
+
+        // Resolve scope names to IDs using the same field-vs-category
+        // priority as upsert(): if fieldName is present it takes precedence
+        // (the audit entry will have fieldId set and categoryId null), so
+        // we must NOT also filter on categoryId or we'd match nothing.
+        Long fieldId = null;
+        Long categoryId = null;
+        Long purposeId = null;
+
+        if (scope.fieldName() != null) {
+            fieldId = resolveFieldId(scope.fieldName(), scope.entityName());
+            // Do NOT resolve category — field-level entries have categoryId null
+        } else if (scope.category() != null) {
+            categoryId = resolveCategoryId(scope.category());
+        }
+        if (scope.purposeName() != null && !scope.purposeName().isBlank()) {
+            purposeId = resolvePurposeId(scope.purposeName());
+        }
+
+        List<ConsentAuditLog> logs =
+            consentAuditLogRepository.findBySubjectAndScope(
+                subject,
+                fieldId,
+                categoryId,
+                purposeId
+            );
+        return logs.stream().map(this::toAuditEntry).toList();
+    }
+
+    // -----------------------------------------------------------------------
     // Internal — upsert delegation
     // -----------------------------------------------------------------------
 
@@ -349,7 +710,7 @@ public class JooqConsentAdminService
      * upsert method.
      *
      * @param subject   the data subject identifier
-     * @param scope     the consent scope containing field/category names
+     * @param scope     the consent scope containing field/category/purpose names
      * @param granted   {@code true} to grant, {@code false} to revoke
      * @param expiresAt when this consent expires, or {@code null} for no
      *                  expiration
@@ -362,29 +723,28 @@ public class JooqConsentAdminService
     ) {
         getDsl(); // guard — ensures we're configured
 
-        String purposeName = scope.purposeName();
+        Long purposeId = resolvePurposeId(scope.purposeName());
+        Long fieldId = null;
+        Long categoryId = null;
 
         if (scope.fieldName() != null) {
             // Field-level write: resolve fieldName → field_id, using
             // entityName from the scope when available to avoid ambiguity.
-            Long fieldId = resolveFieldId(
-                scope.fieldName(),
-                scope.entityName()
-            );
+            fieldId = resolveFieldId(scope.fieldName(), scope.entityName());
             consentPolicyRepository.upsertByField(
                 subject,
                 fieldId,
-                purposeName,
+                purposeId,
                 granted,
                 expiresAt
             );
         } else if (scope.category() != null) {
             // Category-level write: resolve category → category_id
-            Long categoryId = resolveCategoryId(scope.category());
+            categoryId = resolveCategoryId(scope.category());
             consentPolicyRepository.upsertByCategory(
                 subject,
                 categoryId,
-                purposeName,
+                purposeId,
                 granted,
                 expiresAt
             );
@@ -395,6 +755,58 @@ public class JooqConsentAdminService
                     scope
             );
         }
+
+        // Append audit log entry in the same transactional context as the
+        // consent_policy upsert. RequestContext provides actor/IP/UA from
+        // the auth filter scope; defaults to "system"/null/null when no
+        // request context is bound (e.g. programmatic calls).
+        consentAuditLogRepository.insert(
+            subject,
+            fieldId,
+            categoryId,
+            purposeId,
+            granted ? "GRANTED" : "REVOKED",
+            granted,
+            expiresAt,
+            RequestContext.actor(),
+            RequestContext.ipAddress(),
+            RequestContext.userAgent(),
+            null
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal — name-to-ID resolution
+    // -----------------------------------------------------------------------
+
+    /**
+     * Resolves a purpose name to its relational {@code purpose_id}.
+     *
+     * <p>Same pattern as {@link #resolveFieldId} and
+     * {@link #resolveCategoryId}.
+     *
+     * @param purposeName the purpose name to resolve
+     * @return the purpose's database ID
+     * @throws IllegalArgumentException if no purpose with that name exists
+     */
+    private Long resolvePurposeId(String purposeName) {
+        if (purposeName == null || purposeName.isBlank()) {
+            throw new IllegalArgumentException(
+                "purposeName must not be null or blank — every consent " +
+                    "decision must be scoped to a purpose (the purpose_id " +
+                    "column is NOT NULL after V4 migration)"
+            );
+        }
+        Purpose purpose = purposeRepository
+            .findByName(purposeName)
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    "No purpose found with name: " +
+                        purposeName +
+                        ". Register it first via registerPurpose()."
+                )
+            );
+        return purpose.getPurposeId();
     }
 
     /**
@@ -475,5 +887,149 @@ public class JooqConsentAdminService
                 )
             );
         return category.getCategoryId();
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal — DTO mapping
+    // -----------------------------------------------------------------------
+
+    /**
+     * Maps a {@link ConsentPolicy} row to a {@link PolicySummaryEntry} DTO,
+     * resolving relational IDs back to human-readable names.
+     */
+    /**
+     * Maps a {@link ConsentAuditLog} row to a {@link ConsentAuditEntry} DTO,
+     * resolving relational IDs back to human-readable names.
+     */
+    private ConsentAuditEntry toAuditEntry(ConsentAuditLog log) {
+        String fieldName = null;
+        String entityName = null;
+        String categoryName = null;
+        String purposeName = null;
+
+        // Resolve field → fieldName + entityName
+        if (log.getFieldId() != null) {
+            Optional<Field> field = fieldRepository
+                .dao()
+                .findOptionalById(log.getFieldId());
+            if (field.isPresent()) {
+                fieldName = field.get().getFieldName();
+                if (field.get().getEntityId() != null) {
+                    entityName = entityRepository
+                        .dao()
+                        .findOptionalById(field.get().getEntityId())
+                        .map(Entity::getEntityName)
+                        .orElse(null);
+                }
+            }
+        }
+
+        // Resolve category → categoryName
+        if (log.getCategoryId() != null) {
+            categoryName = categoryRepository
+                .dao()
+                .findOptionalById(log.getCategoryId())
+                .map(Category::getCategoryName)
+                .orElse(null);
+        }
+
+        // Resolve purpose → purposeName
+        if (log.getPurposeId() != null) {
+            purposeName = purposeRepository
+                .findById(log.getPurposeId())
+                .map(Purpose::getPurposeName)
+                .orElse(null);
+        }
+
+        Instant expiresAt =
+            log.getExpiresAt() != null
+                ? log.getExpiresAt().toInstant(ZoneOffset.UTC)
+                : null;
+        Instant timestamp =
+            log.getCreatedAt() != null
+                ? log.getCreatedAt().toInstant(ZoneOffset.UTC)
+                : null;
+
+        // Parse metadata JSON string back to Map — null-safe
+        Map<String, String> metadata = Collections.emptyMap();
+
+        return new ConsentAuditEntry(
+            log.getSubjectId(),
+            fieldName,
+            entityName,
+            categoryName,
+            purposeName,
+            log.getAction(),
+            expiresAt,
+            log.getActor(),
+            log.getIpAddress(),
+            log.getUserAgent(),
+            metadata,
+            timestamp
+        );
+    }
+
+    private PolicySummaryEntry toPolicySummary(ConsentPolicy cp) {
+        String fieldName = null;
+        String entityName = null;
+        String categoryName = null;
+        String purposeName = null;
+
+        // Resolve field → fieldName + entityName
+        if (cp.getFieldId() != null) {
+            Optional<Field> field = fieldRepository
+                .dao()
+                .findOptionalById(cp.getFieldId());
+            if (field.isPresent()) {
+                fieldName = field.get().getFieldName();
+                if (field.get().getEntityId() != null) {
+                    entityName = entityRepository
+                        .dao()
+                        .findOptionalById(field.get().getEntityId())
+                        .map(Entity::getEntityName)
+                        .orElse(null);
+                }
+            }
+        }
+
+        // Resolve category → categoryName
+        if (cp.getCategoryId() != null) {
+            categoryName = categoryRepository
+                .dao()
+                .findOptionalById(cp.getCategoryId())
+                .map(Category::getCategoryName)
+                .orElse(null);
+        }
+
+        // Resolve purpose → purposeName
+        if (cp.getPurposeId() != null) {
+            purposeName = purposeRepository
+                .findById(cp.getPurposeId())
+                .map(Purpose::getPurposeName)
+                .orElse(null);
+        }
+
+        String status = Boolean.TRUE.equals(cp.getGranted())
+            ? "GRANTED"
+            : "REVOKED";
+        Instant expiresAt =
+            cp.getExpiresAt() != null
+                ? cp.getExpiresAt().toInstant(ZoneOffset.UTC)
+                : null;
+        Instant createdAt =
+            cp.getCreatedAt() != null
+                ? cp.getCreatedAt().toInstant(ZoneOffset.UTC)
+                : null;
+
+        return new PolicySummaryEntry(
+            cp.getSubjectId(),
+            fieldName,
+            entityName,
+            categoryName,
+            purposeName,
+            status,
+            expiresAt,
+            createdAt
+        );
     }
 }

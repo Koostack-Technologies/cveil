@@ -1,0 +1,64 @@
+# =============================================================================
+# Operio REST API — Docker Build Context Exclusions
+#
+# Keep the Docker build context lean by excluding everything that is not
+# needed to compile the project inside the build stage.  A smaller context
+# means faster `docker build` (less data sent to the daemon) and better
+# layer cache hit rates.
+# =============================================================================
+
+# ---- Version control --------------------------------------------------------
+.git
+.gitattributes
+.gitignore
+
+# ---- IDE / editor metadata --------------------------------------------------
+.idea
+.vscode
+.zed
+**/.settings
+**/.project
+**/.classpath
+*.code-workspace
+
+# ---- Gradle build output (rebuild inside the container) ---------------------
+**/build/
+**/.gradle/
+**/.kotlin/
+
+# ---- OS / editor temp files -------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ---- Logs -------------------------------------------------------------------
+*.log
+
+# ---- Documentation not needed at build time ---------------------------------
+CONTEXT.md
+DEVELOPMENT_LOG.md
+GEMINI.md
+LICENSE
+README.md
+
+# ---- DevContainer config (not used in production image) ---------------------
+.devcontainer
+
+# ---- Redis dev config (local development only) ------------------------------
+redis/
+
+# ---- Compiled artifacts (should never be committed, but just in case) -------
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# ---- JVM crash logs ---------------------------------------------------------
+hs_err_pid*
+replay_pid*

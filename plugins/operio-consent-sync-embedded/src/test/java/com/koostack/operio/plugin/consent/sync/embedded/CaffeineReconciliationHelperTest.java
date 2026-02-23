@@ -545,6 +545,7 @@ class CaffeineReconciliationHelperTest {
         @DisplayName("category with no mapped fields produces zero fan-out")
         void categoryNoFields() {
             jooqAdmin.registerCategory("ORPHAN_CAT", null);
+            jooqAdmin.registerPurpose("ops", null);
 
             // Grant category-level consent directly through jooqAdmin
             // so we have a DB row with category_id but no fields mapped
@@ -552,12 +553,17 @@ class CaffeineReconciliationHelperTest {
                 .categoryRepository()
                 .findByName("ORPHAN_CAT");
             assertTrue(catOpt.isPresent());
+            Long opsPurposeId = jooqAdmin
+                .purposeRepository()
+                .findByName("ops")
+                .orElseThrow()
+                .getPurposeId();
             jooqAdmin
                 .consentPolicyRepository()
                 .upsertByCategory(
                     "user-orphan",
                     catOpt.get().getCategoryId(),
-                    "ops",
+                    opsPurposeId,
                     true
                 );
 

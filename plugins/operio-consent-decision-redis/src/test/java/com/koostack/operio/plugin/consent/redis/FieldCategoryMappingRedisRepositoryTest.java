@@ -3,6 +3,7 @@ package com.koostack.operio.plugin.consent.redis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.github.fppt.jedismock.RedisServer;
+import com.koostack.operio.core.TenantContext;
 import java.io.IOException;
 import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
@@ -408,6 +409,253 @@ class FieldCategoryMappingRedisRepositoryTest {
                 "operio:meta:cat2field:PII",
                 repo.catToFieldKey("PII")
             );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tenant-aware keys (Task 2.6)
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Tenant-aware keys")
+    class TenantAwareKeys {
+
+        @Test
+        @DisplayName("keyPrefix includes tenantId when TenantContext is active")
+        void keyPrefixWithTenant() throws Exception {
+            TenantContext.callWhere("acme", () -> {
+                assertEquals("operio:acme", repo.keyPrefix());
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "keyPrefix is just appName when no TenantContext is active"
+        )
+        void keyPrefixWithoutTenant() {
+            assertEquals("operio", repo.keyPrefix());
+        }
+
+        @Test
+        @DisplayName(
+            "fieldToCatKey includes tenant segment when TenantContext is active"
+        )
+        void fieldToCatKeyWithTenant() throws Exception {
+            TenantContext.callWhere("acme", () -> {
+                assertEquals(
+                    "operio:acme:meta:field2cat:_default_/ssn",
+                    repo.fieldToCatKey("_default_/ssn")
+                );
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "catToFieldKey includes tenant segment when TenantContext is active"
+        )
+        void catToFieldKeyWithTenant() throws Exception {
+            TenantContext.callWhere("acme", () -> {
+                assertEquals(
+                    "operio:acme:meta:cat2field:PII",
+                    repo.catToFieldKey("PII")
+                );
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "key helpers omit tenant segment when no TenantContext is active"
+        )
+        void keyHelpersWithoutTenant() {
+            assertEquals(
+                "operio:meta:field2cat:_default_/ssn",
+                repo.fieldToCatKey("_default_/ssn")
+            );
+            assertEquals(
+                "operio:meta:cat2field:PII",
+                repo.catToFieldKey("PII")
+            );
+        }
+
+        @Test
+        @DisplayName(
+            "addFieldToCategory within a tenant is invisible outside that tenant"
+        )
+        void tenantWriteReadIsolation() throws Exception {
+            // Write in tenant "acme"
+            TenantContext.callWhere("acme", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                return null;
+            });
+
+            // Outside tenant context — should NOT see acme's data
+            assertFalse(repo.isMapped(null, "ssn", "PII"));
+            assertTrue(repo.getCategoriesForField(null, "ssn").isEmpty());
+            assertTrue(repo.getFieldsForCategory("PII").isEmpty());
+
+            // Inside tenant "acme" — should see the data
+            TenantContext.callWhere("acme", () -> {
+                assertTrue(repo.isMapped(null, "ssn", "PII"));
+                assertEquals(
+                    Set.of("PII"),
+                    repo.getCategoriesForField(null, "ssn")
+                );
+                assertEquals(
+                    Set.of("_default_/ssn"),
+                    repo.getFieldsForCategory("PII")
+                );
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName("different tenants do not see each other's mappings")
+        void crossTenantIsolation() throws Exception {
+            // Tenant "acme" maps ssn → PII
+            TenantContext.callWhere("acme", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                return null;
+            });
+
+            // Tenant "globex" maps ssn → Financial
+            TenantContext.callWhere("globex", () -> {
+                repo.addFieldToCategory(null, "ssn", "Financial");
+                return null;
+            });
+
+            // Each tenant sees only its own mapping
+            TenantContext.callWhere("acme", () -> {
+                assertEquals(
+                    Set.of("PII"),
+                    repo.getCategoriesForField(null, "ssn")
+                );
+                assertTrue(repo.getFieldsForCategory("Financial").isEmpty());
+                return null;
+            });
+
+            TenantContext.callWhere("globex", () -> {
+                assertEquals(
+                    Set.of("Financial"),
+                    repo.getCategoriesForField(null, "ssn")
+                );
+                assertTrue(repo.getFieldsForCategory("PII").isEmpty());
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "removeFieldFromCategory within a tenant does not affect other tenants"
+        )
+        void removeIsolation() throws Exception {
+            // Both tenants map ssn → PII
+            TenantContext.callWhere("acme", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                return null;
+            });
+            TenantContext.callWhere("globex", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                return null;
+            });
+
+            // Remove in "acme" only
+            TenantContext.callWhere("acme", () -> {
+                repo.removeFieldFromCategory(null, "ssn", "PII");
+                return null;
+            });
+
+            // "acme" mapping is gone
+            TenantContext.callWhere("acme", () -> {
+                assertFalse(repo.isMapped(null, "ssn", "PII"));
+                return null;
+            });
+
+            // "globex" mapping is untouched
+            TenantContext.callWhere("globex", () -> {
+                assertTrue(repo.isMapped(null, "ssn", "PII"));
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "removeAllMappingsForField within a tenant does not affect other tenants"
+        )
+        void bulkRemoveFieldIsolation() throws Exception {
+            // Both tenants map ssn → PII and ssn → Sensitive
+            TenantContext.callWhere("acme", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                repo.addFieldToCategory(null, "ssn", "Sensitive");
+                return null;
+            });
+            TenantContext.callWhere("globex", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                return null;
+            });
+
+            // Bulk remove ssn in "acme"
+            TenantContext.callWhere("acme", () -> {
+                int removed = repo.removeAllMappingsForField(null, "ssn");
+                assertEquals(2, removed);
+                return null;
+            });
+
+            // "acme" — gone
+            TenantContext.callWhere("acme", () -> {
+                assertTrue(repo.getCategoriesForField(null, "ssn").isEmpty());
+                return null;
+            });
+
+            // "globex" — untouched
+            TenantContext.callWhere("globex", () -> {
+                assertEquals(
+                    Set.of("PII"),
+                    repo.getCategoriesForField(null, "ssn")
+                );
+                return null;
+            });
+        }
+
+        @Test
+        @DisplayName(
+            "removeAllMappingsForCategory within a tenant does not affect other tenants"
+        )
+        void bulkRemoveCategoryIsolation() throws Exception {
+            // Both tenants have fields in PII
+            TenantContext.callWhere("acme", () -> {
+                repo.addFieldToCategory(null, "ssn", "PII");
+                repo.addFieldToCategory(null, "email", "PII");
+                return null;
+            });
+            TenantContext.callWhere("globex", () -> {
+                repo.addFieldToCategory(null, "phone", "PII");
+                return null;
+            });
+
+            // Bulk remove PII in "acme"
+            TenantContext.callWhere("acme", () -> {
+                int removed = repo.removeAllMappingsForCategory("PII");
+                assertEquals(2, removed);
+                return null;
+            });
+
+            // "acme" — gone
+            TenantContext.callWhere("acme", () -> {
+                assertTrue(repo.getFieldsForCategory("PII").isEmpty());
+                return null;
+            });
+
+            // "globex" — untouched
+            TenantContext.callWhere("globex", () -> {
+                assertEquals(
+                    Set.of("_default_/phone"),
+                    repo.getFieldsForCategory("PII")
+                );
+                return null;
+            });
         }
     }
 
