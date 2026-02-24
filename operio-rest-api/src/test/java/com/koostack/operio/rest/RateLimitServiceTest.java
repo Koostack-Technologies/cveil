@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.ratelimit.RateLimitResult;

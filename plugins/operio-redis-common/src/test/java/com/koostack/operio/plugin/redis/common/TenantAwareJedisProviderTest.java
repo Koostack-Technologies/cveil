@@ -2,16 +2,15 @@ package com.koostack.operio.plugin.redis.common;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider.TenantCredentialLookup;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider.TenantRedisCredentials;
-import java.util.concurrent.Callable;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;

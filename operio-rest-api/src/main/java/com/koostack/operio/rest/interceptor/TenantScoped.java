@@ -1,5 +1,7 @@
 package com.koostack.operio.rest.interceptor;
 
+import com.koostack.operio.core.models.RequestContext;
+import com.koostack.operio.core.models.TenantContext;
 import jakarta.interceptor.InterceptorBinding;
 
 import java.lang.annotation.Documented;
@@ -15,8 +17,8 @@ import java.lang.annotation.Target;
  *
  * <p>When applied, every method invocation on the target is wrapped inside
  * nested {@code ScopedValue} bindings so that
- * {@link com.koostack.operio.core.TenantContext TenantContext} and
- * {@link com.koostack.operio.core.RequestContext RequestContext} are
+ * {@link TenantContext TenantContext} and
+ * {@link RequestContext RequestContext} are
  * available throughout the entire call stack — including all Operio SPI
  * implementations (consent decision, admin, sync, audit, masking, etc.).
  *
@@ -77,8 +79,8 @@ import java.lang.annotation.Target;
  *
  * @see TenantScopeInterceptor
  * @see com.koostack.operio.rest.context.OperioRequestHolder
- * @see com.koostack.operio.core.TenantContext
- * @see com.koostack.operio.core.RequestContext
+ * @see TenantContext
+ * @see RequestContext
  */
 @InterceptorBinding
 @Inherited

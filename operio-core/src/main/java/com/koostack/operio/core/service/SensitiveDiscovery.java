@@ -1,6 +1,6 @@
 package com.koostack.operio.core.service;
 
-import com.koostack.operio.core.Models.DiscoveryResult;
+import com.koostack.operio.core.models.DiscoveryResult;
 import com.koostack.operio.core.spi.Plugin;
 
 /**

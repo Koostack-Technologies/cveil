@@ -37,6 +37,13 @@ quarkus:
   devservices:
     enabled: false
 
+# SmallRye Config: allow operio.test.* substitution variables in the Config
+# Override source without requiring them to map to @ConfigMapping(prefix="operio").
+smallrye:
+  config:
+    mapping:
+      validate-unknown: false
+
 # =============================================================================
 # Operio SDK — production mode against Testcontainers Postgres + Redis
 #

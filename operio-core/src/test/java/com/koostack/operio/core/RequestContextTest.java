@@ -2,7 +2,8 @@ package com.koostack.operio.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.RequestContext.RequestMeta;
+import com.koostack.operio.core.models.RequestContext;
+import com.koostack.operio.core.models.RequestContext.RequestMeta;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;

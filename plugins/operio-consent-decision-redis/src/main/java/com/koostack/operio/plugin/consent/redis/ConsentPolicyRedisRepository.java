@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.consent.redis;
 
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.DecisionDetail;
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.DecisionDetail;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.time.Duration;
 import java.time.Instant;

@@ -1,7 +1,7 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
 import com.koostack.operio.rest.auth.Roles;
@@ -386,7 +386,7 @@ public class PlatformResource {
         );
 
         String keyPrefix =
-            rawKey.length() >= 8 ? rawKey.substring(0, 8) : rawKey;
+            rawKey.length() >= 16 ? rawKey.substring(0, 16) : rawKey;
 
         ApiKeyCreatedResponse response = new ApiKeyCreatedResponse(
             rawKey,

@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.consent.redis;
 
-import com.koostack.operio.core.Models.ConsentResponse;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.DecisionDetail;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.DecisionDetail;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.service.ConsentDecisionService;

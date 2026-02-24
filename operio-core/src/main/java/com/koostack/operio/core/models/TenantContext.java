@@ -1,4 +1,4 @@
-package com.koostack.operio.core;
+package com.koostack.operio.core.models;
 
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import java.util.concurrent.Callable;

@@ -25,4 +25,4 @@
 -- passwords are stored in plaintext (backward-compatible but insecure).
 -- ============================================================================
 
-ALTER TABLE tenant ALTER COLUMN redis_acl_password VARCHAR(2048);
+ALTER TABLE tenant ALTER COLUMN redis_acl_password TYPE VARCHAR(2048);

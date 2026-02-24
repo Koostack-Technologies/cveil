@@ -1,8 +1,8 @@
 package com.koostack.operio.core.service;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.IdpConfigInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.IdpConfigInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.spi.Plugin;
 import java.util.List;
 import java.util.Map;

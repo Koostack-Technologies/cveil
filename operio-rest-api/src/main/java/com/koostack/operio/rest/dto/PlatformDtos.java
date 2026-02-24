@@ -1,7 +1,7 @@
 package com.koostack.operio.rest.dto;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;

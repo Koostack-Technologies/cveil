@@ -1,12 +1,12 @@
 package com.koostack.operio.rest.dto;
 
-import com.koostack.operio.core.Models.BatchConsentEntry;
-import com.koostack.operio.core.Models.BatchConsentResult;
-import com.koostack.operio.core.Models.ConsentAuditEntry;
-import com.koostack.operio.core.Models.ConsentResponse;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.DecisionDetail;
-import com.koostack.operio.core.Models.PolicySummaryEntry;
+import com.koostack.operio.core.models.BatchConsentEntry;
+import com.koostack.operio.core.models.BatchConsentResult;
+import com.koostack.operio.core.models.ConsentAuditEntry;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.DecisionDetail;
+import com.koostack.operio.core.models.PolicySummaryEntry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;

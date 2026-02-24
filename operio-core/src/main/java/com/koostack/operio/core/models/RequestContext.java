@@ -1,4 +1,4 @@
-package com.koostack.operio.core;
+package com.koostack.operio.core.models;
 
 import java.util.concurrent.Callable;
 

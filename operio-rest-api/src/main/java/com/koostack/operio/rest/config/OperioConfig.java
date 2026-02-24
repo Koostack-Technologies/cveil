@@ -1,5 +1,6 @@
 package com.koostack.operio.rest.config;
 
+import com.koostack.operio.core.models.TenantContext;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import java.util.Optional;
@@ -159,7 +160,7 @@ public interface OperioConfig {
      * Multi-tenant isolation configuration.
      *
      * <p>When enabled, DSAR endpoints (export and delete) require an active
-     * {@link com.koostack.operio.core.TenantContext TenantContext} and return
+     * {@link TenantContext TenantContext} and return
      * 403 Forbidden if none is set. All queries are automatically routed to
      * the correct tenant schema via
      * {@link com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener}.
@@ -441,7 +442,7 @@ public interface OperioConfig {
      *
      * <p>Controls whether DSAR endpoints enforce tenant context validation.
      * When {@link #enabled()} is {@code true}, all DSAR operations require
-     * an active {@link com.koostack.operio.core.TenantContext TenantContext}
+     * an active {@link TenantContext TenantContext}
      * and return 403 Forbidden if none is set.
      *
      * <h2>Configuration Example</h2>

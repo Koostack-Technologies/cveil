@@ -2,11 +2,10 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.DSAR_AUDIT_LOG;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.DsarAuditLogDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.DsarAuditLog;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+
 import java.util.List;
 import org.jooq.DSLContext;
 
@@ -32,7 +31,7 @@ import org.jooq.DSLContext;
  * to the correct per-tenant Postgres schema by
  * {@link com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener
  * TenantAwareExecuteListener}. When a
- * {@link com.koostack.operio.core.TenantContext TenantContext} is active,
+ * {@link TenantContext TenantContext} is active,
  * the execute listener issues {@code SET search_path TO t_{tenantId}, public}
  * before each statement, ensuring that:
  * <ul>
@@ -76,7 +75,7 @@ public class DsarAuditLogRepository {
      * a permanent record of what was deleted.
      *
      * <p><strong>Tenant scoping:</strong> When a
-     * {@link com.koostack.operio.core.TenantContext} is active,
+     * {@link TenantContext} is active,
      * the insert targets the tenant's schema automatically via
      * {@code TenantAwareExecuteListener}. The caller does not need to
      * specify a tenant ID — it is derived from the scoped context.
@@ -132,7 +131,7 @@ public class DsarAuditLogRepository {
      * reports.
      *
      * <p><strong>Tenant scoping:</strong> When a
-     * {@link com.koostack.operio.core.TenantContext TenantContext} is active,
+     * {@link TenantContext TenantContext} is active,
      * results are automatically restricted to the current tenant's schema.
      * A subject ID that exists in tenant A's schema will not appear in
      * queries executed under tenant B's context — cross-tenant data leakage
@@ -156,7 +155,7 @@ public class DsarAuditLogRepository {
      *
      * <p><strong>Tenant scoping:</strong> Results are restricted to the
      * current tenant's schema when a
-     * {@link com.koostack.operio.core.TenantContext TenantContext} is active.
+     * {@link TenantContext TenantContext} is active.
      * A deletion request ID from tenant A cannot be looked up under
      * tenant B's context.
      *
@@ -179,7 +178,7 @@ public class DsarAuditLogRepository {
      *
      * <p><strong>Tenant scoping:</strong> Count is restricted to the current
      * tenant's schema when a
-     * {@link com.koostack.operio.core.TenantContext TenantContext} is active.
+     * {@link TenantContext TenantContext} is active.
      *
      * @param subjectId the data subject identifier
      * @return the number of successful deletions (status = 'SUCCESS')

@@ -1,8 +1,8 @@
 package com.koostack.operio.spring.aspect;
 
-import com.koostack.operio.core.Models.ConsentResponse;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.annotation.ConsentRequired;
 import com.koostack.operio.core.exception.ConsentDeniedException;

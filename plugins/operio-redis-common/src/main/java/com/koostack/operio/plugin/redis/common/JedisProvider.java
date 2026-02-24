@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.redis.common;
 
+import com.koostack.operio.core.models.TenantContext;
 import redis.clients.jedis.JedisPooled;
 
 /**
@@ -19,7 +20,7 @@ import redis.clients.jedis.JedisPooled;
  *       create one. Suitable for single-tenant deployments or when Redis ACLs
  *       are not configured.</li>
  *   <li><strong>Tenant-aware</strong> — reads the current tenant from
- *       {@link com.koostack.operio.core.TenantContext}, looks up the tenant's
+ *       {@link TenantContext}, looks up the tenant's
  *       Redis ACL credentials, and returns a per-tenant {@link JedisPooled}
  *       authenticated as that tenant's ACL user. The per-tenant ACL user is
  *       restricted to the tenant's key pattern ({@code {appName}:{tenantId}:*}),

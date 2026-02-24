@@ -1,14 +1,14 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.Models.BatchConsentEntry;
-import com.koostack.operio.core.Models.BatchConsentResult;
-import com.koostack.operio.core.Models.ConsentAuditEntry;
-import com.koostack.operio.core.Models.ConsentResponse;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.PolicySummaryEntry;
+import com.koostack.operio.core.models.BatchConsentEntry;
+import com.koostack.operio.core.models.BatchConsentResult;
+import com.koostack.operio.core.models.ConsentAuditEntry;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.PolicySummaryEntry;
 import com.koostack.operio.core.Operio;
-import com.koostack.operio.core.RequestContext;
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.RequestContext;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.service.ConsentAdminService;
 import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.rest.auth.Roles;

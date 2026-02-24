@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.audit.slf4j;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.service.AuditLogger;
 import lombok.extern.slf4j.Slf4j;
 

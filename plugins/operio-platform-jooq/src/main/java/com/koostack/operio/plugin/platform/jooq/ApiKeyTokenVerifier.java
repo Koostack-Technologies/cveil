@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.platform.jooq;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.service.TokenVerifier;
 import com.koostack.operio.plugin.platform.jooq.generated.tables.pojos.ApiKey;

@@ -3,7 +3,7 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.filter.RequestTracingFilter;
 import jakarta.ws.rs.container.ContainerRequestContext;

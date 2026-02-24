@@ -1,6 +1,6 @@
 package com.koostack.operio.core;
 
-import com.koostack.operio.core.Models.ConsentAuditEntry;
+import com.koostack.operio.core.models.ConsentAuditEntry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

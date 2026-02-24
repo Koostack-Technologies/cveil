@@ -3,6 +3,7 @@ package com.koostack.operio.rest.integration;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.*;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.rest.dto.ConsentDtos.DsarDeletionReceipt;
 import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
@@ -56,11 +57,11 @@ import org.testcontainers.utility.DockerImageName;
  * <p>The API key → tenant binding is resolved by the
  * {@link com.koostack.operio.rest.filter.ApiKeyAuthFilter ApiKeyAuthFilter}
  * and the {@code TenantScopeInterceptor}, which sets
- * {@link com.koostack.operio.core.TenantContext TenantContext} for the
+ * {@link TenantContext TenantContext} for the
  * duration of the request.
  *
  * @see com.koostack.operio.rest.config.OperioConfig.MultiTenantConfig
- * @see com.koostack.operio.core.TenantContext
+ * @see TenantContext
  * @see com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener
  */
 @QuarkusTest

@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.consent.sync;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.exception.OperioServiceException;
@@ -10,7 +10,6 @@ import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.FieldCategoryMappingRedisRepository;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService;
-import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.time.Instant;
 import java.util.Set;

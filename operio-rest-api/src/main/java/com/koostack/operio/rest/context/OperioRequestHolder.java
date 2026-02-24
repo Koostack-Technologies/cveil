@@ -1,6 +1,6 @@
 package com.koostack.operio.rest.context;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 
 import jakarta.enterprise.context.RequestScoped;
 

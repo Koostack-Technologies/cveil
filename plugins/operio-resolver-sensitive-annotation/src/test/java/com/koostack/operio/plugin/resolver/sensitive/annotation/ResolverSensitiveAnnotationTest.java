@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.resolver.sensitive.annotation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.annotation.Sensitive;
 import java.util.List;
 import java.util.Map;

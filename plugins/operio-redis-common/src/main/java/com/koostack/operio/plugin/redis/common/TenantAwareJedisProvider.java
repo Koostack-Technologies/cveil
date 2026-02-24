@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.redis.common;
 
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.TenantContext;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;

@@ -3,9 +3,9 @@ package com.koostack.operio.plugin.consent.redis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.github.fppt.jedismock.RedisServer;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.DecisionDetail;
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.DecisionDetail;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository.ConsentValue;
 import java.io.IOException;
 import java.time.Instant;

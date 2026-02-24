@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.jooq.common;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.TenantContext;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;

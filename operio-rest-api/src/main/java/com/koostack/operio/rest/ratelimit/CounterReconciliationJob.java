@@ -1,8 +1,7 @@
 package com.koostack.operio.rest.ratelimit;
 
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
 import com.koostack.operio.plugin.platform.jooq.RateLimitCounterRepository;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;

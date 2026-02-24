@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.introspect.BeanPropertyDefinition;
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.annotation.Sensitive;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
 import java.util.Collections;

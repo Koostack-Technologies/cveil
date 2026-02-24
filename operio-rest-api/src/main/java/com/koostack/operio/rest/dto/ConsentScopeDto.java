@@ -1,6 +1,6 @@
 package com.koostack.operio.rest.dto;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;

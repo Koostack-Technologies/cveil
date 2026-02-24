@@ -1,6 +1,6 @@
 package com.koostack.operio.core.service;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.spi.Plugin;
 
 /**

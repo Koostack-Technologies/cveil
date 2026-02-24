@@ -2,15 +2,14 @@ package com.koostack.operio.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.IdentityContext;
-import com.koostack.operio.core.Models.IdpConfigInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.models.IdpConfigInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.service.TokenVerifier;
 import com.koostack.operio.core.spi.Plugin;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;

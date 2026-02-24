@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.identity.http;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.service.IdentityResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;

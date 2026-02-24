@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.discovery.sensitive.annotation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.DiscoveredField;
-import com.koostack.operio.core.Models.DiscoveryResult;
+import com.koostack.operio.core.models.DiscoveredField;
+import com.koostack.operio.core.models.DiscoveryResult;
 import com.koostack.operio.core.annotation.Sensitive;
 import java.util.List;
 import java.util.Set;

@@ -1,11 +1,11 @@
 package com.koostack.operio.core;
 
-import com.koostack.operio.core.Models.BatchConsentEntry;
-import com.koostack.operio.core.Models.BatchConsentResult;
-import com.koostack.operio.core.Models.BatchConsentResult.BatchItemError;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.DiscoveredField;
-import com.koostack.operio.core.Models.DiscoveryResult;
+import com.koostack.operio.core.models.BatchConsentEntry;
+import com.koostack.operio.core.models.BatchConsentResult;
+import com.koostack.operio.core.models.BatchConsentResult.BatchItemError;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.DiscoveredField;
+import com.koostack.operio.core.models.DiscoveryResult;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.registry.PluginRegistry;
 import com.koostack.operio.core.service.AuditLogger;
@@ -102,6 +102,7 @@ public class Operio {
         propagateAppName(consentService);
         propagateAppName(consentAdminService);
         propagateAppName(consentSyncService);
+        propagateAppName(platformAdminService);
     }
 
     /**

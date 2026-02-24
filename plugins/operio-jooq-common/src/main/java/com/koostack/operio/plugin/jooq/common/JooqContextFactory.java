@@ -1,6 +1,8 @@
 package com.koostack.operio.plugin.jooq.common;
 
 import javax.sql.DataSource;
+
+import com.koostack.operio.core.models.TenantContext;
 import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
@@ -102,7 +104,7 @@ public final class JooqContextFactory {
      * each SQL statement to the per-tenant Postgres schema via
      * {@link TenantAwareExecuteListener}.
      *
-     * <p>When {@link com.koostack.operio.core.TenantContext#get()} returns a
+     * <p>When {@link TenantContext#get()} returns a
      * non-null tenant ID, every jOOQ operation executed through this context
      * will first issue {@code SET search_path TO t_{tenantId}, public} on
      * the underlying JDBC connection. When no tenant context is active, the

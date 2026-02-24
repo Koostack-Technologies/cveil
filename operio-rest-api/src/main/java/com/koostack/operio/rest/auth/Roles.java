@@ -1,12 +1,14 @@
 package com.koostack.operio.rest.auth;
 
+import com.koostack.operio.core.models.IdentityContext;
+
 /**
  * Defines the canonical role names used for RBAC enforcement across
  * the Operio REST API.
  *
  * <p>Roles are assigned to API keys at creation time (via the platform
  * admin {@code POST /api/v1/platform/api-keys} endpoint) and are
- * carried in the {@link com.koostack.operio.core.Models.IdentityContext#roles()}
+ * carried in the {@link IdentityContext#roles()}
  * set. The {@link com.koostack.operio.rest.filter.ApiKeyAuthFilter}
  * populates a JAX-RS {@link jakarta.ws.rs.core.SecurityContext} from
  * those roles, enabling programmatic {@code isUserInRole()} checks in

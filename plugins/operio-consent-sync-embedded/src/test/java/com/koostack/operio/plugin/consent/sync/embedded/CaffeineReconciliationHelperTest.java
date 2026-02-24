@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.sync.embedded;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.ConsentResponse;
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionService;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentRepository;

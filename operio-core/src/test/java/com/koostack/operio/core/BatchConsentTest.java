@@ -2,10 +2,10 @@ package com.koostack.operio.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.BatchConsentEntry;
-import com.koostack.operio.core.Models.BatchConsentResult;
-import com.koostack.operio.core.Models.BatchConsentResult.BatchItemError;
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.BatchConsentEntry;
+import com.koostack.operio.core.models.BatchConsentResult;
+import com.koostack.operio.core.models.BatchConsentResult.BatchItemError;
+import com.koostack.operio.core.models.ConsentScope;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;

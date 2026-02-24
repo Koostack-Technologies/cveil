@@ -1,8 +1,9 @@
 package com.koostack.operio.plugin.platform.jooq;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.IdpConfigInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.IdpConfigInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
@@ -13,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Collections;
@@ -75,7 +75,7 @@ import org.slf4j.LoggerFactory;
  * @see TenantManager
  */
 public class JooqPlatformAdminService
-    implements PlatformAdminService<PlatformJooqConfig>
+    implements PlatformAdminService<PlatformJooqConfig>, Operio.AppNameAware
 {
 
     private static final Logger log = LoggerFactory.getLogger(
@@ -83,7 +83,7 @@ public class JooqPlatformAdminService
     );
 
     private static final String API_KEY_PREFIX_LITERAL = "opr_live_";
-    private static final int KEY_PREFIX_LENGTH = 8;
+    private static final int KEY_PREFIX_LENGTH = 16;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private DSLContext platformDslContext;
@@ -253,6 +253,13 @@ public class JooqPlatformAdminService
     /** Returns the tenant manager. */
     public TenantManager tenantManager() {
         return tenantManager;
+    }
+
+    @Override
+    public void setAppName(String appName) {
+        if (tenantManager != null) {
+            tenantManager.setAppName(appName);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -724,7 +731,7 @@ public class JooqPlatformAdminService
             tenant.getTenantId(),
             tenant.getDisplayName(),
             tenant.getPlan(),
-            tenant.getStatus(),
+            tenant.getStatus() != null ? tenant.getStatus().toUpperCase() : null,
             tenant.getEvalLimitMonthly(),
             tenant.getSubjectLimit(),
             tenant.getBurstLimitPerMin(),
@@ -751,7 +758,7 @@ public class JooqPlatformAdminService
             apiKey.getTenantId(),
             apiKey.getSubject(),
             roles,
-            apiKey.getStatus(),
+            apiKey.getStatus() != null ? apiKey.getStatus().toUpperCase() : null,
             apiKey.getCreatedAt() != null
                 ? apiKey.getCreatedAt().toInstant(ZoneOffset.UTC)
                 : null

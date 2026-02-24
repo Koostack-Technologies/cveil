@@ -1,7 +1,7 @@
 package com.koostack.operio.rest.lifecycle;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.runtime.StartupEvent;

@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.service.MaskingStrategy;
 import java.util.Iterator;

@@ -3,7 +3,7 @@ package com.koostack.operio.plugin.consent.redis;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.github.fppt.jedismock.RedisServer;
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.TenantContext;
 import java.io.IOException;
 import java.util.Set;
 import org.junit.jupiter.api.AfterAll;

@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.jooq.common;
 
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.TenantContext;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.regex.Pattern;

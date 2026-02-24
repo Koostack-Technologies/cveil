@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.koostack.operio.core.models.TenantContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

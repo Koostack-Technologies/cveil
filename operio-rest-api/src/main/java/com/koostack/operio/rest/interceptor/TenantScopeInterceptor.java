@@ -1,9 +1,9 @@
 package com.koostack.operio.rest.interceptor;
 
-import com.koostack.operio.core.Models.IdentityContext;
-import com.koostack.operio.core.RequestContext;
-import com.koostack.operio.core.RequestContext.RequestMeta;
-import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.models.RequestContext;
+import com.koostack.operio.core.models.RequestContext.RequestMeta;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;

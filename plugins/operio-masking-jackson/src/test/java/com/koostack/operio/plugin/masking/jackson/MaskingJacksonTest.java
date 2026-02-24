@@ -3,7 +3,7 @@ package com.koostack.operio.plugin.masking.jackson;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.exception.OperioServiceException;
 import java.util.Collections;
 import java.util.List;

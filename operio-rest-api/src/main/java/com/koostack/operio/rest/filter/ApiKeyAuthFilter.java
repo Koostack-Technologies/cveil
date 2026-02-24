@@ -1,6 +1,6 @@
 package com.koostack.operio.rest.filter;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.service.TokenVerifier;

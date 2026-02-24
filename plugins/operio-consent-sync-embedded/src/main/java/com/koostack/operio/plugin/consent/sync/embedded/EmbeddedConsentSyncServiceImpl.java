@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.consent.sync.embedded;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.exception.OperioServiceException;

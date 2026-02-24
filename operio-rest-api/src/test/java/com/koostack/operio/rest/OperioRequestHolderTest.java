@@ -2,7 +2,7 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import java.util.Map;
 import java.util.Set;

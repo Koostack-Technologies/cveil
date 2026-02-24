@@ -1,6 +1,6 @@
 package com.koostack.operio.core.exception;
 
-import com.koostack.operio.core.Models.ConsentScope;
+import com.koostack.operio.core.models.ConsentScope;
 
 import java.util.Set;
 

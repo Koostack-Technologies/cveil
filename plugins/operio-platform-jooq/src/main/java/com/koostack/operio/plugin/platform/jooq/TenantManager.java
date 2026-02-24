@@ -86,7 +86,7 @@ public class TenantManager {
     private final DataSource dataSource;
     private final TenantRepository tenantRepository;
     private final RedisPluginConfig redisConfig;
-    private final String appName;
+    private volatile String appName;
     private final String consentMigrationLocation;
 
     /**
@@ -146,6 +146,15 @@ public class TenantManager {
             consentMigrationLocation != null
                 ? consentMigrationLocation
                 : "classpath:db/migration/consent";
+    }
+
+    /**
+     * Updates the application name used as the Redis key prefix in ACL rules.
+     *
+     * @param appName the application name, or {@code null} to revert to default
+     */
+    public void setAppName(String appName) {
+        this.appName = appName != null ? appName : "operio";
     }
 
     // -----------------------------------------------------------------------

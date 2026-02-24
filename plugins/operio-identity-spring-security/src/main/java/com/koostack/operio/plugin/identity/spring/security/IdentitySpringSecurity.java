@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.identity.spring.security;
 
-import com.koostack.operio.core.Models.IdentityContext;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.service.IdentityResolver;
 import java.util.Collections;
 import java.util.HashMap;

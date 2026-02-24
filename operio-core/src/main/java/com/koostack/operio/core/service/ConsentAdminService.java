@@ -1,13 +1,13 @@
 package com.koostack.operio.core.service;
 
-import com.koostack.operio.core.Models.CategoryInfo;
-import com.koostack.operio.core.Models.ConsentAuditEntry;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.Models.EntityInfo;
-import com.koostack.operio.core.Models.FieldInfo;
-import com.koostack.operio.core.Models.PolicySummaryEntry;
-import com.koostack.operio.core.Models.PurposeInfo;
-import com.koostack.operio.core.Models.RegulationInfo;
+import com.koostack.operio.core.models.CategoryInfo;
+import com.koostack.operio.core.models.ConsentAuditEntry;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.EntityInfo;
+import com.koostack.operio.core.models.FieldInfo;
+import com.koostack.operio.core.models.PolicySummaryEntry;
+import com.koostack.operio.core.models.PurposeInfo;
+import com.koostack.operio.core.models.RegulationInfo;
 import com.koostack.operio.core.spi.Plugin;
 import java.time.Instant;
 import java.util.List;

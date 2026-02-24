@@ -3,25 +3,17 @@ package com.koostack.operio.rest.integration;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.*;
 
-import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.rest.dto.ConsentDtos.DsarDeletionReceipt;
 import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
-import io.quarkus.test.common.WithTestResource;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Integration tests for DSAR (Data Subject Access Request) endpoints.
@@ -44,7 +36,7 @@ import org.testcontainers.utility.DockerImageName;
  * </ul>
  */
 @QuarkusTest
-@WithTestResource(ConsentDsarIntegrationIT.DsarTestResourceManager.class)
+@QuarkusTestResource(OperioTestResourceManager.class)
 @DisplayName("DSAR (Data Subject Access Request) Integration Tests")
 class ConsentDsarIntegrationIT {
 
@@ -52,87 +44,11 @@ class ConsentDsarIntegrationIT {
         ConsentDsarIntegrationIT.class
     );
 
-    private static final String VALID_API_KEY = "test-api-key-dsar";
+    /** Bootstrap key configured in test application.yml (force-bootstrap=true). */
+    private static final String BOOTSTRAP_KEY =
+        "test-bootstrap-key-for-integration-tests";
     private static final String SUBJECT_ID = "user_test_dsar_123";
     private static final String OTHER_SUBJECT = "user_other_456";
-
-    /**
-     * Test resource manager for DSAR integration tests.
-     *
-     * <p>Starts Postgres and Redis, injects config properties.
-     */
-    public static class DsarTestResourceManager
-        implements QuarkusTestResourceLifecycleManager
-    {
-
-        private static final Logger LOG = LoggerFactory.getLogger(
-            DsarTestResourceManager.class
-        );
-
-        private PostgreSQLContainer<?> postgres;
-        private GenericContainer<?> redis;
-
-        @Override
-        public Map<String, String> start() {
-            LOG.info("Starting DSAR integration test infrastructure...");
-
-            postgres = new PostgreSQLContainer<>(
-                DockerImageName.parse("postgres:16-alpine")
-            )
-                .withDatabaseName("operio_dsar_test")
-                .withUsername("operio_dsar_test")
-                .withPassword("operio_dsar_test")
-                .withLogConsumer(
-                    new Slf4jLogConsumer(LOG).withPrefix("postgres")
-                );
-
-            postgres.start();
-
-            redis = new GenericContainer<>(
-                DockerImageName.parse("redis:7-alpine")
-            )
-                .withExposedPorts(6379)
-                .waitingFor(
-                    Wait.forLogMessage(".*Ready to accept connections.*", 1)
-                )
-                .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("redis"));
-
-            redis.start();
-
-            Map<String, String> props = new HashMap<>();
-            props.put("quarkus.datasource.jdbc.url", postgres.getJdbcUrl());
-            props.put("quarkus.datasource.username", postgres.getUsername());
-            props.put("quarkus.datasource.password", postgres.getPassword());
-            props.put(
-                "operio.plugins.consent-admin-jooq.datasource.jdbc.url",
-                postgres.getJdbcUrl()
-            );
-            props.put(
-                "operio.plugins.consent-admin-jooq.datasource.username",
-                postgres.getUsername()
-            );
-            props.put(
-                "operio.plugins.consent-admin-jooq.datasource.password",
-                postgres.getPassword()
-            );
-            props.put(
-                "operio.plugins.consent-decision-redis.redis.uri",
-                "redis://" + redis.getHost() + ":" + redis.getMappedPort(6379)
-            );
-            props.put(
-                "operio.api-keys.test-api-key-dsar",
-                "role:consent:read,role:consent:write"
-            );
-
-            return props;
-        }
-
-        @Override
-        public void stop() {
-            if (redis != null) redis.stop();
-            if (postgres != null) postgres.stop();
-        }
-    }
 
     /**
      * Test 1: Export completeness
@@ -146,9 +62,9 @@ class ConsentDsarIntegrationIT {
         String subject = "export_test_1";
 
         // Grant three policies
-        grantConsent(subject, "email", null, "marketing");
-        grantConsent(subject, "phone", "User", "analytics");
-        grantConsent(subject, null, "PII", "sales");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "phone", "User", "analytics");
+        grantConsent(subject, "HEALTH", "ssn", "Patient", "sales");
 
         // Export
         SubjectDataExport export = exportSubject(subject);
@@ -189,8 +105,8 @@ class ConsentDsarIntegrationIT {
         String subject = "export_test_audit";
 
         // Grant and revoke same scope
-        grantConsent(subject, "email", null, "marketing");
-        revokeConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        revokeConsent(subject, "PII", "email", "DsarUser", "marketing");
 
         // Export
         SubjectDataExport export = exportSubject(subject);
@@ -214,11 +130,11 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Delete without confirmation token should return 400")
     void testDeleteMissingConfirmation() {
         String subject = "delete_test_noconfirm";
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
         // Try to delete without confirm parameter
         given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .when()
             .delete("/api/v1/consent/subjects/{id}", subject)
             .then()
@@ -234,11 +150,11 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Delete with wrong confirmation token should return 400")
     void testDeleteWrongConfirmation() {
         String subject = "delete_test_wrongconfirm";
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
         // Try to delete with wrong confirmation
         given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .queryParam("confirm", "WRONG_TOKEN")
             .when()
             .delete("/api/v1/consent/subjects/{id}", subject)
@@ -258,7 +174,7 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_atomicity";
 
         // Grant policy
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
         // Verify it exists via export
         SubjectDataExport beforeDelete = exportSubject(subject);
@@ -290,7 +206,7 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_idempotent";
 
         // Grant policy
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
         // Delete first time
         String confirmToken = "DELETE_" + subject;
@@ -322,9 +238,9 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_auditlog";
 
         // Grant three policies
-        grantConsent(subject, "email", null, "marketing");
-        grantConsent(subject, "phone", "User", "analytics");
-        grantConsent(subject, null, "PII", "sales");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "phone", "User", "analytics");
+        grantConsent(subject, "HEALTH", "ssn", "Patient", "sales");
 
         // Delete
         String confirmToken = "DELETE_" + subject;
@@ -345,48 +261,45 @@ class ConsentDsarIntegrationIT {
     /**
      * Test 9: Delete authorization
      *
-     * <p>Call DELETE without the consent:write role and expect 403 Forbidden.
+     * <p>Call DELETE without valid credentials and expect 401 Unauthorized.
      */
     @Test
-    @DisplayName("Delete without consent:write role should return 403")
+    @DisplayName("Delete without valid credentials should return 401")
     void testDeleteAuthorization() {
         String subject = "delete_test_authz";
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
-        // Try to delete with read-only API key (no write permission)
-        String readOnlyKey = "test-api-key-read-only"; // assume this exists but only has read
+        // Try to delete with an unrecognized API key
         String confirmToken = "DELETE_" + subject;
 
         given()
-            .header("X-Api-Key", readOnlyKey)
+            .header("Authorization", "Bearer invalid-key-no-access")
             .queryParam("confirm", confirmToken)
             .when()
             .delete("/api/v1/consent/subjects/{id}", subject)
             .then()
-            .statusCode(403);
+            .statusCode(401);
     }
 
     /**
      * Test 10: Export authorization
      *
-     * <p>Call GET export without the consent:write role and expect 403 Forbidden.
+     * <p>Call GET export without valid credentials and expect 401 Unauthorized.
      */
     @Test
-    @DisplayName("Export without consent:write role should return 403")
+    @DisplayName("Export without valid credentials should return 401")
     void testExportAuthorization() {
         String subject = "export_test_authz";
-        grantConsent(subject, "email", null, "marketing");
+        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
 
-        // Try to export with read-only API key
-        String readOnlyKey = "test-api-key-read-only";
-
+        // Try to export with an unrecognized API key
         given()
-            .header("X-Api-Key", readOnlyKey)
+            .header("Authorization", "Bearer invalid-key-no-access")
             .contentType(ContentType.JSON)
             .when()
             .get("/api/v1/consent/subjects/{id}/export", subject)
             .then()
-            .statusCode(403);
+            .statusCode(401);
     }
 
     // -----------------------------------------------------------------------
@@ -395,18 +308,20 @@ class ConsentDsarIntegrationIT {
 
     private void grantConsent(
         String subject,
+        String category,
         String fieldName,
         String entityName,
         String purposeName
     ) {
         Map<String, Object> scope = buildScope(
+            category,
             fieldName,
             entityName,
             purposeName
         );
 
         given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .contentType(ContentType.JSON)
             .body(Map.of("subject", subject, "scope", scope))
             .when()
@@ -417,18 +332,20 @@ class ConsentDsarIntegrationIT {
 
     private void revokeConsent(
         String subject,
+        String category,
         String fieldName,
         String entityName,
         String purposeName
     ) {
         Map<String, Object> scope = buildScope(
+            category,
             fieldName,
             entityName,
             purposeName
         );
 
         given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .contentType(ContentType.JSON)
             .body(Map.of("subject", subject, "scope", scope))
             .when()
@@ -439,7 +356,7 @@ class ConsentDsarIntegrationIT {
 
     private SubjectDataExport exportSubject(String subject) {
         return given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .contentType(ContentType.JSON)
             .when()
             .get("/api/v1/consent/subjects/{id}/export", subject)
@@ -454,7 +371,7 @@ class ConsentDsarIntegrationIT {
         String confirmToken
     ) {
         return given()
-            .header("X-Api-Key", VALID_API_KEY)
+            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .contentType(ContentType.JSON)
             .queryParam("confirm", confirmToken)
             .when()
@@ -466,14 +383,14 @@ class ConsentDsarIntegrationIT {
     }
 
     private static Map<String, Object> buildScope(
+        String category,
         String fieldName,
         String entityName,
         String purposeName
     ) {
         Map<String, Object> scope = new HashMap<>();
-        if (fieldName != null) {
-            scope.put("fieldName", fieldName);
-        }
+        scope.put("category", category);
+        scope.put("fieldName", fieldName);
         if (entityName != null) {
             scope.put("entityName", entityName);
         }

@@ -3,10 +3,10 @@ package com.koostack.operio.plugin.platform.jooq;
 import static com.koostack.operio.plugin.platform.jooq.generated.Tables.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Models.ApiKeyInfo;
-import com.koostack.operio.core.Models.IdentityContext;
-import com.koostack.operio.core.Models.IdpConfigInfo;
-import com.koostack.operio.core.Models.TenantInfo;
+import com.koostack.operio.core.models.ApiKeyInfo;
+import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.models.IdpConfigInfo;
+import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.plugin.platform.jooq.generated.tables.pojos.ApiKey;
