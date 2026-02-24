@@ -92,15 +92,24 @@ public class TenantManager {
     /**
      * Result of a successful tenant provisioning operation.
      *
-     * @param schemaName       the Postgres schema created for the tenant
-     * @param redisAclUser     the Redis ACL username, or {@code null} if
-     *                         Redis is not configured
-     * @param redisAclPassHash the password hash for the Redis ACL user, or
-     *                         {@code null} if Redis is not configured
+     * @param schemaName        the Postgres schema created for the tenant
+     * @param redisAclUser      the Redis ACL username, or {@code null} if
+     *                          Redis is not configured
+     * @param redisAclPassword  the plaintext password for the Redis ACL user,
+     *                          stored in the tenant table so that per-tenant
+     *                          {@link redis.clients.jedis.JedisPooled} connections
+     *                          can authenticate as this user at runtime —
+     *                          enforcing Redis-level key isolation (not just
+     *                          application-level key-prefix isolation).
+     *                          {@code null} if Redis is not configured.
+     * @param redisAclPassHash  the SHA-256 hex digest of the password, kept
+     *                          for audit/verification purposes.
+     *                          {@code null} if Redis is not configured.
      */
     public record ProvisionResult(
         String schemaName,
         String redisAclUser,
+        String redisAclPassword,
         String redisAclPassHash
     ) {}
 
@@ -214,6 +223,7 @@ public class TenantManager {
 
         // 3. Provision Redis ACL user (if Redis is configured)
         String redisAclUser = null;
+        String redisAclPassword = null;
         String redisAclPassHash = null;
         if (redisConfig != null) {
             try {
@@ -227,6 +237,11 @@ public class TenantManager {
                 // ACL commands are only available on Jedis (not JedisPooled /
                 // UnifiedJedis) in Jedis 5.x. Create a short-lived connection.
                 try (Jedis jedis = createJedisConnection()) {
+                    // Reset the user first to ensure a clean slate (removes
+                    // any stale passwords or key patterns from a previous
+                    // partial provisioning attempt), then configure from
+                    // scratch.
+                    jedis.aclSetUser(redisAclUser, "reset");
                     jedis.aclSetUser(
                         redisAclUser,
                         "on",
@@ -239,6 +254,11 @@ public class TenantManager {
                         "-@dangerous"
                     );
                 }
+
+                // Store the plaintext password so that per-tenant
+                // JedisPooled connections can authenticate as this ACL
+                // user at runtime, enforcing server-side key isolation.
+                redisAclPassword = password;
 
                 log.debug(
                     "Provisioned Redis ACL user '{}' with key pattern '{}'",
@@ -264,7 +284,256 @@ public class TenantManager {
             redisAclUser
         );
 
-        return new ProvisionResult(schemaName, redisAclUser, redisAclPassHash);
+        return new ProvisionResult(
+            schemaName,
+            redisAclUser,
+            redisAclPassword,
+            redisAclPassHash
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Redis ACL Reprovisioning (backfill / rotation)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Result of a Redis ACL reprovisioning operation.
+     *
+     * @param tenantId         the tenant that was reprovisioned
+     * @param redisAclUser     the Redis ACL username
+     * @param redisAclPassword the new plaintext password
+     * @param redisAclPassHash the SHA-256 hex hash of the new password
+     */
+    public record ReprovisionResult(
+        String tenantId,
+        String redisAclUser,
+        String redisAclPassword,
+        String redisAclPassHash
+    ) {}
+
+    /**
+     * Re-provisions (or provisions for the first time) Redis ACL credentials
+     * for an existing tenant.
+     *
+     * <p>This method is designed for two scenarios:
+     * <ol>
+     *   <li><strong>Backfill</strong> — tenants provisioned before per-tenant
+     *       Redis ACL isolation was enabled have {@code redis_acl_password = NULL}
+     *       in the database. This method generates credentials and updates both
+     *       Redis and the database so those tenants can use per-tenant
+     *       connections.</li>
+     *   <li><strong>Rotation</strong> — for security hygiene, periodically
+     *       rotating the Redis ACL password. This method resets the existing
+     *       ACL user with a fresh password and updates the database.</li>
+     * </ol>
+     *
+     * <h2>Atomicity</h2>
+     * <p>This operation is <strong>not</strong> fully atomic across Redis and
+     * Postgres. The sequence is:
+     * <ol>
+     *   <li>Generate a new password</li>
+     *   <li>Reset the Redis ACL user and set the new password + key pattern</li>
+     *   <li>Update the tenant row in Postgres with the new password and hash</li>
+     * </ol>
+     * <p>If step 3 fails after step 2 succeeds, the Redis ACL will have the
+     * new password but the database will still hold the old one (or NULL).
+     * The caller should handle this by retrying or manually reconciling.
+     * In practice this is safe because:
+     * <ul>
+     *   <li>If the DB update fails, the <em>next</em> retry will reset Redis
+     *       again with yet another password and attempt the DB update.</li>
+     *   <li>Existing cached {@code JedisPooled} connections in
+     *       {@code TenantAwareJedisProvider} will fail with an auth error,
+     *       but the provider's eviction mechanism (or application restart)
+     *       will pick up the new credentials.</li>
+     * </ul>
+     *
+     * @param tenantId the tenant to reprovision
+     * @return the reprovisioning result with new credentials
+     * @throws OperioServiceException   if Redis ACL operations fail
+     * @throws IllegalArgumentException if the tenant ID is invalid
+     * @throws IllegalStateException    if Redis is not configured
+     */
+    public ReprovisionResult reprovisionRedisAcl(String tenantId) {
+        if (redisConfig == null) {
+            throw new IllegalStateException(
+                "Cannot reprovision Redis ACL: Redis is not configured. " +
+                    "Ensure redisConfig is provided to TenantManager."
+            );
+        }
+
+        String sanitized = sanitizeTenantId(tenantId);
+        String redisAclUser =
+            TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+        String password = generateSecurePassword();
+        String passHash = sha256Hex(password);
+        String keyPattern = appName + ":" + tenantId + ":*";
+
+        log.info(
+            "Reprovisioning Redis ACL for tenant '{}' (aclUser='{}', keyPattern='{}')",
+            tenantId,
+            redisAclUser,
+            keyPattern
+        );
+
+        // 1. Reset and reconfigure the Redis ACL user
+        try (Jedis jedis = createJedisConnection()) {
+            // Reset first to clear any stale passwords or patterns
+            jedis.aclSetUser(redisAclUser, "reset");
+            jedis.aclSetUser(
+                redisAclUser,
+                "on",
+                ">" + password,
+                "~" + keyPattern,
+                "+@read",
+                "+@write",
+                "+@connection",
+                "-@admin",
+                "-@dangerous"
+            );
+            log.debug(
+                "Redis ACL user '{}' reset with new credentials and key pattern '{}'",
+                redisAclUser,
+                keyPattern
+            );
+        } catch (Exception e) {
+            throw new OperioServiceException(
+                "Failed to reprovision Redis ACL user '" +
+                    redisAclUser +
+                    "' for tenant '" +
+                    tenantId +
+                    "'",
+                e
+            );
+        }
+
+        // 2. Update the tenant row in Postgres
+        try {
+            int updated = tenantRepository.updateRedisAclCredentials(
+                tenantId,
+                redisAclUser,
+                password,
+                passHash,
+                "reprovision-redis-acl"
+            );
+            if (updated == 0) {
+                log.warn(
+                    "Tenant '{}' not found in platform DB — Redis ACL was " +
+                        "updated but no database row was modified. The tenant may " +
+                        "have been deleted concurrently.",
+                    tenantId
+                );
+            }
+        } catch (Exception e) {
+            log.error(
+                "Redis ACL for tenant '{}' was updated but the database " +
+                    "update failed. The Redis ACL has the new password but the " +
+                    "database still holds the old value. Retry this operation " +
+                    "to reconcile.",
+                tenantId,
+                e
+            );
+            throw new OperioServiceException(
+                "Failed to update Redis ACL credentials in database for " +
+                    "tenant '" +
+                    tenantId +
+                    "' (Redis was already updated — retry to reconcile)",
+                e
+            );
+        }
+
+        log.info(
+            "Redis ACL reprovisioned for tenant '{}' (aclUser='{}')",
+            tenantId,
+            redisAclUser
+        );
+
+        return new ReprovisionResult(
+            tenantId,
+            redisAclUser,
+            password,
+            passHash
+        );
+    }
+
+    /**
+     * Re-provisions Redis ACL credentials for <strong>all</strong> active
+     * tenants that are missing credentials ({@code redis_acl_password IS NULL}).
+     *
+     * <p>This is the batch backfill operation for upgrading from the
+     * pre-ACL-isolation era. It iterates over all active tenants, checks
+     * whether they already have Redis ACL credentials, and provisions
+     * credentials for those that don't.
+     *
+     * <p>Tenants that already have credentials are skipped (not rotated).
+     * Use {@link #reprovisionRedisAcl(String)} individually to rotate
+     * credentials for a specific tenant.
+     *
+     * <p>Failures for individual tenants are logged but do not abort the
+     * batch — the method continues to the next tenant.
+     *
+     * @return the number of tenants successfully (re-)provisioned
+     * @throws IllegalStateException if Redis is not configured
+     */
+    public int reprovisionAllRedisAcls() {
+        if (redisConfig == null) {
+            throw new IllegalStateException(
+                "Cannot reprovision Redis ACLs: Redis is not configured."
+            );
+        }
+
+        var tenants = tenantRepository.findAll();
+        int provisioned = 0;
+        int skipped = 0;
+        int failed = 0;
+
+        for (var tenant : tenants) {
+            if (!"active".equals(tenant.getStatus())) {
+                log.debug(
+                    "Skipping inactive tenant '{}' (status={})",
+                    tenant.getTenantId(),
+                    tenant.getStatus()
+                );
+                skipped++;
+                continue;
+            }
+
+            // Skip tenants that already have credentials
+            if (
+                tenant.getRedisAclPassword() != null &&
+                !tenant.getRedisAclPassword().isBlank()
+            ) {
+                log.debug(
+                    "Tenant '{}' already has Redis ACL credentials — skipping",
+                    tenant.getTenantId()
+                );
+                skipped++;
+                continue;
+            }
+
+            try {
+                reprovisionRedisAcl(tenant.getTenantId());
+                provisioned++;
+            } catch (Exception e) {
+                log.error(
+                    "Failed to reprovision Redis ACL for tenant '{}': {}",
+                    tenant.getTenantId(),
+                    e.getMessage(),
+                    e
+                );
+                failed++;
+            }
+        }
+
+        log.info(
+            "Redis ACL batch reprovision complete: provisioned={}, skipped={}, failed={}, total={}",
+            provisioned,
+            skipped,
+            failed,
+            tenants.size()
+        );
+
+        return provisioned;
     }
 
     // -----------------------------------------------------------------------

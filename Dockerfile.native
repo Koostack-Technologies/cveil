@@ -8,8 +8,7 @@
 #
 # Prerequisites:
 #   - The Quarkus Gradle plugin must be enabled in operio-rest-api/build.gradle.kts
-#     (currently commented out due to Gradle 9.x incompatibility — re-enable
-#     once the Quarkus team ships a Gradle-9-compatible plugin release).
+#     (enabled now that the project uses Gradle 8.12).
 #   - Alternatively, use the Quarkus CLI: `quarkus build --native --gradle`
 #     and then build only the runtime stage of this Dockerfile.
 #
@@ -30,7 +29,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build the native image
 # -----------------------------------------------------------------------------
-FROM ghcr.io/graalvm/native-image:25 AS build
+FROM ghcr.io/graalvm/native-image:21 AS build
 
 WORKDIR /app
 
@@ -60,7 +59,7 @@ COPY . .
 #   -Dquarkus.native.container-build=true — use the in-container GraalVM
 #                                           (no need for a local GraalVM install)
 #   -Dquarkus.native.additional-build-args=--enable-preview
-#                                         — required for ScopedValue (Java 25)
+#                                         — required for ScopedValue (preview in Java 21)
 #
 # The native binary is produced at:
 #   operio-rest-api/build/*-runner

@@ -11,6 +11,7 @@ import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.FieldCategoryMappingRedisRepository;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.time.Instant;
 import java.util.Set;
 import java.util.logging.Level;
@@ -109,6 +110,46 @@ public class ConsentSyncServiceImpl
         this.redisMappingRepo = redisDecision.fieldCategoryMappingRepository();
 
         this.autoRegisterMetadata = config.autoRegisterMetadata();
+        this.configured = true;
+    }
+
+    /**
+     * Configures this sync service with a {@link JedisProvider} for
+     * per-tenant Redis connection resolution.
+     *
+     * <p>This is the recommended configuration path for multi-tenant
+     * deployments. The provided {@link JedisProvider} (typically a
+     * {@link com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider})
+     * is shared between this sync service and the
+     * {@link RedisConsentDecisionService}, ensuring that all Redis
+     * operations — both writes (sync) and reads (evaluation) —
+     * authenticate as the current tenant's Redis ACL user.
+     *
+     * <p>This enforces <strong>server-side</strong> key isolation at the
+     * Redis ACL level: each tenant's ACL user is restricted to keys
+     * matching {@code {appName}:{tenantId}:*}, so even a bug in
+     * application-level key-prefix logic cannot leak data between tenants.
+     *
+     * @param jooqConfig          configuration for the jOOQ consent admin layer
+     * @param jedisProvider       the per-tenant Jedis provider
+     * @param autoRegisterMetadata whether to auto-register entities/fields/categories
+     */
+    public void configure(
+        JooqConsentAdminServiceConfig jooqConfig,
+        JedisProvider jedisProvider,
+        boolean autoRegisterMetadata
+    ) {
+        // Initialize the jOOQ admin service
+        this.jooqAdmin = new JooqConsentAdminService();
+        this.jooqAdmin.configure(jooqConfig);
+
+        // Initialize Redis repositories with the tenant-aware provider
+        this.redisConsentRepo = new ConsentPolicyRedisRepository(jedisProvider);
+        this.redisMappingRepo = new FieldCategoryMappingRedisRepository(
+            jedisProvider
+        );
+
+        this.autoRegisterMetadata = autoRegisterMetadata;
         this.configured = true;
     }
 

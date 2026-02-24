@@ -2,6 +2,8 @@ package com.koostack.operio.rest.ratelimit;
 
 import com.koostack.operio.core.Models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
+import com.koostack.operio.plugin.platform.jooq.RateLimitCounterRepository;
 import com.koostack.operio.rest.config.OperioConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -112,6 +114,9 @@ public class RateLimitService {
     /** Infix for monthly evaluation counters. */
     private static final String EVAL_INFIX = ":eval:";
 
+    /** Infix for monthly subject HyperLogLog keys. */
+    private static final String SUBJECT_INFIX = ":subjects:";
+
     // -----------------------------------------------------------------------
     // TTL constants
     // -----------------------------------------------------------------------
@@ -161,8 +166,9 @@ public class RateLimitService {
     OperioConfig config;
 
     @Inject
+    @SuppressWarnings("rawtypes")
     jakarta.enterprise.inject.Instance<
-        PlatformAdminService<?>
+        PlatformAdminService
     > platformAdminInstance;
 
     // -----------------------------------------------------------------------
@@ -183,6 +189,16 @@ public class RateLimitService {
     private final ConcurrentMap<String, CachedTenantLimits> limitsCache =
         new ConcurrentHashMap<>();
 
+    /**
+     * Counter repository for durable Postgres persistence of usage metrics.
+     * Lazily resolved from the {@link PlatformAdminService} on first use.
+     * Null if the platform admin service is not available (embedded mode).
+     */
+    private volatile RateLimitCounterRepository counterRepository;
+
+    /** Whether the counter repository has been resolved (even if null). */
+    private volatile boolean counterRepositoryResolved;
+
     // -----------------------------------------------------------------------
     // Lifecycle
     // -----------------------------------------------------------------------
@@ -193,6 +209,21 @@ public class RateLimitService {
      * <p>In embedded mode ({@code operio.mode=embedded}) or when Redis
      * configuration is absent, the client remains {@code null} and all
      * rate-limiting operations are no-ops.
+     *
+     * <h2>Security Note — Admin Redis Connection (Intentional)</h2>
+     * <p>This service intentionally connects as the Redis {@code default}
+     * (admin) user, <strong>not</strong> a per-tenant ACL user. Rate-limit
+     * counters are platform-level administrative data — not tenant consent
+     * data. The keys use the prefix {@code ratelimit:{tenantId}:...} which
+     * is deliberately <em>outside</em> the tenant ACL key pattern
+     * ({@code {appName}:{tenantId}:*}), so tenant ACL users cannot read
+     * or manipulate their own rate-limit counters.
+     *
+     * <p>This is the correct security boundary: consent data is isolated
+     * per-tenant via {@link com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider}
+     * (each tenant's Redis operations authenticate as that tenant's ACL
+     * user), while rate limiting remains a platform-level concern managed
+     * exclusively through the admin connection.
      */
     @PostConstruct
     void init() {
@@ -206,6 +237,9 @@ public class RateLimitService {
 
         OperioConfig.RedisConfig redis = redisOpt.get();
         try {
+            // Authenticate as the Redis default (admin) user — see the
+            // "Security Note" in the Javadoc above for why this is
+            // intentional and correct for rate-limit counters.
             jedis = redis
                 .password()
                 .filter(pw -> !pw.isBlank())
@@ -319,7 +353,8 @@ public class RateLimitService {
                 resetAt,
                 exceeded,
                 /* warning */ false,
-                /* monthlyExceeded */ false
+                /* monthlyExceeded */ false,
+                /* subjectLimitExceeded */ false
             );
         } catch (Exception e) {
             LOG.warn(
@@ -340,6 +375,12 @@ public class RateLimitService {
      * (e.g. {@code POST /api/v1/consent/evaluate}). It atomically
      * increments a Redis counter keyed to the current UTC year-month and
      * checks against the tenant's configured {@code evalLimitMonthly}.
+     *
+     * <p>After the Redis increment succeeds, the count is also persisted
+     * to Postgres via {@link RateLimitCounterRepository#increment} as the
+     * durable billing record. The Postgres write is best-effort — if it
+     * fails, the Redis counter (which powers rate limiting) still works
+     * and the reconciliation job will catch up.
      *
      * <p>At 90% utilization, the result includes a warning flag so the
      * filter can set the {@code X-RateLimit-Warning} header.
@@ -374,6 +415,9 @@ public class RateLimitService {
                 List.of(String.valueOf(MONTHLY_TTL_SECONDS))
             );
 
+            // Best-effort: persist the count to Postgres for durable billing
+            persistCounterAsync(tenantId, "evaluations", monthKey);
+
             long limit = limits.evalLimitMonthly();
 
             // Reset time is the first instant of the next month
@@ -393,7 +437,8 @@ public class RateLimitService {
                 resetAt,
                 /* burstExceeded */ false,
                 warning,
-                exceeded
+                exceeded,
+                /* subjectLimitExceeded */ false
             );
         } catch (Exception e) {
             LOG.warn(
@@ -403,6 +448,120 @@ public class RateLimitService {
                 e
             );
             return RateLimitResult.UNLIMITED;
+        }
+    }
+
+    /**
+     * Checks whether adding a new subject would exceed the tenant's
+     * subject limit for the current billing period.
+     *
+     * <p>Uses Redis HyperLogLog ({@code PFADD}/{@code PFCOUNT}) for
+     * approximate distinct subject counting with ~0.81% error rate and
+     * only 12KB memory per tenant per month. This is accurate enough
+     * for limit enforcement while being extremely memory-efficient.
+     *
+     * <p>The subject is always added to the HyperLogLog (even if the
+     * limit is not exceeded) so that the count is accurate for future
+     * checks. When {@code PFADD} returns 1 (new subject), the count
+     * is also persisted to Postgres as a durable billing record.
+     *
+     * @param tenantId  the tenant identifier — must not be {@code null}
+     * @param subjectId the data subject being granted/revoked consent
+     * @return the rate limit result with subject limit details
+     */
+    public RateLimitResult checkSubjectLimit(
+        String tenantId,
+        String subjectId
+    ) {
+        if (!isAvailable()) {
+            return RateLimitResult.UNLIMITED;
+        }
+
+        TenantLimits limits = getTenantLimits(tenantId);
+        if (limits == null) {
+            return RateLimitResult.UNLIMITED;
+        }
+
+        long subjectLimit = limits.subjectLimit();
+        if (subjectLimit <= 0) {
+            // No subject limit configured — allow through
+            return RateLimitResult.UNLIMITED;
+        }
+
+        YearMonth currentMonth = YearMonth.now(ZoneOffset.UTC);
+        String monthKey = currentMonth.format(MONTH_FORMATTER);
+        String hllKey = KEY_PREFIX + tenantId + SUBJECT_INFIX + monthKey;
+
+        try {
+            // PFADD returns 1 if the HLL internal registers were altered
+            // (i.e. the subject is likely new)
+            long added = jedis.pfadd(hllKey, subjectId);
+
+            // Ensure the HLL key has a TTL (35 days like other monthly keys)
+            if (added == 1) {
+                jedis.expire(hllKey, MONTHLY_TTL_SECONDS);
+
+                // Best-effort: persist new subject count to Postgres
+                persistCounterAsync(tenantId, "subjects", monthKey);
+            }
+
+            // PFCOUNT gives approximate distinct count
+            long count = jedis.pfcount(hllKey);
+
+            Instant resetAt = currentMonth
+                .plusMonths(1)
+                .atDay(1)
+                .atStartOfDay()
+                .toInstant(ZoneOffset.UTC);
+
+            boolean exceeded = count > subjectLimit;
+            long remaining = Math.max(0, subjectLimit - count);
+
+            return new RateLimitResult(
+                subjectLimit,
+                remaining,
+                resetAt,
+                /* burstExceeded */ false,
+                /* warning */ false,
+                /* monthlyExceeded */ false,
+                exceeded
+            );
+        } catch (Exception e) {
+            LOG.warn(
+                "RateLimitService: Redis error during subject limit check " +
+                    "for tenant '{}' — allowing request through",
+                tenantId,
+                e
+            );
+            return RateLimitResult.UNLIMITED;
+        }
+    }
+
+    /**
+     * Returns the approximate number of distinct subjects for a tenant
+     * in the current month without modifying the HyperLogLog.
+     *
+     * @param tenantId the tenant identifier
+     * @return the approximate subject count, or {@code 0} if unavailable
+     */
+    public long peekSubjectCount(String tenantId) {
+        if (!isAvailable()) {
+            return 0;
+        }
+
+        YearMonth currentMonth = YearMonth.now(ZoneOffset.UTC);
+        String monthKey = currentMonth.format(MONTH_FORMATTER);
+        String hllKey = KEY_PREFIX + tenantId + SUBJECT_INFIX + monthKey;
+
+        try {
+            return jedis.pfcount(hllKey);
+        } catch (Exception e) {
+            LOG.debug(
+                "RateLimitService: failed to peek subject count for '{}'",
+                tenantId,
+                e
+            );
+            return 0;
         }
     }
 
@@ -457,6 +616,74 @@ public class RateLimitService {
     }
 
     // -----------------------------------------------------------------------
+    // Postgres counter persistence (best-effort)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Persists a counter increment to Postgres via the
+     * {@link RateLimitCounterRepository}. Best-effort: failures are logged
+     * but never propagate to the caller.
+     *
+     * @param tenantId the tenant whose counter to persist
+     * @param metric   the metric name
+     * @param period   the billing period (YYYY-MM)
+     */
+    private void persistCounterAsync(
+        String tenantId,
+        String metric,
+        String period
+    ) {
+        try {
+            RateLimitCounterRepository repo = getCounterRepository();
+            if (repo != null) {
+                repo.increment(tenantId, metric, period);
+            }
+        } catch (Exception e) {
+            LOG.debug(
+                "RateLimitService: best-effort Postgres counter sync failed " +
+                    "for tenant='{}', metric='{}', period='{}' — " +
+                    "reconciliation job will catch up",
+                tenantId,
+                metric,
+                period,
+                e
+            );
+        }
+    }
+
+    /**
+     * Lazily resolves the {@link RateLimitCounterRepository} from the
+     * platform admin service. Cached after first resolution.
+     */
+    RateLimitCounterRepository getCounterRepository() {
+        if (!counterRepositoryResolved) {
+            synchronized (this) {
+                if (!counterRepositoryResolved) {
+                    try {
+                        if (platformAdminInstance.isResolvable()) {
+                            Object platformAdmin = platformAdminInstance.get();
+                            if (
+                                platformAdmin instanceof
+                                    JooqPlatformAdminService jooqAdmin
+                            ) {
+                                counterRepository =
+                                    jooqAdmin.rateLimitCounterRepository();
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.debug(
+                            "RateLimitService: could not resolve counter repository",
+                            e
+                        );
+                    }
+                    counterRepositoryResolved = true;
+                }
+            }
+        }
+        return counterRepository;
+    }
+
+    // -----------------------------------------------------------------------
     // Tenant limit caching
     // -----------------------------------------------------------------------
 
@@ -476,7 +703,8 @@ public class RateLimitService {
 
         // Fetch from platform admin service
         try {
-            PlatformAdminService<?> platformAdmin = platformAdminInstance.get();
+            @SuppressWarnings("rawtypes")
+            PlatformAdminService platformAdmin = platformAdminInstance.get();
             TenantInfo tenant = platformAdmin.getTenant(tenantId);
             if (tenant == null) {
                 return null;

@@ -173,7 +173,8 @@ class RateLimitFilterTest {
                 .plus(1, ChronoUnit.MINUTES),
             false, // burstExceeded
             false, // warning
-            false // monthlyExceeded
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
     }
 
@@ -186,7 +187,8 @@ class RateLimitFilterTest {
                 .plus(1, ChronoUnit.MINUTES),
             true, // burstExceeded
             false, // warning
-            false // monthlyExceeded
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
     }
 
@@ -201,7 +203,8 @@ class RateLimitFilterTest {
             Instant.now().plus(15, ChronoUnit.DAYS),
             false, // burstExceeded
             warning, // warning
-            false // monthlyExceeded
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
     }
 
@@ -212,7 +215,8 @@ class RateLimitFilterTest {
             Instant.now().plus(15, ChronoUnit.DAYS),
             false, // burstExceeded
             true, // warning
-            true // monthlyExceeded
+            true, // monthlyExceeded
+            false // subjectLimitExceeded
         );
     }
 
@@ -614,6 +618,12 @@ class RateLimitFilterTest {
             when(rateLimitService.checkMonthly("acme")).thenReturn(
                 monthlyAllowed(10_000, 9_000, false)
             );
+            // Consent write endpoints also trigger subject limit check
+            lenient()
+                .when(
+                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
+                )
+                .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -862,6 +872,7 @@ class RateLimitFilterTest {
                 resetAt,
                 false,
                 false,
+                false,
                 false
             );
             when(
@@ -1103,6 +1114,7 @@ class RateLimitFilterTest {
                 Instant.now().plus(1, ChronoUnit.MINUTES),
                 false,
                 false,
+                false,
                 false
             );
             when(rateLimitService.checkBurst("acme")).thenReturn(result);
@@ -1247,6 +1259,12 @@ class RateLimitFilterTest {
             when(rateLimitService.checkMonthly("acme")).thenReturn(
                 monthlyAllowed(10_000, 9_000, false)
             );
+            // grant-batch is also a consent write endpoint → subject limit check
+            lenient()
+                .when(
+                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
+                )
+                .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -1267,6 +1285,12 @@ class RateLimitFilterTest {
             when(rateLimitService.checkMonthly("acme")).thenReturn(
                 monthlyAllowed(10_000, 9_000, false)
             );
+            // revoke-batch is also a consent write endpoint → subject limit check
+            lenient()
+                .when(
+                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
+                )
+                .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -1297,6 +1321,7 @@ class RateLimitFilterTest {
                 0L,
                 resetAt,
                 true,
+                false,
                 false,
                 false
             );
@@ -1340,7 +1365,8 @@ class RateLimitFilterTest {
                 resetAt,
                 false,
                 true,
-                true
+                true,
+                false
             );
             when(rateLimitService.checkMonthly("acme")).thenReturn(monthly);
 

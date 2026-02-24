@@ -28,7 +28,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
-import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.jooq.Result;
@@ -71,6 +70,7 @@ class JooqConsentAdminServiceTest {
     private RegulationRepository regulationRepo;
     private PurposeRegulationRepository purposeRegulationRepo;
     private ConsentAuditLogRepository auditLogRepo;
+    private DsarAuditLogRepository dsarAuditLogRepo;
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -78,24 +78,19 @@ class JooqConsentAdminServiceTest {
 
     @BeforeAll
     void setUpDatabase() {
+        // Configure the service first — this runs Flyway migrations once via
+        // JooqContextFactory.  Creating the test datasource afterwards ensures
+        // we connect to the already-migrated H2 database without running
+        // migrations a second time (which would fail with "table already exists").
+        service = new JooqConsentAdminService();
+        service.configure(new JooqConsentAdminServiceConfig(H2_URL, "H2"));
+
         HikariConfig hikariConfig = new HikariConfig();
         hikariConfig.setJdbcUrl(H2_URL);
         hikariConfig.setPoolName("operio-consent-test");
         dataSource = new HikariDataSource(hikariConfig);
 
-        Flyway.configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration/consent")
-            .load()
-            .migrate();
-
         dsl = DSL.using(dataSource, SQLDialect.H2);
-
-        // Configure the service pointing at the same in-memory database.
-        // The service's internal configure() will also run Flyway, which is
-        // idempotent — the migration is already at v1 so it's a no-op.
-        service = new JooqConsentAdminService();
-        service.configure(new JooqConsentAdminServiceConfig(H2_URL, "H2"));
 
         // Repositories wired to our test DSLContext for direct data setup
         // and verification.
@@ -108,6 +103,7 @@ class JooqConsentAdminServiceTest {
         regulationRepo = new RegulationRepository(dsl);
         purposeRegulationRepo = new PurposeRegulationRepository(dsl);
         auditLogRepo = new ConsentAuditLogRepository(dsl);
+        dsarAuditLogRepo = new DsarAuditLogRepository(dsl);
     }
 
     @BeforeEach
@@ -115,6 +111,7 @@ class JooqConsentAdminServiceTest {
         // Disable referential integrity so we can truncate in any order,
         // then re-enable it immediately after.
         dsl.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        dsl.truncate(DSAR_AUDIT_LOG).execute();
         dsl.truncate(CONSENT_AUDIT_LOG).execute();
         dsl.truncate(CONSENT_POLICY).execute();
         dsl.truncate(FIELD_CATEGORY).execute();
@@ -480,16 +477,16 @@ class JooqConsentAdminServiceTest {
         }
 
         @Test
-        @DisplayName("All five migrations applied successfully")
+        @DisplayName("All six migrations applied successfully")
         void allMigrationsApplied() {
-            // The Flyway schema_version table should show 5 successful migrations
+            // The Flyway schema history table is named per-module by JooqContextFactory
             Result<Record> versions = dsl.fetch(
-                "SELECT \"version\" FROM \"flyway_schema_history\" " +
+                "SELECT \"version\" FROM \"flyway_schema_history_consent\" " +
                     "WHERE \"success\" = TRUE ORDER BY \"installed_rank\""
             );
             assertTrue(
-                versions.size() >= 5,
-                "At least 5 Flyway migrations should have been applied, got " +
+                versions.size() >= 6,
+                "At least 6 Flyway migrations should have been applied, got " +
                     versions.size()
             );
         }
@@ -2015,6 +2012,65 @@ class JooqConsentAdminServiceTest {
             assertTrue(user2.isPresent());
             assertFalse(user2.get().getGranted());
         }
+
+        // -- countBySubject -------------------------------------------------
+
+        @Test
+        @DisplayName("countBySubject returns 0 for unknown subject")
+        void countBySubjectZero() {
+            assertEquals(0, consentPolicyRepo.countBySubject("nobody"));
+        }
+
+        @Test
+        @DisplayName("countBySubject returns correct count for one policy")
+        void countBySubjectOne() {
+            consentPolicyRepo.upsertByField(
+                "user-cnt",
+                fieldId,
+                purposeId,
+                true
+            );
+            assertEquals(1, consentPolicyRepo.countBySubject("user-cnt"));
+        }
+
+        @Test
+        @DisplayName(
+            "countBySubject returns correct count for multiple policies"
+        )
+        void countBySubjectMultiple() {
+            consentPolicyRepo.upsertByField(
+                "user-cnt2",
+                fieldId,
+                purposeId,
+                true
+            );
+            consentPolicyRepo.upsertByCategory(
+                "user-cnt2",
+                categoryId,
+                purposeId,
+                false
+            );
+            assertEquals(2, consentPolicyRepo.countBySubject("user-cnt2"));
+        }
+
+        @Test
+        @DisplayName("countBySubject does not count other subjects")
+        void countBySubjectIsolation() {
+            consentPolicyRepo.upsertByField(
+                "user-iso-a",
+                fieldId,
+                purposeId,
+                true
+            );
+            consentPolicyRepo.upsertByField(
+                "user-iso-b",
+                fieldId,
+                purposeId,
+                true
+            );
+            assertEquals(1, consentPolicyRepo.countBySubject("user-iso-a"));
+            assertEquals(1, consentPolicyRepo.countBySubject("user-iso-b"));
+        }
     }
 
     // =======================================================================
@@ -2631,6 +2687,350 @@ class JooqConsentAdminServiceTest {
     }
 
     // =======================================================================
+    // DSAR erasure — deleteAuditLogBySubject, countPoliciesBySubject,
+    //                revokeAllConsent count, DsarAuditLogRepository
+    // =======================================================================
+
+    @Nested
+    @DisplayName("DsarErasure")
+    class DsarErasureTests {
+
+        @BeforeEach
+        void seedReferenceData() {
+            service.registerField("email", null, null);
+            service.registerField("phone", "User", null);
+            service.registerCategory("PII", null);
+            service.registerPurpose("marketing", null);
+            service.registerPurpose("analytics", null);
+        }
+
+        // -- countPoliciesBySubject ------------------------------------------
+
+        @Test
+        @DisplayName("countPoliciesBySubject returns 0 for unknown subject")
+        void countPoliciesZeroForUnknown() {
+            assertEquals(0, service.countPoliciesBySubject("ghost"));
+        }
+
+        @Test
+        @DisplayName("countPoliciesBySubject returns correct count")
+        void countPoliciesReturnsCorrectCount() {
+            ConsentScope scope1 = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope scope2 = ConsentScope.to(
+                "PII",
+                "phone",
+                "User",
+                "analytics"
+            );
+            service.grantConsent("user-count", scope1);
+            service.grantConsent("user-count", scope2);
+
+            assertEquals(2, service.countPoliciesBySubject("user-count"));
+        }
+
+        @Test
+        @DisplayName(
+            "countPoliciesBySubject does not count other subjects' policies"
+        )
+        void countPoliciesSubjectIsolation() {
+            ConsentScope scope = ConsentScope.to("PII", "email", "marketing");
+            service.grantConsent("user-a-count", scope);
+            service.grantConsent("user-b-count", scope);
+
+            assertEquals(1, service.countPoliciesBySubject("user-a-count"));
+            assertEquals(1, service.countPoliciesBySubject("user-b-count"));
+        }
+
+        // -- deleteAuditLogBySubject -----------------------------------------
+
+        @Test
+        @DisplayName(
+            "deleteAuditLogBySubject deletes all audit entries for subject"
+        )
+        void deleteAuditLogRemovesEntries() {
+            ConsentScope scope = ConsentScope.to("PII", "email", "marketing");
+            // Grant and revoke to create 2 audit entries
+            service.grantConsent("user-del-audit", scope);
+            service.revokeConsent("user-del-audit", scope);
+
+            // Verify entries exist
+            List<ConsentAuditEntry> before = service.getConsentHistory(
+                "user-del-audit"
+            );
+            assertEquals(2, before.size());
+
+            // Delete
+            int deleted = service.deleteAuditLogBySubject("user-del-audit");
+            assertEquals(2, deleted);
+
+            // Verify entries are gone
+            List<ConsentAuditEntry> after = service.getConsentHistory(
+                "user-del-audit"
+            );
+            assertTrue(after.isEmpty());
+        }
+
+        @Test
+        @DisplayName("deleteAuditLogBySubject returns 0 for unknown subject")
+        void deleteAuditLogReturnsZeroForUnknown() {
+            assertEquals(0, service.deleteAuditLogBySubject("ghost"));
+        }
+
+        @Test
+        @DisplayName("deleteAuditLogBySubject does not affect other subjects")
+        void deleteAuditLogSubjectIsolation() {
+            ConsentScope scope = ConsentScope.to("PII", "email", "marketing");
+            service.grantConsent("user-keep", scope);
+            service.grantConsent("user-erase", scope);
+
+            // Delete only user-erase
+            int deleted = service.deleteAuditLogBySubject("user-erase");
+            assertEquals(1, deleted);
+
+            // user-keep still has their audit entry
+            assertEquals(1, service.getConsentHistory("user-keep").size());
+            // user-erase is gone
+            assertTrue(service.getConsentHistory("user-erase").isEmpty());
+        }
+
+        // -- revokeAllConsent + countPoliciesBySubject (full flow) -----------
+
+        @Test
+        @DisplayName(
+            "count before revokeAllConsent reflects actual policies deleted"
+        )
+        void countBeforeRevokeAll() {
+            ConsentScope scope1 = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope scope2 = ConsentScope.to(
+                "PII",
+                "phone",
+                "User",
+                "analytics"
+            );
+            service.grantConsent("user-full", scope1);
+            service.grantConsent("user-full", scope2);
+
+            // Count before deletion
+            int count = service.countPoliciesBySubject("user-full");
+            assertEquals(2, count);
+
+            // Delete all
+            service.revokeAllConsent("user-full");
+
+            // Count after deletion should be 0
+            assertEquals(0, service.countPoliciesBySubject("user-full"));
+        }
+
+        // -- DsarAuditLogRepository -----------------------------------------
+
+        @Test
+        @DisplayName("DsarAuditLogRepository is accessible via service")
+        void dsarAuditLogRepoAccessible() {
+            assertNotNull(service.dsarAuditLogRepository());
+        }
+
+        @Test
+        @DisplayName("DsarAuditLogRepository insert creates a DSAR entry")
+        void dsarAuditLogInsert() {
+            dsarAuditLogRepo.insert(
+                "user-dsar",
+                "req-001",
+                3,
+                5,
+                10,
+                "SUCCESS",
+                "admin@test.com",
+                "10.0.0.1",
+                "TestAgent/1.0",
+                null
+            );
+
+            var entries = dsarAuditLogRepo.findBySubject("user-dsar");
+            assertEquals(1, entries.size());
+
+            var entry = entries.getFirst();
+            assertEquals("user-dsar", entry.getSubjectId());
+            assertEquals("req-001", entry.getDeletionRequestId());
+            assertEquals(3, entry.getPoliciesDeleted());
+            assertEquals(5, entry.getCachedKeysDeleted());
+            assertEquals(10, entry.getAuditEntriesDeleted());
+            assertEquals("SUCCESS", entry.getStatus());
+            assertEquals("admin@test.com", entry.getActor());
+            assertEquals("10.0.0.1", entry.getIpAddress());
+            assertEquals("TestAgent/1.0", entry.getUserAgent());
+            assertNull(entry.getMetadata());
+            assertNotNull(entry.getCreatedAt());
+        }
+
+        @Test
+        @DisplayName(
+            "DsarAuditLogRepository findByDeletionRequestId returns match"
+        )
+        void dsarAuditLogFindByRequestId() {
+            dsarAuditLogRepo.insert(
+                "user-dsar-2",
+                "req-002",
+                1,
+                0,
+                2,
+                "PARTIAL_FAILURE",
+                "system",
+                null,
+                null,
+                "{\"error\":\"redis timeout\"}"
+            );
+
+            var entries = dsarAuditLogRepo.findByDeletionRequestId("req-002");
+            assertEquals(1, entries.size());
+            assertEquals("PARTIAL_FAILURE", entries.getFirst().getStatus());
+            assertEquals(
+                "{\"error\":\"redis timeout\"}",
+                entries.getFirst().getMetadata()
+            );
+        }
+
+        @Test
+        @DisplayName(
+            "DsarAuditLogRepository countSuccessfulDeletions counts only SUCCESS"
+        )
+        void dsarAuditLogCountSuccessful() {
+            dsarAuditLogRepo.insert(
+                "user-dsar-3",
+                "req-003",
+                1,
+                0,
+                1,
+                "SUCCESS",
+                "system",
+                null,
+                null,
+                null
+            );
+            dsarAuditLogRepo.insert(
+                "user-dsar-3",
+                "req-004",
+                0,
+                0,
+                0,
+                "PARTIAL_FAILURE",
+                "system",
+                null,
+                null,
+                null
+            );
+
+            assertEquals(
+                1,
+                dsarAuditLogRepo.countSuccessfulDeletions("user-dsar-3")
+            );
+        }
+
+        // -- Full DSAR erasure end-to-end flow ------------------------------
+
+        @Test
+        @DisplayName(
+            "full DSAR erasure: count policies, revoke all, delete audit log, record DSAR entry"
+        )
+        void fullDsarErasureFlow() {
+            ConsentScope scope1 = ConsentScope.to("PII", "email", "marketing");
+            ConsentScope scope2 = ConsentScope.to(
+                "PII",
+                "phone",
+                "User",
+                "analytics"
+            );
+
+            // Set up data: two grants
+            service.grantConsent("user-e2e", scope1);
+            service.grantConsent("user-e2e", scope2);
+
+            // Step 1: Count policies
+            int policiesDeleted = service.countPoliciesBySubject("user-e2e");
+            assertEquals(2, policiesDeleted);
+
+            // Step 2: Revoke all consent (also creates a BULK_REVOKED audit entry)
+            service.revokeAllConsent("user-e2e");
+            assertEquals(0, service.countPoliciesBySubject("user-e2e"));
+
+            // Step 3: Delete audit log entries
+            // We expect 2 GRANTED entries + 1 BULK_REVOKED entry = 3 total
+            int auditEntriesDeleted = service.deleteAuditLogBySubject(
+                "user-e2e"
+            );
+            assertEquals(3, auditEntriesDeleted);
+            assertTrue(service.getConsentHistory("user-e2e").isEmpty());
+
+            // Step 4: Record DSAR audit log entry
+            String requestId = "test-req-e2e";
+            dsarAuditLogRepo.insert(
+                "user-e2e",
+                requestId,
+                policiesDeleted,
+                0, // cached keys (no Redis in this test)
+                auditEntriesDeleted,
+                "SUCCESS",
+                "test-actor",
+                "127.0.0.1",
+                "TestAgent/1.0",
+                null
+            );
+
+            // Verify DSAR record
+            var dsarEntries = dsarAuditLogRepo.findBySubject("user-e2e");
+            assertEquals(1, dsarEntries.size());
+
+            var dsarEntry = dsarEntries.getFirst();
+            assertEquals("user-e2e", dsarEntry.getSubjectId());
+            assertEquals(requestId, dsarEntry.getDeletionRequestId());
+            assertEquals(2, dsarEntry.getPoliciesDeleted());
+            assertEquals(3, dsarEntry.getAuditEntriesDeleted());
+            assertEquals(0, dsarEntry.getCachedKeysDeleted());
+            assertEquals("SUCCESS", dsarEntry.getStatus());
+            assertEquals("test-actor", dsarEntry.getActor());
+        }
+
+        @Test
+        @DisplayName("DSAR erasure is idempotent — second pass counts zero")
+        void dsarErasureIdempotent() {
+            ConsentScope scope = ConsentScope.to("PII", "email", "marketing");
+            service.grantConsent("user-idempotent", scope);
+
+            // First pass
+            int policies1 = service.countPoliciesBySubject("user-idempotent");
+            assertEquals(1, policies1);
+            service.revokeAllConsent("user-idempotent");
+            int audit1 = service.deleteAuditLogBySubject("user-idempotent");
+            assertTrue(audit1 > 0);
+
+            // Second pass — everything should be zero
+            int policies2 = service.countPoliciesBySubject("user-idempotent");
+            assertEquals(0, policies2);
+            int audit2 = service.deleteAuditLogBySubject("user-idempotent");
+            assertEquals(0, audit2);
+        }
+
+        @Test
+        @DisplayName("DSAR erasure does not affect other subjects' data")
+        void dsarErasureSubjectIsolation() {
+            ConsentScope scope = ConsentScope.to("PII", "email", "marketing");
+            service.grantConsent("user-erase-iso", scope);
+            service.grantConsent("user-keep-iso", scope);
+
+            // Erase user-erase-iso
+            service.revokeAllConsent("user-erase-iso");
+            service.deleteAuditLogBySubject("user-erase-iso");
+
+            // user-erase-iso is fully gone
+            assertEquals(0, service.countPoliciesBySubject("user-erase-iso"));
+            assertTrue(service.getConsentHistory("user-erase-iso").isEmpty());
+
+            // user-keep-iso is untouched
+            assertEquals(1, service.countPoliciesBySubject("user-keep-iso"));
+            assertEquals(1, service.getConsentHistory("user-keep-iso").size());
+        }
+    }
+
+    // =======================================================================
     // Data isolation sanity check
     // =======================================================================
 
@@ -2647,6 +3047,7 @@ class JooqConsentAdminServiceTest {
             assertEquals(0, dsl.fetchCount(FIELD_CATEGORY));
             assertEquals(0, dsl.fetchCount(CONSENT_POLICY));
             assertEquals(0, dsl.fetchCount(CONSENT_AUDIT_LOG));
+            assertEquals(0, dsl.fetchCount(DSAR_AUDIT_LOG));
 
             // Insert something so the next test can verify it was cleaned
             entityRepo.upsertByName("ShouldBeGone", null, null);
@@ -2662,6 +3063,7 @@ class JooqConsentAdminServiceTest {
             assertEquals(0, dsl.fetchCount(FIELD_CATEGORY));
             assertEquals(0, dsl.fetchCount(CONSENT_POLICY));
             assertEquals(0, dsl.fetchCount(CONSENT_AUDIT_LOG));
+            assertEquals(0, dsl.fetchCount(DSAR_AUDIT_LOG));
         }
     }
 }

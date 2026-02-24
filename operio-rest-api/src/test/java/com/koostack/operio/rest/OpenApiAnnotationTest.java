@@ -320,15 +320,15 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("consent endpoints have 7 distinct operation IDs")
+        @DisplayName("consent endpoints have 9 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(
                 ConsentResource.class
             );
             assertEquals(
-                7,
+                9,
                 opCount,
-                "ConsentResource should have 7 @Operation methods"
+                "ConsentResource should have 9 @Operation methods"
             );
         }
 
@@ -443,15 +443,15 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("platform endpoints have 7 distinct operation IDs")
+        @DisplayName("platform endpoints have 8 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(
                 PlatformResource.class
             );
             assertEquals(
-                7,
+                8,
                 opCount,
-                "PlatformResource should have 7 @Operation methods"
+                "PlatformResource should have 8 @Operation methods"
             );
         }
 
@@ -612,11 +612,11 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 7 consent + 11 admin + 7 platform + 1 health = 26
+            // 9 consent + 11 admin + 8 platform + 1 health = 29
             assertEquals(
-                26,
+                29,
                 allIds.size(),
-                "Expected 26 globally unique operationIds"
+                "Expected 29 globally unique operationIds"
             );
         }
 

@@ -86,7 +86,8 @@ import org.slf4j.LoggerFactory;
 @Provider
 @Priority(Priorities.AUTHORIZATION)
 public class RateLimitFilter
-    implements ContainerRequestFilter, ContainerResponseFilter {
+    implements ContainerRequestFilter, ContainerResponseFilter
+{
 
     private static final Logger LOG = LoggerFactory.getLogger(
         RateLimitFilter.class
@@ -133,6 +134,13 @@ public class RateLimitFilter
     private static final String PROP_MONTHLY_RESULT =
         "operio.ratelimit.monthly-result";
 
+    /**
+     * Request property key for the subject-limit result (consent write
+     * endpoints only).
+     */
+    private static final String PROP_SUBJECT_RESULT =
+        "operio.ratelimit.subject-result";
+
     // -----------------------------------------------------------------------
     // Evaluation endpoint paths (monthly counter applies to these)
     // -----------------------------------------------------------------------
@@ -144,6 +152,17 @@ public class RateLimitFilter
      */
     private static final Set<String> EVALUATION_PATH_SEGMENTS = Set.of(
         "/evaluate",
+        "/grant",
+        "/revoke",
+        "/grant-batch",
+        "/revoke-batch"
+    );
+
+    /**
+     * URI path segments for consent write endpoints where the subject
+     * limit should be enforced (grant and revoke operations).
+     */
+    private static final Set<String> CONSENT_WRITE_PATH_SEGMENTS = Set.of(
         "/grant",
         "/revoke",
         "/grant-batch",
@@ -217,8 +236,9 @@ public class RateLimitFilter
         // ---- Monthly evaluation limit check (evaluation endpoints only) ----
         String path = ctx.getUriInfo().getPath();
         if (isEvaluationEndpoint(path)) {
-            RateLimitResult monthlyResult =
-                rateLimitService.checkMonthly(tenantId);
+            RateLimitResult monthlyResult = rateLimitService.checkMonthly(
+                tenantId
+            );
             ctx.setProperty(PROP_MONTHLY_RESULT, monthlyResult);
 
             if (monthlyResult.monthlyExceeded()) {
@@ -230,6 +250,29 @@ public class RateLimitFilter
                 );
                 abortTooManyRequests(ctx, monthlyResult);
                 return;
+            }
+        }
+
+        // ---- Subject limit check (consent write endpoints only) ----
+        if (isConsentWriteEndpoint(path)) {
+            // Extract subject from the identity context — subject limit
+            // is checked per calling subject per billing period
+            String subjectId = identity.subject();
+            if (subjectId != null && !subjectId.isBlank()) {
+                RateLimitResult subjectResult =
+                    rateLimitService.checkSubjectLimit(tenantId, subjectId);
+                ctx.setProperty(PROP_SUBJECT_RESULT, subjectResult);
+
+                if (subjectResult.subjectLimitExceeded()) {
+                    LOG.info(
+                        "RateLimitFilter: subject limit exceeded for " +
+                            "tenant '{}' (limit={}/month)",
+                        tenantId,
+                        subjectResult.limit()
+                    );
+                    abortTooManyRequests(ctx, subjectResult);
+                    return;
+                }
             }
         }
     }
@@ -258,25 +301,30 @@ public class RateLimitFilter
         // Emit burst headers if available
         Object burstObj = requestCtx.getProperty(PROP_BURST_RESULT);
         if (burstObj instanceof RateLimitResult burst && !burst.isUnlimited()) {
-            responseCtx.getHeaders().putSingle(
-                HEADER_LIMIT, String.valueOf(burst.limit())
-            );
-            responseCtx.getHeaders().putSingle(
-                HEADER_REMAINING, String.valueOf(burst.remaining())
-            );
-            responseCtx.getHeaders().putSingle(
-                HEADER_RESET, String.valueOf(burst.resetAtEpochSeconds())
-            );
+            responseCtx
+                .getHeaders()
+                .putSingle(HEADER_LIMIT, String.valueOf(burst.limit()));
+            responseCtx
+                .getHeaders()
+                .putSingle(HEADER_REMAINING, String.valueOf(burst.remaining()));
+            responseCtx
+                .getHeaders()
+                .putSingle(
+                    HEADER_RESET,
+                    String.valueOf(burst.resetAtEpochSeconds())
+                );
         }
 
         // Emit monthly warning header if approaching limit
         Object monthlyObj = requestCtx.getProperty(PROP_MONTHLY_RESULT);
-        if (monthlyObj instanceof RateLimitResult monthly
-            && !monthly.isUnlimited()
-            && monthly.warning()) {
-            responseCtx.getHeaders().putSingle(
-                HEADER_WARNING, WARNING_APPROACHING
-            );
+        if (
+            monthlyObj instanceof RateLimitResult monthly &&
+            !monthly.isUnlimited() &&
+            monthly.warning()
+        ) {
+            responseCtx
+                .getHeaders()
+                .putSingle(HEADER_WARNING, WARNING_APPROACHING);
         }
     }
 
@@ -292,20 +340,41 @@ public class RateLimitFilter
      * @return {@code true} if this is an evaluation endpoint
      */
     private static boolean isEvaluationEndpoint(String path) {
+        return matchesConsentSegments(path, EVALUATION_PATH_SEGMENTS);
+    }
+
+    /**
+     * Determines whether the request path targets a consent write
+     * endpoint where subject limits should be enforced.
+     *
+     * @param path the request URI path
+     * @return {@code true} if this is a consent write endpoint
+     */
+    private static boolean isConsentWriteEndpoint(String path) {
+        return matchesConsentSegments(path, CONSENT_WRITE_PATH_SEGMENTS);
+    }
+
+    /**
+     * Checks whether the path matches any of the given path segments
+     * under the consent API prefix.
+     */
+    private static boolean matchesConsentSegments(
+        String path,
+        Set<String> segments
+    ) {
         if (path == null) {
             return false;
         }
-        // Normalize: ensure path starts with /
         String normalized = path.startsWith("/") ? path : "/" + path;
-        // Check if the path contains any of the evaluation segments
-        // under the consent API prefix
         if (!normalized.contains("/consent")) {
             return false;
         }
-        for (String segment : EVALUATION_PATH_SEGMENTS) {
-            if (normalized.endsWith(segment)
-                || normalized.contains(segment + "/")
-                || normalized.contains(segment + "?")) {
+        for (String segment : segments) {
+            if (
+                normalized.endsWith(segment) ||
+                normalized.contains(segment + "/") ||
+                normalized.contains(segment + "?")
+            ) {
                 return true;
             }
         }
@@ -325,20 +394,31 @@ public class RateLimitFilter
     ) {
         long retryAfter = result.retryAfterSeconds();
 
-        Response response = Response
-            .status(Response.Status.TOO_MANY_REQUESTS)
+        String message;
+        if (result.subjectLimitExceeded()) {
+            message = "Subject limit exceeded for current billing period";
+        } else if (result.monthlyExceeded()) {
+            message = "Monthly evaluation quota exceeded";
+        } else {
+            message = "Request rate limit exceeded";
+        }
+
+        Response response = Response.status(Response.Status.TOO_MANY_REQUESTS)
             .type(MediaType.APPLICATION_JSON_TYPE)
             .header(HEADER_LIMIT, String.valueOf(result.limit()))
             .header(HEADER_REMAINING, "0")
             .header(HEADER_RESET, String.valueOf(result.resetAtEpochSeconds()))
             .header(HEADER_RETRY_AFTER, String.valueOf(retryAfter))
-            .entity(Map.of(
-                "error", "rate_limit_exceeded",
-                "message", result.monthlyExceeded()
-                    ? "Monthly evaluation quota exceeded"
-                    : "Request rate limit exceeded",
-                "retryAfter", retryAfter
-            ))
+            .entity(
+                Map.of(
+                    "error",
+                    "rate_limit_exceeded",
+                    "message",
+                    message,
+                    "retryAfter",
+                    retryAfter
+                )
+            )
             .build();
 
         ctx.abortWith(response);

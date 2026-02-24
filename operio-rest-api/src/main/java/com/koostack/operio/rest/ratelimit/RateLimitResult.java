@@ -45,6 +45,9 @@ import java.time.Instant;
  * @param monthlyExceeded {@code true} if the monthly evaluation limit
  *                        has been exceeded — the filter should abort
  *                        with 429 and include {@code Retry-After}
+ * @param subjectLimitExceeded {@code true} if the distinct subject limit
+ *                        for the current billing period has been exceeded
+ *                        — the filter should abort with 429
  *
  * @see RateLimitService
  * @see RateLimitFilter
@@ -55,9 +58,9 @@ public record RateLimitResult(
     Instant resetAt,
     boolean burstExceeded,
     boolean warning,
-    boolean monthlyExceeded
+    boolean monthlyExceeded,
+    boolean subjectLimitExceeded
 ) {
-
     /**
      * Sentinel instance representing "no rate limiting applies".
      *
@@ -72,12 +75,13 @@ public record RateLimitResult(
      * rate-limit header emission when this sentinel is returned.
      */
     public static final RateLimitResult UNLIMITED = new RateLimitResult(
-        /* limit */           -1,
-        /* remaining */       -1,
-        /* resetAt */         Instant.EPOCH,
-        /* burstExceeded */   false,
-        /* warning */         false,
-        /* monthlyExceeded */ false
+        /* limit */ -1,
+        /* remaining */ -1,
+        /* resetAt */ Instant.EPOCH,
+        /* burstExceeded */ false,
+        /* warning */ false,
+        /* monthlyExceeded */ false,
+        /* subjectLimitExceeded */ false
     );
 
     /**
@@ -94,15 +98,15 @@ public record RateLimitResult(
     }
 
     /**
-     * Whether any rate limit has been exceeded (burst or monthly).
+     * Whether any rate limit has been exceeded (burst, monthly, or subject).
      *
-     * <p>Convenience method that combines both exceeded flags. When
+     * <p>Convenience method that combines all exceeded flags. When
      * {@code true}, the filter should abort the request with HTTP 429.
      *
-     * @return {@code true} if either burst or monthly limit is exceeded
+     * @return {@code true} if any limit is exceeded
      */
     public boolean isExceeded() {
-        return burstExceeded || monthlyExceeded;
+        return burstExceeded || monthlyExceeded || subjectLimitExceeded;
     }
 
     /**
@@ -115,7 +119,10 @@ public record RateLimitResult(
      * @return seconds until reset, minimum 1
      */
     public long retryAfterSeconds() {
-        long seconds = java.time.Duration.between(Instant.now(), resetAt).toSeconds();
+        long seconds = java.time.Duration.between(
+            Instant.now(),
+            resetAt
+        ).toSeconds();
         return Math.max(1, seconds);
     }
 

@@ -37,6 +37,32 @@ testing {
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
+}
+
+// ScopedValue is a preview feature in Java 21 (JEP 446).  Enable preview
+// features for compilation, test execution, and application runs.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("--enable-preview"))
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--enable-preview")
+    // Docker Desktop 4.x+ only supports API v1.44+.  The default docker-java
+    // client negotiates with v1.24 and receives HTTP 400.  Force v1.44 so
+    // Testcontainers can discover the Docker daemon correctly.
+    environment("DOCKER_API_VERSION", "1.44")
+}
+
+tasks.withType<JavaExec>().configureEach {
+    jvmArgs("--enable-preview")
+}
+
+tasks.withType<Javadoc>().configureEach {
+    val opts = options as StandardJavadocDocletOptions
+    opts.addBooleanOption("-enable-preview", true)
+    opts.addStringOption("source", "21")
+    opts.addStringOption("Xdoclint:none", "-quiet")
+    isFailOnError = false
 }

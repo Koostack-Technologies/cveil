@@ -25,6 +25,8 @@ import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
+import org.jooq.conf.RenderNameCase;
+import org.jooq.conf.Settings;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,24 +127,42 @@ public class JooqPlatformAdminService
     public void configure(PlatformJooqConfig config) {
         // Create the DataSource — shared by DSLContext and TenantManager (for Flyway)
         DataSource dataSource = JooqDataSourceFactory.createDataSource(
-            config.connectionString(),
+            config,
             "operio-platform-jooq"
         );
 
-        // Run platform Flyway migrations
+        // Run platform Flyway migrations (separate history table to avoid
+        // checksum collisions with consent migrations in the same DB).
+        // baselineOnMigrate is required because the consent module's tables
+        // already exist in the public schema — without it Flyway refuses to
+        // run against a non-empty schema that has no history table yet.
         Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration/platform")
+            .table("flyway_schema_history_platform")
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
             .load()
             .migrate();
 
-        // Create the platform DSLContext (non-tenant-aware)
+        // Create the platform DSLContext (non-tenant-aware).
+        // The jOOQ codegen runs against H2 which uses UPPER_CASE identifiers.
+        // Postgres stores unquoted identifiers as lowercase, so quoted
+        // "PUBLIC"."TENANT" won't match the actual `tenant` table.
+        // Setting renderNameCase=LOWER makes jOOQ emit lowercase quoted
+        // identifiers that match the Postgres catalog.
         SQLDialect sqlDialect = SQLDialect.valueOf(
             config.dialect().toUpperCase()
         );
-        this.platformDslContext = DSL.using(dataSource, sqlDialect);
+        Settings settings = new Settings().withRenderNameCase(
+            RenderNameCase.LOWER
+        );
+        this.platformDslContext = DSL.using(dataSource, sqlDialect, settings);
 
-        this.tenantRepository = new TenantRepository(platformDslContext);
+        this.tenantRepository = new TenantRepository(
+            platformDslContext,
+            config.encryptionKey()
+        );
         this.apiKeyRepository = new ApiKeyRepository(platformDslContext);
         this.idpConfigRepository = new IdpConfigRepository(platformDslContext);
         this.rateLimitCounterRepository = new RateLimitCounterRepository(
@@ -158,9 +178,20 @@ public class JooqPlatformAdminService
             "classpath:db/migration/consent"
         );
 
+        boolean encryptionEnabled =
+            config.encryptionKey() != null && !config.encryptionKey().isBlank();
+        if (!encryptionEnabled) {
+            log.warn(
+                "JooqPlatformAdminService: redis_acl_password encryption is " +
+                    "DISABLED — passwords will be stored in plaintext. Set the " +
+                    "OPERIO_DB_ENCRYPTION_KEY environment variable to enable " +
+                    "encryption at rest."
+            );
+        }
         log.info(
-            "JooqPlatformAdminService configured (redis={})",
-            config.redis() != null ? "enabled" : "disabled"
+            "JooqPlatformAdminService configured (redis={}, passwordEncryption={})",
+            config.redis() != null ? "enabled" : "disabled",
+            encryptionEnabled ? "enabled" : "DISABLED"
         );
     }
 
@@ -256,13 +287,16 @@ public class JooqPlatformAdminService
             tenantId
         );
 
-        // Insert tenant row
+        // Insert tenant row (includes plaintext Redis ACL password so that
+        // per-tenant JedisPooled connections can authenticate as the tenant's
+        // ACL user at runtime, enforcing server-side key isolation)
         tenantRepository.insert(
             tenantId,
             displayName,
             plan != null ? plan : "free",
             result.schemaName(),
             result.redisAclUser(),
+            result.redisAclPassword(),
             result.redisAclPassHash(),
             "platform-admin"
         );
@@ -312,6 +346,88 @@ public class JooqPlatformAdminService
         tenantRepository.delete(tenantId);
 
         log.info("Tenant '{}' deleted", tenantId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Redis ACL reprovisioning (backfill / rotation)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Re-provisions Redis ACL credentials for a single tenant.
+     *
+     * <p>This is the service-layer entry point for the two primary
+     * credential management scenarios:
+     * <ul>
+     *   <li><strong>Backfill</strong> — tenants created before per-tenant
+     *       Redis ACL isolation was enabled have
+     *       {@code redis_acl_password = NULL}. Calling this method generates
+     *       credentials and updates both Redis and the platform database.</li>
+     *   <li><strong>Rotation</strong> — periodically rotating the Redis ACL
+     *       password for security hygiene. The old password is replaced
+     *       atomically in Redis; the database is updated immediately
+     *       after.</li>
+     * </ul>
+     *
+     * <p>Delegates to {@link TenantManager#reprovisionRedisAcl(String)}.
+     *
+     * @param tenantId the tenant whose Redis ACL should be (re-)provisioned
+     * @return the reprovisioning result containing the new credentials
+     * @throws OperioServiceException   if the tenant does not exist, or
+     *                                  Redis/DB operations fail
+     * @throws IllegalStateException    if Redis is not configured
+     */
+    public TenantManager.ReprovisionResult reprovisionRedisAcl(
+        String tenantId
+    ) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new OperioServiceException(
+                "Tenant ID must not be null or blank"
+            );
+        }
+
+        // Verify tenant exists
+        tenantRepository
+            .findById(tenantId)
+            .orElseThrow(() ->
+                new OperioServiceException(
+                    "Tenant does not exist: '" + tenantId + "'"
+                )
+            );
+
+        TenantManager.ReprovisionResult result =
+            tenantManager.reprovisionRedisAcl(tenantId);
+
+        log.info(
+            "Redis ACL reprovisioned for tenant '{}' (aclUser='{}')",
+            tenantId,
+            result.redisAclUser()
+        );
+
+        return result;
+    }
+
+    /**
+     * Re-provisions Redis ACL credentials for all active tenants that are
+     * currently missing them ({@code redis_acl_password IS NULL}).
+     *
+     * <p>This is the batch backfill operation for upgrading from the
+     * pre-ACL-isolation era. Tenants that already have credentials are
+     * skipped. Failures for individual tenants are logged but do not abort
+     * the batch.
+     *
+     * <p>Delegates to {@link TenantManager#reprovisionAllRedisAcls()}.
+     *
+     * @return the number of tenants successfully provisioned
+     * @throws IllegalStateException if Redis is not configured
+     */
+    public int reprovisionAllRedisAcls() {
+        log.info("Starting batch Redis ACL reprovision for all tenants");
+        int count = tenantManager.reprovisionAllRedisAcls();
+        log.info(
+            "Batch Redis ACL reprovision complete: {} tenants provisioned",
+            count
+        );
+        return count;
     }
 
     /**

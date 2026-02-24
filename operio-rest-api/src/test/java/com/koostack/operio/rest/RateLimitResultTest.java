@@ -93,14 +93,18 @@ class RateLimitResultTest {
     @DisplayName("Normal result (under limit)")
     class NormalResult {
 
-        private final Instant resetAt = Instant.now().plus(45, ChronoUnit.SECONDS);
+        private final Instant resetAt = Instant.now().plus(
+            45,
+            ChronoUnit.SECONDS
+        );
         private final RateLimitResult result = new RateLimitResult(
-            100L,   // limit
-            75L,    // remaining
+            100L, // limit
+            75L, // remaining
             resetAt,
-            false,  // burstExceeded
-            false,  // warning
-            false   // monthlyExceeded
+            false, // burstExceeded
+            false, // warning
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
 
         @Test
@@ -160,14 +164,18 @@ class RateLimitResultTest {
     @DisplayName("Burst exceeded")
     class BurstExceeded {
 
-        private final Instant resetAt = Instant.now().plus(30, ChronoUnit.SECONDS);
+        private final Instant resetAt = Instant.now().plus(
+            30,
+            ChronoUnit.SECONDS
+        );
         private final RateLimitResult result = new RateLimitResult(
-            100L,   // limit
-            0L,     // remaining
+            100L, // limit
+            0L, // remaining
             resetAt,
-            true,   // burstExceeded
-            false,  // warning
-            false   // monthlyExceeded
+            true, // burstExceeded
+            false, // warning
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
 
         @Test
@@ -212,11 +220,12 @@ class RateLimitResultTest {
         private final Instant resetAt = Instant.now().plus(15, ChronoUnit.DAYS);
         private final RateLimitResult result = new RateLimitResult(
             10_000L, // limit
-            0L,      // remaining
+            0L, // remaining
             resetAt,
-            false,   // burstExceeded
-            true,    // warning
-            true     // monthlyExceeded
+            false, // burstExceeded
+            true, // warning
+            true, // monthlyExceeded
+            false // subjectLimitExceeded
         );
 
         @Test
@@ -256,9 +265,10 @@ class RateLimitResultTest {
             100L,
             0L,
             Instant.now().plus(1, ChronoUnit.MINUTES),
-            true,  // burstExceeded
-            true,  // warning
-            true   // monthlyExceeded
+            true, // burstExceeded
+            true, // warning
+            true, // monthlyExceeded
+            false // subjectLimitExceeded
         );
 
         @Test
@@ -290,11 +300,12 @@ class RateLimitResultTest {
 
         private final RateLimitResult result = new RateLimitResult(
             10_000L, // limit
-            500L,    // remaining (5% left → 95% used → above 90% threshold)
+            500L, // remaining (5% left → 95% used → above 90% threshold)
             Instant.now().plus(5, ChronoUnit.DAYS),
-            false,   // burstExceeded
-            true,    // warning
-            false    // monthlyExceeded
+            false, // burstExceeded
+            true, // warning
+            false, // monthlyExceeded
+            false // subjectLimitExceeded
         );
 
         @Test
@@ -329,12 +340,20 @@ class RateLimitResultTest {
         void futureReset() {
             Instant futureReset = Instant.now().plus(42, ChronoUnit.SECONDS);
             RateLimitResult result = new RateLimitResult(
-                100L, 0L, futureReset, true, false, false
+                100L,
+                0L,
+                futureReset,
+                true,
+                false,
+                false,
+                false
             );
             long retryAfter = result.retryAfterSeconds();
             // Allow 2-second tolerance for test execution time
-            assertTrue(retryAfter >= 40 && retryAfter <= 43,
-                "Expected ~42 but got " + retryAfter);
+            assertTrue(
+                retryAfter >= 40 && retryAfter <= 43,
+                "Expected ~42 but got " + retryAfter
+            );
         }
 
         @Test
@@ -342,10 +361,18 @@ class RateLimitResultTest {
         void imminentReset() {
             // Reset time is NOW — should still return at least 1
             RateLimitResult result = new RateLimitResult(
-                100L, 0L, Instant.now(), true, false, false
+                100L,
+                0L,
+                Instant.now(),
+                true,
+                false,
+                false,
+                false
             );
-            assertTrue(result.retryAfterSeconds() >= 1,
-                "retryAfterSeconds should be at least 1");
+            assertTrue(
+                result.retryAfterSeconds() >= 1,
+                "retryAfterSeconds should be at least 1"
+            );
         }
 
         @Test
@@ -353,10 +380,19 @@ class RateLimitResultTest {
         void pastReset() {
             Instant pastReset = Instant.now().minus(10, ChronoUnit.SECONDS);
             RateLimitResult result = new RateLimitResult(
-                100L, 0L, pastReset, true, false, false
+                100L,
+                0L,
+                pastReset,
+                true,
+                false,
+                false,
+                false
             );
-            assertEquals(1L, result.retryAfterSeconds(),
-                "retryAfterSeconds should clamp to 1 for past resets");
+            assertEquals(
+                1L,
+                result.retryAfterSeconds(),
+                "retryAfterSeconds should clamp to 1 for past resets"
+            );
         }
 
         @Test
@@ -364,12 +400,20 @@ class RateLimitResultTest {
         void largeFutureReset() {
             Instant farFuture = Instant.now().plus(3600, ChronoUnit.SECONDS);
             RateLimitResult result = new RateLimitResult(
-                100L, 0L, farFuture, false, false, true
+                100L,
+                0L,
+                farFuture,
+                false,
+                false,
+                true,
+                false
             );
             long retryAfter = result.retryAfterSeconds();
             // Should be approximately 3600, allow 2s tolerance
-            assertTrue(retryAfter >= 3598 && retryAfter <= 3601,
-                "Expected ~3600 but got " + retryAfter);
+            assertTrue(
+                retryAfter >= 3598 && retryAfter <= 3601,
+                "Expected ~3600 but got " + retryAfter
+            );
         }
     }
 
@@ -386,7 +430,13 @@ class RateLimitResultTest {
         void correctEpochSeconds() {
             Instant resetAt = Instant.ofEpochSecond(1_700_000_000L);
             RateLimitResult result = new RateLimitResult(
-                100L, 50L, resetAt, false, false, false
+                100L,
+                50L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
             );
             assertEquals(1_700_000_000L, result.resetAtEpochSeconds());
         }
@@ -401,9 +451,18 @@ class RateLimitResultTest {
         @DisplayName("handles sub-second precision by truncating to seconds")
         void subSecondTruncation() {
             // Instant with nanos — resetAtEpochSeconds should only return seconds
-            Instant resetAt = Instant.ofEpochSecond(1_700_000_000L, 999_999_999L);
+            Instant resetAt = Instant.ofEpochSecond(
+                1_700_000_000L,
+                999_999_999L
+            );
             RateLimitResult result = new RateLimitResult(
-                100L, 50L, resetAt, false, false, false
+                100L,
+                50L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
             );
             assertEquals(1_700_000_000L, result.resetAtEpochSeconds());
         }
@@ -421,28 +480,62 @@ class RateLimitResultTest {
         @DisplayName("limit of 0 is not considered unlimited")
         void zeroLimitIsNotUnlimited() {
             RateLimitResult result = new RateLimitResult(
-                0L, 0L, Instant.now(), false, false, false
+                0L,
+                0L,
+                Instant.now(),
+                false,
+                false,
+                false,
+                false
             );
-            assertFalse(result.isUnlimited(),
-                "limit=0 should not be treated as unlimited");
+            assertFalse(
+                result.isUnlimited(),
+                "limit=0 should not be treated as unlimited"
+            );
         }
 
         @Test
-        @DisplayName("limit of 1 with remaining 0 is not exceeded without flags")
+        @DisplayName(
+            "limit of 1 with remaining 0 is not exceeded without flags"
+        )
         void limitOneRemainingZero() {
             RateLimitResult result = new RateLimitResult(
-                1L, 0L, Instant.now(), false, false, false
+                1L,
+                0L,
+                Instant.now(),
+                false,
+                false,
+                false,
+                false
             );
-            assertFalse(result.isExceeded(),
-                "isExceeded should be based on flags, not remaining count");
+            assertFalse(
+                result.isExceeded(),
+                "isExceeded should be based on flags, not remaining count"
+            );
         }
 
         @Test
         @DisplayName("record equality works correctly")
         void recordEquality() {
             Instant resetAt = Instant.ofEpochSecond(1_700_000_000L);
-            RateLimitResult a = new RateLimitResult(100L, 50L, resetAt, false, false, false);
-            RateLimitResult b = new RateLimitResult(100L, 50L, resetAt, false, false, false);
+            RateLimitResult a = new RateLimitResult(
+                100L,
+                50L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
+            );
+            RateLimitResult b = new RateLimitResult(
+                100L,
+                50L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
+            );
             assertEquals(a, b);
             assertEquals(a.hashCode(), b.hashCode());
         }
@@ -451,8 +544,24 @@ class RateLimitResultTest {
         @DisplayName("record inequality for different values")
         void recordInequality() {
             Instant resetAt = Instant.ofEpochSecond(1_700_000_000L);
-            RateLimitResult a = new RateLimitResult(100L, 50L, resetAt, false, false, false);
-            RateLimitResult b = new RateLimitResult(100L, 49L, resetAt, false, false, false);
+            RateLimitResult a = new RateLimitResult(
+                100L,
+                50L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
+            );
+            RateLimitResult b = new RateLimitResult(
+                100L,
+                49L,
+                resetAt,
+                false,
+                false,
+                false,
+                false
+            );
             assertNotEquals(a, b);
         }
 

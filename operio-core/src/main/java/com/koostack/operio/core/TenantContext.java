@@ -1,9 +1,10 @@
 package com.koostack.operio.core;
 
 import com.koostack.operio.core.exception.OperioConfigurationException;
+import java.util.concurrent.Callable;
 
 /**
- * Scoped tenant context using JDK 25's {@link ScopedValue}.
+ * Scoped tenant context using {@link ScopedValue} (preview in Java 21, JEP 446).
  *
  * <p>{@code ScopedValue} is the modern replacement for {@code ThreadLocal} in
  * request-scoped contexts. It is designed for virtual threads (which Spring
@@ -34,8 +35,8 @@ import com.koostack.operio.core.exception.OperioConfigurationException;
  *
  * <h2>Why {@code ScopedValue} over {@code ThreadLocal}</h2>
  * <ul>
- *   <li>Java 25 finalizes {@code ScopedValue} — the intended primitive for
- *       request-scoped data.</li>
+ *   <li>{@code ScopedValue} is the intended primitive for
+ *       request-scoped data (preview in Java 21, finalized in Java 24).</li>
  *   <li>Spring Boot 4.0 enables virtual threads by default —
  *       {@code ThreadLocal} on virtual threads carries per-carrier-thread
  *       overhead and risks subtle leaking across continuations.</li>
@@ -87,23 +88,20 @@ public final class TenantContext {
     }
 
     /**
-     * Execute a {@link ScopedValue.CallableOp} within a tenant scope.
+     * Execute a {@link Callable} within a tenant scope.
      *
      * <p>The tenant ID is visible to all code on the current thread
      * (including virtual thread continuations) for the duration of the call
      * and is automatically cleared on exit.
      *
      * @param <R>      the return type
-     * @param <X>      the exception type the operation may throw
      * @param tenantId the tenant ID to bind for the duration of {@code op}
      * @param op       the operation to execute within the tenant scope
      * @return the result of the operation
-     * @throws X if the operation throws
+     * @throws Exception if the operation throws
      */
-    public static <R, X extends Throwable> R callWhere(
-        String tenantId,
-        ScopedValue.CallableOp<? extends R, X> op
-    ) throws X {
+    public static <R> R callWhere(String tenantId, Callable<? extends R> op)
+        throws Exception {
         return ScopedValue.where(CURRENT, tenantId).call(op);
     }
 

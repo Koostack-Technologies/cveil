@@ -129,6 +129,26 @@ public final class PlatformDtos {
     // ===================================================================
 
     /**
+     * Request body for {@code PUT /api/v1/platform/tenants/{id}/plan}.
+     *
+     * <p>Updates a tenant's subscription plan and recalculates all
+     * plan-level rate limits (evaluation quota, subject limit, burst cap).
+     *
+     * @param plan the new subscription plan ({@code "free"},
+     *             {@code "pro"}, {@code "enterprise"})
+     */
+    public record UpdatePlanRequest(
+        @NotBlank(message = "plan must not be blank") @Size(
+            max = 50,
+            message = "plan must not exceed 50 characters"
+        ) String plan
+    ) {}
+
+    // ===================================================================
+    // API Key (creation / listing)
+    // ===================================================================
+
+    /**
      * Request body for {@code POST /api/v1/platform/api-keys}.
      *
      * <p>Creates an API key for a tenant. The raw key is returned only

@@ -1,7 +1,9 @@
 package com.koostack.operio.core;
 
+import java.util.concurrent.Callable;
+
 /**
- * Scoped request metadata context using JDK 25's {@link ScopedValue}.
+ * Scoped request metadata context using JDK 21's {@link ScopedValue} (preview).
  *
  * <p>Carries per-request metadata (actor identity, IP address, user agent)
  * through the call stack without polluting SPI method signatures. The auth
@@ -30,7 +32,7 @@ package com.koostack.operio.core;
  *       has no parameter for actor, IP, or user agent.</li>
  *   <li>Adding parameters would break all existing implementations and
  *       callers.</li>
- *   <li>{@code ScopedValue} is the idiomatic JDK 25 mechanism for
+ *   <li>{@code ScopedValue} is the idiomatic JDK 21+ mechanism for
  *       request-scoped data — same approach as {@link TenantContext}.</li>
  *   <li>Immutable within a scope, automatically cleaned up on exit.</li>
  * </ul>
@@ -127,24 +129,20 @@ public final class RequestContext {
     // -----------------------------------------------------------------------
 
     /**
-     * Execute a {@link ScopedValue.CallableOp} within a request metadata
-     * scope.
+     * Execute a {@link Callable} within a request metadata scope.
      *
      * <p>The metadata is visible to all code on the current thread
      * (including virtual thread continuations) for the duration of the call
      * and is automatically cleared on exit.
      *
      * @param <R>  the return type
-     * @param <X>  the exception type the operation may throw
      * @param meta the request metadata to bind for the duration of {@code op}
      * @param op   the operation to execute within the request scope
      * @return the result of the operation
-     * @throws X if the operation throws
+     * @throws Exception if the operation throws
      */
-    public static <R, X extends Throwable> R callWhere(
-        RequestMeta meta,
-        ScopedValue.CallableOp<? extends R, X> op
-    ) throws X {
+    public static <R> R callWhere(RequestMeta meta, Callable<? extends R> op)
+        throws Exception {
         return ScopedValue.where(CURRENT, meta).call(op);
     }
 

@@ -1,8 +1,13 @@
 package com.koostack.operio.plugin.platform.jooq;
 
-import org.jooq.DSLContext;
-
 import static com.koostack.operio.plugin.platform.jooq.generated.Tables.RATE_LIMIT_COUNTER;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import org.jooq.DSLContext;
+import org.jooq.Record3;
+import org.jooq.impl.DSL;
 
 /**
  * Repository for the {@code rate_limit_counter} table — per-tenant, per-month
@@ -67,22 +72,23 @@ public class RateLimitCounterRepository {
      */
     public long increment(String tenantId, String metric, String period) {
         // Upsert: insert with counter=1 or increment existing counter
-        dsl.insertInto(RATE_LIMIT_COUNTER)
-           .set(RATE_LIMIT_COUNTER.TENANT_ID, tenantId)
-           .set(RATE_LIMIT_COUNTER.METRIC, metric)
-           .set(RATE_LIMIT_COUNTER.PERIOD, period)
-           .set(RATE_LIMIT_COUNTER.COUNTER, 1L)
-           .onConflict(
-               RATE_LIMIT_COUNTER.TENANT_ID,
-               RATE_LIMIT_COUNTER.METRIC,
-               RATE_LIMIT_COUNTER.PERIOD
-           )
-           .doUpdate()
-           .set(
-               RATE_LIMIT_COUNTER.COUNTER,
-               RATE_LIMIT_COUNTER.COUNTER.plus(1L)
-           )
-           .execute();
+        dsl
+            .insertInto(RATE_LIMIT_COUNTER)
+            .set(RATE_LIMIT_COUNTER.TENANT_ID, tenantId)
+            .set(RATE_LIMIT_COUNTER.METRIC, metric)
+            .set(RATE_LIMIT_COUNTER.PERIOD, period)
+            .set(RATE_LIMIT_COUNTER.COUNTER, 1L)
+            .onConflict(
+                RATE_LIMIT_COUNTER.TENANT_ID,
+                RATE_LIMIT_COUNTER.METRIC,
+                RATE_LIMIT_COUNTER.PERIOD
+            )
+            .doUpdate()
+            .set(
+                RATE_LIMIT_COUNTER.COUNTER,
+                RATE_LIMIT_COUNTER.COUNTER.plus(1L)
+            )
+            .execute();
 
         // Read back the current value
         return get(tenantId, metric, period);
@@ -104,13 +110,103 @@ public class RateLimitCounterRepository {
      * @return the current counter value, or {@code 0} if no row exists
      */
     public long get(String tenantId, String metric, String period) {
-        Long value = dsl.select(RATE_LIMIT_COUNTER.COUNTER)
-                        .from(RATE_LIMIT_COUNTER)
-                        .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
-                        .and(RATE_LIMIT_COUNTER.METRIC.eq(metric))
-                        .and(RATE_LIMIT_COUNTER.PERIOD.eq(period))
-                        .fetchOne(RATE_LIMIT_COUNTER.COUNTER);
+        Long value = dsl
+            .select(RATE_LIMIT_COUNTER.COUNTER)
+            .from(RATE_LIMIT_COUNTER)
+            .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
+            .and(RATE_LIMIT_COUNTER.METRIC.eq(metric))
+            .and(RATE_LIMIT_COUNTER.PERIOD.eq(period))
+            .fetchOne(RATE_LIMIT_COUNTER.COUNTER);
         return value != null ? value : 0L;
+    }
+
+    /**
+     * Returns all metric counters for a given tenant and period.
+     *
+     * <p>Used by the usage API to retrieve a tenant's full usage snapshot
+     * for a billing period (e.g. evaluations + subjects for {@code "2026-02"}).
+     *
+     * @param tenantId the tenant to query
+     * @param period   the calendar month in {@code YYYY-MM} format
+     * @return a map of metric name → counter value (empty if no rows exist)
+     */
+    public Map<String, Long> getByTenantAndPeriod(
+        String tenantId,
+        String period
+    ) {
+        return dsl
+            .select(RATE_LIMIT_COUNTER.METRIC, RATE_LIMIT_COUNTER.COUNTER)
+            .from(RATE_LIMIT_COUNTER)
+            .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
+            .and(RATE_LIMIT_COUNTER.PERIOD.eq(period))
+            .fetchMap(RATE_LIMIT_COUNTER.METRIC, RATE_LIMIT_COUNTER.COUNTER);
+    }
+
+    /**
+     * Returns all tenant counters for a given period, grouped by tenant.
+     *
+     * <p>Used by the usage export API to generate a billing report for all
+     * tenants in a period. Each entry in the returned list is a record
+     * containing the tenant ID, metric name, and counter value.
+     *
+     * @param period the calendar month in {@code YYYY-MM} format
+     * @return all counter rows for the period, possibly empty
+     */
+    public List<CounterRow> getAllByPeriod(String period) {
+        return dsl
+            .select(
+                RATE_LIMIT_COUNTER.TENANT_ID,
+                RATE_LIMIT_COUNTER.METRIC,
+                RATE_LIMIT_COUNTER.COUNTER
+            )
+            .from(RATE_LIMIT_COUNTER)
+            .where(RATE_LIMIT_COUNTER.PERIOD.eq(period))
+            .orderBy(RATE_LIMIT_COUNTER.TENANT_ID, RATE_LIMIT_COUNTER.METRIC)
+            .fetch(r ->
+                new CounterRow(
+                    r.get(RATE_LIMIT_COUNTER.TENANT_ID),
+                    r.get(RATE_LIMIT_COUNTER.METRIC),
+                    r.get(RATE_LIMIT_COUNTER.COUNTER)
+                )
+            );
+    }
+
+    /**
+     * Upserts a counter value using high-water-mark semantics: sets the
+     * counter to {@code GREATEST(existing_counter, value)}.
+     *
+     * <p>This is used by the reconciliation job to sync Redis counters
+     * into Postgres without double-counting. The counter only moves
+     * forward — never backwards.
+     *
+     * @param tenantId the tenant whose counter to upsert
+     * @param metric   the metric name (e.g. {@code "evaluations"})
+     * @param period   the calendar month in {@code YYYY-MM} format
+     * @param value    the counter value from Redis
+     */
+    public void upsert(
+        String tenantId,
+        String metric,
+        String period,
+        long value
+    ) {
+        dsl
+            .insertInto(RATE_LIMIT_COUNTER)
+            .set(RATE_LIMIT_COUNTER.TENANT_ID, tenantId)
+            .set(RATE_LIMIT_COUNTER.METRIC, metric)
+            .set(RATE_LIMIT_COUNTER.PERIOD, period)
+            .set(RATE_LIMIT_COUNTER.COUNTER, value)
+            .onConflict(
+                RATE_LIMIT_COUNTER.TENANT_ID,
+                RATE_LIMIT_COUNTER.METRIC,
+                RATE_LIMIT_COUNTER.PERIOD
+            )
+            .doUpdate()
+            .set(
+                RATE_LIMIT_COUNTER.COUNTER,
+                DSL.greatest(RATE_LIMIT_COUNTER.COUNTER, DSL.val(value))
+            )
+            .execute();
     }
 
     // -----------------------------------------------------------------------
@@ -127,11 +223,12 @@ public class RateLimitCounterRepository {
      * @return the number of rows deleted (0 or 1)
      */
     public int reset(String tenantId, String metric, String period) {
-        return dsl.deleteFrom(RATE_LIMIT_COUNTER)
-                  .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
-                  .and(RATE_LIMIT_COUNTER.METRIC.eq(metric))
-                  .and(RATE_LIMIT_COUNTER.PERIOD.eq(period))
-                  .execute();
+        return dsl
+            .deleteFrom(RATE_LIMIT_COUNTER)
+            .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
+            .and(RATE_LIMIT_COUNTER.METRIC.eq(metric))
+            .and(RATE_LIMIT_COUNTER.PERIOD.eq(period))
+            .execute();
     }
 
     /**
@@ -142,8 +239,22 @@ public class RateLimitCounterRepository {
      * @return the number of rows deleted
      */
     public int deleteByTenant(String tenantId) {
-        return dsl.deleteFrom(RATE_LIMIT_COUNTER)
-                  .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
-                  .execute();
+        return dsl
+            .deleteFrom(RATE_LIMIT_COUNTER)
+            .where(RATE_LIMIT_COUNTER.TENANT_ID.eq(tenantId))
+            .execute();
     }
+
+    // -----------------------------------------------------------------------
+    // Inner types
+    // -----------------------------------------------------------------------
+
+    /**
+     * A single counter row from the {@code rate_limit_counter} table.
+     *
+     * @param tenantId the tenant identifier
+     * @param metric   the metric name
+     * @param counter  the current counter value
+     */
+    public record CounterRow(String tenantId, String metric, long counter) {}
 }

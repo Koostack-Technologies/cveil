@@ -97,7 +97,14 @@ public class TenantAwareExecuteListener implements ExecuteListener {
         String sanitized = sanitizeTenantId(tenantId);
         String schemaName = SCHEMA_PREFIX + sanitized;
 
-        try (Statement stmt = ctx.connection().createStatement()) {
+        // IMPORTANT: Do NOT use try-with-resources here.  Closing the
+        // temporary Statement can invalidate jOOQ's already-prepared
+        // PreparedStatement on the same JDBC connection (observed with
+        // the PostgreSQL JDBC driver + HikariCP).  The Statement is
+        // lightweight and will be cleaned up when the connection is
+        // returned to the pool.
+        try {
+            Statement stmt = ctx.connection().createStatement();
             stmt.execute("SET search_path TO " + schemaName + ", public");
         } catch (SQLException e) {
             throw new org.jooq.exception.DataAccessException(

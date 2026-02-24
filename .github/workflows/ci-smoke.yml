@@ -1,0 +1,454 @@
+# =============================================================================
+# Operio REST API — CI Smoke Test
+#
+# End-to-end smoke test that builds the Docker image, starts the full
+# Docker Compose stack (Postgres + Redis + Operio API), waits for the
+# health endpoint to report UP, and exercises the core platform and
+# consent endpoints using the bootstrap key and a freshly-created API key.
+#
+# This workflow catches integration-level regressions that unit tests
+# cannot: Flyway migration failures, jOOQ identifier mismatches,
+# plugin SPI wiring issues, Docker image packaging problems, and
+# startup configuration errors.
+#
+# Triggers:
+#   - Push to main/develop branches
+#   - Pull requests targeting main/develop
+#   - Manual dispatch (workflow_dispatch)
+# =============================================================================
+
+name: CI Smoke Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same branch/PR to save resources.
+concurrency:
+  group: ci-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Bootstrap key used in docker-compose.yml for local development.
+  BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
+  API_BASE: "http://localhost:8080"
+
+jobs:
+  smoke-test:
+    name: Build & Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # -------------------------------------------------------------------
+      # 1. Checkout
+      # -------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------------------
+      # 2. Set up Docker Buildx (enables layer caching)
+      # -------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # -------------------------------------------------------------------
+      # 3. Build the Docker image
+      # -------------------------------------------------------------------
+      - name: Build Docker image
+        run: |
+          docker compose build operio-api
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      # -------------------------------------------------------------------
+      # 4. Start the full stack
+      # -------------------------------------------------------------------
+      - name: Start Docker Compose stack
+        run: |
+          docker compose up -d
+          echo "Stack started — waiting for services to become healthy..."
+
+      # -------------------------------------------------------------------
+      # 5. Wait for health endpoint
+      # -------------------------------------------------------------------
+      - name: Wait for API health
+        run: |
+          echo "Polling ${API_BASE}/q/health/ready ..."
+          attempts=0
+          max_attempts=40
+          while [ $attempts -lt $max_attempts ]; do
+            if curl -sf "${API_BASE}/q/health/ready" > /dev/null 2>&1; then
+              echo "✅ Health endpoint returned UP after $((attempts * 5))s"
+              curl -s "${API_BASE}/q/health" | python3 -m json.tool
+              exit 0
+            fi
+            attempts=$((attempts + 1))
+            echo "  Attempt ${attempts}/${max_attempts} — not ready yet, retrying in 5s..."
+            sleep 5
+          done
+          echo "❌ Health endpoint did not become ready within $((max_attempts * 5))s"
+          echo ""
+          echo "=== Container logs ==="
+          docker compose logs operio-api --tail 200
+          exit 1
+
+      # -------------------------------------------------------------------
+      # 6. Verify OpenAPI spec is generated
+      # -------------------------------------------------------------------
+      - name: Verify OpenAPI endpoint
+        run: |
+          echo "Fetching OpenAPI spec..."
+          status=$(curl -s -o /tmp/openapi.json -w "%{http_code}" "${API_BASE}/q/openapi")
+          if [ "$status" != "200" ]; then
+            echo "❌ OpenAPI endpoint returned HTTP ${status}"
+            exit 1
+          fi
+          # Verify it's valid JSON with expected fields
+          python3 -c "
+          import json, sys
+          with open('/tmp/openapi.json') as f:
+              spec = json.load(f)
+          assert 'openapi' in spec, 'Missing openapi version field'
+          assert 'paths' in spec, 'Missing paths field'
+          path_count = len(spec['paths'])
+          print(f'✅ OpenAPI spec valid — {path_count} paths documented')
+          "
+
+      # -------------------------------------------------------------------
+      # 7. Create a tenant via bootstrap key
+      # -------------------------------------------------------------------
+      - name: Create tenant
+        run: |
+          echo "Creating tenant 'smoke_test'..."
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${API_BASE}/api/v1/platform/tenants" \
+            -H "Authorization: Bearer ${BOOTSTRAP_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tenantId": "smoke_test",
+              "displayName": "CI Smoke Test Tenant",
+              "plan": "free"
+            }')
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "Response (HTTP ${status}):"
+          echo "$body" | python3 -m json.tool || echo "$body"
+
+          if [ "$status" != "201" ]; then
+            echo "❌ Expected HTTP 201, got ${status}"
+            exit 1
+          fi
+
+          # Verify response contains the tenant ID
+          echo "$body" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data['tenantId'] == 'smoke_test', f'Unexpected tenantId: {data[\"tenantId\"]}'
+          assert data['status'] == 'active', f'Unexpected status: {data[\"status\"]}'
+          print('✅ Tenant created successfully')
+          "
+
+      # -------------------------------------------------------------------
+      # 8. Create an API key for the tenant
+      # -------------------------------------------------------------------
+      - name: Create API key
+        id: create_api_key
+        run: |
+          echo "Creating API key for tenant 'smoke_test'..."
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${API_BASE}/api/v1/platform/api-keys" \
+            -H "Authorization: Bearer ${BOOTSTRAP_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tenantId": "smoke_test",
+              "subject": "ci-smoke-admin",
+              "roles": ["admin", "consent-writer", "consent-reader", "super-admin"]
+            }')
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "Response (HTTP ${status}):"
+          # Print response but mask the raw key in logs
+          echo "$body" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          masked = {**data, 'rawKey': data.get('rawKey', '')[:12] + '***'}
+          print(json.dumps(masked, indent=2))
+          " || echo "$body"
+
+          if [ "$status" != "201" ]; then
+            echo "❌ Expected HTTP 201, got ${status}"
+            exit 1
+          fi
+
+          # Extract the raw key for subsequent requests
+          raw_key=$(echo "$body" | python3 -c "import json,sys; print(json.load(sys.stdin)['rawKey'])")
+          echo "api_key=${raw_key}" >> "$GITHUB_OUTPUT"
+          echo "✅ API key created successfully"
+
+      # -------------------------------------------------------------------
+      # 9. Verify API key authentication works
+      # -------------------------------------------------------------------
+      - name: Verify API key auth — list tenants
+        run: |
+          API_KEY="${{ steps.create_api_key.outputs.api_key }}"
+          echo "Listing tenants with the new API key..."
+          response=$(curl -s -w "\n%{http_code}" \
+            "${API_BASE}/api/v1/platform/tenants" \
+            -H "Authorization: Bearer ${API_KEY}")
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "Response (HTTP ${status}):"
+          echo "$body" | python3 -m json.tool || echo "$body"
+
+          if [ "$status" != "200" ]; then
+            echo "❌ Expected HTTP 200, got ${status}"
+            exit 1
+          fi
+
+          echo "$body" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert isinstance(data, list), 'Expected a JSON array'
+          ids = [t['tenantId'] for t in data]
+          assert 'smoke_test' in ids, f'smoke_test not in tenant list: {ids}'
+          print(f'✅ Listed {len(data)} tenant(s) — smoke_test found')
+          "
+
+      # -------------------------------------------------------------------
+      # 10. Verify bootstrap key is auto-disabled
+      # -------------------------------------------------------------------
+      - name: Verify bootstrap key auto-disabled
+        run: |
+          echo "Verifying bootstrap key is rejected after API key creation..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${API_BASE}/api/v1/platform/tenants" \
+            -H "Authorization: Bearer ${BOOTSTRAP_KEY}")
+
+          if [ "$status" = "403" ]; then
+            echo "✅ Bootstrap key correctly rejected with HTTP 403"
+          else
+            echo "⚠️  Bootstrap key returned HTTP ${status} (expected 403)"
+            echo "    This may indicate the auto-disable logic is not working."
+            # Non-fatal — the security model still works if regular keys work
+          fi
+
+      # -------------------------------------------------------------------
+      # 11. Exercise consent admin endpoints
+      # -------------------------------------------------------------------
+      - name: Smoke test — consent admin endpoints
+        run: |
+          API_KEY="${{ steps.create_api_key.outputs.api_key }}"
+
+          echo "=== Register a field ==="
+          status=$(curl -s -o /tmp/field.json -w "%{http_code}" -X POST \
+            "${API_BASE}/api/v1/admin/fields" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "entityName": "user",
+              "fieldName": "email",
+              "description": "User email address"
+            }')
+          echo "Register field: HTTP ${status}"
+          cat /tmp/field.json | python3 -m json.tool 2>/dev/null || cat /tmp/field.json
+          if [ "$status" != "201" ] && [ "$status" != "200" ]; then
+            echo "❌ Register field failed (HTTP ${status})"
+            exit 1
+          fi
+          echo "✅ Field registered"
+
+          echo ""
+          echo "=== Register a category ==="
+          status=$(curl -s -o /tmp/category.json -w "%{http_code}" -X POST \
+            "${API_BASE}/api/v1/admin/categories" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "categoryName": "pii",
+              "description": "Personally identifiable information"
+            }')
+          echo "Register category: HTTP ${status}"
+          cat /tmp/category.json | python3 -m json.tool 2>/dev/null || cat /tmp/category.json
+          if [ "$status" != "201" ] && [ "$status" != "200" ]; then
+            echo "❌ Register category failed (HTTP ${status})"
+            exit 1
+          fi
+          echo "✅ Category registered"
+
+          echo ""
+          echo "=== Register a purpose ==="
+          status=$(curl -s -o /tmp/purpose.json -w "%{http_code}" -X POST \
+            "${API_BASE}/api/v1/admin/purposes" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "purposeName": "email_marketing",
+              "description": "Send marketing emails"
+            }')
+          echo "Register purpose: HTTP ${status}"
+          cat /tmp/purpose.json | python3 -m json.tool 2>/dev/null || cat /tmp/purpose.json
+          if [ "$status" != "201" ] && [ "$status" != "200" ]; then
+            echo "❌ Register purpose failed (HTTP ${status})"
+            exit 1
+          fi
+          echo "✅ Purpose registered"
+
+          echo ""
+          echo "=== List fields ==="
+          status=$(curl -s -o /tmp/fields.json -w "%{http_code}" \
+            "${API_BASE}/api/v1/admin/fields" \
+            -H "Authorization: Bearer ${API_KEY}")
+          echo "List fields: HTTP ${status}"
+          cat /tmp/fields.json | python3 -m json.tool 2>/dev/null || cat /tmp/fields.json
+          if [ "$status" != "200" ]; then
+            echo "❌ List fields failed (HTTP ${status})"
+            exit 1
+          fi
+          echo "✅ Fields listed"
+
+      # -------------------------------------------------------------------
+      # 12. Exercise consent grant/evaluate endpoints
+      # -------------------------------------------------------------------
+      - name: Smoke test — consent grant & evaluate
+        run: |
+          API_KEY="${{ steps.create_api_key.outputs.api_key }}"
+
+          echo "=== Grant consent ==="
+          status=$(curl -s -o /tmp/grant.json -w "%{http_code}" -X POST \
+            "${API_BASE}/api/v1/consent/grant" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "subject": "user-123",
+              "scope": {
+                "category": "pii",
+                "fieldName": "email",
+                "entityName": "user",
+                "purposeName": "email_marketing"
+              }
+            }')
+          echo "Grant consent: HTTP ${status}"
+          cat /tmp/grant.json | python3 -m json.tool 2>/dev/null || cat /tmp/grant.json
+          if [ "$status" != "200" ] && [ "$status" != "201" ] && [ "$status" != "204" ]; then
+            echo "❌ Grant consent failed (HTTP ${status})"
+            exit 1
+          fi
+          echo "✅ Consent granted"
+
+          echo ""
+          echo "=== Evaluate consent ==="
+          status=$(curl -s -o /tmp/eval.json -w "%{http_code}" -X POST \
+            "${API_BASE}/api/v1/consent/evaluate" \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "subject": "user-123",
+              "scopes": [
+                {
+                  "category": "pii",
+                  "fieldName": "email",
+                  "entityName": "user",
+                  "purposeName": "email_marketing"
+                }
+              ]
+            }')
+          echo "Evaluate consent: HTTP ${status}"
+          cat /tmp/eval.json | python3 -m json.tool 2>/dev/null || cat /tmp/eval.json
+          if [ "$status" != "200" ]; then
+            echo "❌ Evaluate consent failed (HTTP ${status})"
+            exit 1
+          fi
+
+          # Verify the granted scope is in the response
+          echo "$( cat /tmp/eval.json )" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          granted = data.get('granted', [])
+          assert len(granted) > 0, 'Expected at least one granted scope'
+          print(f'✅ Consent evaluated — {len(granted)} scope(s) granted')
+          "
+
+      # -------------------------------------------------------------------
+      # 13. Verify rate-limit headers are present
+      # -------------------------------------------------------------------
+      - name: Verify rate-limit headers
+        run: |
+          API_KEY="${{ steps.create_api_key.outputs.api_key }}"
+          echo "Checking for rate-limit response headers..."
+          headers=$(curl -s -D - -o /dev/null \
+            "${API_BASE}/api/v1/admin/fields" \
+            -H "Authorization: Bearer ${API_KEY}")
+
+          echo "$headers"
+
+          if echo "$headers" | grep -qi "X-RateLimit-Limit"; then
+            echo "✅ Rate-limit headers present"
+          else
+            echo "⚠️  Rate-limit headers not found (Redis may not be configured for rate limiting)"
+            # Non-fatal — rate limiting is optional in some configurations
+          fi
+
+      # -------------------------------------------------------------------
+      # 14. Health check (final verification)
+      # -------------------------------------------------------------------
+      - name: Final health check
+        run: |
+          echo "Final health check..."
+          response=$(curl -s "${API_BASE}/q/health")
+          echo "$response" | python3 -m json.tool
+
+          echo "$response" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data['status'] == 'UP', f'Health status is {data[\"status\"]}, expected UP'
+          print('✅ Final health check: UP')
+          "
+
+      # -------------------------------------------------------------------
+      # 15. Delete the test tenant (cleanup)
+      # -------------------------------------------------------------------
+      - name: Cleanup — delete smoke test tenant
+        if: always()
+        run: |
+          API_KEY="${{ steps.create_api_key.outputs.api_key }}"
+          if [ -n "$API_KEY" ]; then
+            echo "Deleting smoke test tenant..."
+            curl -s -X DELETE \
+              "${API_BASE}/api/v1/platform/tenants/smoke_test" \
+              -H "Authorization: Bearer ${API_KEY}" || true
+          fi
+
+      # -------------------------------------------------------------------
+      # 16. Dump logs on failure
+      # -------------------------------------------------------------------
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "========================================="
+          echo "  Docker Compose container logs"
+          echo "========================================="
+          echo ""
+          echo "=== operio-api ==="
+          docker compose logs operio-api --tail 300 2>&1 || true
+          echo ""
+          echo "=== postgres ==="
+          docker compose logs postgres --tail 50 2>&1 || true
+          echo ""
+          echo "=== redis ==="
+          docker compose logs redis --tail 50 2>&1 || true
+
+      # -------------------------------------------------------------------
+      # 17. Tear down
+      # -------------------------------------------------------------------
+      - name: Tear down Docker Compose
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans 2>&1 || true

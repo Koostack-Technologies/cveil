@@ -79,6 +79,10 @@ tasks.named('compileJava').configure {
     dependsOn 'generateJooq'
 }
 
+tasks.named('delombok').configure {
+    dependsOn 'generateJooq'
+}
+
 tasks.named('sourcesJar').configure {
     dependsOn 'generateJooq'
 }

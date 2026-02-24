@@ -5,11 +5,11 @@
     "ghcr.io/devcontainers/features/java:1": {
       "version": "none",
       "installGradle": false,
-      "installMaven": false
-    }
+      "installMaven": false,
+    },
   },
   "remoteEnv": {
-    "GOOGLE_CLOUD_PROJECT": null
+    "GOOGLE_CLOUD_PROJECT": null,
   },
   "customizations": {
     "vscode": {
@@ -18,7 +18,7 @@
         "google.geminicodeassist",
         "Catppuccin.catppuccin-vsc-icons",
         "catppuccin.catppuccin-vsc",
-        "GitHub.github-vscode-theme"
+        "GitHub.github-vscode-theme",
         // Add extension IDs here to ensure they are installed when the container is rebuilt
         // "publisher.extension-name"
       ],
@@ -28,9 +28,9 @@
         "workbench.iconTheme": "catppuccin-mocha",
         "geminicodeassist.project": "",
         "java.import.gradle.wrapper.enabled": true,
-        "java.import.gradle.version": "9.3.1"
-      }
-    }
+        "java.import.gradle.version": "8.12",
+      },
+    },
   },
-  "postCreateCommand": "bash -c 'source /usr/local/sdkman/bin/sdkman-init.sh && sdk install java 25-tem && sdk default java 25-tem'"
+  "postCreateCommand": "bash -c 'source /usr/local/sdkman/bin/sdkman-init.sh && sdk install java 21-tem && sdk default java 21-tem'",
 }

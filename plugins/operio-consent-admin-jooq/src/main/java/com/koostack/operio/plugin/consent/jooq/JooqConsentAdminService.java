@@ -1,5 +1,7 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import static com.koostack.operio.plugin.consent.jooq.generated.Tables.CONSENT_POLICY;
+
 import com.koostack.operio.core.Models.CategoryInfo;
 import com.koostack.operio.core.Models.ConsentAuditEntry;
 import com.koostack.operio.core.Models.ConsentScope;
@@ -26,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jooq.DSLContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * jOOQ-backed {@link ConsentAdminService} implementation.
@@ -55,6 +59,10 @@ public class JooqConsentAdminService
     implements ConsentAdminService<JooqConsentAdminServiceConfig>
 {
 
+    private static final Logger LOG = LoggerFactory.getLogger(
+        JooqConsentAdminService.class
+    );
+
     private DSLContext dslContext;
     private EntityRepository entityRepository;
     private FieldRepository fieldRepository;
@@ -65,6 +73,7 @@ public class JooqConsentAdminService
     private RegulationRepository regulationRepository;
     private PurposeRegulationRepository purposeRegulationRepository;
     private ConsentAuditLogRepository consentAuditLogRepository;
+    private DsarAuditLogRepository dsarAuditLogRepository;
 
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -142,6 +151,7 @@ public class JooqConsentAdminService
         this.consentAuditLogRepository = new ConsentAuditLogRepository(
             dslContext
         );
+        this.dsarAuditLogRepository = new DsarAuditLogRepository(dslContext);
     }
 
     // -----------------------------------------------------------------------
@@ -178,6 +188,86 @@ public class JooqConsentAdminService
         Instant expiresAt
     ) {
         upsert(subject, accessRequest, false, expiresAt);
+    }
+
+    /**
+     * Revokes all consent policies for a subject (GDPR Article 17 erasure).
+     *
+     * <p>Performs a bulk DELETE on all consent_policy rows matching the subject,
+     * then logs the erasure event to the consent audit log (append-only record
+     * of the bulk operation).
+     *
+     * @param subject the data subject identifier
+     */
+    @Override
+    public void revokeAllConsent(String subject) {
+        getDsl(); // guard
+
+        // Fetch all current policies for the subject before deletion (for audit logging)
+        List<ConsentPolicy> policies = consentPolicyRepository.findBySubject(
+            subject
+        );
+
+        // Perform bulk deletion
+        var count = getDsl()
+            .deleteFrom(CONSENT_POLICY)
+            .where(CONSENT_POLICY.SUBJECT_ID.eq(subject))
+            .execute();
+
+        LOG.info(
+            "Bulk revoked {} consent policies for subject: {}",
+            count,
+            subject
+        );
+
+        // Log the bulk erasure to the audit trail (append-only)
+        // This creates a single DSAR-related audit entry indicating a bulk deletion
+        if (count > 0) {
+            consentAuditLogRepository.insert(
+                subject,
+                null, // fieldId — not applicable for bulk operation
+                null, // categoryId — not applicable for bulk operation
+                null, // purposeId — not applicable for bulk operation
+                "BULK_REVOKED", // action
+                false, // granted
+                null, // expiresAt — not applicable for bulk operation
+                "SYSTEM", // actor — bulk erasure initiated by system (could be extended to capture real actor)
+                null, // ipAddress
+                null, // userAgent
+                "{\"bulk_deletion\": true, \"count\": " + count + "}" // metadata
+            );
+        }
+    }
+
+    /**
+     * Deletes all consent audit log entries for a subject (DSAR erasure).
+     *
+     * <p>Delegates to {@link ConsentAuditLogRepository#deleteBySubject(String)}.
+     * This is a destructive operation — only call as part of a full DSAR
+     * erasure flow.
+     *
+     * @param subject the data subject identifier
+     * @return the number of audit log entries deleted
+     */
+    @Override
+    public int deleteAuditLogBySubject(String subject) {
+        getDsl(); // guard
+        return consentAuditLogRepository.deleteBySubject(subject);
+    }
+
+    /**
+     * Counts the number of consent policies for the given subject.
+     *
+     * <p>Delegates to {@link ConsentPolicyRepository#countBySubject(String)}
+     * which uses a lightweight {@code SELECT COUNT(*)} query.
+     *
+     * @param subjectId the data subject identifier
+     * @return the number of consent policies for the subject
+     */
+    @Override
+    public int countPoliciesBySubject(String subjectId) {
+        getDsl(); // guard
+        return consentPolicyRepository.countBySubject(subjectId);
     }
 
     // -----------------------------------------------------------------------
@@ -284,6 +374,17 @@ public class JooqConsentAdminService
     public ConsentAuditLogRepository consentAuditLogRepository() {
         getDsl(); // guard
         return consentAuditLogRepository;
+    }
+
+    /**
+     * Returns the underlying {@link DsarAuditLogRepository}.
+     *
+     * @return the DSAR audit log repository — never {@code null} once configured
+     * @throws OperioConfigurationException if the service has not been configured
+     */
+    public DsarAuditLogRepository dsarAuditLogRepository() {
+        getDsl(); // guard
+        return dsarAuditLogRepository;
     }
 
     // -----------------------------------------------------------------------

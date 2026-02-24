@@ -197,6 +197,26 @@ public final class CommonDtos {
         }
 
         /**
+         * Creates a validation error response.
+         *
+         * @param message the human-readable validation error description
+         * @return an {@code ErrorResponse} with {@code error="validation_error"}
+         */
+        public static ErrorResponse validation(String message) {
+            return of("validation_error", message);
+        }
+
+        /**
+         * Creates an internal error response.
+         *
+         * @param message the human-readable error description
+         * @return an {@code ErrorResponse} with {@code error="internal_error"}
+         */
+        public static ErrorResponse internal(String message) {
+            return of("internal_error", message);
+        }
+
+        /**
          * Creates a retryable error response without a specific
          * {@code retryAfter} duration.
          *

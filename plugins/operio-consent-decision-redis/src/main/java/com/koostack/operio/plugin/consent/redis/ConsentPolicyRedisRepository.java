@@ -3,6 +3,7 @@ package com.koostack.operio.plugin.consent.redis;
 import com.koostack.operio.core.Models.ConsentScope;
 import com.koostack.operio.core.Models.DecisionDetail;
 import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -105,7 +106,7 @@ public class ConsentPolicyRedisRepository {
     /** Delimiter between status and source in stored values. */
     static final char DELIMITER = '|';
 
-    private final JedisPooled jedis;
+    private final JedisProvider jedisProvider;
     private String appName;
 
     // -----------------------------------------------------------------------
@@ -114,25 +115,83 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * Creates a repository with the default application name
-     * ({@value #DEFAULT_APP_NAME}).
+     * ({@value #DEFAULT_APP_NAME}) and a shared {@link JedisPooled} client.
+     *
+     * <p><strong>Note:</strong> This constructor wraps the given client in
+     * {@link JedisProvider#shared(JedisPooled)}, meaning all tenants share
+     * the same connection (application-level key-prefix isolation only).
+     * For server-side Redis ACL isolation in multi-tenant deployments, use
+     * {@link #ConsentPolicyRedisRepository(JedisProvider)} or
+     * {@link #ConsentPolicyRedisRepository(JedisProvider, String)} instead.
      *
      * @param jedis the Jedis client
      */
     public ConsentPolicyRedisRepository(JedisPooled jedis) {
-        this(jedis, DEFAULT_APP_NAME);
+        this(JedisProvider.shared(jedis), DEFAULT_APP_NAME);
     }
 
     /**
-     * Creates a repository with the given application name used as a Redis
-     * key prefix.
+     * Creates a repository with the given application name and a shared
+     * {@link JedisPooled} client.
+     *
+     * <p><strong>Note:</strong> This constructor wraps the given client in
+     * {@link JedisProvider#shared(JedisPooled)}. See
+     * {@link #ConsentPolicyRedisRepository(JedisPooled)} for details.
      *
      * @param jedis   the Jedis client
      * @param appName the application name prefix, or {@code null} to use
      *                the default
      */
     public ConsentPolicyRedisRepository(JedisPooled jedis, String appName) {
-        this.jedis = jedis;
+        this(JedisProvider.shared(jedis), appName);
+    }
+
+    /**
+     * Creates a repository with the default application name and a
+     * {@link JedisProvider} for per-tenant Redis connection resolution.
+     *
+     * <p>This is the recommended constructor for multi-tenant deployments.
+     * Pass a {@link com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider}
+     * to enforce Redis-level ACL isolation per tenant.
+     *
+     * @param jedisProvider the provider that resolves the correct
+     *                      {@link JedisPooled} for the current tenant context
+     */
+    public ConsentPolicyRedisRepository(JedisProvider jedisProvider) {
+        this(jedisProvider, DEFAULT_APP_NAME);
+    }
+
+    /**
+     * Creates a repository with the given application name and a
+     * {@link JedisProvider} for per-tenant Redis connection resolution.
+     *
+     * @param jedisProvider the provider that resolves the correct
+     *                      {@link JedisPooled} for the current tenant context
+     * @param appName       the application name prefix, or {@code null} to
+     *                      use the default
+     */
+    public ConsentPolicyRedisRepository(
+        JedisProvider jedisProvider,
+        String appName
+    ) {
+        if (jedisProvider == null) {
+            throw new NullPointerException("JedisProvider must not be null");
+        }
+        this.jedisProvider = jedisProvider;
         this.appName = appName != null ? appName : DEFAULT_APP_NAME;
+    }
+
+    /**
+     * Returns the {@link JedisProvider} used by this repository.
+     *
+     * <p>Primarily useful for wiring — e.g. passing the same provider to
+     * {@link FieldCategoryMappingRedisRepository} so both repositories
+     * share the same per-tenant connection cache.
+     *
+     * @return the Jedis provider, never {@code null}
+     */
+    public JedisProvider jedisProvider() {
+        return jedisProvider;
     }
 
     // -----------------------------------------------------------------------
@@ -328,10 +387,12 @@ public class ConsentPolicyRedisRepository {
         boolean granted,
         String source
     ) {
-        jedis.set(
-            consentKey(subject, entity, field, purpose),
-            encodeValue(granted ? GRANTED : REVOKED, source)
-        );
+        jedisProvider
+            .get()
+            .set(
+                consentKey(subject, entity, field, purpose),
+                encodeValue(granted ? GRANTED : REVOKED, source)
+            );
     }
 
     /**
@@ -370,11 +431,13 @@ public class ConsentPolicyRedisRepository {
         if (ttlSeconds <= 0) {
             return; // already expired — nothing to write
         }
-        jedis.setex(
-            consentKey(subject, entity, field, purpose),
-            ttlSeconds,
-            encodeValue(granted ? GRANTED : REVOKED, source)
-        );
+        jedisProvider
+            .get()
+            .setex(
+                consentKey(subject, entity, field, purpose),
+                ttlSeconds,
+                encodeValue(granted ? GRANTED : REVOKED, source)
+            );
     }
 
     // -----------------------------------------------------------------------
@@ -486,7 +549,7 @@ public class ConsentPolicyRedisRepository {
             granted ? GRANTED : REVOKED,
             SOURCE_CATEGORY
         );
-        try (Pipeline pipeline = jedis.pipelined()) {
+        try (Pipeline pipeline = jedisProvider.get().pipelined()) {
             for (String qf : writeable) {
                 pipeline.set(consentKey(subject, qf, purpose), value);
             }
@@ -551,7 +614,7 @@ public class ConsentPolicyRedisRepository {
             granted ? GRANTED : REVOKED,
             SOURCE_CATEGORY
         );
-        try (Pipeline pipeline = jedis.pipelined()) {
+        try (Pipeline pipeline = jedisProvider.get().pipelined()) {
             for (String qf : writeable) {
                 pipeline.setex(
                     consentKey(subject, qf, purpose),
@@ -584,7 +647,7 @@ public class ConsentPolicyRedisRepository {
         String purpose
     ) {
         ConsentValue cv = parseValue(
-            jedis.get(consentKey(subject, entity, field, purpose))
+            jedisProvider.get().get(consentKey(subject, entity, field, purpose))
         );
         return cv != null ? Optional.of(cv.status()) : Optional.empty();
     }
@@ -605,7 +668,11 @@ public class ConsentPolicyRedisRepository {
         String purpose
     ) {
         return Optional.ofNullable(
-            parseValue(jedis.get(consentKey(subject, entity, field, purpose)))
+            parseValue(
+                jedisProvider
+                    .get()
+                    .get(consentKey(subject, entity, field, purpose))
+            )
         );
     }
 
@@ -627,7 +694,7 @@ public class ConsentPolicyRedisRepository {
         String field,
         String purpose
     ) {
-        jedis.del(consentKey(subject, entity, field, purpose));
+        jedisProvider.get().del(consentKey(subject, entity, field, purpose));
     }
 
     // -----------------------------------------------------------------------
@@ -669,7 +736,7 @@ public class ConsentPolicyRedisRepository {
         }
 
         // --- single Redis round trip ----------------------------------------
-        List<String> values = jedis.mget(keys);
+        List<String> values = jedisProvider.get().mget(keys);
 
         // --- pure mapping from here on --------------------------------------
         Map<ConsentScope, DecisionDetail> result = new LinkedHashMap<>();
@@ -728,7 +795,7 @@ public class ConsentPolicyRedisRepository {
             keys[i] = consentKey(subject, fieldList.get(i), purpose);
         }
 
-        List<String> values = jedis.mget(keys);
+        List<String> values = jedisProvider.get().mget(keys);
 
         Set<String> writeable = new LinkedHashSet<>();
         for (int i = 0; i < fieldList.size(); i++) {
@@ -759,7 +826,9 @@ public class ConsentPolicyRedisRepository {
         String field,
         String purpose
     ) {
-        return jedis.exists(consentKey(subject, entity, field, purpose));
+        return jedisProvider
+            .get()
+            .exists(consentKey(subject, entity, field, purpose));
     }
 
     /**
@@ -783,6 +852,7 @@ public class ConsentPolicyRedisRepository {
             .match(pattern)
             .count(100);
 
+        JedisPooled jedis = jedisProvider.get();
         do {
             var scanResult = jedis.scan(cursor, scanParams);
             List<String> keys = scanResult.getResult();
@@ -802,6 +872,78 @@ public class ConsentPolicyRedisRepository {
     }
 
     /**
+     * Deletes all cached consent keys for a subject (GDPR Article 17 erasure).
+     *
+     * <p>Discovers all Redis keys matching the pattern
+     * {@code {keyPrefix}:consent:{subject}:*} and deletes them atomically.
+     * This is an idempotent operation — calling it multiple times for the
+     * same subject is safe (subsequent calls are no-ops if no keys exist).
+     *
+     * @param subject the data subject identifier
+     * @return the total number of keys deleted across all purposes/fields
+     */
+    public long deleteAllCachedKeysForSubject(String subject) {
+        // Build the pattern to match all consent keys for this subject
+        // Pattern: {keyPrefix}:consent:{subject}:*
+        String pattern = keyPrefix() + ":consent:" + subject + ":*";
+
+        long removed = 0;
+        String cursor = "0";
+        var scanParams = new redis.clients.jedis.params.ScanParams()
+            .match(pattern)
+            .count(100);
+
+        JedisPooled jedis = jedisProvider.get();
+        do {
+            var scanResult = jedis.scan(cursor, scanParams);
+            List<String> keys = scanResult.getResult();
+            if (!keys.isEmpty()) {
+                try (Pipeline pipeline = jedis.pipelined()) {
+                    for (String key : keys) {
+                        pipeline.del(key);
+                    }
+                    pipeline.sync();
+                }
+                removed += keys.size();
+            }
+            cursor = scanResult.getCursor();
+        } while (!"0".equals(cursor));
+
+        return removed;
+    }
+
+    /**
+     * Counts the number of cached consent keys for a subject without deleting them.
+     *
+     * <p>Discovers all Redis keys matching the pattern
+     * {@code {keyPrefix}:consent:{subject}:*} and returns the count.
+     * This is useful for DSAR data export (Article 20 — data portability).
+     *
+     * @param subject the data subject identifier
+     * @return the total number of cached keys for this subject
+     */
+    public long countCachedKeysForSubject(String subject) {
+        // Build the pattern to match all consent keys for this subject
+        String pattern = keyPrefix() + ":consent:" + subject + ":*";
+
+        long count = 0;
+        String cursor = "0";
+        var scanParams = new redis.clients.jedis.params.ScanParams()
+            .match(pattern)
+            .count(100);
+
+        JedisPooled jedis = jedisProvider.get();
+        do {
+            var scanResult = jedis.scan(cursor, scanParams);
+            List<String> keys = scanResult.getResult();
+            count += keys.size();
+            cursor = scanResult.getCursor();
+        } while (!"0".equals(cursor));
+
+        return count;
+    }
+
+    /**
      * Returns the remaining TTL in seconds for a consent entry, or
      * {@code -1} if the key has no TTL, or {@code -2} if the key does
      * not exist.
@@ -818,6 +960,8 @@ public class ConsentPolicyRedisRepository {
         String field,
         String purpose
     ) {
-        return jedis.ttl(consentKey(subject, entity, field, purpose));
+        return jedisProvider
+            .get()
+            .ttl(consentKey(subject, entity, field, purpose));
     }
 }

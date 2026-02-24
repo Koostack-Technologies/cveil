@@ -73,6 +73,37 @@ public interface ConsentAdminService<T> extends Plugin<T> {
         revokeConsent(subject, accessRequest);
     }
 
+    /**
+     * Revokes all consent policies for a given subject across all purposes and scopes.
+     *
+     * <p>This is a bulk erasure operation used for GDPR Article 17 (right to erasure)
+     * and CCPA §1798.105 (right to deletion). It atomically removes all active
+     * consent records for the subject from the policy store. The operation is:
+     * <ul>
+     *   <li><strong>Atomic</strong> — either all policies are revoked, or none are.
+     *       Implementation should use a single transaction.</li>
+     *   <li><strong>Audited</strong> — the revocation must be logged to the consent
+     *       audit trail (or a separate DSAR audit table) for forensic compliance.</li>
+     *   <li><strong>Idempotent</strong> — calling this multiple times for the same
+     *       subject is safe; subsequent calls are no-ops.</li>
+     * </ul>
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Only implementations that support bulk erasure (e.g. jOOQ-backed relational
+     * stores) should override this method. Purely in-memory implementations
+     * (Caffeine, Redis) do not support this operation.
+     *
+     * @param subject the data subject identifier (e.g. {@code "user_123"})
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support bulk erasure
+     * @see #revokeConsent(String, ConsentScope)
+     */
+    default void revokeAllConsent(String subject) {
+        throw new UnsupportedOperationException(
+            "Bulk erasure (revokeAllConsent) not supported by " + getName()
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Schema registration — used by SensitiveDiscovery pipeline
     // -----------------------------------------------------------------------
@@ -342,6 +373,54 @@ public interface ConsentAdminService<T> extends Plugin<T> {
     default List<PolicySummaryEntry> findPoliciesBySubject(String subjectId) {
         throw new UnsupportedOperationException(
             "Schema query not supported by " + getName()
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // DSAR erasure support
+    // -----------------------------------------------------------------------
+
+    /**
+     * Deletes all consent audit log entries for the given subject.
+     *
+     * <p>This is a destructive operation intended only for DSAR (Data Subject
+     * Access Request) erasure compliance (GDPR Article 17). The audit log is
+     * designed to be append-only under normal circumstances; this method
+     * should only be called as part of a full subject data erasure flow.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support DSAR erasure (e.g. jOOQ-backed relational
+     * stores) should override this method.
+     *
+     * @param subject the data subject identifier (e.g. {@code "user_123"})
+     * @return the number of audit log entries deleted
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support audit log deletion
+     */
+    default int deleteAuditLogBySubject(String subject) {
+        throw new UnsupportedOperationException(
+            "Audit log deletion not supported by " + getName()
+        );
+    }
+
+    /**
+     * Counts the number of consent policies for the given subject.
+     *
+     * <p>This is a lightweight count query — it does not fetch the full
+     * policy rows. Useful for populating DSAR deletion receipts before
+     * performing bulk erasure via {@link #revokeAllConsent(String)}.
+     *
+     * <p>The default implementation throws {@link UnsupportedOperationException}.
+     * Implementations that support schema queries should override this.
+     *
+     * @param subjectId the data subject identifier
+     * @return the number of consent policies for the subject
+     * @throws UnsupportedOperationException if the implementation does not
+     *                                       support this query
+     */
+    default int countPoliciesBySubject(String subjectId) {
+        throw new UnsupportedOperationException(
+            "Policy count query not supported by " + getName()
         );
     }
 

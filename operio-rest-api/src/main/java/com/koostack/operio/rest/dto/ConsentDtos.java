@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
 
 /**
  * Request and response DTOs for the consent endpoints
@@ -440,4 +441,97 @@ public final class ConsentDtos {
             );
         }
     }
+
+    // ===================================================================
+    // DSAR (Data Subject Access Request)
+    // ===================================================================
+
+    /**
+     * Response body for {@code GET /api/v1/consent/subjects/{id}/export}.
+     *
+     * <p>Contains a complete export of all consent-related data held for
+     * a subject, including active policies, audit trail entries, and
+     * cached consent keys (GDPR Article 20 — data portability).
+     *
+     * @param subject             the data subject identifier
+     * @param consentPolicies     all active consent policy summaries for the subject
+     * @param auditLogEntries     the complete audit trail of consent changes
+     * @param cachedKeyCount      the number of cached consent keys in Redis (informational)
+     * @param exportedAt          when the export was generated
+     */
+    @Schema(
+        description = "Complete export of all consent data for a subject (GDPR Article 20)"
+    )
+    public record SubjectDataExport(
+        @Schema(
+            description = "The data subject identifier",
+            example = "user_123"
+        ) String subject,
+        @Schema(
+            description = "All active consent policy summaries for the subject",
+            example = "[]"
+        ) List<PolicySummaryDto> consentPolicies,
+        @Schema(
+            description = "Complete audit trail of consent changes, most recent first",
+            example = "[]"
+        ) List<ConsentAuditEntryDto> auditLogEntries,
+        @Schema(
+            description = "Number of cached consent keys in Redis (informational)",
+            example = "5"
+        ) long cachedKeyCount,
+        @Schema(
+            description = "Timestamp when the export was generated",
+            example = "2026-02-23T10:30:00Z"
+        ) Instant exportedAt
+    ) {}
+
+    /**
+     * Response body for {@code DELETE /api/v1/consent/subjects/{id}}.
+     *
+     * <p>Confirms the completion of a data subject access request (DSAR)
+     * deletion operation. Contains counts of deleted records and a unique
+     * request ID for forensic traceability.
+     *
+     * @param subject            the data subject identifier
+     * @param deletionRequestId  unique request ID for this erasure operation
+     * @param policiesDeleted    number of consent policies deleted
+     * @param cachedKeysDeleted  number of cached keys deleted from Redis
+     * @param auditEntriesDeleted number of audit log entries deleted
+     * @param status             {@code "SUCCESS"} or {@code "PARTIAL_FAILURE"}
+     * @param completedAt        when the deletion was completed
+     */
+    @Schema(
+        description = "Confirmation receipt for a data subject erasure request"
+    )
+    public record DsarDeletionReceipt(
+        @Schema(
+            description = "The data subject identifier",
+            example = "user_123"
+        ) String subject,
+        @Schema(
+            description = "Unique request ID for this erasure operation",
+            example = "550e8400-e29b-41d4-a716-446655440000"
+        ) String deletionRequestId,
+        @Schema(
+            description = "Number of consent policies deleted",
+            example = "12"
+        ) long policiesDeleted,
+        @Schema(
+            description = "Number of cached keys deleted from Redis",
+            example = "8"
+        ) long cachedKeysDeleted,
+        @Schema(
+            description = "Number of audit log entries deleted",
+            example = "45"
+        ) long auditEntriesDeleted,
+        @Schema(
+            description = "Status of the deletion operation",
+            enumeration = { "SUCCESS", "PARTIAL_FAILURE" },
+            example = "SUCCESS"
+        ) String status,
+        @Schema(
+            description = "Timestamp when the deletion was completed",
+            example = "2026-02-23T10:30:00Z"
+        ) Instant completedAt
+    ) {}
 }

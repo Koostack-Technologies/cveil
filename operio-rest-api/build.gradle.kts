@@ -10,27 +10,19 @@
  * that ScopedValue-based TenantContext and RequestContext work correctly.
  *
  * ---------------------------------------------------------------------------
- * Gradle 9.x compatibility note
+ * Quarkus Gradle plugin note
  * ---------------------------------------------------------------------------
- * The `io.quarkus` Gradle plugin (3.22.x) is NOT applied here because it
- * creates detached configurations that extend `compileClasspath`, which
- * Gradle 9.x explicitly prohibits ("Extending a detachedConfiguration is
- * not allowed").  Once the Quarkus team ships a Gradle-9-compatible plugin
- * release, re-enable it by uncommenting the plugin line below.
- *
- * Without the plugin the module compiles, tests run via JUnit 5, and a
- * runnable Quarkus uber-jar can still be produced via the Quarkus CLI:
- *
- *     quarkus build --gradle
- *
- * or by invoking the Quarkus Maven plugin wrapper if needed.  Dev mode
- * (`quarkusDev`) and native-image builds require the plugin or the CLI.
+ * The `io.quarkus` Gradle plugin (3.22.3) is applied below.  It requires
+ * Gradle 8.x — when the project briefly used Gradle 9.x, the plugin was
+ * disabled due to detached-configuration errors.  The project currently uses
+ * Gradle 8.14 (see gradle-wrapper.properties), so the plugin works correctly
+ * and `quarkusBuild` produces the fast-jar layout.
  * ---------------------------------------------------------------------------
  */
 
 plugins {
     id("buildlogic.java-application-conventions")
-    // id("io.quarkus") version "3.22.3"  // TODO: re-enable when Quarkus supports Gradle 9.x
+    id("io.quarkus") version "3.22.3"
 }
 
 dependencies {
@@ -45,11 +37,17 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-health")     // MicroProfile Health
     implementation("io.quarkus:quarkus-smallrye-openapi")    // OpenAPI spec + Swagger UI
     implementation("io.quarkus:quarkus-config-yaml")         // YAML config support
+    implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs (counter reconciliation)
 
     // -- Operio core (framework-agnostic) -------------------------------------
     implementation(project(":operio-core"))
     implementation(project(":operio-bundle-core"))
-    implementation(project(":operio-bundle-embedded"))
+    // The embedded bundle (H2 + Caffeine) is compile-only so it does NOT ship
+    // in the production Docker image.  OperioProducers loads it via reflection
+    // when operio.mode=embedded, giving a clear error if the classes are absent.
+    // For local IDE development with mode=embedded, add the module to your run
+    // configuration's classpath manually or switch to mode=production.
+    compileOnly(project(":operio-bundle-embedded"))
     implementation(project(":plugins:operio-platform-jooq"))
     implementation(project(":plugins:operio-consent-admin-jooq"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
@@ -58,29 +56,27 @@ dependencies {
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")
-    runtimeOnly("com.h2database:h2:2.2.224")
+    // H2 is only needed for embedded mode (not production).  Kept as
+    // testRuntimeOnly so integration tests that spin up EmbeddedConsentBundle
+    // still work.  The production Docker image does not include H2.
+    // runtimeOnly("com.h2database:h2:2.2.224")  // removed from production
 
     // -- Test -----------------------------------------------------------------
     testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("io.rest-assured:rest-assured")
+    testImplementation("org.assertj:assertj-core:3.27.3")
     testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.18.0")
-    testImplementation("net.bytebuddy:byte-buddy:1.17.5")
-    testImplementation("net.bytebuddy:byte-buddy-agent:1.17.5")
-}
+    // Embedded bundle + H2 available in tests for embedded-mode coverage
+    testImplementation(project(":operio-bundle-embedded"))
+    testRuntimeOnly("com.h2database:h2:2.2.224")
 
-// ---------------------------------------------------------------------------
-// Force Byte Buddy 1.17.5 for JDK 25 classfile support (version 69).
-// The Quarkus BOM (enforcedPlatform) pins Byte Buddy to 1.15.11 which
-// cannot read JDK 25 classfiles, causing Mockito to fail at runtime with
-// IllegalArgumentException in OpenedClassReader.  This resolution strategy
-// overrides the BOM constraint for test configurations only.
-// ---------------------------------------------------------------------------
-configurations.matching { it.name.startsWith("test") }.configureEach {
-    resolutionStrategy {
-        force("net.bytebuddy:byte-buddy:1.17.5")
-        force("net.bytebuddy:byte-buddy-agent:1.17.5")
-    }
+    // -- Testcontainers (Postgres + Redis for production-mode integration tests)
+    // Redis uses GenericContainer directly — no extra Redis-specific module needed.
+    testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.3"))
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
 }
 
 application {

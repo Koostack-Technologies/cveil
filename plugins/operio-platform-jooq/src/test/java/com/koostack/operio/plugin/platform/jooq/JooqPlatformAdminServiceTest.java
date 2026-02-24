@@ -125,6 +125,7 @@ class JooqPlatformAdminServiceTest {
             "t_" + tenantId,
             null,
             null,
+            null,
             "test"
         );
     }
@@ -151,13 +152,13 @@ class JooqPlatformAdminServiceTest {
     // =======================================================================
 
     @Nested
-    @DisplayName("V1 Platform Migration Verification")
+    @DisplayName("Platform Migration Verification (V1 + V2)")
     class MigrationVerificationTests {
 
         // -- tenant table ---------------------------------------------------
 
         @Test
-        @DisplayName("V1: tenant table exists with all expected columns")
+        @DisplayName("tenant table exists with all expected columns (V1 + V2)")
         void tenantTableColumns() {
             Result<Record> columns = dsl.fetch(
                 "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
@@ -177,6 +178,10 @@ class JooqPlatformAdminServiceTest {
             assertTrue(
                 names.contains("REDIS_ACL_USER"),
                 "missing REDIS_ACL_USER"
+            );
+            assertTrue(
+                names.contains("REDIS_ACL_PASSWORD"),
+                "missing REDIS_ACL_PASSWORD"
             );
             assertTrue(
                 names.contains("REDIS_ACL_PASS_HASH"),
@@ -596,11 +601,11 @@ class JooqPlatformAdminServiceTest {
         @Test
         @DisplayName("V1: tenant nullable columns are correctly nullable")
         void tenantNullableColumns() {
-            // display_name, redis_acl_user, redis_acl_pass_hash, created_by, updated_by should be nullable
+            // display_name, redis_acl_user, redis_acl_password, redis_acl_pass_hash, created_by, updated_by should be nullable
             Result<Record> nullable = dsl.fetch(
                 "SELECT COLUMN_NAME, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS " +
                     "WHERE TABLE_NAME = 'TENANT' AND COLUMN_NAME IN " +
-                    "('DISPLAY_NAME', 'REDIS_ACL_USER', 'REDIS_ACL_PASS_HASH', 'CREATED_BY', 'UPDATED_BY') " +
+                    "('DISPLAY_NAME', 'REDIS_ACL_USER', 'REDIS_ACL_PASSWORD', 'REDIS_ACL_PASS_HASH', 'CREATED_BY', 'UPDATED_BY') " +
                     "ORDER BY COLUMN_NAME"
             );
             for (Record r : nullable) {
@@ -2487,10 +2492,12 @@ class JooqPlatformAdminServiceTest {
                 new TenantManager.ProvisionResult(
                     "t_test",
                     "t_test",
+                    "plaintext_pass",
                     "hash123"
                 );
             assertEquals("t_test", result.schemaName());
             assertEquals("t_test", result.redisAclUser());
+            assertEquals("plaintext_pass", result.redisAclPassword());
             assertEquals("hash123", result.redisAclPassHash());
         }
 
@@ -2883,7 +2890,7 @@ class JooqPlatformAdminServiceTest {
             );
             String readKey = service.createApiKey(
                 "multikey",
-                "reader@multi",
+                "admin@multi",
                 Set.of("reader")
             );
             String noRoleKey = service.createApiKey(
@@ -2928,6 +2935,268 @@ class JooqPlatformAdminServiceTest {
             assertDoesNotThrow(() -> verifier.verifyToken(noRoleKey));
 
             assertEquals(3, service.listApiKeys("multikey").size());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Redis ACL password encryption at rest
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("RedisAclPasswordEncryptionTests")
+    class RedisAclPasswordEncryptionTests {
+
+        private static final String ENCRYPTION_KEY =
+            "test-encryption-key-for-aes-256-gcm";
+
+        @Test
+        @DisplayName("insert with encryption key stores encrypted value in DB")
+        void insertEncryptsPassword() {
+            // Create a TenantRepository with encryption enabled
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+            String plainPassword = "s3cret-redis-password";
+
+            encryptedRepo.insert(
+                "enc_tenant",
+                "Encrypted Tenant",
+                "free",
+                "t_enc_tenant",
+                "t_enc_tenant",
+                plainPassword,
+                "somehash",
+                "test"
+            );
+
+            // Read the raw value from the database — it should NOT be
+            // the plaintext password (it should be encrypted Base64)
+            String rawFromDb = dsl
+                .select(TENANT.REDIS_ACL_PASSWORD)
+                .from(TENANT)
+                .where(TENANT.TENANT_ID.eq("enc_tenant"))
+                .fetchOneInto(String.class);
+
+            assertNotNull(rawFromDb, "Encrypted password should not be null");
+            assertNotEquals(
+                plainPassword,
+                rawFromDb,
+                "Password stored in DB should be encrypted, not plaintext"
+            );
+
+            // Verify it's valid Base64
+            assertDoesNotThrow(
+                () -> java.util.Base64.getDecoder().decode(rawFromDb),
+                "Encrypted password should be valid Base64"
+            );
+        }
+
+        @Test
+        @DisplayName("findById with encryption key returns decrypted password")
+        void findByIdDecryptsPassword() {
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+            String plainPassword = "my-redis-acl-pass";
+
+            encryptedRepo.insert(
+                "dec_tenant",
+                "Decrypted Tenant",
+                "free",
+                "t_dec_tenant",
+                "t_dec_tenant",
+                plainPassword,
+                "hash123",
+                "test"
+            );
+
+            // Read back through the repository (should auto-decrypt)
+            var tenant = encryptedRepo.findById("dec_tenant");
+            assertTrue(tenant.isPresent());
+            assertEquals(
+                plainPassword,
+                tenant.get().getRedisAclPassword(),
+                "findById should return the decrypted plaintext password"
+            );
+        }
+
+        @Test
+        @DisplayName("findAll with encryption key returns decrypted passwords")
+        void findAllDecryptsPasswords() {
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+
+            encryptedRepo.insert(
+                "all_tenant_1",
+                "T1",
+                "free",
+                "t_all_1",
+                "t_all_1",
+                "password-one",
+                "h1",
+                "test"
+            );
+            encryptedRepo.insert(
+                "all_tenant_2",
+                "T2",
+                "pro",
+                "t_all_2",
+                "t_all_2",
+                "password-two",
+                "h2",
+                "test"
+            );
+
+            var tenants = encryptedRepo.findAll();
+            assertEquals(2, tenants.size());
+
+            var t1 = tenants
+                .stream()
+                .filter(t -> "all_tenant_1".equals(t.getTenantId()))
+                .findFirst()
+                .orElseThrow();
+            var t2 = tenants
+                .stream()
+                .filter(t -> "all_tenant_2".equals(t.getTenantId()))
+                .findFirst()
+                .orElseThrow();
+
+            assertEquals("password-one", t1.getRedisAclPassword());
+            assertEquals("password-two", t2.getRedisAclPassword());
+        }
+
+        @Test
+        @DisplayName("updateRedisAclCredentials encrypts the new password")
+        void updateEncryptsPassword() {
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+
+            // Insert with one password
+            encryptedRepo.insert(
+                "upd_tenant",
+                "Update Tenant",
+                "free",
+                "t_upd_tenant",
+                "t_upd_tenant",
+                "old-password",
+                "oldhash",
+                "test"
+            );
+
+            // Update with a new password
+            String newPassword = "new-rotated-password";
+            encryptedRepo.updateRedisAclCredentials(
+                "upd_tenant",
+                "t_upd_tenant",
+                newPassword,
+                "newhash",
+                "test"
+            );
+
+            // Verify raw DB value is encrypted (not plaintext)
+            String rawFromDb = dsl
+                .select(TENANT.REDIS_ACL_PASSWORD)
+                .from(TENANT)
+                .where(TENANT.TENANT_ID.eq("upd_tenant"))
+                .fetchOneInto(String.class);
+            assertNotEquals(
+                newPassword,
+                rawFromDb,
+                "Updated password should be encrypted in DB"
+            );
+
+            // Verify findById returns decrypted value
+            var tenant = encryptedRepo.findById("upd_tenant");
+            assertTrue(tenant.isPresent());
+            assertEquals(newPassword, tenant.get().getRedisAclPassword());
+        }
+
+        @Test
+        @DisplayName(
+            "repository without encryption key stores plaintext (backward compat)"
+        )
+        void noEncryptionKeyStoresPlaintext() {
+            // Default repository (no encryption key)
+            var plainRepo = new TenantRepository(dsl);
+            String plainPassword = "plain-redis-pass";
+
+            plainRepo.insert(
+                "plain_tenant",
+                "Plain Tenant",
+                "free",
+                "t_plain_tenant",
+                "t_plain_tenant",
+                plainPassword,
+                "hash",
+                "test"
+            );
+
+            // Raw DB value should be the plaintext password
+            String rawFromDb = dsl
+                .select(TENANT.REDIS_ACL_PASSWORD)
+                .from(TENANT)
+                .where(TENANT.TENANT_ID.eq("plain_tenant"))
+                .fetchOneInto(String.class);
+            assertEquals(
+                plainPassword,
+                rawFromDb,
+                "Without encryption key, password should be stored as plaintext"
+            );
+
+            // findById should return the same plaintext
+            var tenant = plainRepo.findById("plain_tenant");
+            assertTrue(tenant.isPresent());
+            assertEquals(plainPassword, tenant.get().getRedisAclPassword());
+        }
+
+        @Test
+        @DisplayName(
+            "encrypted repo can read legacy plaintext rows (passthrough)"
+        )
+        void legacyPlaintextPassthrough() {
+            // Insert using a plain repository (no encryption)
+            var plainRepo = new TenantRepository(dsl);
+            String legacyPassword = "legacy-plaintext-password";
+
+            plainRepo.insert(
+                "legacy_tenant",
+                "Legacy",
+                "free",
+                "t_legacy_tenant",
+                "t_legacy_tenant",
+                legacyPassword,
+                "hash",
+                "test"
+            );
+
+            // Read using an encrypted repository — should fall back to
+            // passthrough since the value isn't valid AES-GCM ciphertext
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+            var tenant = encryptedRepo.findById("legacy_tenant");
+            assertTrue(tenant.isPresent());
+            assertEquals(
+                legacyPassword,
+                tenant.get().getRedisAclPassword(),
+                "Encrypted repo should passthrough legacy plaintext passwords"
+            );
+        }
+
+        @Test
+        @DisplayName("null redis_acl_password is preserved through encryption")
+        void nullPasswordPreserved() {
+            var encryptedRepo = new TenantRepository(dsl, ENCRYPTION_KEY);
+
+            encryptedRepo.insert(
+                "null_pw_tenant",
+                "Null PW",
+                "free",
+                "t_null_pw",
+                null,
+                null,
+                null,
+                "test"
+            );
+
+            var tenant = encryptedRepo.findById("null_pw_tenant");
+            assertTrue(tenant.isPresent());
+            assertNull(
+                tenant.get().getRedisAclPassword(),
+                "Null password should remain null after encrypt/decrypt cycle"
+            );
         }
     }
 }

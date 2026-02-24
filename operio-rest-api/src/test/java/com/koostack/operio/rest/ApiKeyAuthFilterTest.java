@@ -8,7 +8,6 @@ import com.koostack.operio.core.Models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.service.TokenVerifier;
-import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.filter.ApiKeyAuthFilter;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
@@ -71,9 +70,6 @@ class ApiKeyAuthFilterTest {
     private Operio operio;
 
     @Mock
-    private OperioConfig config;
-
-    @Mock
     private BootstrapKeyLifecycleService bootstrapLifecycle;
 
     @Mock
@@ -100,7 +96,6 @@ class ApiKeyAuthFilterTest {
 
         // Inject mocks into the filter via reflection (simulating CDI @Inject)
         injectField(filter, "operio", operio);
-        injectField(filter, "config", config);
         injectField(filter, "bootstrapLifecycle", bootstrapLifecycle);
         injectField(filter, "requestHolder", requestHolder);
     }

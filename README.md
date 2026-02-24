@@ -5,7 +5,7 @@
 Operio is a library that gives your application a complete consent management system: grant and revoke consent per user, evaluate consent decisions at runtime, mask denied fields automatically, and maintain a full audit trail. Everything is built on a plugin architecture so you can swap storage backends, identity providers, and deployment topologies without changing application code.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-25-orange.svg)](https://openjdk.org/projects/jdk/25/)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 
 ---
 
@@ -397,7 +397,7 @@ operio/
 
 ## Building
 
-Requires **Java 25** and **Gradle 9.3.1** (wrapper included).
+Requires **Java 21** (with `--enable-preview` for ScopedValue) and **Gradle 8.14** (wrapper included).
 
 ```bash
 # Build everything
@@ -469,6 +469,34 @@ Operio operio = Operio.builder()
 
 ---
 
+## Deployment Configuration
+
+### CORS
+
+By default the API allows requests from `https://dashboard.operio.dev`. Override this for staging, preview, or customer-specific deployments via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPERIO_CORS_ORIGINS` | `https://dashboard.operio.dev` | Comma-separated list of allowed origins |
+| `OPERIO_CORS_METHODS` | `GET,POST,DELETE,OPTIONS` | Allowed HTTP methods |
+| `OPERIO_CORS_HEADERS` | `Authorization,Content-Type,X-Request-Id` | Allowed request headers |
+| `OPERIO_CORS_EXPOSED_HEADERS` | `X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning` | Headers exposed to the browser |
+
+Example — allow multiple origins for staging + production:
+
+```bash
+export OPERIO_CORS_ORIGINS="https://dashboard.operio.dev,https://staging.operio.dev,http://localhost:3000"
+```
+
+In Docker Compose or Kubernetes, set the variable in the container environment:
+
+```yaml
+environment:
+  OPERIO_CORS_ORIGINS: "https://dashboard.operio.dev,https://staging.operio.dev"
+```
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please:
@@ -482,7 +510,7 @@ Contributions are welcome! Please:
 
 ### Code Conventions
 
-- Java 25 toolchain, Lombok for boilerplate reduction
+- Java 21 toolchain (`--enable-preview` for ScopedValue), Lombok for boilerplate reduction
 - JUnit Jupiter 5.12.1 with `@TestInstance(PER_CLASS)` and nested test classes
 - jOOQ 3.19.5, Jedis 5.2.0, Caffeine 3.1.8, Jackson 2.17.0, Flyway 11.3.0
 - Plugin implementations throw `OperioServiceException` for transient failures and `OperioConfigurationException` for fatal config errors

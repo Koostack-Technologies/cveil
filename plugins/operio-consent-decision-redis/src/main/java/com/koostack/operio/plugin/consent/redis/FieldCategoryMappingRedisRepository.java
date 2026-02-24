@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.consent.redis;
 
 import com.koostack.operio.core.TenantContext;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.util.Collections;
 import java.util.Set;
 import redis.clients.jedis.JedisPooled;
@@ -52,7 +53,7 @@ public class FieldCategoryMappingRedisRepository {
     static final String FIELD_TO_CAT_INFIX = ":meta:field2cat:";
     static final String CAT_TO_FIELD_INFIX = ":meta:cat2field:";
 
-    private final JedisPooled jedis;
+    private final JedisProvider jedisProvider;
     private String appName;
 
     // -----------------------------------------------------------------------
@@ -61,17 +62,32 @@ public class FieldCategoryMappingRedisRepository {
 
     /**
      * Creates a repository with the default application name
-     * ({@value ConsentPolicyRedisRepository#DEFAULT_APP_NAME}).
+     * ({@value ConsentPolicyRedisRepository#DEFAULT_APP_NAME}) and a shared
+     * {@link JedisPooled} client.
+     *
+     * <p><strong>Note:</strong> This constructor wraps the given client in
+     * {@link JedisProvider#shared(JedisPooled)}, meaning all tenants share
+     * the same connection (application-level key-prefix isolation only).
+     * For server-side Redis ACL isolation in multi-tenant deployments, use
+     * {@link #FieldCategoryMappingRedisRepository(JedisProvider)} or
+     * {@link #FieldCategoryMappingRedisRepository(JedisProvider, String)} instead.
      *
      * @param jedis the Jedis client
      */
     public FieldCategoryMappingRedisRepository(JedisPooled jedis) {
-        this(jedis, ConsentPolicyRedisRepository.DEFAULT_APP_NAME);
+        this(
+            JedisProvider.shared(jedis),
+            ConsentPolicyRedisRepository.DEFAULT_APP_NAME
+        );
     }
 
     /**
-     * Creates a repository with the given application name used as a Redis
-     * key prefix.
+     * Creates a repository with the given application name and a shared
+     * {@link JedisPooled} client.
+     *
+     * <p><strong>Note:</strong> This constructor wraps the given client in
+     * {@link JedisProvider#shared(JedisPooled)}. See
+     * {@link #FieldCategoryMappingRedisRepository(JedisPooled)} for details.
      *
      * @param jedis   the Jedis client
      * @param appName the application name prefix, or {@code null} to use
@@ -81,11 +97,54 @@ public class FieldCategoryMappingRedisRepository {
         JedisPooled jedis,
         String appName
     ) {
-        this.jedis = jedis;
+        this(JedisProvider.shared(jedis), appName);
+    }
+
+    /**
+     * Creates a repository with the default application name and a
+     * {@link JedisProvider} for per-tenant Redis connection resolution.
+     *
+     * <p>This is the recommended constructor for multi-tenant deployments.
+     * Pass a {@link com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider}
+     * to enforce Redis-level ACL isolation per tenant.
+     *
+     * @param jedisProvider the provider that resolves the correct
+     *                      {@link JedisPooled} for the current tenant context
+     */
+    public FieldCategoryMappingRedisRepository(JedisProvider jedisProvider) {
+        this(jedisProvider, ConsentPolicyRedisRepository.DEFAULT_APP_NAME);
+    }
+
+    /**
+     * Creates a repository with the given application name and a
+     * {@link JedisProvider} for per-tenant Redis connection resolution.
+     *
+     * @param jedisProvider the provider that resolves the correct
+     *                      {@link JedisPooled} for the current tenant context
+     * @param appName       the application name prefix, or {@code null} to
+     *                      use the default
+     */
+    public FieldCategoryMappingRedisRepository(
+        JedisProvider jedisProvider,
+        String appName
+    ) {
+        if (jedisProvider == null) {
+            throw new NullPointerException("JedisProvider must not be null");
+        }
+        this.jedisProvider = jedisProvider;
         this.appName =
             appName != null
                 ? appName
                 : ConsentPolicyRedisRepository.DEFAULT_APP_NAME;
+    }
+
+    /**
+     * Returns the {@link JedisProvider} used by this repository.
+     *
+     * @return the Jedis provider, never {@code null}
+     */
+    public JedisProvider jedisProvider() {
+        return jedisProvider;
     }
 
     // -----------------------------------------------------------------------
@@ -140,7 +199,7 @@ public class FieldCategoryMappingRedisRepository {
             entityName,
             fieldName
         );
-        try (Pipeline pipeline = jedis.pipelined()) {
+        try (Pipeline pipeline = jedisProvider.get().pipelined()) {
             pipeline.sadd(fieldToCatKey(qf), categoryName);
             pipeline.sadd(catToFieldKey(categoryName), qf);
             pipeline.sync();
@@ -165,7 +224,7 @@ public class FieldCategoryMappingRedisRepository {
             entityName,
             fieldName
         );
-        try (Pipeline pipeline = jedis.pipelined()) {
+        try (Pipeline pipeline = jedisProvider.get().pipelined()) {
             pipeline.srem(fieldToCatKey(qf), categoryName);
             pipeline.srem(catToFieldKey(categoryName), qf);
             pipeline.sync();
@@ -191,7 +250,7 @@ public class FieldCategoryMappingRedisRepository {
             entityName,
             fieldName
         );
-        Set<String> result = jedis.smembers(fieldToCatKey(qf));
+        Set<String> result = jedisProvider.get().smembers(fieldToCatKey(qf));
         return result != null ? result : Collections.emptySet();
     }
 
@@ -208,7 +267,9 @@ public class FieldCategoryMappingRedisRepository {
      * @return the set of qualified field names, possibly empty
      */
     public Set<String> getFieldsForCategory(String categoryName) {
-        Set<String> result = jedis.smembers(catToFieldKey(categoryName));
+        Set<String> result = jedisProvider
+            .get()
+            .smembers(catToFieldKey(categoryName));
         return result != null ? result : Collections.emptySet();
     }
 
@@ -229,7 +290,7 @@ public class FieldCategoryMappingRedisRepository {
             entityName,
             fieldName
         );
-        return jedis.sismember(fieldToCatKey(qf), categoryName);
+        return jedisProvider.get().sismember(fieldToCatKey(qf), categoryName);
     }
 
     // -----------------------------------------------------------------------
@@ -251,6 +312,7 @@ public class FieldCategoryMappingRedisRepository {
             entityName,
             fieldName
         );
+        JedisPooled jedis = jedisProvider.get();
         Set<String> categories = jedis.smembers(fieldToCatKey(qf));
         if (categories == null || categories.isEmpty()) {
             return 0;
@@ -276,6 +338,7 @@ public class FieldCategoryMappingRedisRepository {
      * @return the number of fields that were unlinked
      */
     public int removeAllMappingsForCategory(String categoryName) {
+        JedisPooled jedis = jedisProvider.get();
         Set<String> qualifiedFields = jedis.smembers(
             catToFieldKey(categoryName)
         );

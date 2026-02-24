@@ -8,11 +8,10 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Manages the lifecycle of the bootstrap super-admin key.
@@ -79,7 +78,8 @@ public class BootstrapKeyLifecycleService {
     OperioConfig config;
 
     @Inject
-    PlatformAdminService<?> platformAdminService;
+    @SuppressWarnings("rawtypes")
+    PlatformAdminService platformAdminService;
 
     // -----------------------------------------------------------------------
     // Startup check
@@ -103,26 +103,26 @@ public class BootstrapKeyLifecycleService {
     void onStartup(@Observes StartupEvent event) {
         if (!isBootstrapKeyConfigured()) {
             LOG.info(
-                "Bootstrap key lifecycle: no bootstrap key configured — "
-                    + "bootstrap authentication is disabled"
+                "Bootstrap key lifecycle: no bootstrap key configured — " +
+                    "bootstrap authentication is disabled"
             );
             return;
         }
 
         if (isForceBootstrapEnabled()) {
             LOG.warn(
-                "Bootstrap key lifecycle: OPERIO_FORCE_BOOTSTRAP=true — "
-                    + "bootstrap key is FORCE-ENABLED. This overrides "
-                    + "auto-disable and should only be used for disaster "
-                    + "recovery. Remove this env var after re-establishing "
-                    + "real API keys."
+                "Bootstrap key lifecycle: OPERIO_FORCE_BOOTSTRAP=true — " +
+                    "bootstrap key is FORCE-ENABLED. This overrides " +
+                    "auto-disable and should only be used for disaster " +
+                    "recovery. Remove this env var after re-establishing " +
+                    "real API keys."
             );
         }
 
         if (platformAdminService == null) {
             LOG.debug(
-                "Bootstrap key lifecycle: PlatformAdminService not available "
-                    + "(embedded mode) — skipping startup API key check"
+                "Bootstrap key lifecycle: PlatformAdminService not available " +
+                    "(embedded mode) — skipping startup API key check"
             );
             return;
         }
@@ -133,17 +133,17 @@ public class BootstrapKeyLifecycleService {
 
             if (apiKeysExist) {
                 LOG.warn(
-                    "Bootstrap key lifecycle: OPERIO_BOOTSTRAP_KEY is still "
-                        + "set but real API keys already exist on the platform. "
-                        + "Remove the OPERIO_BOOTSTRAP_KEY environment variable "
-                        + "for production security. The bootstrap key has been "
-                        + "auto-disabled for this process."
+                    "Bootstrap key lifecycle: OPERIO_BOOTSTRAP_KEY is still " +
+                        "set but real API keys already exist on the platform. " +
+                        "Remove the OPERIO_BOOTSTRAP_KEY environment variable " +
+                        "for production security. The bootstrap key has been " +
+                        "auto-disabled for this process."
                 );
                 bootstrapConsumed.set(true);
             } else {
                 LOG.info(
-                    "Bootstrap key lifecycle: no existing API keys found — "
-                        + "bootstrap key is active for initial platform setup"
+                    "Bootstrap key lifecycle: no existing API keys found — " +
+                        "bootstrap key is active for initial platform setup"
                 );
             }
         } catch (Exception e) {
@@ -151,12 +151,15 @@ public class BootstrapKeyLifecycleService {
             // not yet migrated, connection issue). Log and leave the
             // bootstrap key in its default state (active).
             LOG.warn(
-                "Bootstrap key lifecycle: failed to check for existing API "
-                    + "keys during startup — bootstrap key remains in its "
-                    + "default state. Error: {}",
+                "Bootstrap key lifecycle: failed to check for existing API " +
+                    "keys during startup — bootstrap key remains in its " +
+                    "default state. Error: {}",
                 e.getMessage()
             );
-            LOG.debug("Bootstrap key lifecycle: startup check error details", e);
+            LOG.debug(
+                "Bootstrap key lifecycle: startup check error details",
+                e
+            );
         }
     }
 
@@ -260,24 +263,24 @@ public class BootstrapKeyLifecycleService {
         boolean wasActive = bootstrapConsumed.compareAndSet(false, true);
         if (wasActive) {
             LOG.info(
-                "Bootstrap key lifecycle: bootstrap key has been auto-disabled "
-                    + "after API key creation. Remove the OPERIO_BOOTSTRAP_KEY "
-                    + "environment variable and restart for clean production "
-                    + "security posture."
+                "Bootstrap key lifecycle: bootstrap key has been auto-disabled " +
+                    "after API key creation. Remove the OPERIO_BOOTSTRAP_KEY " +
+                    "environment variable and restart for clean production " +
+                    "security posture."
             );
 
             if (isForceBootstrapEnabled()) {
                 LOG.warn(
-                    "Bootstrap key lifecycle: OPERIO_FORCE_BOOTSTRAP=true is "
-                        + "set — the bootstrap key will continue to be "
-                        + "accepted despite auto-disable. Remove this env var "
-                        + "once platform setup is complete."
+                    "Bootstrap key lifecycle: OPERIO_FORCE_BOOTSTRAP=true is " +
+                        "set — the bootstrap key will continue to be " +
+                        "accepted despite auto-disable. Remove this env var " +
+                        "once platform setup is complete."
                 );
             }
         } else {
             LOG.debug(
-                "Bootstrap key lifecycle: markBootstrapConsumed() called "
-                    + "but key was already consumed — no state change"
+                "Bootstrap key lifecycle: markBootstrapConsumed() called " +
+                    "but key was already consumed — no state change"
             );
         }
     }
@@ -345,14 +348,13 @@ public class BootstrapKeyLifecycleService {
                 tenant.tenantId()
             );
             if (keys != null) {
-                boolean hasActiveKey = keys.stream()
-                    .anyMatch(key ->
-                        "ACTIVE".equalsIgnoreCase(key.status())
-                    );
+                boolean hasActiveKey = keys
+                    .stream()
+                    .anyMatch(key -> "ACTIVE".equalsIgnoreCase(key.status()));
                 if (hasActiveKey) {
                     LOG.debug(
-                        "Bootstrap key lifecycle: found active API key for "
-                            + "tenant '{}' — platform has been bootstrapped",
+                        "Bootstrap key lifecycle: found active API key for " +
+                            "tenant '{}' — platform has been bootstrapped",
                         tenant.tenantId()
                     );
                     return true;

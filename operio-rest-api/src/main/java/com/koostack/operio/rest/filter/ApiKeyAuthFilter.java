@@ -8,6 +8,7 @@ import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -112,9 +113,18 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /**
      * Operio configuration — used to read the bootstrap key from
      * {@code operio.super-admin.bootstrap-key}.
+     *
+     * <p>Injected as {@code Instance<OperioConfig>} (lazy) rather than
+     * directly because this filter is eagerly instantiated by RESTEasy
+     * Reactive during the Quarkus static-init deployment phase, before
+     * the runtime {@link io.smallrye.config.SmallRyeConfig} (which
+     * holds the {@code @ConfigMapping} registrations) has been built.
+     * Using {@code Instance} defers the actual config-mapping resolution
+     * to first access at request time, when the runtime config is
+     * available.
      */
     @Inject
-    OperioConfig config;
+    Instance<OperioConfig> configInstance;
 
     /**
      * Bootstrap key lifecycle service — manages the bootstrap key's
@@ -343,7 +353,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     @Deprecated
     @SuppressWarnings("unused")
     private boolean isBootstrapKey(String token) {
-        return config
+        return configInstance
+            .get()
             .superAdmin()
             .flatMap(OperioConfig.SuperAdminConfig::bootstrapKey)
             .filter(key -> !key.isBlank())

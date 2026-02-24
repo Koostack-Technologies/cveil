@@ -18,5 +18,5 @@ repositories {
 
 dependencies {
     // This allows your convention plugins to reference and apply the Lombok plugin
-    implementation("io.freefair.gradle:lombok-plugin:9.2.0")
+    implementation("io.freefair.gradle:lombok-plugin:8.11")
 }

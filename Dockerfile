@@ -9,8 +9,8 @@
 #      fast startup, and low memory footprint.
 #
 #   2. Gradle application distribution (fallback) — uses the standard
-#      Gradle `application` plugin's `installDist` task.  Works today with
-#      Gradle 9.x where the Quarkus Gradle plugin is not yet compatible.
+#      Gradle `application` plugin's `installDist` task.  Available as a
+#      fallback if the Quarkus plugin is unavailable.
 #
 # Build strategy is selected via the OPERIO_BUILD_STRATEGY build arg:
 #
@@ -28,7 +28,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:25-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 
 WORKDIR /app
 
@@ -98,7 +98,7 @@ RUN mkdir -p operio-rest-api/build/quarkus-app \
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:25-jre AS runtime
+FROM eclipse-temurin:21-jre AS runtime
 
 # -- Security: run as non-root ------------------------------------------------
 RUN groupadd --gid 1001 operio && \
@@ -117,30 +117,8 @@ COPY --from=build --chown=operio:operio /app/.build-type /app/.build-type
 
 # -- Entrypoint script --------------------------------------------------------
 # Selects the correct launch command based on which build output exists.
-RUN cat <<'LAUNCHER' > /app/entrypoint.sh
-#!/bin/sh
-set -e
-
-BUILD_TYPE=$(cat /app/.build-type 2>/dev/null || echo "unknown")
-
-if [ "$BUILD_TYPE" = "quarkus" ] && [ -f /app/quarkus-app/quarkus-run.jar ]; then
-    echo "Starting Operio REST API (Quarkus fast-jar)..."
-    exec java \
-        ${JAVA_OPTS:--XX:+UseZGC -XX:+ZGenerational -Xms128m -Xmx512m} \
-        --enable-preview \
-        -Djava.util.logging.manager=org.jboss.logmanager.LogManager \
-        -jar /app/quarkus-app/quarkus-run.jar \
-        "$@"
-elif [ "$BUILD_TYPE" = "dist" ] && [ -f /app/dist/bin/operio-rest-api ]; then
-    echo "Starting Operio REST API (application distribution)..."
-    export JAVA_OPTS="${JAVA_OPTS:--XX:+UseZGC -XX:+ZGenerational -Xms128m -Xmx512m --enable-preview}"
-    exec /app/dist/bin/operio-rest-api "$@"
-else
-    echo "ERROR: No runnable application found. Check the Docker build output." >&2
-    exit 1
-fi
-LAUNCHER
-chmod +x /app/entrypoint.sh
+COPY --chown=operio:operio entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # -- Labels -------------------------------------------------------------------
 LABEL org.opencontainers.image.title="Operio REST API" \
@@ -182,7 +160,7 @@ CMD []
 #
 # --- Dockerfile.native ---
 #
-# FROM ghcr.io/graalvm/native-image:25 AS build
+# FROM ghcr.io/graalvm/native-image:21 AS build
 # WORKDIR /app
 # COPY . .
 # RUN chmod +x gradlew && \

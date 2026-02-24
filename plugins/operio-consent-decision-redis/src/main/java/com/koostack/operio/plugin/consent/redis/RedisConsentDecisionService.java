@@ -6,6 +6,7 @@ import com.koostack.operio.core.Models.DecisionDetail;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.service.ConsentDecisionService;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,7 +69,7 @@ public class RedisConsentDecisionService
     /** Reason message for scopes denied because no consent record exists. */
     static final String REASON_NO_RECORD = "No consent record found";
 
-    private JedisPooled jedis;
+    private JedisProvider jedisProvider;
     private ConsentPolicyRedisRepository consentPolicyRepository;
     private FieldCategoryMappingRedisRepository fieldCategoryMappingRepository;
     private boolean configured;
@@ -94,10 +95,35 @@ public class RedisConsentDecisionService
 
     @Override
     public void configure(RedisConsentDecisionServiceConfig config) {
-        this.jedis = RedisContextFactory.createClient(config);
-        this.consentPolicyRepository = new ConsentPolicyRedisRepository(jedis);
+        JedisPooled client = RedisContextFactory.createClient(config);
+        configure(JedisProvider.shared(client));
+    }
+
+    /**
+     * Configures this service with a {@link JedisProvider} for per-tenant
+     * Redis connection resolution.
+     *
+     * <p>This is the recommended configuration path for multi-tenant
+     * deployments. Pass a
+     * {@link com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider}
+     * to enforce Redis-level ACL isolation per tenant — each tenant's
+     * Redis operations will authenticate as that tenant's dedicated ACL
+     * user, which is restricted to the tenant's key pattern by Redis
+     * itself (server-side enforcement, not just application-level key
+     * prefixing).
+     *
+     * @param provider the Jedis provider — must not be {@code null}
+     */
+    public void configure(JedisProvider provider) {
+        if (provider == null) {
+            throw new NullPointerException("JedisProvider must not be null");
+        }
+        this.jedisProvider = provider;
+        this.consentPolicyRepository = new ConsentPolicyRedisRepository(
+            provider
+        );
         this.fieldCategoryMappingRepository =
-            new FieldCategoryMappingRedisRepository(jedis);
+            new FieldCategoryMappingRedisRepository(provider);
         this.configured = true;
     }
 
@@ -214,17 +240,66 @@ public class RedisConsentDecisionService
     }
 
     /**
-     * Returns the underlying Jedis client.
+     * Returns the underlying {@link JedisProvider}.
+     *
+     * <p>Exposed so that callers can share the same provider (and its
+     * per-tenant connection cache) with other components that need
+     * tenant-scoped Redis access.
+     *
+     * @return the Jedis provider
+     * @throws IllegalStateException if not yet configured
+     */
+    public JedisProvider jedisProvider() {
+        ensureConfigured();
+        return jedisProvider;
+    }
+
+    /**
+     * Returns the underlying Jedis client for the current tenant context.
      *
      * <p>Exposed so that tests and administrative tooling can interact with
-     * Redis directly when needed.
+     * Redis directly when needed. In multi-tenant mode, this returns the
+     * per-tenant connection (authenticated as the tenant's ACL user).
      *
-     * @return the {@link JedisPooled} instance
+     * @return the {@link JedisPooled} instance for the current context
      * @throws IllegalStateException if not yet configured
      */
     public JedisPooled jedis() {
         ensureConfigured();
-        return jedis;
+        return jedisProvider.get();
+    }
+
+    /**
+     * Deletes all cached consent keys for a subject (GDPR Article 17 erasure).
+     *
+     * <p>Discovers all Redis keys matching the pattern {@code operio:consent:{subject}:*}
+     * and deletes them atomically. This is an idempotent operation — calling it
+     * multiple times for the same subject is safe (subsequent calls are no-ops if
+     * no keys exist).
+     *
+     * @param subject the data subject identifier (e.g. {@code "user_123"})
+     * @return the number of keys deleted
+     * @throws IllegalStateException if not yet configured
+     */
+    public long deleteAllCachedKeysForSubject(String subject) {
+        ensureConfigured();
+        return consentPolicyRepository.deleteAllCachedKeysForSubject(subject);
+    }
+
+    /**
+     * Counts the cached consent keys for a subject without deleting them.
+     *
+     * <p>Discovers all Redis keys matching the pattern {@code operio:consent:{subject}:*}
+     * and returns the count. This is useful for DSAR data export (GDPR Article 20 —
+     * data portability).
+     *
+     * @param subject the data subject identifier (e.g. {@code "user_123"})
+     * @return the number of cached keys for this subject
+     * @throws IllegalStateException if not yet configured
+     */
+    public long countCachedKeysForSubject(String subject) {
+        ensureConfigured();
+        return consentPolicyRepository.countCachedKeysForSubject(subject);
     }
 
     // -----------------------------------------------------------------------
@@ -263,11 +338,11 @@ public class RedisConsentDecisionService
      */
     @Override
     public boolean isReady() {
-        if (!configured || jedis == null) {
+        if (!configured || jedisProvider == null) {
             return false;
         }
         try {
-            return "PONG".equals(jedis.ping());
+            return "PONG".equals(jedisProvider.get().ping());
         } catch (Exception e) {
             return false;
         }

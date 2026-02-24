@@ -281,6 +281,24 @@ public class ConsentPolicyRepository {
     }
 
     /**
+     * Counts the number of consent policies for the given subject.
+     *
+     * <p>This is a lightweight {@code SELECT COUNT(*)} query — it does not
+     * fetch the full policy rows. Useful for populating DSAR deletion
+     * receipts before performing bulk erasure.
+     *
+     * @param subjectId the subject identifier
+     * @return the number of policies for the subject
+     */
+    public int countBySubject(String subjectId) {
+        return dsl
+            .selectCount()
+            .from(CONSENT_POLICY)
+            .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
+            .fetchOne(0, int.class);
+    }
+
+    /**
      * Returns every consent policy for the given subject scoped to the
      * specified purpose.
      *
