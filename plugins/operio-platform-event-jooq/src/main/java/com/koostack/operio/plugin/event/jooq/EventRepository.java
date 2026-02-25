@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Set;
 
 import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT;
@@ -58,6 +59,19 @@ public class EventRepository {
             .and(EVENT.AGGREGATE_ID.eq(aggregateId))
             .fetchOneInto(Long.class);
         return version != null ? version : 0L;
+    }
+
+    /**
+     * Fetches all stored change records (serialized JSON patches) for an
+     * aggregate in version order.
+     */
+    public List<String> fetchChangesForAggregate(String aggregateType, String aggregateId) {
+        return dsl.select(EVENT.CHANGES)
+            .from(EVENT)
+            .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
+            .and(EVENT.AGGREGATE_ID.eq(aggregateId))
+            .orderBy(EVENT.VERSION.asc())
+            .fetch(EVENT.CHANGES);
     }
 
     /**

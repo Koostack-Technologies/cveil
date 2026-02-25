@@ -1,11 +1,15 @@
 package com.koostack.operio.plugin.event.jooq;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.fge.jsonpatch.JsonPatch;
+import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PublishEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
+import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.jooq.common.JooqService;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
@@ -110,27 +114,49 @@ public class JooqPlatformEventService
     // -----------------------------------------------------------------------
 
     @Override
-    public void publish(PlatformEvent event) {
+    public <U extends AggregateRoot> void publish(PublishEventInput<U> input) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
         try {
-            if (!eventTypeCache.isValid(event.eventType())) {
+            if (!eventTypeCache.isValid(input.eventType())) {
                 throw new OperioServiceException(
-                    "Unknown event type: " + event.eventType()
+                    "Unknown event type: " + input.eventType()
                 );
             }
-            String serializedChanges = event.changes() != null
-                ? objectMapper.writeValueAsString(event.changes())
-                : null;
+
+            U state = input.state();
+            String aggregateType = state.aggregateType();
+            String aggregateId = state.aggregateId().toString();
+
+            JsonNode currentState = hydrateAggregate(aggregateType, aggregateId);
+            JsonNode updatedNode = objectMapper.valueToTree(state);
+            JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
+
+            Long version = eventRepository.getAggregateVersion(aggregateType, aggregateId) + 1;
+            PlatformEvent event = new PlatformEvent(
+                null,
+                input.tenantId(),
+                state.aggregateId(),
+                aggregateType,
+                input.eventType(),
+                java.time.Instant.now(),
+                version,
+                diff
+            );
+
+            String serializedChanges = objectMapper.writeValueAsString(diff);
             long eventId = eventRepository.insert(event, serializedChanges);
             log.debug(
                 "Published event {} for {}/{}",
-                eventId, event.aggregateType(), event.aggregateId()
+                eventId, aggregateType, aggregateId
             );
+        } catch (OperioServiceException e) {
+            throw e;
         } catch (Exception e) {
             throw new OperioServiceException(
-                "Failed to publish event for " + event.aggregateType() + "/" + event.aggregateId(),
+                "Failed to publish event for " + input.state().aggregateType()
+                    + "/" + input.state().aggregateId(),
                 e
             );
         }
@@ -145,12 +171,42 @@ public class JooqPlatformEventService
     }
 
     @Override
+    public <U> U getAggregate(String aggregateType, String aggregateId, Class<U> type) {
+        if (dslContext == null) {
+            throw new OperioServiceException("JooqPlatformEventService is not configured");
+        }
+        try {
+            JsonNode state = hydrateAggregate(aggregateType, aggregateId);
+            return objectMapper.treeToValue(state, type);
+        } catch (Exception e) {
+            throw new OperioServiceException(
+                "Failed to hydrate aggregate " + aggregateType + "/" + aggregateId, e);
+        }
+    }
+
+    @Override
     public <U> void registerEventType(RegisterEventTypeInput<U> input) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
         eventRepository.insertEventType(input);
         eventTypeCache.refresh();
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal
+    // -----------------------------------------------------------------------
+
+    private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
+            throws Exception {
+        JsonNode state = objectMapper.createObjectNode();
+        for (String raw : eventRepository.fetchChangesForAggregate(aggregateType, aggregateId)) {
+            if (raw != null) {
+                JsonPatch patch = objectMapper.readValue(raw, JsonPatch.class);
+                state = patch.apply(state);
+            }
+        }
+        return state;
     }
 
     // -----------------------------------------------------------------------

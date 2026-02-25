@@ -1,7 +1,9 @@
 package com.koostack.operio.core.event;
 
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PublishEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
+import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.spi.Plugin;
 
 public interface PlatformEventService<T> extends Plugin<T> {
@@ -9,14 +11,15 @@ public interface PlatformEventService<T> extends Plugin<T> {
     /**
      * Publish an event to the platform event bus.
      *
-     * <p>Events are stored in a durable log and delivered asynchronously to
-     * all subscribed {@link PlatformEventService} implementations.
+     * <p>The current aggregate state is hydrated by replaying stored patches,
+     * diffed against the provided updated state, and the resulting JSON Patch
+     * is persisted as a new event.
      *
-     * @param event the event to publish
+     * @param input the publish input carrying tenant id, event type, and updated state
      * @throws com.koostack.operio.core.exception.OperioServiceException
      *         if publishing fails (e.g. database error)
      */
-    void publish(PlatformEvent event);
+    <U extends AggregateRoot> void publish(PublishEventInput<U> input);
 
     /**
      * Retrieve the current version number for a given aggregate.
@@ -30,6 +33,17 @@ public interface PlatformEventService<T> extends Plugin<T> {
      *         aggregate
      */
     Long getAggregateVersion(String aggregateType, String aggregateId);
+
+    /**
+     * Hydrate the current state of an aggregate by replaying all stored
+     * change patches, returning the result as a typed object.
+     *
+     * @param aggregateType the type of the aggregate
+     * @param aggregateId   the unique identifier of the aggregate
+     * @param type          the class to deserialize the hydrated state into
+     * @return the hydrated aggregate, or an empty instance if no events exist
+     */
+    <U> U getAggregate(String aggregateType, String aggregateId, Class<U> type);
 
     <U> void registerEventType(RegisterEventTypeInput<U> input);
 
