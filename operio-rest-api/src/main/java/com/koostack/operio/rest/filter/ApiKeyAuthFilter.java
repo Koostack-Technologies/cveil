@@ -19,6 +19,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
 import java.security.Principal;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -246,6 +247,24 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
+        // 4c. Check config-based API keys (dev/test convenience)
+        IdentityContext configIdentity = resolveConfigApiKey(token);
+        if (configIdentity != null) {
+            LOG.debug(
+                "Config-based API key authentication — subject={}, tenant={}, roles={}",
+                configIdentity.subject(),
+                configIdentity.tenantId(),
+                configIdentity.roles()
+            );
+            applyAuthentication(
+                ctx,
+                configIdentity,
+                resolveRemoteAddress(ctx),
+                ctx.getHeaderString("User-Agent")
+            );
+            return;
+        }
+
         // 5. Verify via TokenVerifier (API key hash lookup)
         TokenVerifier<?> tokenVerifier = operio.tokenVerifier();
         if (tokenVerifier == null) {
@@ -290,6 +309,50 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Resolves a config-based API key from {@code operio.api-keys.*}.
+     *
+     * <p>Parses the comma-separated value string to extract roles
+     * ({@code role:X}) and tenant binding ({@code tenant:X}).
+     *
+     * @param token the bearer token to look up
+     * @return the resolved identity, or {@code null} if not a config key
+     */
+    private IdentityContext resolveConfigApiKey(String token) {
+        OperioConfig config = configInstance.get();
+        Map<String, String> apiKeys = config.apiKeys();
+        if (apiKeys == null || apiKeys.isEmpty()) {
+            return null;
+        }
+
+        String spec = apiKeys.get(token);
+        if (spec == null) {
+            return null;
+        }
+
+        Set<String> roles = new HashSet<>();
+        String tenantId = null;
+
+        for (String directive : spec.split(",")) {
+            String trimmed = directive.trim();
+            if (trimmed.startsWith("role:")) {
+                roles.add(trimmed.substring("role:".length()));
+            } else if (trimmed.startsWith("tenant:")) {
+                tenantId = trimmed.substring("tenant:".length());
+            }
+        }
+
+        return new IdentityContext(
+            "config-api-key:" + token,
+            token,
+            null,
+            roles,
+            Map.of(),
+            tenantId,
+            "config-api-key"
+        );
+    }
 
     /**
      * Applies the authenticated identity to the request context:

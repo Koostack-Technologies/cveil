@@ -8,9 +8,11 @@ import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.filter.ApiKeyAuthFilter;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
+import jakarta.enterprise.inject.Instance;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -76,6 +78,13 @@ class ApiKeyAuthFilterTest {
     @Mock
     private ContainerRequestContext requestContext;
 
+    @SuppressWarnings("unchecked")
+    @Mock
+    private Instance<OperioConfig> configInstance;
+
+    @Mock
+    private OperioConfig operioConfig;
+
     @Mock
     private UriInfo uriInfo;
 
@@ -96,6 +105,11 @@ class ApiKeyAuthFilterTest {
         injectField(filter, "operio", operio);
         injectField(filter, "bootstrapLifecycle", bootstrapLifecycle);
         injectField(filter, "requestHolder", requestHolder);
+        injectField(filter, "configInstance", configInstance);
+
+        // Config-based API key lookup returns empty map by default
+        lenient().when(configInstance.get()).thenReturn(operioConfig);
+        lenient().when(operioConfig.apiKeys()).thenReturn(Map.of());
     }
 
     /**

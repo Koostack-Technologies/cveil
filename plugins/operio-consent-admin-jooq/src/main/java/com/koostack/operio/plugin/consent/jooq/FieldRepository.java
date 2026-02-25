@@ -120,19 +120,43 @@ public class FieldRepository {
     public void upsertByNameAndEntity(String fieldName, Long entityId, String description, String actor) {
         LocalDateTime now = LocalDateTime.now();
 
-        dsl.insertInto(FIELD)
-           .set(FIELD.FIELD_NAME, fieldName)
-           .set(FIELD.ENTITY_ID, entityId)
-           .set(FIELD.DESCRIPTION, description)
-           .set(FIELD.CREATED_AT, now)
-           .set(FIELD.CREATED_BY, actor)
-           .set(FIELD.UPDATED_AT, now)
-           .set(FIELD.UPDATED_BY, actor)
-           .onConflict(FIELD.FIELD_NAME, FIELD.ENTITY_ID)
-           .doUpdate()
-           .set(FIELD.DESCRIPTION, description)
-           .set(FIELD.UPDATED_AT, now)
-           .set(FIELD.UPDATED_BY, actor)
-           .execute();
+        if (entityId == null) {
+            // PostgreSQL unique constraints treat NULL != NULL, so
+            // ON CONFLICT(field_name, entity_id) never fires when
+            // entity_id is NULL. Use UPDATE-or-INSERT instead.
+            int updated = dsl.update(FIELD)
+               .set(FIELD.DESCRIPTION, description)
+               .set(FIELD.UPDATED_AT, now)
+               .set(FIELD.UPDATED_BY, actor)
+               .where(FIELD.FIELD_NAME.eq(fieldName))
+               .and(FIELD.ENTITY_ID.isNull())
+               .execute();
+            if (updated == 0) {
+                dsl.insertInto(FIELD)
+                   .set(FIELD.FIELD_NAME, fieldName)
+                   .set(FIELD.ENTITY_ID, (Long) null)
+                   .set(FIELD.DESCRIPTION, description)
+                   .set(FIELD.CREATED_AT, now)
+                   .set(FIELD.CREATED_BY, actor)
+                   .set(FIELD.UPDATED_AT, now)
+                   .set(FIELD.UPDATED_BY, actor)
+                   .execute();
+            }
+        } else {
+            dsl.insertInto(FIELD)
+               .set(FIELD.FIELD_NAME, fieldName)
+               .set(FIELD.ENTITY_ID, entityId)
+               .set(FIELD.DESCRIPTION, description)
+               .set(FIELD.CREATED_AT, now)
+               .set(FIELD.CREATED_BY, actor)
+               .set(FIELD.UPDATED_AT, now)
+               .set(FIELD.UPDATED_BY, actor)
+               .onConflict(FIELD.FIELD_NAME, FIELD.ENTITY_ID)
+               .doUpdate()
+               .set(FIELD.DESCRIPTION, description)
+               .set(FIELD.UPDATED_AT, now)
+               .set(FIELD.UPDATED_BY, actor)
+               .execute();
+        }
     }
 }

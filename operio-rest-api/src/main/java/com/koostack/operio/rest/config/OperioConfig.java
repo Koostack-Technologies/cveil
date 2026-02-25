@@ -3,6 +3,8 @@ package com.koostack.operio.rest.config;
 import com.koostack.operio.core.models.TenantContext;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
+import io.smallrye.config.WithName;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -171,6 +173,32 @@ public interface OperioConfig {
      * @return the multi-tenant config, or empty
      */
     Optional<MultiTenantConfig> multiTenant();
+
+    /**
+     * Config-based API keys for development and testing.
+     *
+     * <p>Maps key names to role/tenant specifications. The key name is used
+     * as the Bearer token value. The value is a comma-separated list of
+     * directives:
+     * <ul>
+     *   <li>{@code role:<name>} — grants the specified role</li>
+     *   <li>{@code tenant:<id>} — binds the key to the specified tenant</li>
+     * </ul>
+     *
+     * <p>Example configuration:
+     * <pre>{@code
+     * operio:
+     *   api-keys:
+     *     my-dev-key: "role:consent:read,role:consent:write,tenant:acme"
+     * }</pre>
+     *
+     * <p>In production, use database-stored API keys created via the
+     * platform admin API instead.
+     *
+     * @return config-based API keys map (empty if none configured)
+     */
+    @WithName("api-keys")
+    Map<String, String> apiKeys();
 
     // -------------------------------------------------------------------
     // Nested configuration interfaces

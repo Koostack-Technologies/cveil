@@ -13,7 +13,10 @@ import io.restassured.http.ContentType;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
@@ -66,6 +69,7 @@ import org.testcontainers.utility.DockerImageName;
  */
 @QuarkusTest
 @WithTestResource(DsarTenantIsolationIT.TenantIsolationResourceManager.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("DSAR Tenant Isolation (Task 1.4)")
 class DsarTenantIsolationIT {
 
@@ -91,6 +95,29 @@ class DsarTenantIsolationIT {
     private static final String KEY_NO_TENANT = "test-key-no-tenant";
 
     private static final String SUBJECT = "user_isolation_test";
+
+    private static final String BOOTSTRAP_KEY =
+        "test-bootstrap-key-for-integration-tests";
+
+    @Test
+    @Order(0)
+    @DisplayName("Setup: provision tenants")
+    void provisionTenants() {
+        for (String tenantId : new String[] { "tenant_a", "tenant_b" }) {
+            given()
+                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                    "tenantId", tenantId,
+                    "displayName", tenantId,
+                    "plan", "free"
+                ))
+                .when()
+                .post("/api/v1/platform/tenants")
+                .then()
+                .statusCode(201);
+        }
+    }
 
     // ===================================================================
     // Resource manager
@@ -210,6 +237,7 @@ class DsarTenantIsolationIT {
      * cross-tenant leakage).
      */
     @Test
+    @Order(1)
     @DisplayName("Export in tenant A should not return data from tenant B")
     void testExportTenantIsolation() {
         String subject = "export_isolation_1";
@@ -239,6 +267,7 @@ class DsarTenantIsolationIT {
      * tenant A. Verify that tenant B's data is still intact.
      */
     @Test
+    @Order(2)
     @DisplayName("Delete in tenant A should not affect tenant B data")
     void testDeleteTenantIsolation() {
         String subject = "delete_isolation_1";
@@ -278,6 +307,7 @@ class DsarTenantIsolationIT {
      * in tenant A's schema — no cross-tenant audit leakage.
      */
     @Test
+    @Order(3)
     @DisplayName("DSAR audit log entries should be per-tenant")
     void testDsarAuditPerTenant() {
         String subject = "audit_isolation_1";
@@ -312,6 +342,7 @@ class DsarTenantIsolationIT {
      * {@code operio.multi-tenant.enabled=true}.
      */
     @Test
+    @Order(4)
     @DisplayName(
         "Export without tenant context should return 403 when multi-tenant enabled"
     )
@@ -341,6 +372,7 @@ class DsarTenantIsolationIT {
      * {@code operio.multi-tenant.enabled=true}.
      */
     @Test
+    @Order(5)
     @DisplayName(
         "Delete without tenant context should return 403 when multi-tenant enabled"
     )
@@ -420,6 +452,7 @@ class DsarTenantIsolationIT {
         String purposeName
     ) {
         Map<String, Object> scope = new HashMap<>();
+        scope.put("category", "PII");
         if (fieldName != null) {
             scope.put("fieldName", fieldName);
         }

@@ -194,7 +194,11 @@ public final class JooqContextFactory {
         if (dialect == SQLDialect.H2) {
             return new Settings().withRenderSchema(false);
         }
-        return new Settings().withRenderNameCase(RenderNameCase.LOWER);
+        // Disable schema qualification so that SET search_path controls
+        // which schema is used (required for multi-tenant routing).
+        return new Settings()
+            .withRenderNameCase(RenderNameCase.LOWER)
+            .withRenderSchema(false);
     }
 
     /**
