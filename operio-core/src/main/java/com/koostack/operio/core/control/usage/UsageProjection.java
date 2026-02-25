@@ -1,0 +1,4 @@
+package com.koostack.operio.core.control.usage;
+
+public interface UsageProjection {
+}
