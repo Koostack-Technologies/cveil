@@ -2,9 +2,8 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.fge.jsonpatch.JsonPatchException;
-import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.platform.event.models.PlatformEvent;
 
 import java.util.List;
 

@@ -1,6 +1,5 @@
 package com.koostack.operio.core.event;
 
-import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;

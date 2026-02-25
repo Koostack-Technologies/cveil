@@ -6,7 +6,7 @@ import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
-import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.platform.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;

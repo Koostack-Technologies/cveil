@@ -2,9 +2,8 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
-import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.platform.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
-import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
