@@ -87,6 +87,17 @@ public class SnapshotWorker {
     private void processSnapshot(AggregateSnapshotTrigger trigger) {
         AggregateKey key = trigger.aggregateKey();
         try {
+            var existing = eventRepository.fetchLatestSnapshot(
+                key.aggregateType(), key.aggregateId().toString(), key.tenantId().toString()
+            );
+            if (existing.isPresent() && existing.get().version() >= trigger.targetVersion()) {
+                log.debug(
+                    "Snapshot already exists at version {} for {}/{}, skipping",
+                    existing.get().version(), key.aggregateType(), key.aggregateId()
+                );
+                return;
+            }
+
             log.info(
                 "Processing snapshot for {}/{} at version {}",
                 key.aggregateType(), key.aggregateId(), trigger.targetVersion()

@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -32,31 +31,6 @@ public class RedisEventPublisher {
     public RedisEventPublisher(JedisProvider jedisProvider, String appName) {
         this.jedisProvider = jedisProvider;
         this.streamKey = appName + ":platform-events";
-    }
-
-    /**
-     * Publishes an event to the Redis Stream.
-     *
-     * @param event             the platform event
-     * @param eventId           the database-assigned event id
-     * @param serializedChanges the serialized changes string
-     */
-    public <T> void publish(PlatformEvent event, long eventId, String serializedChanges) {
-        try {
-            Map<String, String> fields = new HashMap<>();
-            fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(eventId));
-            fields.put(PlatformEvent.FIELD_TENANT_ID, event.tenantId() != null ? event.tenantId().toString() : "");
-            fields.put(PlatformEvent.FIELD_AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "");
-            fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, event.aggregateType());
-            fields.put(PlatformEvent.FIELD_EVENT_TYPE, event.eventType());
-            fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(event.version()));
-            if (serializedChanges != null) {
-                fields.put(PlatformEvent.FIELD_CHANGES, serializedChanges);
-            }
-            publishRaw(fields);
-        } catch (Exception e) {
-            log.warn("Failed to publish event {} to Redis stream — event is persisted in DB", eventId, e);
-        }
     }
 
     /**

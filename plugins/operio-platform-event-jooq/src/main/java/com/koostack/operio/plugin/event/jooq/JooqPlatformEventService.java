@@ -21,6 +21,7 @@ import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.conf.RenderNameCase;
 import org.jooq.conf.Settings;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -165,6 +166,13 @@ public class JooqPlatformEventService
             );
         } catch (OperioServiceException e) {
             throw e;
+        } catch (DataAccessException e) {
+            throw new OperioServiceException(
+                "Concurrent modification conflict for "
+                    + input.state().aggregateType() + "/" + input.state().aggregateId()
+                    + " — retry the operation",
+                e
+            );
         } catch (Exception e) {
             throw new OperioServiceException(
                 "Failed to publish event for " + input.state().aggregateType()
