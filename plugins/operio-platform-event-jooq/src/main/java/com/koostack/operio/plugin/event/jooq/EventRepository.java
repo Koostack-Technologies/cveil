@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
+import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +41,6 @@ public class EventRepository {
      */
     public <T> long insert(PlatformEvent event, String serializedChanges) {
         return dsl.insertInto(EVENT)
-            .set(EVENT.TENANT_ID, event.tenantId() != null ? event.tenantId() : "")
             .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
             .set(EVENT.AGGREGATE_TYPE, event.aggregateType())
             .set(EVENT.EVENT_TYPE, event.eventType())
@@ -68,76 +69,35 @@ public class EventRepository {
     }
 
     /**
-     * Fetches all events for an aggregate scoped by tenant, ordered by version.
+     * Fetches all events for an aggregate, ordered by version.
      */
-    public List<PlatformEvent> fetchChangesForAggregate(String aggregateType, String aggregateId, String tenantId) {
+    public List<PlatformEvent> fetchChangesForAggregate(String aggregateType, String aggregateId) {
         return dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
             .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-            .and(EVENT.TENANT_ID.eq(tenantId))
             .orderBy(EVENT.VERSION.asc())
-            .fetch(record -> {
-                JsonPatch changes = null;
-                try {
-                    if (record.getChanges() != null) {
-                        changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
-                }
-                return new PlatformEvent(
-                    record.getEventId(),
-                    record.getTenantId(),
-                    record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
-                    record.getAggregateType(),
-                    record.getEventType(),
-                    record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
-                    record.getVersion(),
-                    changes
-                );
-            });
+            .fetch(this::toPlatformEvent);
     }
 
     /**
      * Fetches events for an aggregate up to and including the given version.
      */
-    public List<PlatformEvent> fetchChangesUpToVersion(String aggregateType, String aggregateId, String tenantId, Long version) {
+    public List<PlatformEvent> fetchChangesUpToVersion(String aggregateType, String aggregateId, Long version) {
         return dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
             .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-            .and(EVENT.TENANT_ID.eq(tenantId))
             .and(EVENT.VERSION.le(version))
             .orderBy(EVENT.VERSION.asc())
-            .fetch(record -> {
-                JsonPatch changes = null;
-                try {
-                    if (record.getChanges() != null) {
-                        changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
-                }
-                return new PlatformEvent(
-                    record.getEventId(),
-                    record.getTenantId(),
-                    record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
-                    record.getAggregateType(),
-                    record.getEventType(),
-                    record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
-                    record.getVersion(),
-                    changes
-                );
-            });
+            .fetch(this::toPlatformEvent);
     }
 
     /**
      * Persists an aggregate snapshot (upsert — replaces existing snapshot at same key).
      */
-    public void insertSnapshot(String aggregateType, String aggregateId, String tenantId, Long version, String serializedSnapshot) {
+    public void insertSnapshot(String aggregateType, String aggregateId, Long version, String serializedSnapshot) {
         dsl.insertInto(AGGREGATE_SNAPSHOT)
             .set(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE, aggregateType)
             .set(AGGREGATE_SNAPSHOT.AGGREGATE_ID, aggregateId)
-            .set(AGGREGATE_SNAPSHOT.TENANT_ID, tenantId)
             .set(AGGREGATE_SNAPSHOT.VERSION, version)
             .set(AGGREGATE_SNAPSHOT.SNAPSHOT, serializedSnapshot)
             .onConflictDoNothing()
@@ -148,12 +108,11 @@ public class EventRepository {
      * Fetches the latest snapshot for an aggregate, returning the version and
      * serialized state. Empty if no snapshot exists.
      */
-    public Optional<SnapshotRecord> fetchLatestSnapshot(String aggregateType, String aggregateId, String tenantId) {
+    public Optional<SnapshotRecord> fetchLatestSnapshot(String aggregateType, String aggregateId) {
         return dsl.select(AGGREGATE_SNAPSHOT.VERSION, AGGREGATE_SNAPSHOT.SNAPSHOT)
             .from(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(aggregateType))
             .and(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId))
-            .and(AGGREGATE_SNAPSHOT.TENANT_ID.eq(tenantId))
             .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
             .limit(1)
             .fetchOptional(record -> new SnapshotRecord(
@@ -165,33 +124,13 @@ public class EventRepository {
     /**
      * Fetches events for an aggregate after a given version, ordered by version ascending.
      */
-    public List<PlatformEvent> fetchChangesAfterVersion(String aggregateType, String aggregateId, String tenantId, Long version) {
+    public List<PlatformEvent> fetchChangesAfterVersion(String aggregateType, String aggregateId, Long version) {
         return dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
             .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-            .and(EVENT.TENANT_ID.eq(tenantId))
             .and(EVENT.VERSION.gt(version))
             .orderBy(EVENT.VERSION.asc())
-            .fetch(record -> {
-                JsonPatch changes = null;
-                try {
-                    if (record.getChanges() != null) {
-                        changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
-                }
-                return new PlatformEvent(
-                    record.getEventId(),
-                    record.getTenantId(),
-                    record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
-                    record.getAggregateType(),
-                    record.getEventType(),
-                    record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
-                    record.getVersion(),
-                    changes
-                );
-            });
+            .fetch(this::toPlatformEvent);
     }
 
     /**
@@ -216,4 +155,25 @@ public class EventRepository {
     }
 
     public record SnapshotRecord(Long version, String snapshot) {}
+
+    private PlatformEvent toPlatformEvent(EventRecord record) {
+        JsonPatch changes = null;
+        try {
+            if (record.getChanges() != null) {
+                changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
+        }
+        return new PlatformEvent(
+            record.getEventId(),
+            TenantContext.get(),
+            record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
+            record.getAggregateType(),
+            record.getEventType(),
+            record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
+            record.getVersion(),
+            changes
+        );
+    }
 }

@@ -85,16 +85,32 @@ public class JooqPlatformEventService
         this.eventTypeCache = new EventTypeCache(eventRepository);
 
         if (config.redis() != null) {
-            JedisProvider jedisProvider = RedisContextFactory.createSharedProvider(config.redis());
+            if (config.tenantCredentialLookup() == null) {
+                throw new IllegalStateException(
+                    "Redis is enabled but no TenantCredentialLookup was provided. " +
+                    "A tenant credential lookup is required for per-tenant Redis ACL isolation."
+                );
+            }
+            if (config.tenantDiscovery() == null) {
+                throw new IllegalStateException(
+                    "Redis is enabled but no tenantDiscovery supplier was provided. " +
+                    "A tenant discovery supplier is required so the outbox poller can " +
+                    "iterate per-tenant schemas."
+                );
+            }
+            JedisProvider jedisProvider = RedisContextFactory.createProvider(
+                config.redis(), config.tenantCredentialLookup()
+            );
             this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio");
-            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher);
+            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, config.tenantDiscovery());
             this.outboxPoller.start(2);
         }
 
         log.info(
-            "JooqPlatformEventService configured (dialect={}, redis={})",
+            "JooqPlatformEventService configured (dialect={}, redis={}, tenantAcl={})",
             config.dialect(),
-            config.redis() != null ? "enabled" : "disabled"
+            config.redis() != null ? "enabled" : "disabled",
+            config.tenantCredentialLookup() != null ? "enabled" : "disabled"
         );
 
         this.snapshotWorker = new SnapshotWorker(snapshotQueue, eventRepository);
@@ -115,6 +131,7 @@ public class JooqPlatformEventService
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
+        // todo look into this pattern of wrapping the entire method in TenantContext.runWhere — is it better to do this at a higher level (e.g. in a service layer) so that the context is available for the entire operation, including any repository calls? Or is it better to do it here to ensure that all operations are properly scoped, even if the caller forgets to set the context?
         TenantContext.runWhere(input.tenantId(), () -> {
             try {
                 if (!eventTypeCache.isValid(input.eventType())) {
@@ -127,7 +144,7 @@ public class JooqPlatformEventService
                 String aggregateType = state.aggregateType();
                 String aggregateId = state.aggregateId().toString();
 
-                JsonNode currentState = hydrateAggregate(aggregateType, aggregateId, input.tenantId());
+                JsonNode currentState = hydrateAggregate(aggregateType, aggregateId);
                 JsonNode updatedNode = objectMapper.valueToTree(state);
                 JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
 
@@ -192,7 +209,7 @@ public class JooqPlatformEventService
         }
         try {
             return TenantContext.callWhere(key.tenantId(), () -> {
-                JsonNode state = hydrateAggregate(key.aggregateType(), key.aggregateId().toString(), key.tenantId());
+                JsonNode state = hydrateAggregate(key.aggregateType(), key.aggregateId().toString());
                 return objectMapper.treeToValue(state, type);
             });
         } catch (OperioServiceException e) {
@@ -216,27 +233,27 @@ public class JooqPlatformEventService
     // Internal
     // -----------------------------------------------------------------------
 
-    private JsonNode hydrateAggregate(String aggregateType, String aggregateId, String tenantId)
+    private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
             throws Exception {
         JsonNode state;
         List<PlatformEvent> events;
 
-        var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId, tenantId);
+        var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
         if (snapshot.isPresent()) {
             JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
             events = eventRepository.fetchChangesAfterVersion(
-                aggregateType, aggregateId, tenantId, snapshot.get().version()
+                aggregateType, aggregateId, snapshot.get().version()
             );
             state = AggregateHydrationUtil.hydrate(baseState, events);
         } else {
-            events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId, tenantId);
+            events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
             state = AggregateHydrationUtil.hydrate(events);
         }
 
         int depth = events.size();
         if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
             AggregateKey key = new AggregateKey(
-                UUID.fromString(aggregateId), aggregateType, tenantId
+                UUID.fromString(aggregateId), aggregateType, TenantContext.get()
             );
             long targetVersion = events.getLast().version();
             snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));

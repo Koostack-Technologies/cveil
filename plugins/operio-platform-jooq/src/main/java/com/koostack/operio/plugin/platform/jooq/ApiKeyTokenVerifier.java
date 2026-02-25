@@ -11,8 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * API key bearer token verifier — the auth filter hot path.
@@ -191,7 +193,10 @@ public class ApiKeyTokenVerifier implements TokenVerifier<PlatformJooqConfig> {
         // Parse roles from comma-separated string
         Set<String> roles;
         if (apiKey.getRoles() != null && !apiKey.getRoles().isBlank()) {
-            roles = Set.of(apiKey.getRoles().split(","));
+            roles = Arrays.stream(apiKey.getRoles().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
         } else {
             roles = Set.of();
         }

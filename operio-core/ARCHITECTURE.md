@@ -1,0 +1,5 @@
+we are going to be doing some refactoring of the @operio-core project. This is what i want done:
+
+1) we are splitting the organization by data spi and control spi as in data plane and control plane. The data plane is the tenant space, and the control plane is the platform management space.
+so, break the code into two separate packages, one for the data plane and one for the control plane. The data plane package will contain all the code related to tenant management, while the control plane package will contain all the code related to platform management.
+2) For the control plane there will be 4 domains platform_security, platform_tenant, platform_billing, platform_usage each of these domains will have a QueryService interface, CommandService interface, and Projection interface. those names will be prefixed with the domain name miuns platform. C

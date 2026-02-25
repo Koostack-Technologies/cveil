@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.event.jooq;
 
+import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.conf.RenderNameCase;
@@ -11,6 +12,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+
+import java.util.List;
 
 /**
  * Base test class that provides PostgreSQL and Redis containers for
@@ -39,12 +42,20 @@ abstract class PlatformEventServiceTestBase {
 
     @BeforeAll
     static void configureService() {
+        // Provide a noop credential lookup — the test Redis container has no
+        // ACL users, so the TenantAwareJedisProvider falls back to the admin
+        // pool (default user) when no TenantContext is active.
+        TenantAwareJedisProvider.TenantCredentialLookup noopLookup =
+            tenantId -> null;
+
         PlatformEventJooqConfig config = new PlatformEventJooqConfig(
             postgres.getJdbcUrl(),
             "POSTGRES",
             postgres.getUsername(),
             postgres.getPassword(),
-            new TestRedisConfig(redis.getHost(), redis.getMappedPort(6379), null)
+            new TestRedisConfig(redis.getHost(), redis.getMappedPort(6379), null),
+            noopLookup,
+            List::of
         );
 
         service = new JooqPlatformEventService();

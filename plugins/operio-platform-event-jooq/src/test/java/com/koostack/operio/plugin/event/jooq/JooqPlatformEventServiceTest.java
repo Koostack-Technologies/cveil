@@ -38,7 +38,6 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
         EventRecord record = dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .and(EVENT.TENANT_ID.eq(tenantId))
             .fetchOne();
 
         assertNotNull(record);
@@ -88,7 +87,6 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
             .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq("snap-aggregate"))
-            .and(AGGREGATE_SNAPSHOT.TENANT_ID.eq(tenantId))
             .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
             .limit(1)
             .fetchOne();

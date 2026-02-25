@@ -2,7 +2,6 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.models.TenantContext;
-import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +14,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT;
-import static org.jooq.impl.DSL.selectDistinct;
 
 /**
  * Polls the {@code event} table for unpublished rows and forwards them to
@@ -25,10 +24,11 @@ import static org.jooq.impl.DSL.selectDistinct;
  * {@code publish} call only writes to the database; this poller
  * asynchronously relays events to Redis in the background.
  *
- * <p>Work is parallelised by {@code tenant_id}: a scheduler discovers
- * tenants with unpublished events and fans each tenant out to a worker
- * thread.  Within a tenant, events are published in {@code event_id}
- * order to preserve causal ordering.
+ * <p>Each poll cycle discovers active tenants via the provided
+ * {@code tenantDiscovery} supplier, then processes each tenant's outbox
+ * within a {@link TenantContext} scope so that the tenant-aware
+ * {@link DSLContext} routes queries to the correct per-tenant schema and
+ * the tenant-aware Redis provider authenticates as the correct ACL user.
  */
 public class OutboxPoller {
 
@@ -39,6 +39,7 @@ public class OutboxPoller {
 
     private final DSLContext dsl;
     private final RedisEventPublisher redisPublisher;
+    private final Supplier<List<String>> tenantDiscovery;
     private final int batchSize;
     private final long pollIntervalMs;
 
@@ -46,18 +47,21 @@ public class OutboxPoller {
     private ExecutorService workers;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public OutboxPoller(DSLContext dsl, RedisEventPublisher redisPublisher) {
-        this(dsl, redisPublisher, DEFAULT_BATCH_SIZE, DEFAULT_POLL_INTERVAL_MS);
+    public OutboxPoller(DSLContext dsl, RedisEventPublisher redisPublisher,
+                        Supplier<List<String>> tenantDiscovery) {
+        this(dsl, redisPublisher, tenantDiscovery, DEFAULT_BATCH_SIZE, DEFAULT_POLL_INTERVAL_MS);
     }
 
     public OutboxPoller(
         DSLContext dsl,
         RedisEventPublisher redisPublisher,
+        Supplier<List<String>> tenantDiscovery,
         int batchSize,
         long pollIntervalMs
     ) {
         this.dsl = dsl;
         this.redisPublisher = redisPublisher;
+        this.tenantDiscovery = tenantDiscovery;
         this.batchSize = batchSize;
         this.pollIntervalMs = pollIntervalMs;
     }
@@ -109,19 +113,17 @@ public class OutboxPoller {
     }
 
     /**
-     * Discovers distinct tenant IDs with unpublished events and submits
-     * a {@link #publishForTenant} task per tenant to the worker pool.
+     * Discovers active tenants and submits a per-tenant publish task
+     * to the worker pool, each wrapped in the appropriate
+     * {@link TenantContext}.
      */
     private void discoverAndDispatch() {
         try {
-            List<String> tenantIds = dsl
-                .selectDistinct(EVENT.TENANT_ID)
-                .from(EVENT)
-                .where(EVENT.PUBLISHED.eq(false))
-                .fetchInto(String.class);
-
-            for (String tenantId : tenantIds) {
-                workers.submit(() -> publishForTenant(tenantId));
+            List<String> tenants = tenantDiscovery.get();
+            for (String tenantId : tenants) {
+                workers.submit(() ->
+                    TenantContext.runWhere(tenantId, this::publishBatch)
+                );
             }
         } catch (Exception e) {
             log.warn("Outbox discovery cycle failed — will retry", e);
@@ -129,58 +131,59 @@ public class OutboxPoller {
     }
 
     /**
-     * Claims and publishes a batch of unpublished events for a single tenant.
-     * Uses {@code FOR UPDATE SKIP LOCKED} so concurrent workers on the same
-     * tenant (across nodes) do not block each other.
+     * Claims and publishes a batch of unpublished events.
+     * Uses {@code FOR UPDATE SKIP LOCKED} so concurrent workers (across
+     * nodes) do not block each other.
      */
-    private void publishForTenant(String tenantId) {
-        TenantContext.runWhere(tenantId, () -> {
-            try {
-                dsl.transaction(txConfig -> {
-                    DSLContext txDsl = txConfig.dsl();
+    private void publishBatch() {
+        try {
+            dsl.transaction(txConfig -> {
+                DSLContext txDsl = txConfig.dsl();
 
-                    List<EventRecord> batch = txDsl
-                        .selectFrom(EVENT)
-                        .where(EVENT.PUBLISHED.eq(false))
-                        .and(EVENT.TENANT_ID.eq(tenantId))
-                        .orderBy(EVENT.EVENT_ID.asc())
-                        .limit(batchSize)
-                        .forUpdate()
-                        .skipLocked()
-                        .fetchInto(EventRecord.class);
+                var batch = txDsl
+                    .selectFrom(EVENT)
+                    .where(EVENT.PUBLISHED.eq(false))
+                    .orderBy(EVENT.EVENT_ID.asc())
+                    .limit(batchSize)
+                    .forUpdate()
+                    .skipLocked()
+                    .fetch();
 
-                    if (batch.isEmpty()) {
-                        return;
+                if (batch.isEmpty()) {
+                    return;
+                }
+
+                String tenantId = TenantContext.get();
+
+                for (var record : batch) {
+                    Map<String, String> fields = new HashMap<>();
+                    fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
+                    if (tenantId != null) {
+                        fields.put(PlatformEvent.FIELD_TENANT_ID, tenantId);
                     }
-
-                    for (EventRecord record : batch) {
-                        Map<String, String> fields = new HashMap<>();
-                        fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
-                        fields.put(PlatformEvent.FIELD_TENANT_ID, record.getTenantId());
-                        fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
-                        fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
-                        fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.getEventType());
-                        fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
-                        if (record.getChanges() != null) {
-                            fields.put(PlatformEvent.FIELD_CHANGES, record.getChanges());
-                        }
-                        redisPublisher.publishRaw(fields);
+                    fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
+                    fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
+                    fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.getEventType());
+                    fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
+                    if (record.getChanges() != null) {
+                        fields.put(PlatformEvent.FIELD_CHANGES, record.getChanges());
                     }
+                    redisPublisher.publishRaw(fields);
+                }
 
-                    List<Long> ids = batch.stream()
-                        .map(EventRecord::getEventId)
-                        .toList();
+                List<Long> ids = batch.stream()
+                    .map(r -> r.getEventId())
+                    .toList();
 
-                    txDsl.update(EVENT)
-                        .set(EVENT.PUBLISHED, true)
-                        .where(EVENT.EVENT_ID.in(ids))
-                        .execute();
+                txDsl.update(EVENT)
+                    .set(EVENT.PUBLISHED, true)
+                    .where(EVENT.EVENT_ID.in(ids))
+                    .execute();
 
-                    log.debug("Outbox relayed {} events for tenant {} to Redis", ids.size(), tenantId);
-                });
-            } catch (Exception e) {
-                log.warn("Outbox publish failed for tenant {} — will retry", tenantId, e);
-            }
-        });
+                log.debug("Outbox relayed {} events to Redis", ids.size());
+            });
+        } catch (Exception e) {
+            log.warn("Outbox publish failed — will retry", e);
+        }
     }
 }

@@ -90,7 +90,7 @@ public class SnapshotWorker {
         TenantContext.runWhere(key.tenantId(), () -> {
             try {
                 var existing = eventRepository.fetchLatestSnapshot(
-                    key.aggregateType(), key.aggregateId().toString(), key.tenantId()
+                    key.aggregateType(), key.aggregateId().toString()
                 );
                 if (existing.isPresent() && existing.get().version() >= trigger.targetVersion()) {
                     log.debug(
@@ -108,7 +108,6 @@ public class SnapshotWorker {
                 List<PlatformEvent> events = eventRepository.fetchChangesUpToVersion(
                     key.aggregateType(),
                     key.aggregateId().toString(),
-                    key.tenantId(),
                     trigger.targetVersion()
                 );
 
@@ -118,7 +117,6 @@ public class SnapshotWorker {
                 eventRepository.insertSnapshot(
                     key.aggregateType(),
                     key.aggregateId().toString(),
-                    key.tenantId(),
                     trigger.targetVersion(),
                     serializedSnapshot
                 );
