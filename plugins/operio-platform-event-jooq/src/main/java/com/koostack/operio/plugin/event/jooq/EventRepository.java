@@ -39,20 +39,21 @@ public class EventRepository {
      * Inserts a new event into the event store and returns its generated id.
      */
     public <T> long insert(PlatformEvent event, String serializedChanges) {
-        EventRecord record = dsl.newRecord(EVENT);
-        record.setTenantId(event.tenantId() != null ? event.tenantId().toString() : "");
-        record.setAggregateId(event.aggregateId() != null ? event.aggregateId().toString() : "");
-        record.setAggregateType(event.aggregateType());
-        record.setEventType(event.eventType());
-        record.setOccurredAt(
-            event.occurredAt() != null
-                ? LocalDateTime.ofInstant(event.occurredAt(), ZoneOffset.UTC)
-                : LocalDateTime.now(ZoneOffset.UTC)
-        );
-        record.setVersion(event.version());
-        record.setChanges(serializedChanges);
-        record.store();
-        return record.getEventId();
+        return dsl.insertInto(EVENT)
+            .set(EVENT.TENANT_ID, event.tenantId() != null ? event.tenantId().toString() : "")
+            .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
+            .set(EVENT.AGGREGATE_TYPE, event.aggregateType())
+            .set(EVENT.EVENT_TYPE, event.eventType())
+            .set(EVENT.OCCURRED_AT,
+                event.occurredAt() != null
+                    ? LocalDateTime.ofInstant(event.occurredAt(), ZoneOffset.UTC)
+                    : LocalDateTime.now(ZoneOffset.UTC)
+            )
+            .set(EVENT.VERSION, event.version())
+            .set(EVENT.CHANGES, serializedChanges)
+            .returningResult(EVENT.EVENT_ID)
+            .fetchOne()
+            .get(EVENT.EVENT_ID);
     }
 
     /**

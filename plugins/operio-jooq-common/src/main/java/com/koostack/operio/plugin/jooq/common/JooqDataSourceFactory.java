@@ -45,7 +45,12 @@ public final class JooqDataSourceFactory {
         String poolName
     ) {
         HikariConfig hikariConfig = new HikariConfig();
-        hikariConfig.setJdbcUrl(config.connectionString());
+        String jdbcUrl = config.connectionString();
+        if (jdbcUrl != null && jdbcUrl.startsWith("jdbc:postgresql")) {
+            String separator = jdbcUrl.contains("?") ? "&" : "?";
+            jdbcUrl = jdbcUrl + separator + "stringtype=unspecified";
+        }
+        hikariConfig.setJdbcUrl(jdbcUrl);
         hikariConfig.setPoolName(poolName);
 
         if (config.username() != null) {

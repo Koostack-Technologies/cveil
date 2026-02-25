@@ -16,8 +16,10 @@ dependencies {
     implementation(project(":plugins:operio-consent-admin-jooq"))
 
     // --- Test ----------------------------------------------------------------
-    testImplementation("com.h2database:h2:2.2.224")
-    testImplementation("com.github.fppt:jedis-mock:1.1.4")
+    testImplementation("org.testcontainers:testcontainers:1.20.6")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.6")
+    testImplementation("org.testcontainers:postgresql:1.20.6")
+    testImplementation("org.postgresql:postgresql:42.7.4")
 }
 
 // ---------------------------------------------------------------------------

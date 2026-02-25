@@ -95,7 +95,9 @@ public class JooqPlatformEventService
             .migrate();
 
         SQLDialect sqlDialect = SQLDialect.valueOf(config.dialect().toUpperCase());
-        Settings settings = new Settings().withRenderNameCase(RenderNameCase.LOWER);
+        Settings settings = new Settings()
+            .withRenderNameCase(RenderNameCase.LOWER)
+            .withRenderSchema(false);
         this.dslContext = DSL.using(dataSource, sqlDialect, settings);
         this.eventRepository = new EventRepository(dslContext);
         this.eventTypeCache = new EventTypeCache(eventRepository);
