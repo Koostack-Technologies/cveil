@@ -2,14 +2,11 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import static com.koostack.operio.plugin.event.jooq.generated.tables.EventType.EVENT_TYPE;
 
 /**
  * Caffeine-backed cache of valid event type names loaded from the
@@ -25,11 +22,15 @@ public class EventTypeCache {
 
     private final LoadingCache<String, Set<String>> cache;
 
-    public EventTypeCache(DSLContext dsl) {
+    public EventTypeCache(EventRepository eventRepository) {
         this.cache = Caffeine.newBuilder()
             .refreshAfterWrite(5, TimeUnit.MINUTES)
             .expireAfterWrite(10, TimeUnit.MINUTES)
-            .build(key -> loadEventTypes(dsl));
+            .build(key -> {
+                Set<String> types = eventRepository.fetchAllEventTypeNames();
+                log.debug("Loaded {} event types from database", types.size());
+                return types;
+            });
     }
 
     /**
@@ -46,14 +47,5 @@ public class EventTypeCache {
      */
     public void refresh() {
         cache.refresh("ALL");
-    }
-
-    private static Set<String> loadEventTypes(DSLContext dsl) {
-        Set<String> types = dsl
-            .select(EVENT_TYPE.NAME)
-            .from(EVENT_TYPE)
-            .fetchSet(EVENT_TYPE.NAME);
-        log.debug("Loaded {} event types from database", types.size());
-        return types;
     }
 }

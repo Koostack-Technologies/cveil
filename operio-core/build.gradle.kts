@@ -11,4 +11,5 @@ plugins {
 
 dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+    api("com.github.fge:json-patch:1.9")
 }

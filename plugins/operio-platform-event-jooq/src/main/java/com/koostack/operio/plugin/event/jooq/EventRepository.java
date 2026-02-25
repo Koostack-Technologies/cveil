@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.event.jooq;
 
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
@@ -8,10 +9,11 @@ import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-
-import static org.jooq.impl.DSL.max;
+import java.util.Set;
 
 import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT;
+import static com.koostack.operio.plugin.event.jooq.generated.tables.EventType.EVENT_TYPE;
+import static org.jooq.impl.DSL.max;
 
 /**
  * Repository for persisting and querying platform events via jOOQ.
@@ -29,7 +31,7 @@ public class EventRepository {
     /**
      * Inserts a new event into the event store and returns its generated id.
      */
-    public <T> long insert(PlatformEvent<T> event, String serializedPayload) {
+    public <T> long insert(PlatformEvent event, String serializedChanges) {
         EventRecord record = dsl.newRecord(EVENT);
         record.setTenantId(event.tenantId() != null ? event.tenantId().toString() : "");
         record.setAggregateId(event.aggregateId() != null ? event.aggregateId().toString() : "");
@@ -41,7 +43,7 @@ public class EventRepository {
                 : LocalDateTime.now(ZoneOffset.UTC)
         );
         record.setVersion(event.version());
-        record.setPayload(serializedPayload);
+        record.setChanges(serializedChanges);
         record.store();
         return record.getEventId();
     }
@@ -56,5 +58,26 @@ public class EventRepository {
             .and(EVENT.AGGREGATE_ID.eq(aggregateId))
             .fetchOneInto(Long.class);
         return version != null ? version : 0L;
+    }
+
+    /**
+     * Registers an event type (idempotent — conflicts are ignored).
+     */
+    public <U> void insertEventType(RegisterEventTypeInput<U> input) {
+        dsl.insertInto(EVENT_TYPE)
+            .set(EVENT_TYPE.NAME, input.name())
+            .set(EVENT_TYPE.DISPLAY_NAME, input.displayName())
+            .set(EVENT_TYPE.FQN, input.eventClass().getName())
+            .onConflictDoNothing()
+            .execute();
+    }
+
+    /**
+     * Loads all event type names from the database.
+     */
+    public Set<String> fetchAllEventTypeNames() {
+        return dsl.select(EVENT_TYPE.NAME)
+            .from(EVENT_TYPE)
+            .fetchSet(EVENT_TYPE.NAME);
     }
 }

@@ -39,11 +39,10 @@ public class RedisEventPublisher {
      *
      * @param event             the platform event
      * @param eventId           the database-assigned event id
-     * @param serializedPayload the serialized payload string
+     * @param serializedChanges the serialized changes string
      */
-    public <T> void publish(PlatformEvent<T> event, long eventId, String serializedPayload) {
+    public <T> void publish(PlatformEvent event, long eventId, String serializedChanges) {
         try {
-            JedisPooled jedis = jedisProvider.get();
             Map<String, String> fields = new HashMap<>();
             fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(eventId));
             fields.put(PlatformEvent.FIELD_TENANT_ID, event.tenantId() != null ? event.tenantId().toString() : "");
@@ -51,11 +50,10 @@ public class RedisEventPublisher {
             fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, event.aggregateType());
             fields.put(PlatformEvent.FIELD_EVENT_TYPE, event.eventType());
             fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(event.version()));
-            if (serializedPayload != null) {
-                fields.put(PlatformEvent.FIELD_PAYLOAD, serializedPayload);
+            if (serializedChanges != null) {
+                fields.put(PlatformEvent.FIELD_CHANGES, serializedChanges);
             }
-            jedis.xadd(event.eventType(), fields, new redis.clients.jedis.params.XAddParams());
-            log.debug("Published event {} to Redis stream {}", eventId, event.eventType());
+            publishRaw(fields);
         } catch (Exception e) {
             log.warn("Failed to publish event {} to Redis stream — event is persisted in DB", eventId, e);
         }
@@ -69,7 +67,7 @@ public class RedisEventPublisher {
         try {
             JedisPooled jedis = jedisProvider.get();
             jedis.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
-            log.debug("Published event {} to Redis stream {}", fields.get("eventId"), streamKey);
+            log.debug("Published event {} to Redis stream {}", fields.get(PlatformEvent.FIELD_EVENT_ID), streamKey);
         } catch (Exception e) {
             throw new RuntimeException("Failed to publish event to Redis stream", e);
         }

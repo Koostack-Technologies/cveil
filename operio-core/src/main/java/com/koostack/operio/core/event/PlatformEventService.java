@@ -1,6 +1,7 @@
 package com.koostack.operio.core.event;
 
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.spi.Plugin;
 
 public interface PlatformEventService<T> extends Plugin<T> {
@@ -15,7 +16,7 @@ public interface PlatformEventService<T> extends Plugin<T> {
      * @throws com.koostack.operio.core.exception.OperioServiceException
      *         if publishing fails (e.g. database error)
      */
-    <U> void publish(PlatformEvent<U> event);
+    void publish(PlatformEvent event);
 
     /**
      * Retrieve the current version number for a given aggregate.
@@ -29,5 +30,7 @@ public interface PlatformEventService<T> extends Plugin<T> {
      *         aggregate
      */
     Long getAggregateVersion(String aggregateType, String aggregateId);
+
+    <U> void registerEventType(RegisterEventTypeInput<U> input);
 
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.jooq.common.JooqService;
@@ -83,7 +84,7 @@ public class JooqPlatformEventService
         Settings settings = new Settings().withRenderNameCase(RenderNameCase.LOWER);
         this.dslContext = DSL.using(dataSource, sqlDialect, settings);
         this.eventRepository = new EventRepository(dslContext);
-        this.eventTypeCache = new EventTypeCache(dslContext);
+        this.eventTypeCache = new EventTypeCache(eventRepository);
 
         if (config.redis() != null) {
             JedisProvider jedisProvider = RedisContextFactory.createSharedProvider(config.redis());
@@ -109,7 +110,7 @@ public class JooqPlatformEventService
     // -----------------------------------------------------------------------
 
     @Override
-    public <U> void publish(PlatformEvent<U> event) {
+    public void publish(PlatformEvent event) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
@@ -119,10 +120,10 @@ public class JooqPlatformEventService
                     "Unknown event type: " + event.eventType()
                 );
             }
-            String serializedPayload = event.payload() != null
-                ? objectMapper.writeValueAsString(event.payload())
+            String serializedChanges = event.changes() != null
+                ? objectMapper.writeValueAsString(event.changes())
                 : null;
-            long eventId = eventRepository.insert(event, serializedPayload);
+            long eventId = eventRepository.insert(event, serializedChanges);
             log.debug(
                 "Published event {} for {}/{}",
                 eventId, event.aggregateType(), event.aggregateId()
@@ -141,6 +142,15 @@ public class JooqPlatformEventService
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
         return eventRepository.getAggregateVersion(aggregateType, aggregateId);
+    }
+
+    @Override
+    public <U> void registerEventType(RegisterEventTypeInput<U> input) {
+        if (dslContext == null) {
+            throw new OperioServiceException("JooqPlatformEventService is not configured");
+        }
+        eventRepository.insertEventType(input);
+        eventTypeCache.refresh();
     }
 
     // -----------------------------------------------------------------------
