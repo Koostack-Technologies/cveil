@@ -9,7 +9,7 @@ CREATE TABLE event (
     occurred_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version         BIGINT NOT NULL,
     payload         CLOB,
-    UNIQUE (aggregate_type, aggregate_id, version)
+    UNIQUE (aggregate_type, aggregate_id, version, tenant_id)
 );
 
 CREATE INDEX idx_event_aggregate

@@ -3,6 +3,7 @@ CREATE TABLE aggregate_snapshot (
     aggregate_id    VARCHAR(255) NOT NULL,
     aggregate_type  VARCHAR(255) NOT NULL,
     tenant_id       VARCHAR(255) NOT NULL,
+    version         BIGINT NOT NULL,
     snapshot        JSONB,
-    PRIMARY KEY (aggregate_type, aggregate_id)
+    PRIMARY KEY (aggregate_type, aggregate_id, tenant_id, version)
 );

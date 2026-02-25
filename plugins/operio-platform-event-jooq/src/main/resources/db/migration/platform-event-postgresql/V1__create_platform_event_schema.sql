@@ -7,6 +7,17 @@
 --   • GIN index on JSONB payload for ad-hoc event queries
 -- ============================================================================
 
+CREATE TABLE event (
+    event_id        BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id       VARCHAR(255) NOT NULL,
+    aggregate_id    VARCHAR(255) NOT NULL,
+    aggregate_type  VARCHAR(255) NOT NULL,
+    event_type      VARCHAR(255) NOT NULL,
+    occurred_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    version         BIGINT       NOT NULL,
+    payload         JSONB,
+    UNIQUE (aggregate_type, aggregate_id, version, tenant_id)
+);
 
 -- --------------------------------------------------------------------------
 -- Indexes

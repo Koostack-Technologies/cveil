@@ -15,7 +15,7 @@ CREATE TABLE event (
     occurred_at     TEXT         NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     version         INTEGER      NOT NULL,
     payload         TEXT,
-    UNIQUE (aggregate_type, aggregate_id, version)
+    UNIQUE (aggregate_type, aggregate_id, version, tenant_id)
 );
 
 -- --------------------------------------------------------------------------
