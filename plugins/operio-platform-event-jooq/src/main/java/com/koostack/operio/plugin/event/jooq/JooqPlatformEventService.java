@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.PlatformEventService;
+import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
+import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.jooq.common.JooqService;
@@ -24,6 +26,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * jOOQ-backed {@link PlatformEventService} implementation — durable event
@@ -41,12 +46,16 @@ public class JooqPlatformEventService
 
     private static final Logger log = LoggerFactory.getLogger(JooqPlatformEventService.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final int SNAPSHOT_DEPTH_THRESHOLD = 20;
 
     private DSLContext dslContext;
     private EventRepository eventRepository;
     private EventTypeCache eventTypeCache;
     private RedisEventPublisher redisPublisher;
     private OutboxPoller outboxPoller;
+
+    private final LinkedBlockingQueue<AggregateSnapshotTrigger> snapshotQueue = new LinkedBlockingQueue<>();
+    private SnapshotWorker snapshotWorker;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -102,6 +111,9 @@ public class JooqPlatformEventService
             config.dialect(),
             config.redis() != null ? "enabled" : "disabled"
         );
+
+        this.snapshotWorker = new SnapshotWorker(snapshotQueue, eventRepository);
+        this.snapshotWorker.start(2);
     }
 
     @Override
@@ -129,7 +141,7 @@ public class JooqPlatformEventService
             String aggregateType = state.aggregateType();
             String aggregateId = state.aggregateId().toString();
 
-            JsonNode currentState = hydrateAggregate(aggregateType, aggregateId);
+            JsonNode currentState = hydrateAggregate(aggregateType, aggregateId, input.tenantId());
             JsonNode updatedNode = objectMapper.valueToTree(state);
             JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
 
@@ -163,24 +175,24 @@ public class JooqPlatformEventService
     }
 
     @Override
-    public Long getAggregateVersion(String aggregateType, String aggregateId) {
+    public Long getAggregateVersion(AggregateKey key) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
-        return eventRepository.getAggregateVersion(aggregateType, aggregateId);
+        return eventRepository.getAggregateVersion(key.aggregateType(), key.aggregateId().toString());
     }
 
     @Override
-    public <U> U getAggregate(String aggregateType, String aggregateId, Class<U> type) {
+    public <U> U getAggregate(AggregateKey key, Class<U> type) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
         try {
-            JsonNode state = hydrateAggregate(aggregateType, aggregateId);
+            JsonNode state = hydrateAggregate(key.aggregateType(), key.aggregateId().toString(), key.tenantId());
             return objectMapper.treeToValue(state, type);
         } catch (Exception e) {
             throw new OperioServiceException(
-                "Failed to hydrate aggregate " + aggregateType + "/" + aggregateId, e);
+                "Failed to hydrate aggregate " + key.aggregateType() + "/" + key.aggregateId(), e);
         }
     }
 
@@ -197,15 +209,37 @@ public class JooqPlatformEventService
     // Internal
     // -----------------------------------------------------------------------
 
-    private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
+    private JsonNode hydrateAggregate(String aggregateType, String aggregateId, UUID tenantId)
             throws Exception {
-        JsonNode state = objectMapper.createObjectNode();
-        for (String raw : eventRepository.fetchChangesForAggregate(aggregateType, aggregateId)) {
-            if (raw != null) {
-                JsonPatch patch = objectMapper.readValue(raw, JsonPatch.class);
-                state = patch.apply(state);
-            }
+        String tid = tenantId.toString();
+        JsonNode state;
+        List<PlatformEvent> events;
+
+        var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId, tid);
+        if (snapshot.isPresent()) {
+            JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
+            events = eventRepository.fetchChangesAfterVersion(
+                aggregateType, aggregateId, tid, snapshot.get().version()
+            );
+            state = AggregateHydrationUtil.hydrate(baseState, events);
+        } else {
+            events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId, tid);
+            state = AggregateHydrationUtil.hydrate(events);
         }
+
+        int depth = events.size();
+        if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
+            AggregateKey key = new AggregateKey(
+                UUID.fromString(aggregateId), aggregateType, tenantId
+            );
+            long targetVersion = events.getLast().version();
+            snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
+            log.debug(
+                "Snapshot trigger enqueued for {}/{} (depth={})",
+                aggregateType, aggregateId, depth
+            );
+        }
+
         return state;
     }
 
