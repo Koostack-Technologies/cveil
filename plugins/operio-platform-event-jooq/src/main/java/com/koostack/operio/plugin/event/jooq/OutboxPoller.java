@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.event.jooq;
 
-import com.koostack.operio.core.platform.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
@@ -133,51 +134,53 @@ public class OutboxPoller {
      * tenant (across nodes) do not block each other.
      */
     private void publishForTenant(String tenantId) {
-        try {
-            dsl.transaction(txConfig -> {
-                DSLContext txDsl = txConfig.dsl();
+        TenantContext.runWhere(tenantId, () -> {
+            try {
+                dsl.transaction(txConfig -> {
+                    DSLContext txDsl = txConfig.dsl();
 
-                List<EventRecord> batch = txDsl
-                    .selectFrom(EVENT)
-                    .where(EVENT.PUBLISHED.eq(false))
-                    .and(EVENT.TENANT_ID.eq(tenantId))
-                    .orderBy(EVENT.EVENT_ID.asc())
-                    .limit(batchSize)
-                    .forUpdate()
-                    .skipLocked()
-                    .fetchInto(EventRecord.class);
+                    List<EventRecord> batch = txDsl
+                        .selectFrom(EVENT)
+                        .where(EVENT.PUBLISHED.eq(false))
+                        .and(EVENT.TENANT_ID.eq(tenantId))
+                        .orderBy(EVENT.EVENT_ID.asc())
+                        .limit(batchSize)
+                        .forUpdate()
+                        .skipLocked()
+                        .fetchInto(EventRecord.class);
 
-                if (batch.isEmpty()) {
-                    return;
-                }
-
-                for (EventRecord record : batch) {
-                    Map<String, String> fields = new HashMap<>();
-                    fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
-                    fields.put(PlatformEvent.FIELD_TENANT_ID, record.getTenantId());
-                    fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
-                    fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
-                    fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.getEventType());
-                    fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
-                    if (record.getChanges() != null) {
-                        fields.put(PlatformEvent.FIELD_CHANGES, record.getChanges());
+                    if (batch.isEmpty()) {
+                        return;
                     }
-                    redisPublisher.publishRaw(fields);
-                }
 
-                List<Long> ids = batch.stream()
-                    .map(EventRecord::getEventId)
-                    .toList();
+                    for (EventRecord record : batch) {
+                        Map<String, String> fields = new HashMap<>();
+                        fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
+                        fields.put(PlatformEvent.FIELD_TENANT_ID, record.getTenantId());
+                        fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
+                        fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
+                        fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.getEventType());
+                        fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
+                        if (record.getChanges() != null) {
+                            fields.put(PlatformEvent.FIELD_CHANGES, record.getChanges());
+                        }
+                        redisPublisher.publishRaw(fields);
+                    }
 
-                txDsl.update(EVENT)
-                    .set(EVENT.PUBLISHED, true)
-                    .where(EVENT.EVENT_ID.in(ids))
-                    .execute();
+                    List<Long> ids = batch.stream()
+                        .map(EventRecord::getEventId)
+                        .toList();
 
-                log.debug("Outbox relayed {} events for tenant {} to Redis", ids.size(), tenantId);
-            });
-        } catch (Exception e) {
-            log.warn("Outbox publish failed for tenant {} — will retry", tenantId, e);
-        }
+                    txDsl.update(EVENT)
+                        .set(EVENT.PUBLISHED, true)
+                        .where(EVENT.EVENT_ID.in(ids))
+                        .execute();
+
+                    log.debug("Outbox relayed {} events for tenant {} to Redis", ids.size(), tenantId);
+                });
+            } catch (Exception e) {
+                log.warn("Outbox publish failed for tenant {} — will retry", tenantId, e);
+            }
+        });
     }
 }

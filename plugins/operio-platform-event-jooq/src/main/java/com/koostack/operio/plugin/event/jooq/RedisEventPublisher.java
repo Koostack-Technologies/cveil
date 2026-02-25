@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.event.jooq;
 
-import com.koostack.operio.core.platform.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -5,5 +5,5 @@ import java.util.UUID;
 public record AggregateKey(
     UUID aggregateId,
     String aggregateType,
-    UUID tenantId
+    String tenantId
 ) {}

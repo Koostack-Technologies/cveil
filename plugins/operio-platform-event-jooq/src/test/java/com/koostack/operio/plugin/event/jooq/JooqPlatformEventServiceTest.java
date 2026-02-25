@@ -19,7 +19,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
     @Test
     void publishInsertsEventAndHydratesAggregate() {
-        UUID tenantId = UUID.randomUUID();
+        String tenantId = "tenant_publish";
         UUID aggregateId = UUID.randomUUID();
 
         TestAggregate state = new TestAggregate(
@@ -38,7 +38,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
         EventRecord record = dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .and(EVENT.TENANT_ID.eq(tenantId.toString()))
+            .and(EVENT.TENANT_ID.eq(tenantId))
             .fetchOne();
 
         assertNotNull(record);
@@ -63,7 +63,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
     @Test
     void snapshotCreatedAfterTwentyEvents() throws Exception {
-        UUID tenantId = UUID.randomUUID();
+        String tenantId = "tenant_snap";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "snap-aggregate", tenantId);
 
@@ -88,7 +88,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
             .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq("snap-aggregate"))
-            .and(AGGREGATE_SNAPSHOT.TENANT_ID.eq(tenantId.toString()))
+            .and(AGGREGATE_SNAPSHOT.TENANT_ID.eq(tenantId))
             .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
             .limit(1)
             .fetchOne();
@@ -103,7 +103,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
     @Test
     void rehydrateFromSnapshotReturnsCorrectState() throws Exception {
-        UUID tenantId = UUID.randomUUID();
+        String tenantId = "tenant_rehydrate";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "rehydrate-aggregate", tenantId);
 
@@ -162,7 +162,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
     @Test
     void rehydrateWithoutSnapshotReturnsCorrectState() {
-        UUID tenantId = UUID.randomUUID();
+        String tenantId = "tenant_nosnap";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "no-snap-aggregate", tenantId);
 
@@ -203,7 +203,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
     record ConsentPreference(String category, boolean granted, String grantedBy) {}
 
     record TestAggregate(
-        UUID tenantId,
+        String tenantId,
         UUID aggregateId,
         String aggregateType,
         Long version,

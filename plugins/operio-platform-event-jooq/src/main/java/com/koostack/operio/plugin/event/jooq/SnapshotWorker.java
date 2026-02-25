@@ -3,8 +3,9 @@ package com.koostack.operio.plugin.event.jooq;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
-import com.koostack.operio.core.platform.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.models.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,50 +87,52 @@ public class SnapshotWorker {
 
     private void processSnapshot(AggregateSnapshotTrigger trigger) {
         AggregateKey key = trigger.aggregateKey();
-        try {
-            var existing = eventRepository.fetchLatestSnapshot(
-                key.aggregateType(), key.aggregateId().toString(), key.tenantId().toString()
-            );
-            if (existing.isPresent() && existing.get().version() >= trigger.targetVersion()) {
-                log.debug(
-                    "Snapshot already exists at version {} for {}/{}, skipping",
-                    existing.get().version(), key.aggregateType(), key.aggregateId()
+        TenantContext.runWhere(key.tenantId(), () -> {
+            try {
+                var existing = eventRepository.fetchLatestSnapshot(
+                    key.aggregateType(), key.aggregateId().toString(), key.tenantId()
                 );
-                return;
+                if (existing.isPresent() && existing.get().version() >= trigger.targetVersion()) {
+                    log.debug(
+                        "Snapshot already exists at version {} for {}/{}, skipping",
+                        existing.get().version(), key.aggregateType(), key.aggregateId()
+                    );
+                    return;
+                }
+
+                log.info(
+                    "Processing snapshot for {}/{} at version {}",
+                    key.aggregateType(), key.aggregateId(), trigger.targetVersion()
+                );
+
+                List<PlatformEvent> events = eventRepository.fetchChangesUpToVersion(
+                    key.aggregateType(),
+                    key.aggregateId().toString(),
+                    key.tenantId(),
+                    trigger.targetVersion()
+                );
+
+                JsonNode state = AggregateHydrationUtil.hydrate(events);
+
+                String serializedSnapshot = objectMapper.writeValueAsString(state);
+                eventRepository.insertSnapshot(
+                    key.aggregateType(),
+                    key.aggregateId().toString(),
+                    key.tenantId(),
+                    trigger.targetVersion(),
+                    serializedSnapshot
+                );
+
+                log.info(
+                    "Snapshot persisted for {}/{} at version {}",
+                    key.aggregateType(), key.aggregateId(), trigger.targetVersion()
+                );
+            } catch (Exception e) {
+                log.warn(
+                    "Snapshot processing failed for {}/{}",
+                    key.aggregateType(), key.aggregateId(), e
+                );
             }
-
-            log.info(
-                "Processing snapshot for {}/{} at version {}",
-                key.aggregateType(), key.aggregateId(), trigger.targetVersion()
-            );
-
-            List<PlatformEvent> events = eventRepository.fetchChangesUpToVersion(
-                key.aggregateType(),
-                key.aggregateId().toString(),
-                key.tenantId().toString(),
-                trigger.targetVersion()
-            );
-
-            JsonNode state = AggregateHydrationUtil.hydrate(events);
-
-            String serializedSnapshot = objectMapper.writeValueAsString(state);
-            eventRepository.insertSnapshot(
-                key.aggregateType(),
-                key.aggregateId().toString(),
-                key.tenantId().toString(),
-                trigger.targetVersion(),
-                serializedSnapshot
-            );
-
-            log.info(
-                "Snapshot persisted for {}/{} at version {}",
-                key.aggregateType(), key.aggregateId(), trigger.targetVersion()
-            );
-        } catch (Exception e) {
-            log.warn(
-                "Snapshot processing failed for {}/{}",
-                key.aggregateType(), key.aggregateId(), e
-            );
-        }
+        });
     }
 }

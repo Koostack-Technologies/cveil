@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fge.jsonpatch.JsonPatch;
-import com.koostack.operio.core.platform.event.models.PlatformEvent;
+import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
@@ -39,7 +39,7 @@ public class EventRepository {
      */
     public <T> long insert(PlatformEvent event, String serializedChanges) {
         return dsl.insertInto(EVENT)
-            .set(EVENT.TENANT_ID, event.tenantId() != null ? event.tenantId().toString() : "")
+            .set(EVENT.TENANT_ID, event.tenantId() != null ? event.tenantId() : "")
             .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
             .set(EVENT.AGGREGATE_TYPE, event.aggregateType())
             .set(EVENT.EVENT_TYPE, event.eventType())
@@ -87,7 +87,7 @@ public class EventRepository {
                 }
                 return new PlatformEvent(
                     record.getEventId(),
-                    record.getTenantId() != null ? UUID.fromString(record.getTenantId()) : null,
+                    record.getTenantId(),
                     record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
                     record.getAggregateType(),
                     record.getEventType(),
@@ -119,7 +119,7 @@ public class EventRepository {
                 }
                 return new PlatformEvent(
                     record.getEventId(),
-                    record.getTenantId() != null ? UUID.fromString(record.getTenantId()) : null,
+                    record.getTenantId(),
                     record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
                     record.getAggregateType(),
                     record.getEventType(),
@@ -183,7 +183,7 @@ public class EventRepository {
                 }
                 return new PlatformEvent(
                     record.getEventId(),
-                    record.getTenantId() != null ? UUID.fromString(record.getTenantId()) : null,
+                    record.getTenantId(),
                     record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
                     record.getAggregateType(),
                     record.getEventType(),
