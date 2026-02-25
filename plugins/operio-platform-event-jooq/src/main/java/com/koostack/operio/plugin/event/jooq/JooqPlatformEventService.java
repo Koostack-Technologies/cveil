@@ -1,5 +1,7 @@
 package com.koostack.operio.plugin.event.jooq;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.exception.OperioServiceException;
@@ -33,10 +35,13 @@ public class JooqPlatformEventService
 {
 
     private static final Logger log = LoggerFactory.getLogger(JooqPlatformEventService.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private DSLContext dslContext;
     private EventRepository eventRepository;
+    private EventTypeCache eventTypeCache;
     private RedisEventPublisher redisPublisher;
+    private OutboxPoller outboxPoller;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -78,10 +83,13 @@ public class JooqPlatformEventService
         Settings settings = new Settings().withRenderNameCase(RenderNameCase.LOWER);
         this.dslContext = DSL.using(dataSource, sqlDialect, settings);
         this.eventRepository = new EventRepository(dslContext);
+        this.eventTypeCache = new EventTypeCache(dslContext);
 
         if (config.redis() != null) {
             JedisProvider jedisProvider = RedisContextFactory.createSharedProvider(config.redis());
             this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio");
+            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher);
+            this.outboxPoller.start(2);
         }
 
         log.info(
@@ -106,13 +114,15 @@ public class JooqPlatformEventService
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
         try {
+            if (!eventTypeCache.isValid(event.eventType())) {
+                throw new OperioServiceException(
+                    "Unknown event type: " + event.eventType()
+                );
+            }
             String serializedPayload = event.payload() != null
-                ? event.payload().toString()
+                ? objectMapper.writeValueAsString(event.payload())
                 : null;
             long eventId = eventRepository.insert(event, serializedPayload);
-            if (redisPublisher != null) {
-                redisPublisher.publish(event, eventId, serializedPayload);
-            }
             log.debug(
                 "Published event {} for {}/{}",
                 eventId, event.aggregateType(), event.aggregateId()

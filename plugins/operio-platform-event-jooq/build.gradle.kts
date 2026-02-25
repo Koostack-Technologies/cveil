@@ -11,6 +11,7 @@ dependencies {
     api(project(":operio-core"))
     implementation(project(":plugins:operio-jooq-common"))
     implementation(project(":plugins:operio-redis-common"))
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     // Needs access to consent migrations for TenantManager.provisionTenant()
     implementation(project(":plugins:operio-consent-admin-jooq"))
 

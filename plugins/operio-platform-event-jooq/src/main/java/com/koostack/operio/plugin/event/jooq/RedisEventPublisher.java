@@ -45,19 +45,33 @@ public class RedisEventPublisher {
         try {
             JedisPooled jedis = jedisProvider.get();
             Map<String, String> fields = new HashMap<>();
-            fields.put("eventId", String.valueOf(eventId));
-            fields.put("tenantId", event.tenantId() != null ? event.tenantId().toString() : "");
-            fields.put("aggregateId", event.aggregateId() != null ? event.aggregateId().toString() : "");
-            fields.put("aggregateType", event.aggregateType());
-            fields.put("eventType", event.eventType());
-            fields.put("version", String.valueOf(event.version()));
+            fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(eventId));
+            fields.put(PlatformEvent.FIELD_TENANT_ID, event.tenantId() != null ? event.tenantId().toString() : "");
+            fields.put(PlatformEvent.FIELD_AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "");
+            fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, event.aggregateType());
+            fields.put(PlatformEvent.FIELD_EVENT_TYPE, event.eventType());
+            fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(event.version()));
             if (serializedPayload != null) {
-                fields.put("payload", serializedPayload);
+                fields.put(PlatformEvent.FIELD_PAYLOAD, serializedPayload);
             }
-            jedis.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
-            log.debug("Published event {} to Redis stream {}", eventId, streamKey);
+            jedis.xadd(event.eventType(), fields, new redis.clients.jedis.params.XAddParams());
+            log.debug("Published event {} to Redis stream {}", eventId, event.eventType());
         } catch (Exception e) {
             log.warn("Failed to publish event {} to Redis stream — event is persisted in DB", eventId, e);
+        }
+    }
+
+    /**
+     * Publishes pre-built fields to the Redis Stream.  Used by the outbox
+     * poller which reads serialised rows directly from the database.
+     */
+    public void publishRaw(Map<String, String> fields) {
+        try {
+            JedisPooled jedis = jedisProvider.get();
+            jedis.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
+            log.debug("Published event {} to Redis stream {}", fields.get("eventId"), streamKey);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to publish event to Redis stream", e);
         }
     }
 }
