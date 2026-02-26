@@ -1,5 +1,7 @@
 package com.koostack.operio.core.data.consent.events;
 
+import com.koostack.operio.core.event.DomainEvent;
+
 import java.time.Instant;
 
 public record PolicyRevokedEvent(

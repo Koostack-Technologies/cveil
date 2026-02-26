@@ -2,6 +2,8 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.models.AggregateKey;
@@ -23,7 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SnapshotWorker {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotWorker.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new JavaTimeModule());
 
     private final LinkedBlockingQueue<AggregateSnapshotTrigger> queue;
     private final EventRepository eventRepository;
@@ -105,13 +108,26 @@ public class SnapshotWorker {
                     key.aggregateType(), key.aggregateId(), trigger.targetVersion()
                 );
 
-                List<PlatformEvent> events = eventRepository.fetchChangesUpToVersion(
-                    key.aggregateType(),
-                    key.aggregateId().toString(),
-                    trigger.targetVersion()
-                );
+                JsonNode baseState;
+                List<PlatformEvent> events;
+                if (existing.isPresent()) {
+                    // Start from existing snapshot, replay only the delta
+                    baseState = objectMapper.readTree(existing.get().snapshot());
+                    events = eventRepository.fetchChangesAfterVersion(
+                        key.aggregateType(),
+                        key.aggregateId().toString(),
+                        existing.get().version()
+                    );
+                } else {
+                    baseState = objectMapper.createObjectNode();
+                    events = eventRepository.fetchChangesUpToVersion(
+                        key.aggregateType(),
+                        key.aggregateId().toString(),
+                        trigger.targetVersion()
+                    );
+                }
 
-                JsonNode state = AggregateHydrationUtil.hydrate(events);
+                JsonNode state = replayPayloads(baseState, events);
 
                 String serializedSnapshot = objectMapper.writeValueAsString(state);
                 eventRepository.insertSnapshot(
@@ -132,5 +148,28 @@ public class SnapshotWorker {
                 );
             }
         });
+    }
+
+    private JsonNode replayPayloads(JsonNode baseState, List<PlatformEvent> events) {
+        ObjectNode state = baseState.isObject()
+            ? (ObjectNode) baseState.deepCopy()
+            : objectMapper.createObjectNode();
+        for (PlatformEvent event : events) {
+            if (event.payload() != null) {
+                try {
+                    JsonNode payloadNode = objectMapper.readTree(event.payload());
+                    if (payloadNode.isObject()) {
+                        payloadNode.fields().forEachRemaining(
+                            field -> state.set(field.getKey(), field.getValue())
+                        );
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(
+                        "Failed to replay payload for event " + event.eventId()
+                            + " (" + event.eventType() + ")", e);
+                }
+            }
+        }
+        return state;
     }
 }

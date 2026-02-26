@@ -8,6 +8,7 @@ import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
 import com.koostack.operio.core.data.consent.events.*;
+import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;

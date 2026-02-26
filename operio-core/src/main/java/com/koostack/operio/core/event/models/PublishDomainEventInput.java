@@ -1,6 +1,6 @@
 package com.koostack.operio.core.event.models;
 
-import com.koostack.operio.core.data.consent.events.DomainEvent;
+import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.models.AggregateKey;
 
 /**

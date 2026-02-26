@@ -3,7 +3,7 @@ package com.koostack.operio.tenant.event.jooq;
 import com.koostack.operio.core.data.consent.ConsentEventTypes;
 import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
 import com.koostack.operio.core.data.consent.events.CategoryRegisteredEvent;
-import com.koostack.operio.core.data.consent.events.DomainEvent;
+import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;

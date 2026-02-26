@@ -1,40 +1,21 @@
 package com.koostack.operio.core.event;
 
-import com.koostack.operio.core.event.models.PublishEventInput;
-import com.koostack.operio.core.event.models.PublishTransformInput;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.spi.Plugin;
 
 public interface PlatformEventService<T> extends Plugin<T> {
 
     /**
-     * Publish an event to the platform event bus.
+     * Publish a semantic domain event to the platform event store.
      *
-     * <p>The current aggregate state is hydrated by replaying stored patches,
-     * diffed against the provided updated state, and the resulting JSON Patch
-     * is persisted as a new event.
-     *
-     * @param input the publish input carrying tenant id, event type, and updated state
+     * @param input carries tenant id, event type, aggregate key, and the
+     *              semantic domain event payload
      * @throws com.koostack.operio.core.exception.OperioServiceException
-     *         if publishing fails (e.g. database error)
+     *         if publishing fails
      */
-    <U extends AggregateRoot> void publish(PublishEventInput<U> input);
-
-    /**
-     * Atomically hydrate (or create) an aggregate, apply a transformation,
-     * and publish the resulting event — all within a single transaction.
-     *
-     * <p>This eliminates the TOCTOU race that exists when hydration and
-     * publishing are performed as separate operations.
-     *
-     * @param input carries tenant id, event type, aggregate key, default
-     *              state factory, transformation function, and aggregate class
-     * @throws com.koostack.operio.core.exception.OperioServiceException
-     *         if publishing fails (e.g. database error or concurrent conflict)
-     */
-    <U extends AggregateRoot> void publishTransform(PublishTransformInput<U> input);
+    void publishEvent(PublishDomainEventInput input);
 
     /**
      * Retrieve the current version number for a given aggregate.
@@ -47,7 +28,7 @@ public interface PlatformEventService<T> extends Plugin<T> {
 
     /**
      * Hydrate the current state of an aggregate by replaying all stored
-     * change patches, returning the result as a typed object.
+     * event payloads, returning the result as a typed object.
      *
      * @param key  the aggregate key identifying the aggregate
      * @param type the class to deserialize the hydrated state into

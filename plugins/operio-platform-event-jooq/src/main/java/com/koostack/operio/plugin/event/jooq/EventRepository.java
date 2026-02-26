@@ -2,7 +2,6 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.github.fge.jsonpatch.JsonPatch;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
@@ -40,7 +39,7 @@ public class EventRepository {
     /**
      * Inserts a new event into the event store and returns its generated id.
      */
-    public <T> long insert(PlatformEvent event, String serializedChanges) {
+    public long insert(PlatformEvent event) {
         return dsl.insertInto(EVENT)
             .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
             .set(EVENT.AGGREGATE_TYPE, event.aggregateType())
@@ -51,7 +50,7 @@ public class EventRepository {
                     : LocalDateTime.now(ZoneOffset.UTC)
             )
             .set(EVENT.VERSION, event.version())
-            .set(EVENT.CHANGES, serializedChanges)
+            .set(EVENT.PAYLOAD, event.payload())
             .returningResult(EVENT.EVENT_ID)
             .fetchOne()
             .get(EVENT.EVENT_ID);
@@ -158,14 +157,6 @@ public class EventRepository {
     public record SnapshotRecord(Long version, String snapshot) {}
 
     private PlatformEvent toPlatformEvent(EventRecord record) {
-        JsonPatch changes = null;
-        try {
-            if (record.getChanges() != null) {
-                changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
-        }
         return new PlatformEvent(
             record.getEventId(),
             record.getAggregateId() != null ? UUID.fromString(record.getAggregateId()) : null,
@@ -173,7 +164,7 @@ public class EventRepository {
             record.getEventType(),
             record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
             record.getVersion(),
-            changes
+            record.getPayload()
         );
     }
 }

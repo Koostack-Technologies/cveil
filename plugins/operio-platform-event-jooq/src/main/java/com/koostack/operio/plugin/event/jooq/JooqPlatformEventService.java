@@ -3,17 +3,13 @@ package com.koostack.operio.plugin.event.jooq;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.github.fge.jsonpatch.JsonPatch;
-import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
-import com.koostack.operio.core.event.models.PublishEventInput;
-import com.koostack.operio.core.event.models.PublishTransformInput;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import com.koostack.operio.plugin.jooq.common.JooqService;
@@ -143,75 +139,7 @@ public class JooqPlatformEventService
     // -----------------------------------------------------------------------
 
     @Override
-    public <U extends AggregateRoot> void publish(PublishEventInput<U> input) {
-        if (dslContext == null) {
-            throw new OperioServiceException("JooqPlatformEventService is not configured");
-        }
-        TenantContext.runWhere(input.tenantId(), () -> {
-            try {
-                if (!eventTypeCache.isValid(input.eventType())) {
-                    throw new OperioServiceException(
-                        "Unknown event type: " + input.eventType()
-                    );
-                }
-
-                U state = input.state();
-                String aggregateType = state.aggregateType();
-                String aggregateId = state.aggregateId().toString();
-                JsonNode updatedNode = objectMapper.valueToTree(state);
-
-                // Wrap hydrate + version + insert in a transaction so the
-                // diff is always computed against the state that the version
-                // was derived from. The unique constraint on
-                // (aggregate_type, aggregate_id, version, tenant_id) acts
-                // as an optimistic lock — a concurrent insert at the same
-                // version will cause a DataAccessException.
-                dslContext.transaction(txConfig -> {
-                    DSLContext txDsl = txConfig.dsl();
-                    EventRepository txRepo = new EventRepository(txDsl);
-
-                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
-                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
-
-                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
-                    PlatformEvent event = new PlatformEvent(
-                        null,
-                        state.aggregateId(),
-                        aggregateType,
-                        input.eventType(),
-                        java.time.Instant.now(),
-                        version,
-                        diff
-                    );
-
-                    String serializedChanges = objectMapper.writeValueAsString(diff);
-                    long eventId = txRepo.insert(event, serializedChanges);
-                    log.debug(
-                        "Published event {} for {}/{}",
-                        eventId, aggregateType, aggregateId
-                    );
-                });
-            } catch (OperioServiceException e) {
-                throw e;
-            } catch (DataAccessException e) {
-                throw new OperioServiceException(
-                    "Concurrent modification conflict for "
-                        + input.state().aggregateType() + "/" + input.state().aggregateId()
-                        + " — retry the operation",
-                    e
-                );
-            } catch (Exception e) {
-                throw new OperioServiceException(
-                    "Failed to publish event for " + input.state().aggregateType()
-                        + "/" + input.state().aggregateId(),
-                    e
-                );
-            }
-        });
-    }
-
-    @Override
-    public <U extends AggregateRoot> void publishTransform(PublishTransformInput<U> input) {
+    public void publishEvent(PublishDomainEventInput input) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
@@ -225,42 +153,26 @@ public class JooqPlatformEventService
 
                 String aggregateType = input.key().aggregateType();
                 String aggregateId = input.key().aggregateId().toString();
+                String serializedPayload = objectMapper.writeValueAsString(input.payload());
 
                 dslContext.transaction(txConfig -> {
                     DSLContext txDsl = txConfig.dsl();
                     EventRepository txRepo = new EventRepository(txDsl);
 
-                    // Hydrate or create the aggregate inside the transaction
-                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
-                    Long currentVersion = txRepo.getAggregateVersion(aggregateType, aggregateId);
-
-                    U current;
-                    if (currentVersion == 0L) {
-                        current = input.defaultState().get();
-                    } else {
-                        current = objectMapper.treeToValue(currentState, input.type());
-                    }
-
-                    // Apply the transformation inside the transaction
-                    U updated = input.transform().apply(current);
-                    JsonNode updatedNode = objectMapper.valueToTree(updated);
-                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
-
-                    Long version = currentVersion + 1;
+                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
                     PlatformEvent event = new PlatformEvent(
                         null,
-                        updated.aggregateId(),
+                        input.key().aggregateId(),
                         aggregateType,
                         input.eventType(),
                         java.time.Instant.now(),
                         version,
-                        diff
+                        serializedPayload
                     );
 
-                    String serializedChanges = objectMapper.writeValueAsString(diff);
-                    long eventId = txRepo.insert(event, serializedChanges);
+                    long eventId = txRepo.insert(event);
                     log.debug(
-                        "Published transform event {} for {}/{}",
+                        "Published event {} for {}/{}",
                         eventId, aggregateType, aggregateId
                     );
                 });
@@ -275,8 +187,8 @@ public class JooqPlatformEventService
                 );
             } catch (Exception e) {
                 throw new OperioServiceException(
-                    "Failed to publish transform event for "
-                        + input.key().aggregateType() + "/" + input.key().aggregateId(),
+                    "Failed to publish event for " + input.key().aggregateType()
+                        + "/" + input.key().aggregateId(),
                     e
                 );
             }
@@ -307,8 +219,25 @@ public class JooqPlatformEventService
         }
         try {
             return TenantContext.callWhere(key.tenantId(), () -> {
-                JsonNode state = hydrateAggregate(key.aggregateType(), key.aggregateId().toString());
-                return objectMapper.treeToValue(state, type);
+                String aggregateType = key.aggregateType();
+                String aggregateId = key.aggregateId().toString();
+                List<PlatformEvent> events;
+
+                var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
+                if (snapshot.isPresent()) {
+                    JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
+                    events = eventRepository.fetchChangesAfterVersion(
+                        aggregateType, aggregateId, snapshot.get().version()
+                    );
+                    JsonNode result = replayPayloads(baseState, events);
+                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
+                    return objectMapper.treeToValue(result, type);
+                } else {
+                    events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
+                    JsonNode result = replayPayloads(objectMapper.createObjectNode(), events);
+                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
+                    return objectMapper.treeToValue(result, type);
+                }
             });
         } catch (OperioServiceException e) {
             throw e;
@@ -331,34 +260,43 @@ public class JooqPlatformEventService
     // Internal
     // -----------------------------------------------------------------------
 
-    private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
-            throws Exception {
-        return hydrateAggregateWith(eventRepository, aggregateType, aggregateId);
+    /**
+     * Replays semantic event payloads by deep-merging each payload into the
+     * running state.  Platform aggregates do not yet have typed {@code apply()}
+     * methods (the command services are empty interfaces), so this performs a
+     * simple JSON overlay: each payload's fields overwrite matching keys in
+     * the current state.
+     */
+    private JsonNode replayPayloads(JsonNode baseState, List<PlatformEvent> events) {
+        if (events.isEmpty()) {
+            return baseState;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode state =
+            baseState.isObject()
+                ? (com.fasterxml.jackson.databind.node.ObjectNode) baseState.deepCopy()
+                : objectMapper.createObjectNode();
+        for (PlatformEvent event : events) {
+            if (event.payload() != null) {
+                try {
+                    JsonNode payloadNode = objectMapper.readTree(event.payload());
+                    if (payloadNode.isObject()) {
+                        payloadNode.fields().forEachRemaining(
+                            field -> state.set(field.getKey(), field.getValue())
+                        );
+                    }
+                } catch (Exception e) {
+                    throw new OperioServiceException(
+                        "Failed to replay payload for event " + event.eventId()
+                            + " (" + event.eventType() + ")", e);
+                }
+            }
+        }
+        return state;
     }
 
-    /**
-     * Hydrates an aggregate using the given repository — allows callers to
-     * pass a transaction-scoped repository so reads and the subsequent
-     * insert share the same transaction.
-     */
-    private JsonNode hydrateAggregateWith(
-            EventRepository repo, String aggregateType, String aggregateId)
-            throws Exception {
-        JsonNode state;
-        List<PlatformEvent> events;
-
-        var snapshot = repo.fetchLatestSnapshot(aggregateType, aggregateId);
-        if (snapshot.isPresent()) {
-            JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
-            events = repo.fetchChangesAfterVersion(
-                aggregateType, aggregateId, snapshot.get().version()
-            );
-            state = AggregateHydrationUtil.hydrate(baseState, events);
-        } else {
-            events = repo.fetchChangesForAggregate(aggregateType, aggregateId);
-            state = AggregateHydrationUtil.hydrate(events);
-        }
-
+    private void triggerSnapshotIfNeeded(
+        String aggregateType, String aggregateId, List<PlatformEvent> events
+    ) {
         int depth = events.size();
         if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
             AggregateKey key = new AggregateKey(
@@ -371,8 +309,6 @@ public class JooqPlatformEventService
                 aggregateType, aggregateId, depth
             );
         }
-
-        return state;
     }
 
     // -----------------------------------------------------------------------

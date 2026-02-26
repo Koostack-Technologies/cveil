@@ -5,8 +5,6 @@ import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
-import com.koostack.operio.plugin.consent.sync.ConsentSyncServiceConfig;
-import com.koostack.operio.plugin.consent.sync.ConsentSyncServiceImpl;
 import com.koostack.operio.plugin.discovery.sensitive.annotation.AnnotationDiscoveryConfig;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 
@@ -19,8 +17,6 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
  *
  * <p>Wires:
  * <ul>
- *   <li>{@code ConsentSyncService} ("consent-sync") — dual-write coordinator
- *       that writes to the relational DB and syncs to Redis</li>
  *   <li>{@code ConsentDecisionService} ("redis") — Redis-backed consent
  *       evaluation (single-MGET read path)</li>
  *   <li>{@code ConsentAdminService} ("jooq") — standalone admin provider
@@ -290,17 +286,12 @@ public class CoreConsentBundle implements PluginBundle {
         if (jedisProvider != null) {
             // --- Per-tenant ACL isolation path --------------------------------
             // When a JedisProvider is supplied (typically a
-            // TenantAwareJedisProvider), use it for both the sync service
-            // (write path) and the decision service (read path). This ensures
-            // every Redis operation authenticates as the current tenant's
-            // ACL user, which Redis restricts to that tenant's key pattern.
+            // TenantAwareJedisProvider), use it for the decision service
+            // (read path). This ensures every Redis operation authenticates
+            // as the current tenant's ACL user, which Redis restricts to
+            // that tenant's key pattern.
 
-            // Dual-write: DB + Redis sync — using per-tenant Jedis provider
-            ConsentSyncServiceImpl syncService = new ConsentSyncServiceImpl();
-            syncService.configure(jooqConfig, jedisProvider, true);
-            builder.withConsentSyncProvider(syncService);
-
-            // Read-path: Redis evaluation — using the same per-tenant provider
+            // Read-path: Redis evaluation — using the per-tenant provider
             RedisConsentDecisionService decisionService =
                 new RedisConsentDecisionService();
             decisionService.configure(jedisProvider);
@@ -311,12 +302,6 @@ public class CoreConsentBundle implements PluginBundle {
             // JedisPooled from the RedisConsentDecisionServiceConfig.
             // This is the backward-compatible path for single-tenant
             // deployments, embedded mode, and tests.
-
-            // Dual-write: DB + Redis sync
-            builder.withConsentSyncProvider(
-                "consent-sync",
-                new ConsentSyncServiceConfig(jooqConfig, redisConfig)
-            );
 
             // Read-path: Redis evaluation (single-MGET)
             builder.withConsentProvider("redis", redisConfig);
