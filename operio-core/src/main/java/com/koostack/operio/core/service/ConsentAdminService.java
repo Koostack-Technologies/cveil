@@ -393,7 +393,9 @@ public interface ConsentAdminService<T> extends Plugin<T> {
      * stores) should override this method.
      *
      * @param subject the data subject identifier (e.g. {@code "user_123"})
-     * @return the number of audit log entries deleted
+     * @return the number of audit log entries deleted, or {@code -1} if the
+     *         deletion is eventual (e.g. event-sourced implementations that
+     *         publish a deletion-requested event)
      * @throws UnsupportedOperationException if the implementation does not
      *                                       support audit log deletion
      */

@@ -135,7 +135,7 @@ public class JooqConsentAdminCommandService
             "Published audit-log deletion event for subject: {} (actual deletion is eventual)",
             subject
         );
-        return 0;
+        return -1;
     }
 
     // -----------------------------------------------------------------------
