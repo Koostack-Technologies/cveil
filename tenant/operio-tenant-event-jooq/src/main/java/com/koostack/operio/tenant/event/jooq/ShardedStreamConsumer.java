@@ -100,10 +100,11 @@ public class ShardedStreamConsumer {
         List<String> streamKeys = RedisEventPublisher.allStreamKeys();
         ensureConsumerGroups(streamKeys);
 
+        var threadIndex = new java.util.concurrent.atomic.AtomicInteger(0);
         executor = Executors.newFixedThreadPool(
             RedisEventPublisher.SHARD_COUNT,
             r -> {
-                Thread t = new Thread(r, "stream-consumer-" + groupName);
+                Thread t = new Thread(r, "stream-consumer-" + groupName + "-" + threadIndex.getAndIncrement());
                 t.setDaemon(true);
                 return t;
             }

@@ -157,21 +157,27 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleEntityDeleted(JsonNode node) {
         String entityName = node.get("entityName").asText();
 
-        // Delete fields first (FK constraint), then entity
         Long entityId = dsl.select(ENTITY.ENTITY_ID)
             .from(ENTITY)
             .where(ENTITY.ENTITY_NAME.eq(entityName))
             .fetchOneInto(Long.class);
 
         if (entityId != null) {
-            // Delete field_category links for all fields of this entity
-            dsl.deleteFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.FIELD_ID.in(
-                    dsl.select(FIELD.FIELD_ID).from(FIELD).where(FIELD.ENTITY_ID.eq(entityId))
-                ))
+            var fieldIds = dsl.select(FIELD.FIELD_ID).from(FIELD).where(FIELD.ENTITY_ID.eq(entityId));
+
+            // FK order: audit_log → consent_policy → field_category → field → entity
+            dsl.deleteFrom(CONSENT_AUDIT_LOG)
+                .where(CONSENT_AUDIT_LOG.FIELD_ID.in(fieldIds))
                 .execute();
 
-            // Delete fields
+            dsl.deleteFrom(CONSENT_POLICY)
+                .where(CONSENT_POLICY.FIELD_ID.in(fieldIds))
+                .execute();
+
+            dsl.deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_ID.in(fieldIds))
+                .execute();
+
             dsl.deleteFrom(FIELD)
                 .where(FIELD.ENTITY_ID.eq(entityId))
                 .execute();
@@ -199,7 +205,15 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .fetchOneInto(Long.class);
 
             if (fieldId != null) {
-                // Remove field_category links first
+                // FK order: audit_log → consent_policy → field_category → field
+                dsl.deleteFrom(CONSENT_AUDIT_LOG)
+                    .where(CONSENT_AUDIT_LOG.FIELD_ID.eq(fieldId))
+                    .execute();
+
+                dsl.deleteFrom(CONSENT_POLICY)
+                    .where(CONSENT_POLICY.FIELD_ID.eq(fieldId))
+                    .execute();
+
                 dsl.deleteFrom(FIELD_CATEGORY)
                     .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
                     .execute();
@@ -282,6 +296,15 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         Long categoryId = resolveCategoryId(categoryName);
         if (categoryId != null) {
+            // FK order: audit_log → consent_policy → field_category → category
+            dsl.deleteFrom(CONSENT_AUDIT_LOG)
+                .where(CONSENT_AUDIT_LOG.CATEGORY_ID.eq(categoryId))
+                .execute();
+
+            dsl.deleteFrom(CONSENT_POLICY)
+                .where(CONSENT_POLICY.CATEGORY_ID.eq(categoryId))
+                .execute();
+
             dsl.deleteFrom(FIELD_CATEGORY)
                 .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
                 .execute();
@@ -318,6 +341,15 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         Long purposeId = resolvePurposeId(purposeName);
         if (purposeId != null) {
+            // FK order: audit_log → consent_policy → purpose_regulation → purpose
+            dsl.deleteFrom(CONSENT_AUDIT_LOG)
+                .where(CONSENT_AUDIT_LOG.PURPOSE_ID.eq(purposeId))
+                .execute();
+
+            dsl.deleteFrom(CONSENT_POLICY)
+                .where(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
+                .execute();
+
             dsl.deleteFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId))
                 .execute();
@@ -441,21 +473,38 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             return;
         }
 
+        Long fieldId = null;
+        Long categoryId = null;
+
         if (fieldName != null) {
-            Long fieldId = resolveFieldId(entityName, fieldName);
+            fieldId = resolveFieldId(entityName, fieldName);
             if (fieldId == null) {
                 log.warn("Field '{}/{}' not found — cannot project policy grant", entityName, fieldName);
                 return;
             }
             upsertFieldPolicy(subjectId, fieldId, purposeId, granted, expiresAt, now);
         } else if (category != null) {
-            Long categoryId = resolveCategoryId(category);
+            categoryId = resolveCategoryId(category);
             if (categoryId == null) {
                 log.warn("Category '{}' not found — cannot project policy grant", category);
                 return;
             }
             upsertCategoryPolicy(subjectId, categoryId, purposeId, granted, expiresAt, now);
+        } else {
+            return;
         }
+
+        // Append audit trail entry
+        dsl.insertInto(CONSENT_AUDIT_LOG)
+            .set(CONSENT_AUDIT_LOG.SUBJECT_ID, subjectId)
+            .set(CONSENT_AUDIT_LOG.FIELD_ID, fieldId)
+            .set(CONSENT_AUDIT_LOG.CATEGORY_ID, categoryId)
+            .set(CONSENT_AUDIT_LOG.PURPOSE_ID, purposeId)
+            .set(CONSENT_AUDIT_LOG.ACTION, granted ? "GRANTED" : "REVOKED")
+            .set(CONSENT_AUDIT_LOG.GRANTED, granted)
+            .set(CONSENT_AUDIT_LOG.EXPIRES_AT, expiresAt)
+            .set(CONSENT_AUDIT_LOG.CREATED_AT, now)
+            .execute();
     }
 
     private void handlePolicyRevoked(JsonNode node) {
@@ -465,9 +514,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
     private void handlePolicyAllRevoked(JsonNode node) {
         String subjectId = node.get("subjectId").asText();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         dsl.deleteFrom(CONSENT_POLICY)
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
+            .execute();
+
+        // Audit the bulk revocation
+        dsl.insertInto(CONSENT_AUDIT_LOG)
+            .set(CONSENT_AUDIT_LOG.SUBJECT_ID, subjectId)
+            .set(CONSENT_AUDIT_LOG.ACTION, "ALL_REVOKED")
+            .set(CONSENT_AUDIT_LOG.GRANTED, false)
+            .set(CONSENT_AUDIT_LOG.CREATED_AT, now)
             .execute();
     }
 
