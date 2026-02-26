@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.billing;
 
-public interface BillingQueryService {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface BillingQueryService<T> extends Plugin<T> {
 }

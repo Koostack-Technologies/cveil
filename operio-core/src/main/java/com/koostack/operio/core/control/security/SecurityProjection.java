@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.security;
 
-public interface SecurityProjection {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface SecurityProjection<T> extends Plugin<T> {
 }

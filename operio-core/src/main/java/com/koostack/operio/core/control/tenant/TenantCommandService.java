@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.tenant;
 
-public interface TenantCommandService {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface TenantCommandService<T> extends Plugin<T> {
 }

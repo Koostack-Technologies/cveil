@@ -8,7 +8,7 @@ dependencies {
     api(project(":operio-core"))
 
     // The plugins this bundle wires
-    implementation(project(":plugins:operio-consent-admin-jooq"))
+    implementation(project(":tenant:operio-consent-admin-jooq"))
     implementation(project(":plugins:operio-consent-decision-redis"))
     implementation(project(":plugins:operio-consent-sync"))
     implementation(project(":plugins:operio-discovery-sensitive-annotation"))

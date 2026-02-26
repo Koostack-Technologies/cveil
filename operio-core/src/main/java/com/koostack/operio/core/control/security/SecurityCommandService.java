@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.security;
 
-public interface SecurityCommandService {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface SecurityCommandService<T> extends Plugin<T> {
 }

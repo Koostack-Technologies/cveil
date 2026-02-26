@@ -1,4 +1,6 @@
 package com.koostack.operio.core.data.consent;
 
-public interface ConsentDecisionProjection {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface ConsentDecisionProjection<T> extends Plugin<T> {
 }

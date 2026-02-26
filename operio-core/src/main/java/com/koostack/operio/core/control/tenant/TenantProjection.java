@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.tenant;
 
-public interface TenantProjection {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface TenantProjection<T> extends Plugin<T> {
 }

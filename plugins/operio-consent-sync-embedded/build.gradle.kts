@@ -8,7 +8,7 @@ dependencies {
     api(project(":operio-core"))
 
     // Internal delegates — not exposed to consumers
-    implementation(project(":plugins:operio-consent-admin-jooq"))
+    implementation(project(":tenant:operio-consent-admin-jooq"))
     implementation(project(":plugins:operio-consent-decision-caffeine"))
     implementation(project(":plugins:operio-jooq-common"))
 

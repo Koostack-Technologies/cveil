@@ -1,4 +1,6 @@
 package com.koostack.operio.core.data.consent;
 
-public interface ConsentAdminProjection {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface ConsentAdminProjection<T> extends Plugin<T> {
 }

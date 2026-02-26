@@ -1,4 +1,6 @@
 package com.koostack.operio.core.data.user;
 
-public interface UserProjection {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface UserProjection<T> extends Plugin<T> {
 }

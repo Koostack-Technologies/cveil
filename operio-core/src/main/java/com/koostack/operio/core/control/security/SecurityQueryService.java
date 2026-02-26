@@ -1,4 +1,6 @@
 package com.koostack.operio.core.control.security;
 
-public interface SecurityQueryService {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface SecurityQueryService<T> extends Plugin<T> {
 }

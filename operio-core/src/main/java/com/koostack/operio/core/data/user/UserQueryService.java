@@ -1,4 +1,6 @@
 package com.koostack.operio.core.data.user;
 
-public interface UserQueryService {
+import com.koostack.operio.core.spi.Plugin;
+
+public interface UserQueryService<T> extends Plugin<T> {
 }

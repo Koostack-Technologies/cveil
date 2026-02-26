@@ -12,7 +12,7 @@ dependencies {
     implementation project(':plugins:operio-jooq-common')
     implementation project(':plugins:operio-redis-common')
     // Needs access to consent migrations for TenantManager.provisionTenant()
-    implementation project(':plugins:operio-consent-admin-jooq')
+    implementation project(":tenant:operio-consent-admin-jooq")
 
     // --- Test ----------------------------------------------------------------
     testImplementation 'com.h2database:h2:2.2.224'

@@ -49,7 +49,7 @@ dependencies {
     // configuration's classpath manually or switch to mode=production.
     compileOnly(project(":operio-bundle-embedded"))
     implementation(project(":plugins:operio-platform-jooq"))
-    implementation(project(":plugins:operio-consent-admin-jooq"))
+    implementation(project(":tenant:operio-consent-admin-jooq"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
     implementation(project(":plugins:operio-jooq-common"))
     implementation(project(":plugins:operio-redis-common"))

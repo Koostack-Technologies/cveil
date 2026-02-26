@@ -1,0 +1,42 @@
+package com.koostack.operio.plugin.consent.jooq;
+
+import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.CategoryDao;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
+
+import org.jooq.DSLContext;
+
+import java.util.List;
+import java.util.Optional;
+
+import static com.koostack.operio.plugin.consent.jooq.generated.Tables.CATEGORY;
+
+/**
+ * Read-only repository for the {@code category} table.
+ */
+public class CategoryRepository {
+
+    private final DSLContext dsl;
+    private final CategoryDao dao;
+
+    public CategoryRepository(DSLContext dsl) {
+        this.dsl = dsl;
+        this.dao = new CategoryDao(dsl.configuration());
+    }
+
+    /** Exposes the generated DAO for standard CRUD when needed. */
+    public CategoryDao dao() {
+        return dao;
+    }
+
+    public Optional<Category> findByName(String categoryName) {
+        return dsl.selectFrom(CATEGORY)
+                  .where(CATEGORY.CATEGORY_NAME.eq(categoryName))
+                  .fetchOptionalInto(Category.class);
+    }
+
+    public List<Category> findAll() {
+        return dsl.selectFrom(CATEGORY)
+                  .orderBy(CATEGORY.CATEGORY_NAME)
+                  .fetchInto(Category.class);
+    }
+}
