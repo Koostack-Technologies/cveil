@@ -1,6 +1,7 @@
 package com.koostack.operio.core.event;
 
 import com.koostack.operio.core.event.models.PublishEventInput;
+import com.koostack.operio.core.event.models.PublishTransformInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
@@ -20,6 +21,20 @@ public interface PlatformEventService<T> extends Plugin<T> {
      *         if publishing fails (e.g. database error)
      */
     <U extends AggregateRoot> void publish(PublishEventInput<U> input);
+
+    /**
+     * Atomically hydrate (or create) an aggregate, apply a transformation,
+     * and publish the resulting event — all within a single transaction.
+     *
+     * <p>This eliminates the TOCTOU race that exists when hydration and
+     * publishing are performed as separate operations.
+     *
+     * @param input carries tenant id, event type, aggregate key, default
+     *              state factory, transformation function, and aggregate class
+     * @throws com.koostack.operio.core.exception.OperioServiceException
+     *         if publishing fails (e.g. database error or concurrent conflict)
+     */
+    <U extends AggregateRoot> void publishTransform(PublishTransformInput<U> input);
 
     /**
      * Retrieve the current version number for a given aggregate.

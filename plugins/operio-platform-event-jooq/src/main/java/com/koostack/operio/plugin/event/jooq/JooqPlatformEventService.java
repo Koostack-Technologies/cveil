@@ -9,6 +9,7 @@ import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishEventInput;
+import com.koostack.operio.core.event.models.PublishTransformInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
@@ -191,6 +192,80 @@ public class JooqPlatformEventService
                 throw new OperioServiceException(
                     "Failed to publish event for " + input.state().aggregateType()
                         + "/" + input.state().aggregateId(),
+                    e
+                );
+            }
+        });
+    }
+
+    @Override
+    public <U extends AggregateRoot> void publishTransform(PublishTransformInput<U> input) {
+        if (dslContext == null) {
+            throw new OperioServiceException("JooqPlatformEventService is not configured");
+        }
+        TenantContext.runWhere(input.tenantId(), () -> {
+            try {
+                if (!eventTypeCache.isValid(input.eventType())) {
+                    throw new OperioServiceException(
+                        "Unknown event type: " + input.eventType()
+                    );
+                }
+
+                String aggregateType = input.key().aggregateType();
+                String aggregateId = input.key().aggregateId().toString();
+
+                dslContext.transaction(txConfig -> {
+                    DSLContext txDsl = txConfig.dsl();
+                    EventRepository txRepo = new EventRepository(txDsl);
+
+                    // Hydrate or create the aggregate inside the transaction
+                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
+                    Long currentVersion = txRepo.getAggregateVersion(aggregateType, aggregateId);
+
+                    U current;
+                    if (currentVersion == 0L) {
+                        current = input.defaultState().get();
+                    } else {
+                        current = objectMapper.treeToValue(currentState, input.type());
+                    }
+
+                    // Apply the transformation inside the transaction
+                    U updated = input.transform().apply(current);
+                    JsonNode updatedNode = objectMapper.valueToTree(updated);
+                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
+
+                    Long version = currentVersion + 1;
+                    PlatformEvent event = new PlatformEvent(
+                        null,
+                        input.tenantId(),
+                        updated.aggregateId(),
+                        aggregateType,
+                        input.eventType(),
+                        java.time.Instant.now(),
+                        version,
+                        diff
+                    );
+
+                    String serializedChanges = objectMapper.writeValueAsString(diff);
+                    long eventId = txRepo.insert(event, serializedChanges);
+                    log.debug(
+                        "Published transform event {} for {}/{}",
+                        eventId, aggregateType, aggregateId
+                    );
+                });
+            } catch (OperioServiceException e) {
+                throw e;
+            } catch (DataAccessException e) {
+                throw new OperioServiceException(
+                    "Concurrent modification conflict for "
+                        + input.key().aggregateType() + "/" + input.key().aggregateId()
+                        + " — retry the operation",
+                    e
+                );
+            } catch (Exception e) {
+                throw new OperioServiceException(
+                    "Failed to publish transform event for "
+                        + input.key().aggregateType() + "/" + input.key().aggregateId(),
                     e
                 );
             }
