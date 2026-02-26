@@ -4,6 +4,7 @@ import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -91,10 +92,8 @@ abstract class ConsentAdminCommandTestBase {
         commandService = new JooqConsentAdminCommandService();
         commandService.configure(new ConsentAdminCommandConfig(eventService));
 
-        // The Caffeine cache in EventTypeCache uses async refresh, so the
-        // first refresh (triggered after the first insertEventType) may only
-        // see a partial set.  Re-register one type to trigger a fresh async
-        // load after all 10 types are in the DB, then sleep to let it settle.
+        // Re-register one type to trigger a synchronous cache reload after
+        // all 10 types are in the DB, ensuring the cache is fully populated.
         eventService.registerEventType(
             new com.koostack.operio.core.event.models.RegisterEventTypeInput<>(
                 com.koostack.operio.core.data.consent.ConsentEventTypes.REGULATION_REGISTERED,
@@ -102,11 +101,21 @@ abstract class ConsentAdminCommandTestBase {
                 com.koostack.operio.core.data.consent.aggregates.RegulationAggregate.class
             )
         );
-        try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
 
         // -- Redis consumer for verification --
         testJedis = new JedisPooled(redis.getHost(), redis.getMappedPort(6379));
         startRedisConsumer();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        consumerRunning = false;
+        if (eventService != null) {
+            eventService.stop();
+        }
+        if (testJedis != null) {
+            testJedis.close();
+        }
     }
 
     /**

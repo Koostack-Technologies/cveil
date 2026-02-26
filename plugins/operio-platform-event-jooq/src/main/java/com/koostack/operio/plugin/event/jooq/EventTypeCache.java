@@ -43,9 +43,12 @@ public class EventTypeCache {
     }
 
     /**
-     * Forces a reload of the cached event types from the database.
+     * Invalidates and synchronously reloads the cached event types from the
+     * database.  This ensures callers see the latest state immediately after
+     * a {@code registerEventType} call — no async race.
      */
     public void refresh() {
-        cache.refresh("ALL");
+        cache.invalidate("ALL");
+        cache.get("ALL");
     }
 }

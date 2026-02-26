@@ -167,6 +167,61 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     }
 
     // -----------------------------------------------------------------------
+    // grantConsent / revokeConsent with expiresAt
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(4)
+    void grantConsentWithExpiresAtRoundTrip() throws Exception {
+        String subject = "frank-expires";
+        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
+        Instant expiresAt = Instant.now().plusSeconds(86400 * 30); // 30 days
+
+        TenantContext.runWhere(TENANT, () ->
+            commandService.grantConsent(subject, scope, expiresAt)
+        );
+
+        AggregateKey key = new AggregateKey(
+            ConsentPolicyAggregate.deriveId(subject),
+            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+
+        assertEquals(1, agg.policies().size());
+        assertTrue(agg.policies().getFirst().granted());
+        assertNotNull(agg.policies().getFirst().expiresAt(),
+            "expiresAt should survive the event-store round-trip");
+        assertEquals(expiresAt, agg.policies().getFirst().expiresAt());
+    }
+
+    @Test
+    @Order(5)
+    void revokeConsentWithExpiresAtRoundTrip() throws Exception {
+        String subject = "grace-expires";
+        ConsentScope scope = ConsentScope.to("PII", "phone", "User", "analytics");
+        Instant expiresAt = Instant.now().plusSeconds(86400 * 7); // 7 days
+
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.grantConsent(subject, scope);
+            commandService.revokeConsent(subject, scope, expiresAt);
+        });
+
+        AggregateKey key = new AggregateKey(
+            ConsentPolicyAggregate.deriveId(subject),
+            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+
+        assertEquals(1, agg.policies().size());
+        assertFalse(agg.policies().getFirst().granted());
+        assertNotNull(agg.policies().getFirst().expiresAt(),
+            "expiresAt should survive the event-store round-trip");
+        assertEquals(expiresAt, agg.policies().getFirst().expiresAt());
+    }
+
+    // -----------------------------------------------------------------------
     // revokeAllConsent
     // -----------------------------------------------------------------------
 
@@ -528,6 +583,53 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             assertNotNull(event.get(PlatformEvent.FIELD_VERSION), "Missing version");
             assertNotNull(event.get(PlatformEvent.FIELD_CHANGES), "Missing changes");
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Negative / error-path tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(101)
+    void grantConsentWithoutTenantContextThrows() {
+        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
+        assertThrows(
+            com.koostack.operio.core.exception.OperioConfigurationException.class,
+            () -> commandService.grantConsent("no-tenant-subject", scope),
+            "Should throw when no tenant context is set"
+        );
+    }
+
+    @Test
+    @Order(102)
+    void revokeConsentWithoutTenantContextThrows() {
+        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
+        assertThrows(
+            com.koostack.operio.core.exception.OperioConfigurationException.class,
+            () -> commandService.revokeConsent("no-tenant-subject", scope),
+            "Should throw when no tenant context is set"
+        );
+    }
+
+    @Test
+    @Order(103)
+    void grantConsentWithNullSubjectThrows() {
+        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
+        assertThrows(Exception.class, () ->
+            TenantContext.runWhere(TENANT, () ->
+                commandService.grantConsent(null, scope)
+            )
+        );
+    }
+
+    @Test
+    @Order(104)
+    void grantConsentWithNullScopeThrows() {
+        assertThrows(Exception.class, () ->
+            TenantContext.runWhere(TENANT, () ->
+                commandService.grantConsent("null-scope-subject", null)
+            )
+        );
     }
 
     // -----------------------------------------------------------------------

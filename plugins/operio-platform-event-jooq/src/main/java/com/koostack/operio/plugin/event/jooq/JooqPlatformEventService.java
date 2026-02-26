@@ -125,6 +125,19 @@ public class JooqPlatformEventService
         return dslContext != null;
     }
 
+    /**
+     * Shuts down background workers (outbox poller and snapshot worker).
+     * Safe to call multiple times or before {@link #configure}.
+     */
+    public void stop() {
+        if (outboxPoller != null) {
+            outboxPoller.stop();
+        }
+        if (snapshotWorker != null) {
+            snapshotWorker.stop();
+        }
+    }
+
     // -----------------------------------------------------------------------
     // PlatformEventService
     // -----------------------------------------------------------------------
