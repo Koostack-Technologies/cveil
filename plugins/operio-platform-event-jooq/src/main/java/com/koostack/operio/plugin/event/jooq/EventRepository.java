@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
@@ -28,7 +29,8 @@ import static org.jooq.impl.DSL.max;
 public class EventRepository {
 
     private static final Logger log = LoggerFactory.getLogger(EventRepository.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new JavaTimeModule());
 
     private final DSLContext dsl;
 

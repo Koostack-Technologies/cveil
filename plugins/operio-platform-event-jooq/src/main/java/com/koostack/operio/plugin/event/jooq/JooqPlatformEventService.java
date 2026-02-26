@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.PlatformEventService;
@@ -41,7 +42,8 @@ public class JooqPlatformEventService
 {
 
     private static final Logger log = LoggerFactory.getLogger(JooqPlatformEventService.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new JavaTimeModule());
     private static final int SNAPSHOT_DEPTH_THRESHOLD = 20;
 
     private DSLContext dslContext;
@@ -131,7 +133,6 @@ public class JooqPlatformEventService
         if (dslContext == null) {
             throw new OperioServiceException("JooqPlatformEventService is not configured");
         }
-        // todo look into this pattern of wrapping the entire method in TenantContext.runWhere — is it better to do this at a higher level (e.g. in a service layer) so that the context is available for the entire operation, including any repository calls? Or is it better to do it here to ensure that all operations are properly scoped, even if the caller forgets to set the context?
         TenantContext.runWhere(input.tenantId(), () -> {
             try {
                 if (!eventTypeCache.isValid(input.eventType())) {
@@ -143,29 +144,40 @@ public class JooqPlatformEventService
                 U state = input.state();
                 String aggregateType = state.aggregateType();
                 String aggregateId = state.aggregateId().toString();
-
-                JsonNode currentState = hydrateAggregate(aggregateType, aggregateId);
                 JsonNode updatedNode = objectMapper.valueToTree(state);
-                JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
 
-                Long version = eventRepository.getAggregateVersion(aggregateType, aggregateId) + 1;
-                PlatformEvent event = new PlatformEvent(
-                    null,
-                    input.tenantId(),
-                    state.aggregateId(),
-                    aggregateType,
-                    input.eventType(),
-                    java.time.Instant.now(),
-                    version,
-                    diff
-                );
+                // Wrap hydrate + version + insert in a transaction so the
+                // diff is always computed against the state that the version
+                // was derived from. The unique constraint on
+                // (aggregate_type, aggregate_id, version, tenant_id) acts
+                // as an optimistic lock — a concurrent insert at the same
+                // version will cause a DataAccessException.
+                dslContext.transaction(txConfig -> {
+                    DSLContext txDsl = txConfig.dsl();
+                    EventRepository txRepo = new EventRepository(txDsl);
 
-                String serializedChanges = objectMapper.writeValueAsString(diff);
-                long eventId = eventRepository.insert(event, serializedChanges);
-                log.debug(
-                    "Published event {} for {}/{}",
-                    eventId, aggregateType, aggregateId
-                );
+                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
+                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
+
+                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
+                    PlatformEvent event = new PlatformEvent(
+                        null,
+                        input.tenantId(),
+                        state.aggregateId(),
+                        aggregateType,
+                        input.eventType(),
+                        java.time.Instant.now(),
+                        version,
+                        diff
+                    );
+
+                    String serializedChanges = objectMapper.writeValueAsString(diff);
+                    long eventId = txRepo.insert(event, serializedChanges);
+                    log.debug(
+                        "Published event {} for {}/{}",
+                        eventId, aggregateType, aggregateId
+                    );
+                });
             } catch (OperioServiceException e) {
                 throw e;
             } catch (DataAccessException e) {
@@ -235,18 +247,29 @@ public class JooqPlatformEventService
 
     private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
             throws Exception {
+        return hydrateAggregateWith(eventRepository, aggregateType, aggregateId);
+    }
+
+    /**
+     * Hydrates an aggregate using the given repository — allows callers to
+     * pass a transaction-scoped repository so reads and the subsequent
+     * insert share the same transaction.
+     */
+    private JsonNode hydrateAggregateWith(
+            EventRepository repo, String aggregateType, String aggregateId)
+            throws Exception {
         JsonNode state;
         List<PlatformEvent> events;
 
-        var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
+        var snapshot = repo.fetchLatestSnapshot(aggregateType, aggregateId);
         if (snapshot.isPresent()) {
             JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
-            events = eventRepository.fetchChangesAfterVersion(
+            events = repo.fetchChangesAfterVersion(
                 aggregateType, aggregateId, snapshot.get().version()
             );
             state = AggregateHydrationUtil.hydrate(baseState, events);
         } else {
-            events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
+            events = repo.fetchChangesForAggregate(aggregateType, aggregateId);
             state = AggregateHydrationUtil.hydrate(events);
         }
 
