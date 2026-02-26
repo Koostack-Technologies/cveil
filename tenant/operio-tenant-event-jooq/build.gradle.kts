@@ -19,6 +19,8 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.20.6")
     testImplementation("org.testcontainers:postgresql:1.20.6")
     testImplementation("org.postgresql:postgresql:42.7.4")
+    testImplementation("redis.clients:jedis:5.2.0")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.12")
 }
 
 // ---------------------------------------------------------------------------

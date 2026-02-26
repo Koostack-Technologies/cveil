@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
+import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import org.junit.jupiter.api.AfterAll;
@@ -28,13 +29,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p>The Redis container is started with a per-tenant ACL user
  * ({@code t_test_tenant}) so the outbox poller can authenticate and
  * publish events. A background consumer thread captures all events
- * published to the {@code operio:tenant-events} stream.
+ * published to the sharded Redis stream for the test tenant.
  */
 @Testcontainers
 abstract class ConsentAdminCommandTestBase {
 
-    static final String STREAM_KEY = "operio:tenant-events";
     static final String TEST_TENANT = "test_tenant";
+    /** Stream key for the test tenant, derived from the shard function. */
+    static final String STREAM_KEY = RedisEventPublisher.streamKeyForTenant(TEST_TENANT);
     private static final String TENANT_ACL_USER = "t_" + TEST_TENANT;
     private static final String TENANT_ACL_PASS = "testpass";
 

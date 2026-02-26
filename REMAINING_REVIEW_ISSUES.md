@@ -1,90 +1,182 @@
-# Remaining Code Review Issues — Medium Severity
+# Remaining Review Issues
 
-These items were identified during a code review of the operio CQRS refactoring work and deferred for a follow-up session. Issues 1–5 from that review have already been fixed and committed.
+Issues identified during review of the tenant event module refactoring and sharded Redis stream publishing work. Provides enough context for a fresh session to pick up and fix each item.
 
 ---
 
-## Issue 6: No `@AfterAll` teardown in test base
+## Background: What was done
 
-**File:** `plugins/operio-consent-admin-command-jooq/src/test/java/com/koostack/operio/plugin/consent/jooq/ConsentAdminCommandTestBase.java`
+The `operio-tenant-event-jooq` module was created as a copy of `operio-platform-event-jooq`, adapted for tenant-scoped events:
 
-**Severity:** Medium
+- **`TenantEvent`** model (operio-core) — like `PlatformEvent` but with a `tenantId` field
+- **`TenantEventService`** interface (operio-core) — mirrors `PlatformEventService`
+- **`PlatformEvent`** — had `tenantId` removed (platform events are not tenant-scoped)
+- **`JooqConsentAdminCommandService`** — migrated from `PlatformEventService` to `TenantEventService`
+- **Sharded Redis publishing** — tenant events publish to 16 sharded streams (`operio:stream:domain:0` … `operio:stream:domain:15`) based on `tenantId.hashCode()`. The `RedisEventPublisher` owns the sharding logic; the `OutboxPoller` just passes event fields to `publishRaw()`.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `tenant/operio-tenant-event-jooq/src/main/java/.../RedisEventPublisher.java` | Sharded stream publishing + `streamKeyForTenant()` |
+| `tenant/operio-tenant-event-jooq/src/main/java/.../OutboxPoller.java` | Transactional outbox — polls unpublished events, builds field maps, delegates to RedisEventPublisher |
+| `tenant/operio-tenant-event-jooq/src/main/java/.../JooqTenantEventService.java` | Main service impl — wires EventRepository, OutboxPoller, SnapshotWorker |
+| `tenant/operio-tenant-event-jooq/src/main/java/.../EventRepository.java` | jOOQ persistence — insert/fetch events, snapshots, event types |
+| `tenant/operio-consent-admin-command-jooq/src/main/java/.../ConsentAdminCommandConfig.java` | Config record now holds `TenantEventService<?>` (was `PlatformEventService<?>`) |
+| `tenant/operio-consent-admin-command-jooq/src/main/java/.../JooqConsentAdminCommandService.java` | Event-sourced consent commands, uses `TenantEventService` |
+| `tenant/operio-consent-admin-command-jooq/src/test/java/.../ConsentAdminCommandTestBase.java` | Integration test base (Testcontainers: Postgres + Redis) |
+| `tenant/operio-consent-admin-command-jooq/src/test/java/.../JooqConsentAdminCommandServiceTest.java` | Integration tests for consent commands |
+
+---
+
+## Issue 1: NPE in `RedisEventPublisher.streamKeyForTenant(null)`
+
+**File:** `tenant/operio-tenant-event-jooq/src/main/java/com/koostack/operio/tenant/event/jooq/RedisEventPublisher.java`
+**Lines:** 37–38, 51–54
+
+**Severity:** Bug (crash path)
 
 **Problem:**
-The test base class starts three background components but never shuts them down:
-- A Redis consumer thread (line 119–147) — `consumerRunning` is set to `true` but never set to `false`
-- The `OutboxPoller` (started inside `eventService.configure()`) — has a `stop()` method that is never called
-- The `SnapshotWorker` — also has a `stop()` method that is never called
-- `testJedis` (`JedisPooled` instance on line 108) — never closed
+`publishRaw()` extracts `tenantId` from the fields map via `fields.get(TenantEvent.FIELD_TENANT_ID)`. If the field is absent (returns `null`), it passes `null` to `streamKeyForTenant()`, which calls `tenantId.hashCode()` — a `NullPointerException`.
 
-While threads are daemon so they won't block JVM exit, the `OutboxPoller` and `SnapshotWorker` hold `ExecutorService` thread pools that are never shut down. This can cause:
-- Intermittent test failures from lingering threads accessing closed database/Redis connections
-- Port exhaustion or connection pool leaks if the test suite grows to include more test classes
-- Misleading flaky failures in CI
+This can happen because `OutboxPoller.publishBatch()` (line 138) conditionally puts `FIELD_TENANT_ID` into the map:
+```java
+if (tenantId != null) {
+    fields.put(TenantEvent.FIELD_TENANT_ID, tenantId);
+}
+```
 
-**Suggested fix:**
-Add an `@AfterAll static void tearDown()` method that:
-1. Sets `consumerRunning = false`
-2. Closes `testJedis`
-3. Calls stop/shutdown on the event service (may need to expose a `stop()` or `close()` method on `JooqPlatformEventService` that delegates to `outboxPoller.stop()` and `snapshotWorker.stop()`)
+If `TenantContext.get()` returns `null`, the field is omitted and the publisher crashes.
 
-**Context:** The `OutboxPoller` and `SnapshotWorker` classes already have `stop()` methods — they just aren't called. The `JooqPlatformEventService` doesn't currently expose a shutdown method, so one would need to be added (perhaps implementing `AutoCloseable` or a custom `Lifecycle` interface).
+**Fix:** Add a null guard at the top of `streamKeyForTenant`:
+```java
+public static String streamKeyForTenant(String tenantId) {
+    if (tenantId == null) {
+        throw new IllegalArgumentException("tenantId must not be null for shard routing");
+    }
+    int hash = tenantId.hashCode();
+    int partitionIndex = (hash & 0x7FFFFFFF) % SHARD_COUNT;
+    return STREAM_KEY_PREFIX + partitionIndex;
+}
+```
 
-**Related consideration (Issue 8):** The `Thread.sleep(1000)` at line 105 for Caffeine cache warming is also fragile. Consider replacing it with a polling loop that checks `eventTypeCache` (or a similar signal) until all 10 event types are present, with a reasonable timeout.
+Also consider whether `OutboxPoller.publishBatch()` should fail fast if `TenantContext.get()` is null rather than silently omitting the field. A tenant event without a `tenantId` is invalid.
 
 ---
 
-## Issue 7: H2 V7 migration reassigns `event_type_id` values
+## Issue 2: Missing `FIELD_TENANT_ID` assertion in integration test
+
+**File:** `tenant/operio-consent-admin-command-jooq/src/test/java/com/koostack/operio/plugin/consent/jooq/JooqConsentAdminCommandServiceTest.java`
+**Lines:** 578–585 (test `allEventsContainRequiredStreamFields`, `@Order(100)`)
+
+**Severity:** Test gap
+
+**Problem:**
+The test asserts presence of `eventId`, `aggregateId`, `aggregateType`, `eventType`, `version`, and `changes` in consumed Redis events — but **never asserts `tenantId`**. Since these are tenant events, every message in the stream must carry `FIELD_TENANT_ID`.
+
+**Fix:** Add this assertion inside the `for` loop:
+```java
+assertNotNull(event.get(TenantEvent.FIELD_TENANT_ID), "Missing tenantId");
+```
+
+---
+
+## Issue 3: `SHARD_COUNT` not publicly accessible
+
+**File:** `tenant/operio-tenant-event-jooq/src/main/java/com/koostack/operio/tenant/event/jooq/RedisEventPublisher.java`
+**Line:** 23
+
+**Severity:** Design concern
+
+**Problem:**
+`SHARD_COUNT` is package-private (`static final int SHARD_COUNT = 16`). Any consumer service that needs to subscribe to all 16 shards (e.g., a consent-sync projection reading from Redis) cannot discover the shard count programmatically.
+
+**Fix options:**
+- Make `SHARD_COUNT` `public`
+- Or expose a utility method like `public static List<String> allStreamKeys()` that returns all 16 keys
+
+---
+
+## Issue 4: No unit tests for `streamKeyForTenant` sharding logic
+
+**Severity:** Test gap
+
+**Problem:**
+The sharding function is critical for correct event routing but has zero test coverage. Issues like negative hash codes, off-by-one in modulo, or inconsistent hashing across JVM versions would go undetected.
+
+**Suggested tests (can be a simple JUnit class in `operio-tenant-event-jooq`):**
+```java
+@Test void sameInputAlwaysReturnsSameKey() { ... }
+@Test void resultAlwaysInValidRange() {
+    // test many tenant IDs, assert partition index is in [0, SHARD_COUNT)
+}
+@Test void nullInputThrows() { ... }  // after Issue 1 fix
+@Test void keyHasExpectedPrefix() {
+    assertTrue(RedisEventPublisher.streamKeyForTenant("x").startsWith("operio:stream:domain:"));
+}
+```
+
+---
+
+## Issue 5: No direct integration tests for `operio-tenant-event-jooq`
+
+**Severity:** Test gap (medium)
+
+**Problem:**
+The `tenant/operio-tenant-event-jooq` module has **no test directory at all**. All testing happens indirectly through the consent-admin-command integration tests. The sibling `plugins/operio-platform-event-jooq` module has its own Testcontainers-based test suite that directly tests the event service, outbox poller, snapshot worker, and Redis publishing.
+
+**Suggested:** Mirror the platform-event-jooq test structure:
+- `JooqTenantEventServiceTest` — publish, publishTransform, getAggregate, getAggregateVersion
+- Outbox poller publishes to correct sharded stream key
+- Snapshot worker creates snapshots after threshold depth
+- Multi-tenant isolation (two tenants, events stay separated)
+
+---
+
+## Issue 6: No multi-tenant test verifying shard isolation
+
+**Severity:** Test gap
+
+**Problem:**
+All integration tests use a single tenant (`test_tenant`). There is no test verifying:
+- Two different tenants can independently publish events
+- Events from tenant A don't appear in tenant B's queries
+- Different tenants may map to different (or the same) shard, and both work correctly
+
+**Suggested:** Add a test in the consent-admin-command suite (or the new tenant-event-jooq tests) that:
+1. Configures `tenantDiscovery` to return `["tenant_a", "tenant_b"]`
+2. Publishes events under each tenant context
+3. Verifies aggregate state per-tenant is independent
+4. Verifies Redis stream(s) contain events from both tenants with correct `tenantId` fields
+
+---
+
+## Previously identified issues (from earlier review session)
+
+### Issue 7: H2 V7 migration reassigns `event_type_id` values
 
 **File:** `plugins/operio-platform-event-jooq/src/main/resources/db/migration/platform-event/V7__drop_event_type_fqn_unique.sql`
 
 **Severity:** Medium (currently safe, fragile for future changes)
 
 **Problem:**
-The H2 migration drops the unique constraint on `event_type.fqn` by recreating the table:
+The H2 migration drops the unique constraint on `event_type.fqn` by recreating the table with `GENERATED ALWAYS AS IDENTITY`, which assigns new auto-generated IDs to copied rows. Currently safe because nothing references `event_type_id` by value, but would break if a FK is ever added.
 
-```sql
-CREATE TABLE event_type_new (
-    event_type_id   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    ...
-);
-INSERT INTO event_type_new (name, display_name, fqn)
-    SELECT name, display_name, fqn FROM event_type;
-DROP TABLE event_type;
-ALTER TABLE event_type_new RENAME TO event_type;
-```
+**Fix:** Use `GENERATED BY DEFAULT AS IDENTITY` and copy the original IDs. Or accept as H2-only (build-time codegen), since PostgreSQL uses a clean `ALTER TABLE DROP CONSTRAINT`.
 
-Because `event_type_id` uses `GENERATED ALWAYS AS IDENTITY`, the copied rows get **new** auto-generated IDs that won't match their original values. Currently safe because:
-- No foreign keys reference `event_type_id`
-- `EventTypeCache` only caches names, not IDs
-- The event table references event types by name string, not by ID
+### Issue 8: `JooqPlatformEventService` has no shutdown method
 
-**Risk:** If a future migration adds a FK from `event` to `event_type` on `event_type_id`, or if any code starts caching/using the numeric IDs, this migration will silently corrupt references on H2.
+**File:** `plugins/operio-platform-event-jooq/src/main/java/com/koostack/operio/plugin/event/jooq/JooqPlatformEventService.java`
 
-**Suggested fix:**
-Preserve the original IDs during the copy. Two options:
+**Severity:** Medium
 
-**Option A** — Use `GENERATED BY DEFAULT AS IDENTITY` instead of `GENERATED ALWAYS`:
-```sql
-CREATE TABLE event_type_new (
-    event_type_id   BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    ...
-);
-INSERT INTO event_type_new (event_type_id, name, display_name, fqn)
-    SELECT event_type_id, name, display_name, fqn FROM event_type;
-```
-Then reset the identity sequence to `MAX(event_type_id) + 1`.
+**Problem:**
+Unlike `JooqTenantEventService` (which has `stop()`), the platform event service doesn't expose a way to shut down its `OutboxPoller` and `SnapshotWorker`. This can cause thread pool leaks in tests and application shutdown.
 
-**Option B** — Since this is H2-only (used for jOOQ codegen at build time, not production), and the PostgreSQL/SQLite variants don't have this issue, document the limitation and accept it. The H2 migration is only run during build-time code generation — production uses the PostgreSQL variant which is a simple `ALTER TABLE DROP CONSTRAINT`.
-
-**Note:** The PostgreSQL variant (`platform-event-postgresql/V7__drop_event_type_fqn_unique.sql`) is a clean single-line `ALTER TABLE event_type DROP CONSTRAINT event_type_fqn_key` and doesn't have this problem. The SQLite variant uses the same recreate approach but SQLite's `AUTOINCREMENT` assigns new IDs starting after the max existing ID, so it's also less problematic.
+**Fix:** Add a `stop()` method mirroring `JooqTenantEventService.stop()`.
 
 ---
 
-## Additional Testing Gaps (from same review, lower priority)
+## Pre-existing unrelated issue
 
-These were identified as 🟢 testing gaps — not bugs, but areas where coverage could be improved:
-
-- **No tests for `grantConsent`/`revokeConsent` with non-null `expiresAt`** — Now that the Jackson `JavaTimeModule` fix is in (Issue 3, already fixed), a test with `Instant.now().plusDays(30)` should be added to validate the full round-trip.
-- **No negative/error path tests** — e.g., unknown event type, null subject, null scope, calling commands before `configure()`, concurrent modification conflicts.
-- **`Thread.sleep(1000)` in test setup** (line 105 of `ConsentAdminCommandTestBase.java`) — Replace with a polling loop for deterministic behavior on slow CI runners.
+**`plugins/operio-consent-sync`** has a compilation error referencing a missing `JooqConsentAdminService` class. This failure exists on the main branch and is not related to any of the work described here.

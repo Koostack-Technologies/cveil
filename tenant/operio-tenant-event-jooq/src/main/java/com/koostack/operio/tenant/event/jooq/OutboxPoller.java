@@ -20,7 +20,8 @@ import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT
 
 /**
  * Polls the {@code event} table for unpublished rows and forwards them to
- * Redis. Implements the transactional outbox pattern.
+ * Redis via {@link RedisEventPublisher}. Implements the transactional
+ * outbox pattern.
  */
 public class OutboxPoller {
 
@@ -129,13 +130,15 @@ public class OutboxPoller {
                 }
 
                 String tenantId = TenantContext.get();
+                if (tenantId == null) {
+                    throw new IllegalStateException(
+                        "TenantContext.get() returned null — tenant events require a tenant ID");
+                }
 
                 for (var record : batch) {
                     Map<String, String> fields = new HashMap<>();
                     fields.put(TenantEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
-                    if (tenantId != null) {
-                        fields.put(TenantEvent.FIELD_TENANT_ID, tenantId);
-                    }
+                    fields.put(TenantEvent.FIELD_TENANT_ID, tenantId);
                     fields.put(TenantEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
                     fields.put(TenantEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
                     fields.put(TenantEvent.FIELD_EVENT_TYPE, record.getEventType());

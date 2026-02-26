@@ -577,6 +577,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         for (Map<String, String> event : consumedEvents) {
             assertNotNull(event.get(TenantEvent.FIELD_EVENT_ID), "Missing eventId");
+            assertNotNull(event.get(TenantEvent.FIELD_TENANT_ID), "Missing tenantId");
             assertNotNull(event.get(TenantEvent.FIELD_AGGREGATE_ID), "Missing aggregateId");
             assertNotNull(event.get(TenantEvent.FIELD_AGGREGATE_TYPE), "Missing aggregateType");
             assertNotNull(event.get(TenantEvent.FIELD_EVENT_TYPE), "Missing eventType");

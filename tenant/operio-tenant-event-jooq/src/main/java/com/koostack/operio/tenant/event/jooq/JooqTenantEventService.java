@@ -104,7 +104,7 @@ public class JooqTenantEventService
             JedisProvider jedisProvider = RedisContextFactory.createProvider(
                 config.redis(), config.tenantCredentialLookup()
             );
-            this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio");
+            this.redisPublisher = new RedisEventPublisher(jedisProvider);
             this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, config.tenantDiscovery());
             this.outboxPoller.start(2);
         }
