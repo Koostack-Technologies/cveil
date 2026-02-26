@@ -153,14 +153,9 @@ public class OutboxPoller {
                     return;
                 }
 
-                String tenantId = TenantContext.get();
-
                 for (var record : batch) {
                     Map<String, String> fields = new HashMap<>();
                     fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
-                    if (tenantId != null) {
-                        fields.put(PlatformEvent.FIELD_TENANT_ID, tenantId);
-                    }
                     fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
                     fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
                     fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.getEventType());

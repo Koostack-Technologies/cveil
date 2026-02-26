@@ -8,7 +8,7 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
 
     // --- Test ----------------------------------------------------------------
-    testImplementation(project(":plugins:operio-platform-event-jooq"))
+    testImplementation(project(":tenant:operio-tenant-event-jooq"))
     testImplementation(project(":plugins:operio-jooq-common"))
     testImplementation(project(":plugins:operio-redis-common"))
     testImplementation("org.testcontainers:testcontainers:1.20.6")

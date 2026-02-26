@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.event.models.PlatformEvent;
-import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
-import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
+import com.koostack.operio.core.event.models.TenantEvent;
+import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
+import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,17 +23,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * Base test class providing PostgreSQL + Redis containers and a fully
  * configured {@link JooqConsentAdminCommandService} backed by a real
- * {@link JooqPlatformEventService}.
+ * {@link JooqTenantEventService}.
  *
  * <p>The Redis container is started with a per-tenant ACL user
  * ({@code t_test_tenant}) so the outbox poller can authenticate and
  * publish events. A background consumer thread captures all events
- * published to the {@code operio:platform-events} stream.
+ * published to the {@code operio:tenant-events} stream.
  */
 @Testcontainers
 abstract class ConsentAdminCommandTestBase {
 
-    static final String STREAM_KEY = "operio:platform-events";
+    static final String STREAM_KEY = "operio:tenant-events";
     static final String TEST_TENANT = "test_tenant";
     private static final String TENANT_ACL_USER = "t_" + TEST_TENANT;
     private static final String TENANT_ACL_PASS = "testpass";
@@ -57,7 +57,7 @@ abstract class ConsentAdminCommandTestBase {
                     "~*", "&*", "+@all"
             );
 
-    static JooqPlatformEventService eventService;
+    static JooqTenantEventService eventService;
     static JooqConsentAdminCommandService commandService;
     static JedisPooled testJedis;
 
@@ -75,7 +75,7 @@ abstract class ConsentAdminCommandTestBase {
                 "t_" + tenantId, TENANT_ACL_PASS
             );
 
-        PlatformEventJooqConfig eventConfig = new PlatformEventJooqConfig(
+        TenantEventJooqConfig eventConfig = new TenantEventJooqConfig(
             postgres.getJdbcUrl(),
             "POSTGRES",
             postgres.getUsername(),
@@ -85,7 +85,7 @@ abstract class ConsentAdminCommandTestBase {
             () -> List.of(TEST_TENANT)
         );
 
-        eventService = new JooqPlatformEventService();
+        eventService = new JooqTenantEventService();
         eventService.configure(eventConfig);
 
         // -- Command service under test --
@@ -172,7 +172,7 @@ abstract class ConsentAdminCommandTestBase {
      */
     static List<Map<String, String>> consumedByType(String eventType) {
         return consumedEvents.stream()
-            .filter(e -> eventType.equals(e.get(PlatformEvent.FIELD_EVENT_TYPE)))
+            .filter(e -> eventType.equals(e.get(TenantEvent.FIELD_EVENT_TYPE)))
             .toList();
     }
 }

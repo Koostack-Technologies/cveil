@@ -176,7 +176,6 @@ public class JooqPlatformEventService
                     Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
                     PlatformEvent event = new PlatformEvent(
                         null,
-                        input.tenantId(),
                         state.aggregateId(),
                         aggregateType,
                         input.eventType(),
@@ -250,7 +249,6 @@ public class JooqPlatformEventService
                     Long version = currentVersion + 1;
                     PlatformEvent event = new PlatformEvent(
                         null,
-                        input.tenantId(),
                         updated.aggregateId(),
                         aggregateType,
                         input.eventType(),
