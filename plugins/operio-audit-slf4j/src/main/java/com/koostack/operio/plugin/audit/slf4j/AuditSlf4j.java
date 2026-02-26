@@ -1,10 +1,11 @@
 package com.koostack.operio.plugin.audit.slf4j;
 
-import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.service.AuditLogger;
+import lombok.extern.slf4j.Slf4j;
 
-public class AuditSlf4j implements AuditLogger {
-    
-    private static final Logger log = LoggerFactory.getLogger(AuditSlf4j.class);
+@Slf4j
+public class AuditSlf4j implements AuditLogger<AuditSlf4jConfig> {
 
     @Override
     public String getName() {
@@ -13,18 +14,41 @@ public class AuditSlf4j implements AuditLogger {
 
     @Override
     public void logAccessGranted(String user, ConsentScope scope) {
-        log.debug("Access GRANTED - User: [{}], Field: [{}], Purpose: [{}]", 
-                user, scope.fieldName(), scope.purposeName());
+        log.debug(
+            "Access GRANTED - User: [{}], Field: [{}], Purpose: [{}]",
+            user,
+            scope.fieldName(),
+            scope.purposeName()
+        );
     }
 
     @Override
-    public void logAccessDenied(String user, ConsentScope scope, String reason) {
-        log.warn("Access DENIED - User: [{}], Field: [{}], Purpose: [{}], Reason: [{}]", 
-                user, scope.fieldName(), scope.purposeName(), reason);
+    public void logAccessDenied(
+        String user,
+        ConsentScope scope,
+        String reason
+    ) {
+        log.warn(
+            "Access DENIED - User: [{}], Field: [{}], Purpose: [{}], Reason: [{}]",
+            user,
+            scope.fieldName(),
+            scope.purposeName(),
+            reason
+        );
     }
 
     @Override
     public void logAlert(String message, Throwable throwable) {
         log.error("OPERIO SECURITY ALERT: {}", message, throwable);
+    }
+
+    @Override
+    public Class<AuditSlf4jConfig> getConfigurationType() {
+        return AuditSlf4jConfig.class;
+    }
+
+    @Override
+    public void configure(AuditSlf4jConfig config) {
+        // Intentionally left blank
     }
 }

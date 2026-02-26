@@ -1,0 +1,100 @@
+# =============================================================================
+# Operio REST API — Test Configuration (Quarkus)
+#
+# This configuration is loaded during @QuarkusTest integration tests.
+# It runs in PRODUCTION mode against real Postgres and Redis instances
+# provided by Testcontainers.
+#
+# The OperioTestResourceManager (a QuarkusTestResourceLifecycleManager)
+# starts Postgres and Redis containers before the Quarkus app boots and
+# injects connection details as system properties.  The ${...} placeholders
+# below are resolved from those injected properties at startup.
+#
+# WHY PRODUCTION MODE?
+# --------------------
+# Testing only in embedded mode (H2 + Caffeine) hides entire categories
+# of bugs: Flyway migration failures on real Postgres, jOOQ identifier
+# case-sensitivity, Redis consent decision wiring, tenant schema routing,
+# HikariCP credential handling, etc.  These are exactly the bugs that
+# previously slipped through because the test suite was 100% Mockito unit
+# tests with zero container startup.
+# =============================================================================
+
+quarkus:
+  http:
+    port: 0 # random port — avoids conflicts in CI
+    test-port: 0 # RestAssured discovers the actual port automatically
+  log:
+    level: WARN
+    category:
+      "com.koostack.operio":
+        level: INFO
+      "org.flywaydb":
+        level: INFO
+      "org.testcontainers":
+        level: INFO
+  # Disable DevServices — we manage our own containers via Testcontainers
+  devservices:
+    enabled: false
+
+# SmallRye Config: allow operio.test.* substitution variables in the Config
+# Override source without requiring them to map to @ConfigMapping(prefix="operio").
+smallrye:
+  config:
+    mapping:
+      validate-unknown: false
+
+# =============================================================================
+# Operio SDK — production mode against Testcontainers Postgres + Redis
+#
+# All ${operio.test.*} properties are injected by OperioTestResourceManager
+# before the Quarkus container boots.  If a test does NOT use the resource
+# manager (e.g. pure unit tests), these placeholders remain unresolved —
+# which is fine because OperioProducers is never instantiated in that case.
+#
+# TLS Configuration for Tests:
+# ---------------------------
+# Tests default to plaintext (tls-enabled=false, ssl-mode=disable) for
+# simplicity. To test TLS configurations, set:
+#   - operio.db.ssl-mode=require
+#   - operio.redis.tls-enabled=true
+# These tests require OperioTestResourceManager to be extended with TLS
+# certificate provisioning (see RedisTlsIntegrationIT and PostgresSslIT).
+# =============================================================================
+operio:
+  mode: production
+  app-name: operio-integration-test
+
+  db:
+    url: ${operio.test.db.url:jdbc:postgresql://localhost:5432/operio_test}
+    dialect: POSTGRES
+    username: ${operio.test.db.username:operio_test}
+    password: ${operio.test.db.password:operio_test}
+    ssl-mode: ${operio.test.db.ssl-mode:disable}
+    ssl-cert-path: ${operio.test.db.ssl-cert-path:}
+    ssl-key-path: ${operio.test.db.ssl-key-path:}
+
+  redis:
+    host: ${operio.test.redis.host:localhost}
+    port: ${operio.test.redis.port:6379}
+    tls-enabled: ${operio.test.redis.tls-enabled:false}
+    tls-ca-cert-path: ${operio.test.redis.tls-ca-cert-path:}
+    tls-verify-peer: ${operio.test.redis.tls-verify-peer:true}
+
+  platform-db:
+    url: ${operio.test.platform-db.url:jdbc:postgresql://localhost:5432/operio_test}
+    dialect: POSTGRES
+    username: ${operio.test.platform-db.username:operio_test}
+    password: ${operio.test.platform-db.password:operio_test}
+    ssl-mode: ${operio.test.platform-db.ssl-mode:disable}
+    ssl-cert-path: ${operio.test.platform-db.ssl-cert-path:}
+    ssl-key-path: ${operio.test.platform-db.ssl-key-path:}
+
+  super-admin:
+    bootstrap-key: test-bootstrap-key-for-integration-tests
+    force-bootstrap: true
+
+  # Multi-tenant isolation — disabled by default for tests.
+  # Individual test classes override via @QuarkusTestResource properties.
+  multi-tenant:
+    enabled: false

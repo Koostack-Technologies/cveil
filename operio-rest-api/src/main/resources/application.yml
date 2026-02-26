@@ -1,0 +1,102 @@
+# =============================================================================
+# Operio REST API — Quarkus Configuration
+#
+# This is the cloud deployment REST API configuration.  Virtual threads MUST
+# be enabled so that ScopedValue-based TenantContext and RequestContext work
+# correctly (ScopedValue requires structured thread-per-request semantics).
+# =============================================================================
+
+quarkus:
+  http:
+    port: 8080
+    cors:
+      origins: ${OPERIO_CORS_ORIGINS:https://dashboard.operio.dev}
+      methods: ${OPERIO_CORS_METHODS:GET,POST,DELETE,OPTIONS}
+      headers: ${OPERIO_CORS_HEADERS:Authorization,Content-Type,X-Request-Id}
+      exposed-headers: ${OPERIO_CORS_EXPOSED_HEADERS:X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning}
+  virtual-threads:
+    enabled: true # REQUIRED for ScopedValue (TenantContext, RequestContext)
+
+  # ---------------------------------------------------------------------------
+  # OpenAPI & Swagger UI
+  # ---------------------------------------------------------------------------
+  smallrye-openapi:
+    path: /q/openapi # OpenAPI spec endpoint (YAML/JSON)
+    info-title: Operio Consent Management API
+    info-version: 1.0.0
+  swagger-ui:
+    always-include: true # Ship Swagger UI in production builds
+    path: /q/swagger-ui # Swagger UI base path
+    theme: flattop # Clean visual theme
+    doc-expansion: list # Expand operations to summary level
+    deep-linking: true # Enable deep-link anchors per operation
+    display-request-duration: true # Show request timing in "Try it out"
+    filter: true # Enable the search/filter bar
+    operations-sorter: alpha # Alphabetical ordering within tags
+    tags-sorter: alpha # Alphabetical tag ordering
+
+# -----------------------------------------------------------------------------
+# Operio SDK configuration — read by OperioProducers CDI bean
+# =============================================================================
+# HIPAA & GDPR Compliance Notes:
+#
+# - Redis credentials (ACL passwords) must be encrypted in transit (TLS).
+# - Consent data (subject IDs, field names) must be encrypted in transit (TLS).
+# - Database connections must use TLS for compliance with:
+#   * HIPAA §164.312(a)(2)(ii) — encryption in transit
+#   * GDPR Article 32 — technical measures for data security
+#
+# For production deployments:
+#
+#   1. operio.db.ssl-mode: set to "verify-full" or "verify-ca"
+#   2. operio.db.ssl-cert-path: mount a PEM CA certificate file
+#   3. operio.redis.tls-enabled: set to true
+#   4. operio.redis.tls-ca-cert-path: mount a PEM CA certificate file
+#
+# For local development, the defaults (ssl-mode=require, tls-enabled=false)
+# allow unencrypted connections for simplicity.
+# =============================================================================
+operio:
+  mode: production # or "embedded" for local dev
+  app-name: operio # application name for Redis key namespacing
+  db:
+    url: jdbc:postgresql://localhost:5432/operio
+    dialect: POSTGRES
+    username: ${OPERIO_DB_USERNAME:}
+    password: ${OPERIO_DB_PASSWORD:}
+    encryption-key: ${OPERIO_DB_ENCRYPTION_KEY:}
+    ssl-mode: ${OPERIO_DB_SSL_MODE:require} # disable, require, verify-ca, verify-full
+    ssl-cert-path: ${OPERIO_DB_SSL_CERT_PATH:} # path to PEM CA certificate
+    ssl-key-path: ${OPERIO_DB_SSL_KEY_PATH:} # path to PEM client key (for mTLS)
+  redis:
+    host: localhost
+    port: 6379
+    password: ${OPERIO_REDIS_PASSWORD:} # optional
+    tls-enabled: ${OPERIO_REDIS_TLS_ENABLED:false} # set to true for production with TLS
+    tls-ca-cert-path: ${OPERIO_REDIS_TLS_CA_CERT_PATH:} # path to PEM CA certificate
+    tls-verify-peer: ${OPERIO_REDIS_TLS_VERIFY_PEER:true} # verify server certificate
+  platform-db:
+    url: jdbc:postgresql://localhost:5432/operio
+    dialect: POSTGRES
+    username: ${OPERIO_PLATFORM_DB_USERNAME:}
+    password: ${OPERIO_PLATFORM_DB_PASSWORD:}
+    encryption-key: ${OPERIO_DB_ENCRYPTION_KEY:}
+    ssl-mode: ${OPERIO_PLATFORM_DB_SSL_MODE:require} # disable, require, verify-ca, verify-full
+    ssl-cert-path: ${OPERIO_PLATFORM_DB_SSL_CERT_PATH:} # path to PEM CA certificate
+    ssl-key-path: ${OPERIO_PLATFORM_DB_SSL_KEY_PATH:} # path to PEM client key (for mTLS)
+  super-admin:
+    bootstrap-key: ${OPERIO_BOOTSTRAP_KEY:}
+    force-bootstrap: ${OPERIO_FORCE_BOOTSTRAP:false}
+
+  # ---------------------------------------------------------------------------
+  # Multi-Tenant Isolation
+  # ---------------------------------------------------------------------------
+  # When enabled, DSAR endpoints (export and delete) require an active
+  # TenantContext and return 403 Forbidden if none is set.  All database
+  # queries are automatically routed to the correct per-tenant schema via
+  # TenantAwareExecuteListener (SET search_path TO t_{tenantId}, public).
+  #
+  # Set to true for multi-tenant SaaS deployments.  Defaults to false for
+  # backward compatibility with single-tenant installations.
+  multi-tenant:
+    enabled: ${OPERIO_MULTI_TENANT_ENABLED:false}

@@ -1,14 +1,16 @@
 package com.koostack.operio.core.service;
 
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.spi.Plugin;
+
 import java.util.Set;
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.spi.NamedPlugin;
-import com.koostack.operio.core.spi.Prioritized;
 
 /**
- * Responsible for identifying sensitive fields within an object 
+ * Responsible for identifying sensitive fields within an object
  * and mapping them to the required ConsentScopes.
  */
-public interface SensitiveFieldResolver extends NamedPlugin, Prioritized {
+public interface SensitiveFieldResolver<T>
+extends Plugin<T>
+{
     Set<ConsentScope> resolveScopes(Object obj);
 }

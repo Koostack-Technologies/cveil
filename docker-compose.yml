@@ -1,0 +1,226 @@
+# =============================================================================
+# Operio REST API — Local Development Docker Compose
+#
+# Spins up the full Operio stack for local development and testing:
+#
+#   - operio-api:  Quarkus REST API (built from source)
+#   - postgres:    PostgreSQL 16 (consent + platform schemas)
+#   - redis:       Redis 7 (consent decision cache + rate limiting)
+#
+# Usage:
+#
+#   # Build and start all services:
+#   docker compose up --build
+#
+#   # Start infrastructure only (run the API from your IDE):
+#   docker compose up postgres redis
+#
+#   # Tear down and remove volumes:
+#   docker compose down -v
+#
+# The bootstrap key is pre-configured for local development.  Use it to
+# create the first tenant and API key:
+#
+#   curl -X POST http://localhost:8080/api/v1/platform/tenants \
+#     -H "Authorization: Bearer opr_bootstrap_localdev_do_not_use_in_prod" \
+#     -H "Content-Type: application/json" \
+#     -d '{"tenantId": "dev_tenant", "displayName": "Dev Tenant", "plan": "free"}'
+#
+#   curl -X POST http://localhost:8080/api/v1/platform/api-keys \
+#     -H "Authorization: Bearer opr_bootstrap_localdev_do_not_use_in_prod" \
+#     -H "Content-Type: application/json" \
+#     -d '{"tenantId": "dev_tenant", "subject": "dev-admin", "roles": ["admin", "consent-writer"]}'
+#
+# =============================================================================
+# TLS/SSL for Local Development (Optional)
+#
+# For testing TLS configuration locally, you can:
+#
+#   1. Generate self-signed certificates:
+#      openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+#
+#   2. Mount certificates into containers (requires custom Dockerfiles)
+#
+#   3. Set environment variables for the Operio API:
+#      OPERIO_DB_SSL_MODE: "require"        # or "verify-ca", "verify-full"
+#      OPERIO_DB_SSL_CERT_PATH: "/certs/ca.pem"
+#      OPERIO_REDIS_TLS_ENABLED: "true"
+#      OPERIO_REDIS_TLS_CA_CERT_PATH: "/certs/redis-ca.pem"
+#
+# Note: Standard postgres:16-alpine and redis:7-alpine images do NOT have
+# TLS compiled in. For local TLS testing, use:
+#   - Custom PostgreSQL image with TLS support
+#   - redis-stack or other Redis TLS-enabled image
+#
+# For production deployments, always enable TLS:
+#   - operio.db.ssl-mode: "verify-full"  (HIPAA §164.312(a)(2)(ii), GDPR Art 32)
+#   - operio.redis.tls-enabled: true      (encrypt Redis ACL credentials in transit)
+# =============================================================================
+
+name: operio
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — consent schema + platform schema
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: operio
+      POSTGRES_USER: operio
+      POSTGRES_PASSWORD: operio_local_dev
+      # Performance tuning for local dev (not production values)
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # To enable TLS locally, mount certificates:
+      # - ./certs/server.crt:/var/lib/postgresql/server.crt:ro
+      # - ./certs/server.key:/var/lib/postgresql/server.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U operio -d operio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis — consent decision cache + rate limiting
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - ""
+      - "--appendonly"
+      - "no"
+    volumes:
+      - redisdata:/data
+      # To enable TLS locally, mount certificates and use:
+      # command:
+      #   - redis-server
+      #   - "--port"
+      #   - "0"
+      #   - "--tls-port"
+      #   - "6380"
+      #   - "--tls-cert-file"
+      #   - "/etc/redis/certs/server.crt"
+      #   - "--tls-key-file"
+      #   - "/etc/redis/certs/server.key"
+      #   - "--tls-ca-cert-file"
+      #   - "/etc/redis/certs/ca.crt"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Operio REST API — Quarkus application
+  # ---------------------------------------------------------------------------
+  operio-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Use the Gradle application distribution (works with Gradle 9.x
+        # where the Quarkus Gradle plugin is not yet compatible).
+        # Change to "quarkus" once the plugin is re-enabled.
+        BUILD_STRATEGY: quarkus
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # -- Quarkus runtime configuration -----------------------------------
+      QUARKUS_HTTP_PORT: "8080"
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_VIRTUAL_THREADS_ENABLED: "true"
+
+      # -- CORS (allow local dashboard development) ------------------------
+      # Override CORS origins via the Operio env var (resolved in application.yml).
+      # Comma-separated list of allowed origins.
+      OPERIO_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+
+      # -- Operio SDK configuration ----------------------------------------
+      OPERIO_MODE: "production"
+      OPERIO_APP_NAME: "operio-local"
+
+      # -- Consent database (jOOQ admin + sync layer) ----------------------
+      OPERIO_DB_URL: "jdbc:postgresql://postgres:5432/operio"
+      OPERIO_DB_DIALECT: "POSTGRES"
+      OPERIO_DB_USERNAME: "operio"
+      OPERIO_DB_PASSWORD: "operio_local_dev"
+      # TLS for database (optional for local dev, required for production)
+      # OPERIO_DB_SSL_MODE: "require"          # or "verify-ca", "verify-full"
+      # OPERIO_DB_SSL_CERT_PATH: "/certs/ca.pem"
+
+      # -- Platform database (tenant management, API keys) -----------------
+      # Same Postgres instance for local dev; separate in production.
+      OPERIO_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/operio"
+      OPERIO_PLATFORM_DB_DIALECT: "POSTGRES"
+      OPERIO_PLATFORM_DB_USERNAME: "operio"
+      OPERIO_PLATFORM_DB_PASSWORD: "operio_local_dev"
+      # OPERIO_PLATFORM_DB_SSL_MODE: "require"
+      # OPERIO_PLATFORM_DB_SSL_CERT_PATH: "/certs/ca.pem"
+
+      # -- Redis (consent decision cache + rate limiting) ------------------
+      OPERIO_REDIS_HOST: "redis"
+      OPERIO_REDIS_PORT: "6379"
+      # No password for local dev Redis.  In production, set OPERIO_REDIS_PASSWORD.
+      # TLS for Redis (optional for local dev, required for production)
+      # OPERIO_REDIS_TLS_ENABLED: "false"     # set to "true" with TLS Redis
+      # OPERIO_REDIS_TLS_CA_CERT_PATH: "/certs/redis-ca.pem"
+      # OPERIO_REDIS_TLS_VERIFY_PEER: "true"
+
+      # -- Bootstrap key (local development only!) -------------------------
+      # This key allows initial tenant and API key creation before any
+      # real credentials exist.  NEVER use this value in production.
+      OPERIO_BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
+
+      # -- Force bootstrap OFF by default ----------------------------------
+      # Set to "true" only for disaster recovery.
+      OPERIO_FORCE_BOOTSTRAP: "false"
+
+      # -- JVM tuning (local dev — generous limits) ------------------------
+      JAVA_OPTS: >-
+        -XX:+UseZGC
+        -Xms256m
+        -Xmx1g
+        --enable-preview
+        -Dquarkus.log.level=INFO
+        -Dquarkus.log.category."com.koostack.operio".level=DEBUG
+    volumes:
+      # To enable TLS locally, mount certificates:
+      # - ./certs:/certs:ro
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:8080/q/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

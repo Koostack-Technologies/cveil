@@ -1,0 +1,28 @@
+-- ============================================================================
+-- V3: Widen redis_acl_password column for encrypted values
+-- ============================================================================
+-- Application-level AES-256-GCM encryption produces Base64-encoded ciphertext
+-- that is significantly longer than the original plaintext password (~32 chars
+-- → ~80+ chars after encryption + Base64 encoding). The existing VARCHAR(255)
+-- column is widened to accommodate encrypted values.
+--
+-- This migration does NOT encrypt existing plaintext values in-place.
+-- Encryption is applied transparently by the application on all subsequent
+-- writes (INSERT/UPDATE). Existing plaintext rows are handled gracefully
+-- by the application's decryptOrPassthrough() logic — if a value cannot be
+-- decrypted (because it's legacy plaintext), it is returned as-is.
+--
+-- To encrypt existing rows, either:
+--   1. Rotate each tenant's Redis ACL password via
+--      JooqPlatformAdminService.reprovisionRedisAcl(tenantId) — this
+--      generates a new password and stores it encrypted.
+--   2. Run a one-time administrative script that reads each tenant's
+--      plaintext password and re-saves it (the repository will encrypt
+--      it transparently).
+--
+-- SECURITY: The encryption key MUST be provided via the
+-- OPERIO_DB_ENCRYPTION_KEY environment variable in production. Without it,
+-- passwords are stored in plaintext (backward-compatible but insecure).
+-- ============================================================================
+
+ALTER TABLE tenant ALTER COLUMN redis_acl_password TYPE VARCHAR(2048);

@@ -1,11 +1,12 @@
 package com.koostack.operio.core.service;
 
+import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.spi.Plugin;
+
 import java.util.Set;
 
-import com.koostack.operio.core.Models.ConsentScope;
-import com.koostack.operio.core.spi.NamedPlugin;
-import com.koostack.operio.core.spi.Prioritized;
-
-public interface MaskingStrategy extends NamedPlugin, Prioritized  {
+public interface MaskingStrategy<T>
+extends Plugin<T>
+{
     Object mask(Object obj, Set<ConsentScope> masked);
 }

@@ -5,5 +5,8 @@ plugins {
 
 dependencies {
     implementation(project(":operio-core"))
-    // TODO: Add specific implementation dependencies (e.g., Jackson, Spring Security, SLF4J)
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

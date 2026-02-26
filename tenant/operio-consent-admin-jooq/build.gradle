@@ -1,0 +1,88 @@
+plugins {
+    id("buildlogic.java-library-conventions")
+    id("buildlogic.maven-publish")
+}
+
+// ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+dependencies {
+    // --- Runtime / API -------------------------------------------------------
+    api project(':operio-core')
+    implementation project(':plugins:operio-jooq-common')
+
+    // --- Test ----------------------------------------------------------------
+    testImplementation 'com.h2database:h2:2.2.224'
+}
+
+// ---------------------------------------------------------------------------
+// jOOQ code generation task
+// ---------------------------------------------------------------------------
+sourceSets {
+    main {
+        java.srcDir layout.buildDirectory.dir("generated-src/jooq/main")
+    }
+}
+
+configurations {
+    jooqCodegen
+}
+
+dependencies {
+    jooqCodegen project(':plugins:operio-jooq-common')
+}
+
+def h2DbFile = layout.buildDirectory.file("h2/consent")
+def generatedDir = layout.buildDirectory.dir("generated-src/jooq/main")
+
+tasks.register('generateJooq', JavaExec) {
+    description = 'Runs Flyway migrations against a build-time H2 instance and generates jOOQ sources'
+    group = 'jooq'
+
+    classpath = configurations.jooqCodegen
+    mainClass = 'com.koostack.operio.plugin.jooq.common.JooqCodegenRunner'
+
+    def h2Url = provider {
+        "jdbc:h2:file:${h2DbFile.get().asFile.absolutePath}"
+    }
+    def migrationPath = provider {
+        "${projectDir}/src/main/resources/db/migration/consent"
+    }
+    def outputPath = provider {
+        generatedDir.get().asFile.absolutePath
+    }
+
+    argumentProviders.add({
+        [h2Url.get(), outputPath.get(), migrationPath.get(), 'com.koostack.operio.plugin.consent.jooq.generated']
+    } as CommandLineArgumentProvider)
+
+    inputs.dir("${projectDir}/src/main/resources/db/migration")
+    outputs.dir(generatedDir)
+
+    doFirst {
+        // Always start with a clean H2 database and fresh generated sources
+        // Use File API directly — Gradle's delete() is not compatible with the configuration cache
+        def h2Dir = h2DbFile.get().asFile.parentFile
+        if (h2Dir.exists()) h2Dir.deleteDir()
+        def genDir = generatedDir.get().asFile
+        if (genDir.exists()) genDir.deleteDir()
+        h2Dir.mkdirs()
+        genDir.mkdirs()
+    }
+}
+
+tasks.named('compileJava').configure {
+    dependsOn 'generateJooq'
+}
+
+tasks.named('delombok').configure {
+    dependsOn 'generateJooq'
+}
+
+tasks.named('sourcesJar').configure {
+    dependsOn 'generateJooq'
+}
+
+tasks.named('javadocJar').configure {
+    dependsOn 'generateJooq'
+}
