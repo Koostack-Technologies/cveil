@@ -1,5 +1,11 @@
 package com.koostack.operio.core.data.consent.aggregates;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koostack.operio.core.data.consent.ConsentEventTypes;
+import com.koostack.operio.core.data.consent.events.PurposeRegisteredEvent;
+import com.koostack.operio.core.data.consent.events.PurposeRegulationLinkedEvent;
+import com.koostack.operio.core.data.consent.events.PurposeRegulationUnlinkedEvent;
 import com.koostack.operio.core.models.AggregateRoot;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -43,6 +49,35 @@ public record PurposeAggregate(
         );
     }
 
+    /**
+     * Applies a semantic domain event to rebuild aggregate state.
+     */
+    public static PurposeAggregate apply(
+        PurposeAggregate current,
+        String eventType,
+        JsonNode payloadNode,
+        ObjectMapper mapper
+    ) {
+        return switch (eventType) {
+            case ConsentEventTypes.PURPOSE_REGISTERED -> {
+                var e = mapper.convertValue(payloadNode, PurposeRegisteredEvent.class);
+                yield current.withDescription(e.description());
+            }
+            case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> {
+                var e = mapper.convertValue(payloadNode, PurposeRegulationLinkedEvent.class);
+                yield current.withRegulationLink(e.regulationName(), e.legalBasis());
+            }
+            case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> {
+                var e = mapper.convertValue(payloadNode, PurposeRegulationUnlinkedEvent.class);
+                yield current.withoutRegulationLink(e.regulationName());
+            }
+            case ConsentEventTypes.PURPOSE_DELETED -> current;
+            default -> throw new IllegalArgumentException(
+                "Unknown event type for PurposeAggregate: " + eventType
+            );
+        };
+    }
+
     /** Returns a new aggregate with an updated description. */
     public PurposeAggregate withDescription(String newDescription) {
         return new PurposeAggregate(
@@ -60,6 +95,18 @@ public record PurposeAggregate(
             l -> l.regulationName().equals(regulationName)
         );
         updated.add(new RegulationLink(regulationName, legalBasis));
+        return new PurposeAggregate(
+            tenantId, aggregateId, purposeName, description,
+            List.copyOf(updated), version
+        );
+    }
+
+    /** Returns a new aggregate with the named regulation link removed. */
+    public PurposeAggregate withoutRegulationLink(String regulationName) {
+        var updated = new ArrayList<>(regulationLinks);
+        updated.removeIf(
+            l -> l.regulationName().equals(regulationName)
+        );
         return new PurposeAggregate(
             tenantId, aggregateId, purposeName, description,
             List.copyOf(updated), version

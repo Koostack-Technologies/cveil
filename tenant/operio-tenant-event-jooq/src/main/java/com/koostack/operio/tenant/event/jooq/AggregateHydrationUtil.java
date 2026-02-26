@@ -2,14 +2,15 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.fge.jsonpatch.JsonPatchException;
 import com.koostack.operio.core.event.models.TenantEvent;
 
 import java.util.List;
 
 /**
- * Shared utility for replaying {@link TenantEvent} patches onto a base state.
+ * @deprecated Replaced by {@link AggregateEventApplier}. Kept only for
+ *             compilation compatibility until the cleanup phase removes it.
  */
+@Deprecated(forRemoval = true)
 public final class AggregateHydrationUtil {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -17,24 +18,18 @@ public final class AggregateHydrationUtil {
     private AggregateHydrationUtil() {}
 
     /**
-     * Replays the patches from the given events onto the provided base state,
-     * returning the resulting {@link JsonNode}.
+     * @deprecated Use {@link AggregateEventApplier} directly.
      */
-    public static JsonNode hydrate(JsonNode baseState, List<TenantEvent> events)
-            throws JsonPatchException {
-        JsonNode state = baseState;
-        for (TenantEvent event : events) {
-            if (event.changes() != null) {
-                state = event.changes().apply(state);
-            }
+    @Deprecated(forRemoval = true)
+    public static JsonNode hydrate(JsonNode baseState, List<TenantEvent> events) {
+        if (events.isEmpty()) {
+            return baseState;
         }
-        return state;
+        // Delegate ignores baseState — callers should migrate to AggregateEventApplier
+        return AggregateEventApplier.replayToJson(events);
     }
 
-    /**
-     * Replays the patches from the given events onto an empty JSON object.
-     */
-    public static JsonNode hydrate(List<TenantEvent> events) throws JsonPatchException {
-        return hydrate(objectMapper.createObjectNode(), events);
+    public static JsonNode hydrate(List<TenantEvent> events) {
+        return AggregateEventApplier.replayToJson(events);
     }
 }

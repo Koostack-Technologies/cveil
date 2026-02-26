@@ -1,5 +1,11 @@
 package com.koostack.operio.core.data.consent.aggregates;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koostack.operio.core.data.consent.ConsentEventTypes;
+import com.koostack.operio.core.data.consent.events.PolicyAllRevokedEvent;
+import com.koostack.operio.core.data.consent.events.PolicyGrantedEvent;
+import com.koostack.operio.core.data.consent.events.PolicyRevokedEvent;
 import com.koostack.operio.core.models.AggregateRoot;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -40,6 +46,40 @@ public record ConsentPolicyAggregate(
         return new ConsentPolicyAggregate(
             tenantId, deriveId(subjectId), subjectId, List.of(), 0L
         );
+    }
+
+    /**
+     * Applies a semantic domain event to rebuild aggregate state.
+     */
+    public static ConsentPolicyAggregate apply(
+        ConsentPolicyAggregate current,
+        String eventType,
+        JsonNode payloadNode,
+        ObjectMapper mapper
+    ) {
+        return switch (eventType) {
+            case ConsentEventTypes.POLICY_GRANTED -> {
+                var e = mapper.convertValue(payloadNode, PolicyGrantedEvent.class);
+                var entry = new PolicyEntry(
+                    e.purposeName(), e.fieldName(), e.entityName(),
+                    e.category(), e.granted(), e.expiresAt()
+                );
+                yield current.withPolicy(entry);
+            }
+            case ConsentEventTypes.POLICY_REVOKED -> {
+                var e = mapper.convertValue(payloadNode, PolicyRevokedEvent.class);
+                var entry = new PolicyEntry(
+                    e.purposeName(), e.fieldName(), e.entityName(),
+                    e.category(), e.granted(), e.expiresAt()
+                );
+                yield current.withPolicy(entry);
+            }
+            case ConsentEventTypes.POLICY_ALL_REVOKED -> current.withAllRevoked();
+            case ConsentEventTypes.POLICY_AUDIT_DELETED -> current;
+            default -> throw new IllegalArgumentException(
+                "Unknown event type for ConsentPolicyAggregate: " + eventType
+            );
+        };
     }
 
     /**

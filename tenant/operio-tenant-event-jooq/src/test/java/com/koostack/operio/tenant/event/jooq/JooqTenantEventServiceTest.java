@@ -1,10 +1,13 @@
 package com.koostack.operio.tenant.event.jooq;
 
-import com.koostack.operio.core.event.models.PublishEventInput;
+import com.koostack.operio.core.data.consent.ConsentEventTypes;
+import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.data.consent.events.CategoryRegisteredEvent;
+import com.koostack.operio.core.data.consent.events.DomainEvent;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -24,52 +27,49 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for {@link JooqTenantEventService}.
  *
- * <p>Tests publish, getAggregate, getAggregateVersion, snapshot creation,
+ * <p>Tests publishEvent, getAggregate, getAggregateVersion, snapshot creation,
  * outbox-to-Redis publishing, and multi-tenant isolation.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
-    private static final String EVENT_TYPE = "TEST_EVENT";
-
     @BeforeAll
     static void registerTestEventType() {
         service.registerEventType(new RegisterEventTypeInput<>(
-            EVENT_TYPE, "Test Event", TestAggregate.class
+            ConsentEventTypes.CATEGORY_REGISTERED, "Category Registered", CategoryRegisteredEvent.class
         ));
     }
 
     // -----------------------------------------------------------------------
-    // publish + getAggregate
+    // publishEvent + getAggregate
     // -----------------------------------------------------------------------
 
     @Test
     @Order(1)
-    void publishInsertsEventAndHydratesAggregate() {
-        UUID aggregateId = UUID.randomUUID();
+    void publishEventInsertsEventAndHydratesAggregate() {
+        String categoryName = "test-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
 
-        TestAggregate state = new TestAggregate(
-            TEST_TENANT, aggregateId, "test-aggregate", 1L,
-            "Alice", "alice@example.com", 30
-        );
-        service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+        var payload = new CategoryRegisteredEvent(categoryName, "Test category description");
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        service.publishEvent(PublishDomainEventInput.of(
+            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+        ));
 
         var record = dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
             .fetchOne();
 
         assertNotNull(record);
-        assertEquals("test-aggregate", record.getAggregateType());
-        assertEquals(EVENT_TYPE, record.getEventType());
+        assertEquals(CategoryAggregate.AGGREGATE_TYPE, record.getAggregateType());
+        assertEquals(ConsentEventTypes.CATEGORY_REGISTERED, record.getEventType());
         assertEquals(1L, record.getVersion());
         assertEquals(TEST_TENANT, record.getTenantId());
 
-        AggregateKey key = new AggregateKey(aggregateId, "test-aggregate", TEST_TENANT);
-        TestAggregate hydrated = service.getAggregate(key, TestAggregate.class);
+        CategoryAggregate hydrated = service.getAggregate(key, CategoryAggregate.class);
 
-        assertEquals("Alice", hydrated.name());
-        assertEquals("alice@example.com", hydrated.email());
-        assertEquals(30, hydrated.age());
+        assertEquals(categoryName, hydrated.categoryName());
+        assertEquals("Test category description", hydrated.description());
     }
 
     // -----------------------------------------------------------------------
@@ -79,18 +79,18 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(2)
     void getAggregateVersionReturnsCorrectVersion() {
-        UUID aggregateId = UUID.randomUUID();
-        AggregateKey key = new AggregateKey(aggregateId, "ver-aggregate", TEST_TENANT);
+        String categoryName = "ver-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         Long v0 = service.getAggregateVersion(key);
         assertEquals(0L, v0, "Non-existent aggregate should have version 0");
 
         for (int i = 1; i <= 3; i++) {
-            TestAggregate state = new TestAggregate(
-                TEST_TENANT, aggregateId, "ver-aggregate", (long) i,
-                "user-v" + i, "v" + i + "@test.com", 20 + i
-            );
-            service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+            var payload = new CategoryRegisteredEvent(categoryName, "description-v" + i);
+            service.publishEvent(PublishDomainEventInput.of(
+                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            ));
         }
 
         Long v3 = service.getAggregateVersion(key);
@@ -104,24 +104,24 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(3)
     void snapshotCreatedAfterTwentyEvents() throws Exception {
-        UUID aggregateId = UUID.randomUUID();
-        AggregateKey key = new AggregateKey(aggregateId, "snap-aggregate", TEST_TENANT);
+        String categoryName = "snap-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
-            TestAggregate state = new TestAggregate(
-                TEST_TENANT, aggregateId, "snap-aggregate", (long) i,
-                "user-v" + i, "u" + i + "@test.com", 20 + i
-            );
-            service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+            var payload = new CategoryRegisteredEvent(categoryName, "snap-desc-v" + i);
+            service.publishEvent(PublishDomainEventInput.of(
+                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            ));
         }
 
         // Trigger hydration to enqueue snapshot
-        service.getAggregate(key, TestAggregate.class);
+        service.getAggregate(key, CategoryAggregate.class);
         TimeUnit.SECONDS.sleep(2);
 
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq("snap-aggregate"))
+            .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(CategoryAggregate.AGGREGATE_TYPE))
             .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
             .limit(1)
             .fetchOne();
@@ -138,35 +138,32 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(4)
     void rehydrateFromSnapshotReturnsCorrectState() throws Exception {
-        UUID aggregateId = UUID.randomUUID();
-        AggregateKey key = new AggregateKey(aggregateId, "rehydrate-agg", TEST_TENANT);
+        String categoryName = "rehydrate-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
-            TestAggregate state = new TestAggregate(
-                TEST_TENANT, aggregateId, "rehydrate-agg", (long) i,
-                "pre-snap-" + i, "pre" + i + "@test.com", 25 + i
-            );
-            service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+            var payload = new CategoryRegisteredEvent(categoryName, "pre-snap-" + i);
+            service.publishEvent(PublishDomainEventInput.of(
+                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            ));
         }
 
-        service.getAggregate(key, TestAggregate.class);
+        service.getAggregate(key, CategoryAggregate.class);
         TimeUnit.SECONDS.sleep(2);
 
         // Post-snapshot events
         for (int i = 22; i <= 25; i++) {
-            TestAggregate state = new TestAggregate(
-                TEST_TENANT, aggregateId, "rehydrate-agg", (long) i,
-                "post-snap-" + i, "post" + i + "@test.com", 50 + i
-            );
-            service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+            var payload = new CategoryRegisteredEvent(categoryName, "post-snap-" + i);
+            service.publishEvent(PublishDomainEventInput.of(
+                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            ));
         }
 
-        TestAggregate hydrated = service.getAggregate(key, TestAggregate.class);
+        CategoryAggregate hydrated = service.getAggregate(key, CategoryAggregate.class);
 
-        assertEquals("post-snap-25", hydrated.name());
-        assertEquals("post25@test.com", hydrated.email());
-        assertEquals(75, hydrated.age());
-        assertEquals(25L, hydrated.version());
+        assertEquals(categoryName, hydrated.categoryName());
+        assertEquals("post-snap-25", hydrated.description());
     }
 
     // -----------------------------------------------------------------------
@@ -178,12 +175,13 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void outboxPublishesToRedisWithAllFields() throws Exception {
         int beforeCount = consumedEvents.size();
 
-        UUID aggregateId = UUID.randomUUID();
-        TestAggregate state = new TestAggregate(
-            TEST_TENANT, aggregateId, "redis-aggregate", 1L,
-            "RedisUser", "redis@test.com", 40
-        );
-        service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+        String categoryName = "redis-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        var payload = new CategoryRegisteredEvent(categoryName, "Redis test");
+        service.publishEvent(PublishDomainEventInput.of(
+            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+        ));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
 
@@ -201,42 +199,37 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         assertNotNull(event.get(TenantEvent.FIELD_AGGREGATE_TYPE), "Missing aggregateType");
         assertNotNull(event.get(TenantEvent.FIELD_EVENT_TYPE), "Missing eventType");
         assertNotNull(event.get(TenantEvent.FIELD_VERSION), "Missing version");
-        assertNotNull(event.get(TenantEvent.FIELD_CHANGES), "Missing changes");
+        assertNotNull(event.get(TenantEvent.FIELD_PAYLOAD), "Missing payload");
     }
 
     // -----------------------------------------------------------------------
-    // Multi-tenant isolation (Issue 6)
+    // Multi-tenant isolation
     // -----------------------------------------------------------------------
 
     @Test
     @Order(20)
     void multiTenantAggregateIsolation() {
         String tenantA = TEST_TENANT;
-        String tenantB = TEST_TENANT; // same DB, different logical tenant ID in event
-        // Use same aggregate ID to prove per-tenant isolation in the event store
-        UUID aggregateId = UUID.randomUUID();
+        String categoryName = "mt-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
 
-        TestAggregate stateA = new TestAggregate(
-            tenantA, aggregateId, "mt-aggregate", 1L,
-            "TenantA-User", "a@test.com", 10
-        );
-        service.publish(PublishEventInput.from(tenantA, EVENT_TYPE, stateA));
+        var payload1 = new CategoryRegisteredEvent(categoryName, "TenantA-v1");
+        AggregateKey keyA = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, tenantA);
+        service.publishEvent(PublishDomainEventInput.of(
+            tenantA, ConsentEventTypes.CATEGORY_REGISTERED, keyA, payload1
+        ));
 
-        // Publish under tenantA context — then verify aggregate state for tenantA
-        AggregateKey keyA = new AggregateKey(aggregateId, "mt-aggregate", tenantA);
-        TestAggregate hydratedA = service.getAggregate(keyA, TestAggregate.class);
-        assertEquals("TenantA-User", hydratedA.name());
+        CategoryAggregate hydratedA = service.getAggregate(keyA, CategoryAggregate.class);
+        assertEquals("TenantA-v1", hydratedA.description());
 
         // Publish a second version under the same tenant and verify version increments
-        TestAggregate stateA2 = new TestAggregate(
-            tenantA, aggregateId, "mt-aggregate", 2L,
-            "TenantA-Updated", "a2@test.com", 11
-        );
-        service.publish(PublishEventInput.from(tenantA, EVENT_TYPE, stateA2));
+        var payload2 = new CategoryRegisteredEvent(categoryName, "TenantA-Updated");
+        service.publishEvent(PublishDomainEventInput.of(
+            tenantA, ConsentEventTypes.CATEGORY_REGISTERED, keyA, payload2
+        ));
 
-        TestAggregate hydratedA2 = service.getAggregate(keyA, TestAggregate.class);
-        assertEquals("TenantA-Updated", hydratedA2.name());
-        assertEquals(2L, hydratedA2.version());
+        CategoryAggregate hydratedA2 = service.getAggregate(keyA, CategoryAggregate.class);
+        assertEquals("TenantA-Updated", hydratedA2.description());
     }
 
     @Test
@@ -244,36 +237,22 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void multiTenantRedisEventsCarryCorrectTenantId() throws Exception {
         int beforeCount = consumedEvents.size();
 
-        UUID aggregateId = UUID.randomUUID();
-        TestAggregate state = new TestAggregate(
-            TEST_TENANT, aggregateId, "mt-redis-aggregate", 1L,
-            "MT-Redis", "mt@test.com", 50
-        );
-        service.publish(PublishEventInput.from(TEST_TENANT, EVENT_TYPE, state));
+        String categoryName = "mt-redis-category-" + UUID.randomUUID();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        var payload = new CategoryRegisteredEvent(categoryName, "MT-Redis test");
+        service.publishEvent(PublishDomainEventInput.of(
+            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+        ));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
 
         List<Map<String, String>> tenantEvents = consumedByTenant(TEST_TENANT);
         assertFalse(tenantEvents.isEmpty(), "Should have events for " + TEST_TENANT);
 
-        // Every event for this tenant must carry the correct tenantId
         for (Map<String, String> event : tenantEvents) {
             assertEquals(TEST_TENANT, event.get(TenantEvent.FIELD_TENANT_ID),
                 "All events should carry the correct tenantId");
         }
     }
-
-    // -----------------------------------------------------------------------
-    // Test aggregate record
-    // -----------------------------------------------------------------------
-
-    record TestAggregate(
-        String tenantId,
-        UUID aggregateId,
-        String aggregateType,
-        Long version,
-        String name,
-        String email,
-        int age
-    ) implements AggregateRoot {}
 }

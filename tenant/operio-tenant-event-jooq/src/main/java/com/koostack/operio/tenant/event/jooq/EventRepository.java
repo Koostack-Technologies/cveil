@@ -2,7 +2,6 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.github.fge.jsonpatch.JsonPatch;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.tenant.event.jooq.generated.tables.records.EventRecord;
@@ -40,7 +39,7 @@ public class EventRepository {
     /**
      * Inserts a new event into the event store and returns its generated id.
      */
-    public <T> long insert(TenantEvent event, String serializedChanges) {
+    public long insert(TenantEvent event) {
         return dsl.insertInto(EVENT)
             .set(EVENT.TENANT_ID, event.tenantId())
             .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
@@ -52,7 +51,7 @@ public class EventRepository {
                     : LocalDateTime.now(ZoneOffset.UTC)
             )
             .set(EVENT.VERSION, event.version())
-            .set(EVENT.CHANGES, serializedChanges)
+            .set(EVENT.PAYLOAD, event.payload())
             .returningResult(EVENT.EVENT_ID)
             .fetchOne()
             .get(EVENT.EVENT_ID);
@@ -160,14 +159,6 @@ public class EventRepository {
     public record SnapshotRecord(Long version, String snapshot) {}
 
     private TenantEvent toTenantEvent(EventRecord record) {
-        JsonPatch changes = null;
-        try {
-            if (record.getChanges() != null) {
-                changes = objectMapper.readValue(record.getChanges(), JsonPatch.class);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to deserialize changes for event {}", record.getEventId(), e);
-        }
         return new TenantEvent(
             record.getEventId(),
             record.getTenantId(),
@@ -176,7 +167,7 @@ public class EventRepository {
             record.getEventType(),
             record.getOccurredAt() != null ? record.getOccurredAt().toInstant(ZoneOffset.UTC) : null,
             record.getVersion(),
-            changes
+            record.getPayload()
         );
     }
 }

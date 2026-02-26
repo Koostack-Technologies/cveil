@@ -143,8 +143,8 @@ public class OutboxPoller {
                     fields.put(TenantEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
                     fields.put(TenantEvent.FIELD_EVENT_TYPE, record.getEventType());
                     fields.put(TenantEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
-                    if (record.getChanges() != null) {
-                        fields.put(TenantEvent.FIELD_CHANGES, record.getChanges());
+                    if (record.getPayload() != null) {
+                        fields.put(TenantEvent.FIELD_PAYLOAD, record.getPayload());
                     }
                     redisPublisher.publishRaw(fields);
                 }

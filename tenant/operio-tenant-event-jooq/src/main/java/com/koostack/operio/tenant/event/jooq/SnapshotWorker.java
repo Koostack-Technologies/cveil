@@ -2,6 +2,7 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
@@ -23,7 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SnapshotWorker {
 
     private static final Logger log = LoggerFactory.getLogger(SnapshotWorker.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new JavaTimeModule());
 
     private final LinkedBlockingQueue<AggregateSnapshotTrigger> queue;
     private final EventRepository eventRepository;
@@ -104,7 +106,7 @@ public class SnapshotWorker {
                     trigger.targetVersion()
                 );
 
-                JsonNode state = AggregateHydrationUtil.hydrate(events);
+                JsonNode state = AggregateEventApplier.replayToJson(events);
 
                 String serializedSnapshot = objectMapper.writeValueAsString(state);
                 eventRepository.insertSnapshot(

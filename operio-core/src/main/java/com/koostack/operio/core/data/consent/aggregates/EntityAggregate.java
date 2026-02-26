@@ -1,5 +1,12 @@
 package com.koostack.operio.core.data.consent.aggregates;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koostack.operio.core.data.consent.ConsentEventTypes;
+import com.koostack.operio.core.data.consent.events.EntityFieldRegisteredEvent;
+import com.koostack.operio.core.data.consent.events.EntityFieldRemovedEvent;
+import com.koostack.operio.core.data.consent.events.FieldCategoryLinkedEvent;
+import com.koostack.operio.core.data.consent.events.FieldCategoryUnlinkedEvent;
 import com.koostack.operio.core.models.AggregateRoot;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -49,11 +56,54 @@ public record EntityAggregate(
         );
     }
 
+    /**
+     * Applies a semantic domain event to rebuild aggregate state.
+     */
+    public static EntityAggregate apply(
+        EntityAggregate current,
+        String eventType,
+        JsonNode payloadNode,
+        ObjectMapper mapper
+    ) {
+        return switch (eventType) {
+            case ConsentEventTypes.ENTITY_FIELD_REGISTERED -> {
+                var e = mapper.convertValue(payloadNode, EntityFieldRegisteredEvent.class);
+                yield current.withField(e.fieldName(), e.description());
+            }
+            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED -> {
+                var e = mapper.convertValue(payloadNode, FieldCategoryLinkedEvent.class);
+                yield current.withFieldCategoryLink(e.fieldName(), e.categoryName());
+            }
+            case ConsentEventTypes.ENTITY_FIELD_REMOVED -> {
+                var e = mapper.convertValue(payloadNode, EntityFieldRemovedEvent.class);
+                yield current.withoutField(e.fieldName());
+            }
+            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED -> {
+                var e = mapper.convertValue(payloadNode, FieldCategoryUnlinkedEvent.class);
+                yield current.withoutFieldCategoryLink(e.fieldName(), e.categoryName());
+            }
+            case ConsentEventTypes.ENTITY_DELETED -> current;
+            default -> throw new IllegalArgumentException(
+                "Unknown event type for EntityAggregate: " + eventType
+            );
+        };
+    }
+
     /** Returns a new aggregate with the given field upserted. */
     public EntityAggregate withField(String fieldName, String fieldDescription) {
         var updated = new ArrayList<>(fields);
         updated.removeIf(f -> f.fieldName().equals(fieldName));
         updated.add(new FieldEntry(fieldName, fieldDescription, List.of()));
+        return new EntityAggregate(
+            tenantId, aggregateId, entityName, description,
+            List.copyOf(updated), version
+        );
+    }
+
+    /** Returns a new aggregate with the named field removed. */
+    public EntityAggregate withoutField(String fieldName) {
+        var updated = new ArrayList<>(fields);
+        updated.removeIf(f -> f.fieldName().equals(fieldName));
         return new EntityAggregate(
             tenantId, aggregateId, entityName, description,
             List.copyOf(updated), version
@@ -72,6 +122,32 @@ public record EntityAggregate(
                 if (!cats.contains(categoryName)) {
                     cats.add(categoryName);
                 }
+                updated.set(
+                    i,
+                    new FieldEntry(f.fieldName(), f.description(),
+                        List.copyOf(cats))
+                );
+                return new EntityAggregate(
+                    tenantId, aggregateId, entityName, description,
+                    List.copyOf(updated), version
+                );
+            }
+        }
+        throw new IllegalArgumentException(
+            "No field '" + fieldName + "' found in entity '" + entityName + "'"
+        );
+    }
+
+    /** Returns a new aggregate with a category link removed from the named field. */
+    public EntityAggregate withoutFieldCategoryLink(
+        String fieldName, String categoryName
+    ) {
+        var updated = new ArrayList<>(fields);
+        for (int i = 0; i < updated.size(); i++) {
+            FieldEntry f = updated.get(i);
+            if (f.fieldName().equals(fieldName)) {
+                var cats = new ArrayList<>(f.categories());
+                cats.remove(categoryName);
                 updated.set(
                     i,
                     new FieldEntry(f.fieldName(), f.description(),

@@ -4,30 +4,28 @@ import com.koostack.operio.core.data.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.data.consent.ConsentEventTypes;
 import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
 import com.koostack.operio.core.data.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.data.consent.aggregates.ConsentPolicyAggregate.PolicyEntry;
 import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.data.consent.events.*;
 import com.koostack.operio.core.event.TenantEventService;
-import com.koostack.operio.core.event.models.PublishTransformInput;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.TenantContext;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Event-sourced {@link ConsentAdminCommandService} implementation.
  *
- * <p>All write operations publish domain events via {@link TenantEventService}
- * instead of writing directly to the database. A separate projection is
- * responsible for materializing the event stream into the consent read model.
+ * <p>All write operations publish semantic domain events via
+ * {@link TenantEventService} instead of writing directly to the database.
+ * A separate projection is responsible for materializing the event stream
+ * into the consent read model.
  */
 public class JooqConsentAdminCommandService
     implements ConsentAdminCommandService<ConsentAdminCommandConfig>
@@ -90,8 +88,19 @@ public class JooqConsentAdminCommandService
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
-        publishPolicyChange(subject, accessRequest, true, expiresAt,
-            ConsentEventTypes.POLICY_GRANTED);
+        String tenantId = TenantContext.require();
+        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
+        var payload = new PolicyGrantedEvent(
+            subject,
+            accessRequest.purposeName(),
+            accessRequest.fieldName(),
+            accessRequest.entityName(),
+            accessRequest.category(),
+            true,
+            expiresAt
+        );
+        publishEvent(tenantId, ConsentEventTypes.POLICY_GRANTED,
+            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
@@ -100,37 +109,38 @@ public class JooqConsentAdminCommandService
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
-        publishPolicyChange(subject, accessRequest, false, expiresAt,
-            ConsentEventTypes.POLICY_REVOKED);
+        String tenantId = TenantContext.require();
+        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
+        var payload = new PolicyRevokedEvent(
+            subject,
+            accessRequest.purposeName(),
+            accessRequest.fieldName(),
+            accessRequest.entityName(),
+            accessRequest.category(),
+            false,
+            expiresAt
+        );
+        publishEvent(tenantId, ConsentEventTypes.POLICY_REVOKED,
+            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
     public void revokeAllConsent(String subject) {
         String tenantId = TenantContext.require();
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.POLICY_ALL_REVOKED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            ConsentPolicyAggregate.deriveId(subject),
-            () -> ConsentPolicyAggregate.create(tenantId, subject),
-            ConsentPolicyAggregate::withAllRevoked,
-            ConsentPolicyAggregate.class
-        );
+        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
+        var payload = new PolicyAllRevokedEvent(subject);
+        publishEvent(tenantId, ConsentEventTypes.POLICY_ALL_REVOKED,
+            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
         LOG.info("Published bulk revoke event for subject: {}", subject);
     }
 
     @Override
     public int deleteAuditLogBySubject(String subject) {
         String tenantId = TenantContext.require();
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.POLICY_AUDIT_DELETED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            ConsentPolicyAggregate.deriveId(subject),
-            () -> ConsentPolicyAggregate.create(tenantId, subject),
-            Function.identity(),
-            ConsentPolicyAggregate.class
-        );
+        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
+        var payload = new PolicyAuditDeletedEvent(subject);
+        publishEvent(tenantId, ConsentEventTypes.POLICY_AUDIT_DELETED,
+            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
         LOG.info(
             "Published audit-log deletion event for subject: {} (actual deletion is eventual)",
             subject
@@ -151,32 +161,18 @@ public class JooqConsentAdminCommandService
         String tenantId = TenantContext.require();
         String normalizedEntity = EntityAggregate.normalizeEntityName(entityName);
         UUID aggregateId = EntityAggregate.deriveId(normalizedEntity);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.ENTITY_FIELD_REGISTERED,
-            EntityAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> EntityAggregate.create(tenantId, entityName),
-            current -> current.withField(fieldName, description),
-            EntityAggregate.class
-        );
+        var payload = new EntityFieldRegisteredEvent(normalizedEntity, fieldName, description);
+        publishEvent(tenantId, ConsentEventTypes.ENTITY_FIELD_REGISTERED,
+            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
     public void registerCategory(String categoryName, String description) {
         String tenantId = TenantContext.require();
         UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.CATEGORY_REGISTERED,
-            CategoryAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> CategoryAggregate.create(tenantId, categoryName, description),
-            current -> current.withDescription(description),
-            CategoryAggregate.class
-        );
+        var payload = new CategoryRegisteredEvent(categoryName, description);
+        publishEvent(tenantId, ConsentEventTypes.CATEGORY_REGISTERED,
+            CategoryAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
@@ -188,16 +184,9 @@ public class JooqConsentAdminCommandService
         String tenantId = TenantContext.require();
         String normalizedEntity = EntityAggregate.normalizeEntityName(entityName);
         UUID aggregateId = EntityAggregate.deriveId(normalizedEntity);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
-            EntityAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> EntityAggregate.create(tenantId, entityName),
-            current -> current.withFieldCategoryLink(fieldName, categoryName),
-            EntityAggregate.class
-        );
+        var payload = new FieldCategoryLinkedEvent(normalizedEntity, fieldName, categoryName);
+        publishEvent(tenantId, ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
+            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     // -----------------------------------------------------------------------
@@ -208,16 +197,9 @@ public class JooqConsentAdminCommandService
     public void registerPurpose(String purposeName, String description) {
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.PURPOSE_REGISTERED,
-            PurposeAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> PurposeAggregate.create(tenantId, purposeName, description),
-            current -> current.withDescription(description),
-            PurposeAggregate.class
-        );
+        var payload = new PurposeRegisteredEvent(purposeName, description);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGISTERED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
@@ -230,19 +212,11 @@ public class JooqConsentAdminCommandService
     ) {
         String tenantId = TenantContext.require();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.REGULATION_REGISTERED,
-            RegulationAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> RegulationAggregate.create(
-                tenantId, regulationName, fullName,
-                jurisdiction, description, url
-            ),
-            current -> current.withDetails(fullName, jurisdiction, description, url),
-            RegulationAggregate.class
+        var payload = new RegulationRegisteredEvent(
+            regulationName, fullName, jurisdiction, description, url
         );
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_REGISTERED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
@@ -253,64 +227,25 @@ public class JooqConsentAdminCommandService
     ) {
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
-
-        publishTransform(
-            tenantId,
-            ConsentEventTypes.PURPOSE_REGULATION_LINKED,
-            PurposeAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> PurposeAggregate.create(tenantId, purposeName, null),
-            current -> current.withRegulationLink(regulationName, legalBasis),
-            PurposeAggregate.class
-        );
+        var payload = new PurposeRegulationLinkedEvent(purposeName, regulationName, legalBasis);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     // -----------------------------------------------------------------------
-    // Internal — event publishing helpers
+    // Internal — event publishing helper
     // -----------------------------------------------------------------------
 
-    private void publishPolicyChange(
-        String subject,
-        ConsentScope scope,
-        boolean granted,
-        Instant expiresAt,
-        String eventType
-    ) {
-        String tenantId = TenantContext.require();
-        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
-
-        var entry = new PolicyEntry(
-            scope.purposeName(),
-            scope.fieldName(),
-            scope.entityName(),
-            scope.category(),
-            granted,
-            expiresAt
-        );
-
-        publishTransform(
-            tenantId,
-            eventType,
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            aggregateId,
-            () -> ConsentPolicyAggregate.create(tenantId, subject),
-            current -> current.withPolicy(entry),
-            ConsentPolicyAggregate.class
-        );
-    }
-
-    private <T extends AggregateRoot> void publishTransform(
+    private void publishEvent(
         String tenantId,
         String eventType,
         String aggregateType,
         UUID aggregateId,
-        Supplier<T> defaultState,
-        Function<T, T> transform,
-        Class<T> type
+        DomainEvent payload
     ) {
         AggregateKey key = new AggregateKey(aggregateId, aggregateType, tenantId);
-        eventService.publishTransform(
-            PublishTransformInput.of(tenantId, eventType, key, defaultState, transform, type)
+        eventService.publishEvent(
+            PublishDomainEventInput.of(tenantId, eventType, key, payload)
         );
     }
 
@@ -320,25 +255,41 @@ public class JooqConsentAdminCommandService
 
     private void registerEventTypes() {
         register(ConsentEventTypes.POLICY_GRANTED,
-            "Consent Policy Granted", ConsentPolicyAggregate.class);
+            "Consent Policy Granted", PolicyGrantedEvent.class);
         register(ConsentEventTypes.POLICY_REVOKED,
-            "Consent Policy Revoked", ConsentPolicyAggregate.class);
+            "Consent Policy Revoked", PolicyRevokedEvent.class);
         register(ConsentEventTypes.POLICY_ALL_REVOKED,
-            "All Consent Policies Revoked", ConsentPolicyAggregate.class);
+            "All Consent Policies Revoked", PolicyAllRevokedEvent.class);
         register(ConsentEventTypes.POLICY_AUDIT_DELETED,
-            "Consent Audit Log Deletion Requested", ConsentPolicyAggregate.class);
+            "Consent Audit Log Deletion Requested", PolicyAuditDeletedEvent.class);
         register(ConsentEventTypes.ENTITY_FIELD_REGISTERED,
-            "Consent Field Registered", EntityAggregate.class);
+            "Consent Field Registered", EntityFieldRegisteredEvent.class);
         register(ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
-            "Field-Category Link Created", EntityAggregate.class);
+            "Field-Category Link Created", FieldCategoryLinkedEvent.class);
         register(ConsentEventTypes.CATEGORY_REGISTERED,
-            "Consent Category Registered", CategoryAggregate.class);
+            "Consent Category Registered", CategoryRegisteredEvent.class);
         register(ConsentEventTypes.PURPOSE_REGISTERED,
-            "Consent Purpose Registered", PurposeAggregate.class);
+            "Consent Purpose Registered", PurposeRegisteredEvent.class);
         register(ConsentEventTypes.PURPOSE_REGULATION_LINKED,
-            "Purpose-Regulation Link Created", PurposeAggregate.class);
+            "Purpose-Regulation Link Created", PurposeRegulationLinkedEvent.class);
         register(ConsentEventTypes.REGULATION_REGISTERED,
-            "Consent Regulation Registered", RegulationAggregate.class);
+            "Consent Regulation Registered", RegulationRegisteredEvent.class);
+
+        // Delete / unlink event types
+        register(ConsentEventTypes.ENTITY_DELETED,
+            "Consent Entity Deleted", EntityDeletedEvent.class);
+        register(ConsentEventTypes.ENTITY_FIELD_REMOVED,
+            "Consent Entity Field Removed", EntityFieldRemovedEvent.class);
+        register(ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED,
+            "Field-Category Link Removed", FieldCategoryUnlinkedEvent.class);
+        register(ConsentEventTypes.CATEGORY_DELETED,
+            "Consent Category Deleted", CategoryDeletedEvent.class);
+        register(ConsentEventTypes.PURPOSE_DELETED,
+            "Consent Purpose Deleted", PurposeDeletedEvent.class);
+        register(ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
+            "Purpose-Regulation Link Removed", PurposeRegulationUnlinkedEvent.class);
+        register(ConsentEventTypes.REGULATION_DELETED,
+            "Consent Regulation Deleted", RegulationDeletedEvent.class);
     }
 
     private <T> void register(

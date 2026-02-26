@@ -1,15 +1,11 @@
 package com.koostack.operio.tenant.event.jooq;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.github.fge.jsonpatch.JsonPatch;
-import com.github.fge.jsonpatch.diff.JsonDiff;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.TenantEvent;
-import com.koostack.operio.core.event.models.PublishEventInput;
-import com.koostack.operio.core.event.models.PublishTransformInput;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
@@ -143,70 +139,7 @@ public class JooqTenantEventService
     // -----------------------------------------------------------------------
 
     @Override
-    public <U extends AggregateRoot> void publish(PublishEventInput<U> input) {
-        if (dslContext == null) {
-            throw new OperioServiceException("JooqTenantEventService is not configured");
-        }
-        TenantContext.runWhere(input.tenantId(), () -> {
-            try {
-                if (!eventTypeCache.isValid(input.eventType())) {
-                    throw new OperioServiceException(
-                        "Unknown event type: " + input.eventType()
-                    );
-                }
-
-                U state = input.state();
-                String aggregateType = state.aggregateType();
-                String aggregateId = state.aggregateId().toString();
-                JsonNode updatedNode = objectMapper.valueToTree(state);
-
-                dslContext.transaction(txConfig -> {
-                    DSLContext txDsl = txConfig.dsl();
-                    EventRepository txRepo = new EventRepository(txDsl);
-
-                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
-                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
-
-                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
-                    TenantEvent event = new TenantEvent(
-                        null,
-                        input.tenantId(),
-                        state.aggregateId(),
-                        aggregateType,
-                        input.eventType(),
-                        java.time.Instant.now(),
-                        version,
-                        diff
-                    );
-
-                    String serializedChanges = objectMapper.writeValueAsString(diff);
-                    long eventId = txRepo.insert(event, serializedChanges);
-                    log.debug(
-                        "Published event {} for {}/{}",
-                        eventId, aggregateType, aggregateId
-                    );
-                });
-            } catch (OperioServiceException e) {
-                throw e;
-            } catch (DataAccessException e) {
-                throw new OperioServiceException(
-                    "Concurrent modification conflict for "
-                        + input.state().aggregateType() + "/" + input.state().aggregateId()
-                        + " — retry the operation",
-                    e
-                );
-            } catch (Exception e) {
-                throw new OperioServiceException(
-                    "Failed to publish event for " + input.state().aggregateType()
-                        + "/" + input.state().aggregateId(),
-                    e
-                );
-            }
-        });
-    }
-
-    @Override
-    public <U extends AggregateRoot> void publishTransform(PublishTransformInput<U> input) {
+    public void publishEvent(PublishDomainEventInput input) {
         if (dslContext == null) {
             throw new OperioServiceException("JooqTenantEventService is not configured");
         }
@@ -220,41 +153,27 @@ public class JooqTenantEventService
 
                 String aggregateType = input.key().aggregateType();
                 String aggregateId = input.key().aggregateId().toString();
+                String serializedPayload = objectMapper.writeValueAsString(input.payload());
 
                 dslContext.transaction(txConfig -> {
                     DSLContext txDsl = txConfig.dsl();
                     EventRepository txRepo = new EventRepository(txDsl);
 
-                    JsonNode currentState = hydrateAggregateWith(txRepo, aggregateType, aggregateId);
-                    Long currentVersion = txRepo.getAggregateVersion(aggregateType, aggregateId);
-
-                    U current;
-                    if (currentVersion == 0L) {
-                        current = input.defaultState().get();
-                    } else {
-                        current = objectMapper.treeToValue(currentState, input.type());
-                    }
-
-                    U updated = input.transform().apply(current);
-                    JsonNode updatedNode = objectMapper.valueToTree(updated);
-                    JsonPatch diff = JsonDiff.asJsonPatch(currentState, updatedNode);
-
-                    Long version = currentVersion + 1;
+                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
                     TenantEvent event = new TenantEvent(
                         null,
                         input.tenantId(),
-                        updated.aggregateId(),
+                        input.key().aggregateId(),
                         aggregateType,
                         input.eventType(),
                         java.time.Instant.now(),
                         version,
-                        diff
+                        serializedPayload
                     );
 
-                    String serializedChanges = objectMapper.writeValueAsString(diff);
-                    long eventId = txRepo.insert(event, serializedChanges);
+                    long eventId = txRepo.insert(event);
                     log.debug(
-                        "Published transform event {} for {}/{}",
+                        "Published event {} for {}/{}",
                         eventId, aggregateType, aggregateId
                     );
                 });
@@ -269,8 +188,8 @@ public class JooqTenantEventService
                 );
             } catch (Exception e) {
                 throw new OperioServiceException(
-                    "Failed to publish transform event for "
-                        + input.key().aggregateType() + "/" + input.key().aggregateId(),
+                    "Failed to publish event for " + input.key().aggregateType()
+                        + "/" + input.key().aggregateId(),
                     e
                 );
             }
@@ -301,8 +220,31 @@ public class JooqTenantEventService
         }
         try {
             return TenantContext.callWhere(key.tenantId(), () -> {
-                JsonNode state = hydrateAggregate(key.aggregateType(), key.aggregateId().toString());
-                return objectMapper.treeToValue(state, type);
+                String aggregateType = key.aggregateType();
+                String aggregateId = key.aggregateId().toString();
+                List<TenantEvent> events;
+
+                var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
+                if (snapshot.isPresent()) {
+                    U baseState = objectMapper.readValue(snapshot.get().snapshot(), type);
+                    events = eventRepository.fetchChangesAfterVersion(
+                        aggregateType, aggregateId, snapshot.get().version()
+                    );
+                    @SuppressWarnings("unchecked")
+                    U result = (U) AggregateEventApplier.replay(
+                        (AggregateRoot) baseState, events
+                    );
+                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
+                    return result;
+                } else {
+                    events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
+                    @SuppressWarnings("unchecked")
+                    Class<? extends AggregateRoot> rootType = (Class<? extends AggregateRoot>) type;
+                    @SuppressWarnings("unchecked")
+                    U result = (U) AggregateEventApplier.replay(events, rootType);
+                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
+                    return result;
+                }
             });
         } catch (OperioServiceException e) {
             throw e;
@@ -325,29 +267,9 @@ public class JooqTenantEventService
     // Internal
     // -----------------------------------------------------------------------
 
-    private JsonNode hydrateAggregate(String aggregateType, String aggregateId)
-            throws Exception {
-        return hydrateAggregateWith(eventRepository, aggregateType, aggregateId);
-    }
-
-    private JsonNode hydrateAggregateWith(
-            EventRepository repo, String aggregateType, String aggregateId)
-            throws Exception {
-        JsonNode state;
-        List<TenantEvent> events;
-
-        var snapshot = repo.fetchLatestSnapshot(aggregateType, aggregateId);
-        if (snapshot.isPresent()) {
-            JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
-            events = repo.fetchChangesAfterVersion(
-                aggregateType, aggregateId, snapshot.get().version()
-            );
-            state = AggregateHydrationUtil.hydrate(baseState, events);
-        } else {
-            events = repo.fetchChangesForAggregate(aggregateType, aggregateId);
-            state = AggregateHydrationUtil.hydrate(events);
-        }
-
+    private void triggerSnapshotIfNeeded(
+        String aggregateType, String aggregateId, List<TenantEvent> events
+    ) {
         int depth = events.size();
         if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
             AggregateKey key = new AggregateKey(
@@ -360,8 +282,6 @@ public class JooqTenantEventService
                 aggregateType, aggregateId, depth
             );
         }
-
-        return state;
     }
 
     // -----------------------------------------------------------------------

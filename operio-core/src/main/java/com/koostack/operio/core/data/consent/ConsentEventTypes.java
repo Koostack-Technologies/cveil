@@ -20,14 +20,21 @@ public final class ConsentEventTypes {
     // -- EntityAggregate ------------------------------------------------------
     public static final String ENTITY_FIELD_REGISTERED = "consent.entity.field-registered";
     public static final String ENTITY_FIELD_CATEGORY_LINKED = "consent.entity.field-category-linked";
+    public static final String ENTITY_DELETED = "consent.entity.deleted";
+    public static final String ENTITY_FIELD_REMOVED = "consent.entity.field-removed";
+    public static final String ENTITY_FIELD_CATEGORY_UNLINKED = "consent.entity.field-category-unlinked";
 
     // -- CategoryAggregate ----------------------------------------------------
     public static final String CATEGORY_REGISTERED = "consent.category.registered";
+    public static final String CATEGORY_DELETED = "consent.category.deleted";
 
     // -- PurposeAggregate -----------------------------------------------------
     public static final String PURPOSE_REGISTERED = "consent.purpose.registered";
     public static final String PURPOSE_REGULATION_LINKED = "consent.purpose.regulation-linked";
+    public static final String PURPOSE_DELETED = "consent.purpose.deleted";
+    public static final String PURPOSE_REGULATION_UNLINKED = "consent.purpose.regulation-unlinked";
 
     // -- RegulationAggregate --------------------------------------------------
     public static final String REGULATION_REGISTERED = "consent.regulation.registered";
+    public static final String REGULATION_DELETED = "consent.regulation.deleted";
 }
