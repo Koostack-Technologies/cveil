@@ -1,9 +1,9 @@
 package com.koostack.operio.tenant.consent.projection.decision;
 
-import com.koostack.operio.core.data.consent.ConsentEventTypes;
-import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationPublisher;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationPublisher;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository.AffectedEntry;

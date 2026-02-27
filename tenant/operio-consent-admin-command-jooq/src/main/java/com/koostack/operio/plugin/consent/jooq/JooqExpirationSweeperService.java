@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.ConsentAdminCommandService;
-import com.koostack.operio.core.data.consent.ConsentAdminQueryService;
-import com.koostack.operio.core.data.consent.ExpirationSweeperService;
+import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
+import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
+import com.koostack.operio.core.tenant.consent.ExpirationSweeperService;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.PolicySummaryEntry;
 import com.koostack.operio.core.models.TenantContext;

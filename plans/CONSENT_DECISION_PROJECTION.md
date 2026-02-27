@@ -1078,7 +1078,7 @@ Apply same validation to `revokeConsent()`.
 **Location:** `operio-core/src/main/java/com/koostack/operio/core/data/consent/ExpirationSweeperService.java`
 
 ```java
-package com.koostack.operio.core.data.consent;
+package com.koostack.operio.core.tenant.consent;
 
 /**
  * Periodic service that sweeps for expired consent policies and issues

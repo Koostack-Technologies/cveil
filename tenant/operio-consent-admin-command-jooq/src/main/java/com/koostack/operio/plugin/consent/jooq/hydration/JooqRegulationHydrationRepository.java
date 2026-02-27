@@ -1,7 +1,7 @@
 package com.koostack.operio.plugin.consent.jooq.hydration;
 
-import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
-import com.koostack.operio.core.data.consent.hydration.RegulationHydrationRepository;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.hydration.RegulationHydrationRepository;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;

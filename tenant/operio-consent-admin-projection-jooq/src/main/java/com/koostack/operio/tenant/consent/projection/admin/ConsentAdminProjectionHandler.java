@@ -3,7 +3,7 @@ package com.koostack.operio.tenant.consent.projection.admin;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.data.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.tenant.event.jooq.StreamEventHandler;

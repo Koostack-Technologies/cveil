@@ -1,16 +1,16 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.ConsentAdminCommandService;
-import com.koostack.operio.core.data.consent.ConsentEventTypes;
-import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.data.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
-import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
-import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
-import com.koostack.operio.core.data.consent.events.*;
-import com.koostack.operio.core.data.consent.hydration.CategoryHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.EntityHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.PurposeHydrationRepository;
+import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.events.*;
+import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;

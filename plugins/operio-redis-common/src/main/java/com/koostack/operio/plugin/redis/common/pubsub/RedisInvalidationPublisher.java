@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.redis.common.pubsub;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationPublisher;
+import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;

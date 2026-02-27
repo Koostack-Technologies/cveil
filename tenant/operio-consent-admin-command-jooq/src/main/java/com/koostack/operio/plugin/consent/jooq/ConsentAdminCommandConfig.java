@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.hydration.CategoryHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.EntityHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.PurposeHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.TenantEventService;
 
 /**

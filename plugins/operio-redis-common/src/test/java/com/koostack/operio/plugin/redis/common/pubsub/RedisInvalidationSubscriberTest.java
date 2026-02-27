@@ -2,10 +2,10 @@ package com.koostack.operio.plugin.redis.common.pubsub;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fppt.jedismock.RedisServer;
-import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationSink;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationSubscriber;
+import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSink;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.JedisPooled;
 

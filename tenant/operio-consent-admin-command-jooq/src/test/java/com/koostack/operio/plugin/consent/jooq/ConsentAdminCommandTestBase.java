@@ -1,11 +1,11 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
-import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
-import com.koostack.operio.core.data.consent.hydration.CategoryHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.EntityHydrationRepository;
-import com.koostack.operio.core.data.consent.hydration.PurposeHydrationRepository;
+import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
+import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
@@ -119,9 +119,9 @@ abstract class ConsentAdminCommandTestBase {
         // all 10 types are in the DB, ensuring the cache is fully populated.
         eventService.registerEventType(
             new com.koostack.operio.core.event.models.RegisterEventTypeInput<>(
-                com.koostack.operio.core.data.consent.ConsentEventTypes.REGULATION_REGISTERED,
+                com.koostack.operio.core.tenant.consent.ConsentEventTypes.REGULATION_REGISTERED,
                 "Consent Regulation Registered",
-                com.koostack.operio.core.data.consent.aggregates.RegulationAggregate.class
+                com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate.class
             )
         );
 

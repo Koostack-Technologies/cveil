@@ -1,15 +1,13 @@
 package com.koostack.operio.plugin.redis.common.pubsub;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
-import org.junit.jupiter.api.BeforeEach;
+import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.JedisPooled;
 
 import java.util.List;
-import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 

@@ -1,14 +1,12 @@
 package com.koostack.operio.tenant.event.jooq;
 
-import com.koostack.operio.core.data.consent.ConsentEventTypes;
-import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.data.consent.events.CategoryRegisteredEvent;
-import com.koostack.operio.core.event.DomainEvent;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.tenant.consent.events.CategoryRegisteredEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.TenantContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

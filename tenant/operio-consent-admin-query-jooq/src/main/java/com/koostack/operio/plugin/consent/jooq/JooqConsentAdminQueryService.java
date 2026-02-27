@@ -1,6 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.ConsentAdminQueryService;
+import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
 import com.koostack.operio.core.models.CategoryInfo;
 import com.koostack.operio.core.models.ConsentAuditEntry;
 import com.koostack.operio.core.models.ConsentScope;

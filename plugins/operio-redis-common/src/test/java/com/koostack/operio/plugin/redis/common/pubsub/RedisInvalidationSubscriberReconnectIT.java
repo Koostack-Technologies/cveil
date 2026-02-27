@@ -1,9 +1,9 @@
 package com.koostack.operio.plugin.redis.common.pubsub;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
-import com.koostack.operio.core.data.consent.invalidation.InvalidationSubscriber;
+import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
+import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;

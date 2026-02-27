@@ -1,11 +1,11 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.data.consent.ConsentEventTypes;
-import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.data.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
-import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
-import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.ConsentScope;

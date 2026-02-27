@@ -48,7 +48,7 @@ dependencies {
     // For local IDE development with mode=embedded, add the module to your run
     // configuration's classpath manually or switch to mode=production.
     compileOnly(project(":operio-bundle-embedded"))
-    implementation(project(":plugins:operio-platform-jooq"))
+    implementation(project(":platform:operio-platform-jooq"))
     implementation(project(":tenant:operio-consent-admin-jooq"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
     implementation(project(":plugins:operio-jooq-common"))

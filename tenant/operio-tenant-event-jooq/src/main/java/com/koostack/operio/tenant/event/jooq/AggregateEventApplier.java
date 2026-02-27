@@ -3,11 +3,11 @@ package com.koostack.operio.tenant.event.jooq;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.data.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
-import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
-import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateRoot;
 
