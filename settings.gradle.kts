@@ -15,7 +15,8 @@ rootProject.name = "operio"
 include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
 
 include("plugins:operio-audit-slf4j")
-include("tenant:operio-consent-admin-jooq")
+include("tenant:operio-consent-admin-schema")
+include("tenant:operio-consent-admin-jooq-common")
 include("tenant:operio-consent-admin-command")
 include("tenant:operio-consent-admin-query-jooq")
 include("plugins:operio-jooq-common")

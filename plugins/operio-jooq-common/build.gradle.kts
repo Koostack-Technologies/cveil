@@ -24,7 +24,7 @@ dependencies {
     // NOTE: slf4j-simple is intentionally NOT an implementation dependency.
     // The JooqCodegenRunner (which lives in this module's main source set)
     // is executed via the `jooqCodegen` configuration in downstream modules
-    // (operio-consent-admin-jooq, operio-platform-jooq).  At codegen time,
+    // (operio-consent-admin-jooq-common, operio-platform-jooq).  At codegen time,
     // SLF4J 2.x gracefully degrades to NOP if no binding is present — the
     // codegen output is unaffected.  At production runtime, the Quarkus
     // JBoss SLF4J binding is the correct provider; shipping slf4j-simple

@@ -22,7 +22,7 @@ import redis.clients.jedis.Jedis;
  *   <li>Creates Postgres schema {@code t_{tenantId}} via
  *       {@code CREATE SCHEMA IF NOT EXISTS}.</li>
  *   <li>Runs consent Flyway migrations against the new schema (reuses
- *       migration files from {@code operio-consent-admin-jooq}).</li>
+ *       migration files from {@code operio-consent-admin-schema}).</li>
  *   <li>If a Redis config is provided, provisions a Redis ACL user
  *       ({@code t_{tenantId}}) restricted to the tenant's key prefix
  *       ({@code {appName}:{tenantId}:*}).</li>

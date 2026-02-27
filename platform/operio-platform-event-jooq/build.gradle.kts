@@ -14,7 +14,7 @@ dependencies {
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     // Needs access to consent migrations for TenantManager.provisionTenant()
-    implementation(project(":tenant:operio-consent-admin-jooq"))
+    implementation(project(":tenant:operio-consent-admin-jooq-common"))
 
     // --- Test ----------------------------------------------------------------
     testImplementation("org.testcontainers:testcontainers:1.20.6")

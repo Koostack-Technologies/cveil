@@ -1,12 +1,12 @@
 package com.koostack.operio.common.metrics;
 
-import com.koostack.operio.core.metrics.MetricsWorker;
+import com.koostack.operio.core.metrics.MetricsSweeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class RedisMetricsWorker implements MetricsWorker<Void> {
+public class RedisMetricsSweeper implements MetricsSweeper<Void> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RedisMetricsWorker.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RedisMetricsSweeper.class);
 
     @Override
     public String getName() {
