@@ -136,6 +136,49 @@ class JooqExpirationSweeperServiceTest {
             assertEquals(1, result); // only second succeeded
             verify(commandService, times(2)).revokeConsent(any(), any());
         }
+
+        @Test
+        void nullPurposeFallsBackToWildcard() throws Exception {
+            var expired = new PolicySummaryEntry(
+                "alice", "email", "User", null, null,
+                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+            );
+            when(queryService.findExpiredPolicies(any(Instant.class)))
+                .thenReturn(List.of(expired));
+
+            int result = TenantContext.callWhere(TENANT, sweeper::sweep);
+
+            assertEquals(1, result);
+            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
+            verify(commandService).revokeConsent(eq("alice"), scopeCaptor.capture());
+
+            ConsentScope scope = scopeCaptor.getValue();
+            assertTrue(scope.isFieldScoped());
+            assertEquals("email", scope.fieldName());
+            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
+        }
+
+        @Test
+        void bothFieldAndCategoryPrefersField() throws Exception {
+            var expired = new PolicySummaryEntry(
+                "alice", "email", "User", "PII", "marketing",
+                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+            );
+            when(queryService.findExpiredPolicies(any(Instant.class)))
+                .thenReturn(List.of(expired));
+
+            int result = TenantContext.callWhere(TENANT, sweeper::sweep);
+
+            assertEquals(1, result);
+            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
+            verify(commandService).revokeConsent(eq("alice"), scopeCaptor.capture());
+
+            ConsentScope scope = scopeCaptor.getValue();
+            assertTrue(scope.isFieldScoped());
+            assertEquals("email", scope.fieldName());
+            assertEquals("User", scope.entityName());
+            assertEquals("marketing", scope.purposeName());
+        }
     }
 
     @Nested

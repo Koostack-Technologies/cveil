@@ -60,8 +60,8 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
                 commandService.revokeConsent(policy.subject(), scope);
                 revoked++;
             } catch (Exception e) {
-                LOG.warn("Failed to revoke expired policy for subject={}, purpose={}: {}",
-                    policy.subject(), policy.purposeName(), e.getMessage());
+                LOG.warn("Failed to revoke expired policy for subject={}, purpose={}",
+                    policy.subject(), policy.purposeName(), e);
             }
         }
         LOG.info("Revoked {} of {} expired consent policies", revoked, expired.size());
@@ -77,30 +77,38 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
                 int count = TenantContext.callWhere(tenantId, this::sweep);
                 total += count;
             } catch (Exception e) {
-                LOG.warn("Sweep failed for tenant {}: {}", tenantId, e.getMessage());
+                LOG.warn("Sweep failed for tenant {}", tenantId, e);
             }
         }
         return total;
     }
 
-    private static ConsentScope buildScope(PolicySummaryEntry policy) {
+    static ConsentScope buildScope(PolicySummaryEntry policy) {
+        if (policy.purposeName() == null) {
+            LOG.warn("Expired policy for subject={} has null purpose; "
+                + "falling back to wildcard purpose", policy.subject());
+        }
+        String purpose = policy.purposeName() != null
+            ? policy.purposeName() : ConsentScope.WILDCARD;
+
         boolean hasCategory = policy.categoryName() != null
             && !ConsentScope.WILDCARD.equals(policy.categoryName());
         boolean hasField = policy.fieldName() != null
             && !ConsentScope.WILDCARD.equals(policy.fieldName());
 
-        if (hasCategory && !hasField) {
-            return ConsentScope.forCategory(policy.categoryName(), policy.purposeName());
-        }
+        // Field scope takes precedence when both dimensions are present
         if (hasField) {
             String entity = policy.entityName() != null
                 ? policy.entityName() : ConsentScope.WILDCARD;
-            return ConsentScope.forField(policy.fieldName(), entity, policy.purposeName());
+            return ConsentScope.forField(policy.fieldName(), entity, purpose);
+        }
+        if (hasCategory) {
+            return ConsentScope.forCategory(policy.categoryName(), purpose);
         }
         // Fallback: neither field nor category — use category-scoped with wildcard
         // to revoke at the broadest scope. This shouldn't happen with well-formed data.
         LOG.warn("Expired policy for subject={} has neither field nor category; "
             + "falling back to wildcard scope", policy.subject());
-        return ConsentScope.forCategory(ConsentScope.WILDCARD, policy.purposeName());
+        return ConsentScope.forCategory(ConsentScope.WILDCARD, purpose);
     }
 }

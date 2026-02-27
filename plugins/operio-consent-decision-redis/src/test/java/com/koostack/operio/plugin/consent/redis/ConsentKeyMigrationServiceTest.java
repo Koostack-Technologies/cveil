@@ -211,10 +211,26 @@ class ConsentKeyMigrationServiceTest {
     }
 
     @Test
-    @DisplayName("splitQualifiedField handles default entity")
-    void splitQualifiedFieldDefault() {
-        String[] parts = ConsentKeyMigrationService.splitQualifiedField("_default_/ssn");
-        assertEquals("_default_", parts[0]);
+    @DisplayName("splitQualifiedField handles bare field name without separator")
+    void splitQualifiedFieldNoSeparator() {
+        String[] parts = ConsentKeyMigrationService.splitQualifiedField("ssn");
+        assertNull(parts[0]);
         assertEquals("ssn", parts[1]);
+    }
+
+    @Test
+    @DisplayName("splitQualifiedField handles leading separator")
+    void splitQualifiedFieldLeadingSeparator() {
+        String[] parts = ConsentKeyMigrationService.splitQualifiedField("/email");
+        assertNull(parts[0]);
+        assertEquals("email", parts[1]);
+    }
+
+    @Test
+    @DisplayName("parseOldValue rejects unknown status/source values")
+    void parseOldValueRejectsUnknown() {
+        assertNull(migration.parseOldValue("UNKNOWN|FIELD"));
+        assertNull(migration.parseOldValue("GRANTED|INVALID"));
+        assertNull(migration.parseOldValue("MAYBE|OTHER"));
     }
 }

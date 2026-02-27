@@ -30,8 +30,7 @@ public class JooqEntityHydrationRepository implements EntityHydrationRepository 
 
     @Override
     public EntityAggregate findByName(String entityName) {
-        String normalized = EntityAggregate.normalizeEntityName(entityName);
-        UUID id = EntityAggregate.deriveId(normalized);
+        UUID id = EntityAggregate.deriveId(entityName);
         AggregateKey key = new AggregateKey(
             id, EntityAggregate.AGGREGATE_TYPE, TenantContext.require()
         );

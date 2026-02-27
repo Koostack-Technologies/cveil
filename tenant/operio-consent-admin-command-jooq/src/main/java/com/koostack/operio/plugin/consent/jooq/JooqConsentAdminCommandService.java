@@ -70,6 +70,11 @@ public class JooqConsentAdminCommandService
         this.categoryHydrationRepo = config.categoryHydrationRepo();
         this.purposeHydrationRepo = config.purposeHydrationRepo();
         registerEventTypes();
+        if (entityHydrationRepo == null && categoryHydrationRepo == null
+                && purposeHydrationRepo == null) {
+            LOG.warn("JooqConsentAdminCommandService configured WITHOUT hydration repos "
+                + "— entity/category/purpose validation is DISABLED");
+        }
         LOG.info("JooqConsentAdminCommandService configured (event-sourced)");
     }
 

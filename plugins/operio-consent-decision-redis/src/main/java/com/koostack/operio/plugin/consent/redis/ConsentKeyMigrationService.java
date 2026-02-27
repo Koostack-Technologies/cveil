@@ -224,10 +224,13 @@ public class ConsentKeyMigrationService {
         return new ParsedOldKey(subject, qualifiedField, purpose);
     }
 
+    private static final List<String> KNOWN_STATUSES = List.of("GRANTED", "REVOKED");
+    private static final List<String> KNOWN_SOURCES = List.of("FIELD", "CATEGORY");
+
     /**
      * Parses an old-format value ({@code "STATUS|SOURCE"}) into status and source.
      *
-     * @return parsed value, or null if malformed
+     * @return parsed value, or null if malformed or unrecognized status/source
      */
     ParsedOldValue parseOldValue(String value) {
         int sep = value.indexOf(VALUE_SEPARATOR);
@@ -236,6 +239,10 @@ public class ConsentKeyMigrationService {
         }
         String status = value.substring(0, sep);
         String source = value.substring(sep + 1);
+        if (!KNOWN_STATUSES.contains(status) || !KNOWN_SOURCES.contains(source)) {
+            LOG.warn("Unrecognized status '{}' or source '{}' in value '{}'", status, source, value);
+            return null;
+        }
         return new ParsedOldValue(status, source);
     }
 
@@ -254,11 +261,12 @@ public class ConsentKeyMigrationService {
      */
     static String[] splitQualifiedField(String qualifiedField) {
         int sep = qualifiedField.indexOf(ConsentPolicyRedisRepository.ENTITY_FIELD_SEP);
-        if (sep <= 0) {
+        if (sep < 0) {
             return new String[] { null, qualifiedField };
         }
+        String entity = sep > 0 ? qualifiedField.substring(0, sep) : null;
         return new String[] {
-            qualifiedField.substring(0, sep),
+            entity,
             qualifiedField.substring(sep + 1)
         };
     }
