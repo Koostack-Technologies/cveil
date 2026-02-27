@@ -62,7 +62,6 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * @deprecated No longer used — appName is dropped from key prefixes.
-     *             Kept for backward compatibility with {@link FieldCategoryMappingRedisRepository}.
      */
     @Deprecated
     public static final String DEFAULT_APP_NAME = "operio";

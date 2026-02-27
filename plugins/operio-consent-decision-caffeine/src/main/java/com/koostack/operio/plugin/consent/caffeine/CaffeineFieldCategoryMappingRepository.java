@@ -9,10 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory bidirectional field-to-category mapping repository using
  * concurrent maps.
  *
- * <p>This is the Caffeine/embedded counterpart of
- * {@code FieldCategoryMappingRedisRepository} — it provides the same
- * bidirectional mapping semantics but stores everything in-process rather
- * than in Redis Sets.
+ * <p>This provides bidirectional field-to-category mapping semantics,
+ * storing everything in-process rather than in Redis Sets.
  *
  * <h2>Key Schema</h2>
  * <pre>

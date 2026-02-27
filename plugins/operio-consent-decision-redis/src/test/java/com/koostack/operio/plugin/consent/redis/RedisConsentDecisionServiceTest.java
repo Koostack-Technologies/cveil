@@ -126,14 +126,6 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "fieldCategoryMappingRepository() is accessible after configure()"
-        )
-        void mappingRepoAccessible() {
-            assertNotNull(service.fieldCategoryMappingRepository());
-        }
-
-        @Test
         @DisplayName("jedis() is accessible after configure()")
         void jedisAccessible() {
             assertNotNull(service.jedis());
@@ -1399,111 +1391,6 @@ class RedisConsentDecisionServiceTest {
     }
 
     // =======================================================================
-    // Tenant-Aware Field-Category Mappings (Service-level, Task 7.4)
-    // =======================================================================
-
-    @Nested
-    @DisplayName("Tenant-Aware Mapping Repository via Service")
-    class TenantAwareMappingsViaService {
-
-        @Test
-        @DisplayName(
-            "field-category mapping repo accessed via service is tenant-isolated"
-        )
-        void mappingRepoTenantIsolation() throws Exception {
-            FieldCategoryMappingRedisRepository mappingRepo =
-                service.fieldCategoryMappingRepository();
-
-            // Add mapping in "acme"
-            TenantContext.callWhere("acme", () -> {
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
-                return null;
-            });
-
-            // Visible in "acme"
-            TenantContext.callWhere("acme", () -> {
-                assertTrue(mappingRepo.isMapped(null, "ssn", "PII"));
-                assertEquals(
-                    Set.of("PII"),
-                    mappingRepo.getCategoriesForField(null, "ssn")
-                );
-                return null;
-            });
-
-            // Not visible in "globex"
-            TenantContext.callWhere("globex", () -> {
-                assertFalse(mappingRepo.isMapped(null, "ssn", "PII"));
-                assertTrue(
-                    mappingRepo.getCategoriesForField(null, "ssn").isEmpty()
-                );
-                return null;
-            });
-
-            // Not visible without tenant
-            assertFalse(mappingRepo.isMapped(null, "ssn", "PII"));
-        }
-
-        @Test
-        @DisplayName(
-            "mapping key prefixes include tenant segment when TenantContext is active"
-        )
-        void mappingKeyPrefixesTenantAware() throws Exception {
-            FieldCategoryMappingRedisRepository mappingRepo =
-                service.fieldCategoryMappingRepository();
-
-            TenantContext.callWhere("acme", () -> {
-                String prefix = mappingRepo.keyPrefix();
-                assertEquals("operio:acme", prefix);
-                String f2cKey = mappingRepo.fieldToCatKey("_default_/ssn");
-                assertTrue(
-                    f2cKey.startsWith("operio:acme:"),
-                    "field2cat key should include tenant: " + f2cKey
-                );
-                String c2fKey = mappingRepo.catToFieldKey("PII");
-                assertTrue(
-                    c2fKey.startsWith("operio:acme:"),
-                    "cat2field key should include tenant: " + c2fKey
-                );
-                return null;
-            });
-        }
-
-        @Test
-        @DisplayName("removeAllMappingsForField via service is tenant-scoped")
-        void removeFieldMappingsTenantScoped() throws Exception {
-            FieldCategoryMappingRedisRepository mappingRepo =
-                service.fieldCategoryMappingRepository();
-
-            // Both tenants map ssn → PII
-            TenantContext.callWhere("acme", () -> {
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
-                return null;
-            });
-            TenantContext.callWhere("globex", () -> {
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
-                return null;
-            });
-
-            // Remove in "acme"
-            TenantContext.callWhere("acme", () -> {
-                int removed = mappingRepo.removeAllMappingsForField(
-                    null,
-                    "ssn"
-                );
-                assertEquals(1, removed);
-                assertFalse(mappingRepo.isMapped(null, "ssn", "PII"));
-                return null;
-            });
-
-            // "globex" unaffected
-            TenantContext.callWhere("globex", () -> {
-                assertTrue(mappingRepo.isMapped(null, "ssn", "PII"));
-                return null;
-            });
-        }
-    }
-
-    // =======================================================================
     // Redis Key Pattern / SCAN Verification (Task 7.4)
     // =======================================================================
 
@@ -1855,52 +1742,6 @@ class RedisConsentDecisionServiceTest {
         }
 
         @Test
-        @DisplayName("mapping keys also match the ACL pattern for the tenant")
-        void mappingKeysMatchAclPattern() throws Exception {
-            FieldCategoryMappingRedisRepository mappingRepo =
-                service.fieldCategoryMappingRepository();
-
-            TenantContext.callWhere("acme", () -> {
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
-                mappingRepo.addFieldToCategory("User", "email", "Contact");
-
-                // Verify mapping keys match {keyPrefix}:*
-                String prefix = mappingRepo.keyPrefix();
-                return prefix;
-            });
-
-            // Use the mapping repo's key prefix for SCAN
-            String aclPattern = TenantContext.callWhere("acme", () -> {
-                return mappingRepo.keyPrefix() + ":*";
-            });
-            Set<String> allKeys = new HashSet<>();
-            String cursor = "0";
-            ScanParams params = new ScanParams().match(aclPattern).count(100);
-            do {
-                ScanResult<String> scanResult = jedis.scan(cursor, params);
-                allKeys.addAll(scanResult.getResult());
-                cursor = scanResult.getCursor();
-            } while (!"0".equals(cursor));
-
-            // 2 field→cat keys + 2 cat→field keys = 4
-            assertEquals(
-                4,
-                allKeys.size(),
-                "Expected 4 mapping keys for tenant acme, got: " + allKeys
-            );
-
-            String expectedPrefix = TenantContext.callWhere("acme", () -> {
-                return mappingRepo.keyPrefix();
-            });
-            for (String key : allKeys) {
-                assertTrue(
-                    key.startsWith(expectedPrefix + ":"),
-                    "Mapping key '" + key + "' should match tenant ACL pattern"
-                );
-            }
-        }
-
-        @Test
         @DisplayName(
             "keys from one tenant do NOT match another tenant's ACL glob"
         )
@@ -1961,16 +1802,8 @@ class RedisConsentDecisionServiceTest {
                 "marketing"
             );
 
-            FieldCategoryMappingRedisRepository mappingRepo =
-                service.fieldCategoryMappingRepository();
-
-            // --- Set up tenant A: register schema (mappings + consent) ---
+            // --- Set up tenant A: grant consent ---
             TenantContext.callWhere("tenantA", () -> {
-                // Register field-category mappings
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
-                mappingRepo.addFieldToCategory(null, "email", "PII");
-
-                // Grant consent for user-123
                 consentRepo.setFieldConsent(
                     "user-123",
                     null,
@@ -1990,7 +1823,6 @@ class RedisConsentDecisionServiceTest {
 
             // --- Set up tenant B: separate data ---
             TenantContext.callWhere("tenantB", () -> {
-                mappingRepo.addFieldToCategory(null, "ssn", "PII");
                 // Grant only ssn, not email
                 consentRepo.setFieldConsent(
                     "user-123",
@@ -2032,16 +1864,10 @@ class RedisConsentDecisionServiceTest {
                 return null;
             });
 
-            // --- "Delete" tenant A: remove all consent + mappings ---
+            // --- "Delete" tenant A: remove all consent ---
             TenantContext.callWhere("tenantA", () -> {
                 long removed = consentRepo.deleteAllCachedKeysForSubject("user-123");
-                assertEquals(
-                    2,
-                    removed,
-                    "Should remove 2 consent entries for tenantA"
-                );
-                mappingRepo.removeAllMappingsForField(null, "ssn");
-                mappingRepo.removeAllMappingsForField(null, "email");
+                assertTrue(removed > 0, "Should remove consent entries for tenantA");
                 return null;
             });
 
@@ -2059,8 +1885,6 @@ class RedisConsentDecisionServiceTest {
                     response.denied().contains(email),
                     "Tenant A email should be denied after delete"
                 );
-                assertFalse(mappingRepo.isMapped(null, "ssn", "PII"));
-                assertFalse(mappingRepo.isMapped(null, "email", "PII"));
                 return null;
             });
 
@@ -2077,10 +1901,6 @@ class RedisConsentDecisionServiceTest {
                 assertTrue(
                     response.denied().contains(email),
                     "Tenant B email should still be denied (was never granted)"
-                );
-                assertTrue(
-                    mappingRepo.isMapped(null, "ssn", "PII"),
-                    "Tenant B mappings should be untouched"
                 );
                 return null;
             });

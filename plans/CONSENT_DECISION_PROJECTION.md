@@ -1408,9 +1408,9 @@ the index becomes inconsistent. This is acceptable because:
 | Task 2.5 — Create ExpirationSweeperService SPI | ✅ Done | sweep() + sweepAll() in operio-core |
 | Task 2.6 — Implement ExpirationSweeperService | ✅ Done | JooqExpirationSweeperService; findExpiredPolicies added as default method on ConsentAdminQueryService |
 | Task 2.7 — Unit tests for validation and sweeper | ✅ Done | 3 Mockito test classes: validation, sweeper, hydration repos |
-| **Phase 3: Cleanup + Migration** | | |
-| Task 3.1 — Audit RedisConsentDecisionService consumers | | |
-| Task 3.2 — Decide FieldCategoryMappingRedisRepository retention | | |
-| Task 3.3 — Migrate old flat keys to new Hash format | | |
-| Task 3.4 — Clean up orphaned Redis data | | |
-| Task 3.5 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md | | |
+| **Phase 3: Cleanup + Migration** | ✅ Complete | |
+| Task 3.1 — Audit RedisConsentDecisionService consumers | ✅ Done | Redis version: zero runtime consumers (getter was @Deprecated, handler removed in Phase 1). Caffeine version: kept — used by embedded sync module. |
+| Task 3.2 — Decide FieldCategoryMappingRedisRepository retention | ✅ Done | Deleted FieldCategoryMappingRedisRepository class + test + deprecated getter. Updated DEFAULT_APP_NAME javadoc. Removed mapping repo tests from RedisConsentDecisionServiceTest. Kept CaffeineFieldCategoryMappingRepository (embedded sync depends on it). |
+| Task 3.3 — Migrate old flat keys to new Hash format | ✅ Done | ConsentKeyMigrationService: SCANs old flat keys, parses STATUS\|SOURCE values, migrates SOURCE_FIELD to Hash format (Option B), skips+deletes SOURCE_CATEGORY. 12 unit tests. |
+| Task 3.4 — Clean up orphaned Redis data | ✅ Done | ConsentKeyCleanupService: SCANs meta:field2cat:* and meta:cat2field:* patterns, batch DELetes. Supports per-tenant + legacy single-tenant cleanup. 7 unit tests. |
+| Task 3.5 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md | ✅ Done | Updated Redis Key Namespace Reference (flat keys → Hash + reverse indices), ConsentPolicyRedisRepository description, handler constructor, ACL pattern. Removed FieldCategoryMappingRedisRepository reference, added migration/cleanup service entries. |

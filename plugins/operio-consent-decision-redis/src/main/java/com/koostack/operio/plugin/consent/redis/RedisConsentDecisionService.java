@@ -140,15 +140,6 @@ public class RedisConsentDecisionService
         return consentPolicyRepository;
     }
 
-    /**
-     * @deprecated The field-category mapping repository is no longer used.
-     */
-    @Deprecated
-    public FieldCategoryMappingRedisRepository fieldCategoryMappingRepository() {
-        ensureConfigured();
-        return new FieldCategoryMappingRedisRepository(jedisProvider);
-    }
-
     public JedisProvider jedisProvider() {
         ensureConfigured();
         return jedisProvider;
