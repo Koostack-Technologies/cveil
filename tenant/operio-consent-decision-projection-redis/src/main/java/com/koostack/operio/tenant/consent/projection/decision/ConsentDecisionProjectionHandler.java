@@ -3,7 +3,6 @@ package com.koostack.operio.tenant.consent.projection.decision;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.data.consent.ConsentEventTypes;
 import com.koostack.operio.core.data.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
@@ -11,71 +10,65 @@ import com.koostack.operio.core.data.consent.invalidation.InvalidationPublisher;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
-import com.koostack.operio.plugin.consent.redis.FieldCategoryMappingRedisRepository;
+import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository.AffectedEntry;
 import com.koostack.operio.tenant.event.jooq.StreamEventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * Stream projection handler that materializes tenant consent domain events
- * into the Redis decision cache.
+ * into the Redis decision cache using a Hash-per-subject schema with
+ * reverse indices.
  *
  * <p>Switches on {@code eventType} and writes to Redis via
- * {@link ConsentPolicyRedisRepository} (consent decisions) and
- * {@link FieldCategoryMappingRedisRepository} (field↔category metadata).
+ * {@link ConsentPolicyRedisRepository} (Hash-based consent decisions with
+ * reverse indices for O(1) invalidation).
  *
- * <p>Handles policy events (grant/revoke/bulk-revoke) and metadata events
- * (field-category link/unlink, category deletion, field removal). Events
- * unrelated to the decision layer (e.g., entity registration, purpose/regulation
- * management) are silently ignored.
+ * <p>Handles policy events (grant/revoke/bulk-revoke), metadata events
+ * (field-category link/unlink), and structural deletion events (category
+ * deleted, field removed, entity deleted, purpose deleted).
  *
  * <p>All writes are routed to the correct tenant's Redis key namespace via
  * {@link TenantContext}, set from the event's {@code tenantId} field.
- *
- * <h2>Thread Safety</h2>
- * <p>Safe for concurrent use — all state is final. {@link TenantContext}
- * provides per-thread isolation.
  */
-public class ConsentDecisionProjectionHandler implements StreamEventHandler, Operio.AppNameAware {
+public class ConsentDecisionProjectionHandler implements StreamEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ConsentDecisionProjectionHandler.class);
 
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-        .registerModule(new JavaTimeModule());
+    private static final String WILDCARD = "*";
 
+    private final ObjectMapper objectMapper;
     private final ConsentPolicyRedisRepository consentRepo;
-    private final FieldCategoryMappingRedisRepository mappingRepo;
     private final InvalidationPublisher invalidationPublisher;
 
-    public ConsentDecisionProjectionHandler(
-        ConsentPolicyRedisRepository consentRepo,
-        FieldCategoryMappingRedisRepository mappingRepo
-    ) {
-        this(consentRepo, mappingRepo, null);
+    public ConsentDecisionProjectionHandler(ConsentPolicyRedisRepository consentRepo) {
+        this(consentRepo, null, defaultObjectMapper());
     }
 
     public ConsentDecisionProjectionHandler(
         ConsentPolicyRedisRepository consentRepo,
-        FieldCategoryMappingRedisRepository mappingRepo,
         InvalidationPublisher invalidationPublisher
     ) {
-        this.consentRepo = consentRepo;
-        this.mappingRepo = mappingRepo;
-        this.invalidationPublisher = invalidationPublisher;
+        this(consentRepo, invalidationPublisher, defaultObjectMapper());
     }
 
-    @Override
-    public void setAppName(String appName) {
-        consentRepo.setAppName(appName);
-        mappingRepo.setAppName(appName);
+    public ConsentDecisionProjectionHandler(
+        ConsentPolicyRedisRepository consentRepo,
+        InvalidationPublisher invalidationPublisher,
+        ObjectMapper objectMapper
+    ) {
+        this.consentRepo = consentRepo;
+        this.invalidationPublisher = invalidationPublisher;
+        this.objectMapper = objectMapper;
+    }
+
+    private static ObjectMapper defaultObjectMapper() {
+        return new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
     @Override
@@ -109,13 +102,15 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
             case ConsentEventTypes.POLICY_REVOKED -> handlePolicyGrantedOrRevoked(tenantId, node);
             case ConsentEventTypes.POLICY_ALL_REVOKED -> handlePolicyAllRevoked(tenantId, node);
 
-            // -- Field ↔ Category metadata --
+            // -- Field ↔ Category metadata (publish-only) --
             case ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED -> handleFieldCategoryLinked(tenantId, node);
             case ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED -> handleFieldCategoryUnlinked(tenantId, node);
 
-            // -- Metadata cleanup --
+            // -- Structural deletion (reverse-index cleanup + publish) --
             case ConsentEventTypes.CATEGORY_DELETED -> handleCategoryDeleted(tenantId, node);
             case ConsentEventTypes.ENTITY_FIELD_REMOVED -> handleEntityFieldRemoved(tenantId, node);
+            case ConsentEventTypes.ENTITY_DELETED -> handleEntityDeleted(tenantId, node);
+            case ConsentEventTypes.PURPOSE_DELETED -> handlePurposeDeleted(tenantId, node);
 
             // Events not relevant to the decision cache are silently ignored
             default -> {}
@@ -127,67 +122,38 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
     // -----------------------------------------------------------------------
 
     private void handlePolicyGrantedOrRevoked(String tenantId, JsonNode node) {
-        String subjectId = node.get("subjectId").asText();
-        String purposeName = node.get("purposeName").asText();
+        String subjectId = requiredText(node, "subjectId");
+        String purposeName = requiredText(node, "purposeName");
+        boolean granted = requiredBoolean(node, "granted");
+
+        String category = textOrNull(node, "category");
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
-        String category = textOrNull(node, "category");
-        boolean granted = node.get("granted").asBoolean();
-        Instant expiresAt = instantOrNull(node, "expiresAt");
 
-        if (fieldName != null && entityName != null) {
-            // Field-level consent
-            if (expiresAt != null) {
-                consentRepo.setFieldConsent(subjectId, entityName, fieldName, purposeName, granted, expiresAt);
-            } else {
-                consentRepo.setFieldConsent(subjectId, entityName, fieldName, purposeName, granted);
-            }
+        if (!isWildcard(fieldName) && !isWildcard(entityName)) {
+            // Field-level: (*, field, entity, purpose)
+            consentRepo.setFieldConsent(subjectId, entityName, fieldName, purposeName, granted);
             publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectId, entityName, fieldName,
-                null, purposeName, granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
+                UUID.randomUUID().toString(), tenantId, subjectId,
+                entityName, fieldName, null, purposeName,
+                granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
             ));
-        } else if (category != null) {
-            // Category-level consent — fan out to all fields in the category
-            Set<String> qualifiedFields = mappingRepo.getFieldsForCategory(category);
-            if (qualifiedFields.isEmpty()) {
-                log.debug("No fields mapped to category '{}' — skipping category consent fan-out", category);
-                // Still notify clients: they may have stale metadata showing fields for this category
-                publishInvalidation(new CacheInvalidationMessage(
-                    UUID.randomUUID().toString(), tenantId, subjectId,
-                    null, null, category, purposeName,
-                    granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
-                ));
-                return;
-            }
-            if (expiresAt != null) {
-                consentRepo.setCategoryConsentForFields(
-                    subjectId, purposeName, granted, expiresAt, qualifiedFields
-                );
-            } else {
-                consentRepo.setCategoryConsentForFields(
-                    subjectId, purposeName, granted, qualifiedFields
-                );
-            }
-            // Batch-publish one invalidation per field in the fan-out
-            InvalidationAction action = granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED;
-            List<CacheInvalidationMessage> batch = new ArrayList<>();
-            for (String qualifiedField : qualifiedFields) {
-                String[] parts = parseQualifiedField(qualifiedField);
-                batch.add(new CacheInvalidationMessage(
-                    UUID.randomUUID().toString(), tenantId, subjectId,
-                    parts[0], parts[1], category, purposeName, action
-                ));
-            }
-            publishBatchInvalidation(batch);
+        } else if (!isWildcard(category)) {
+            // Category-level: (category, *, *, purpose)
+            consentRepo.setCategoryConsent(subjectId, category, purposeName, granted);
+            publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, subjectId,
+                null, null, category, purposeName,
+                granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
+            ));
         } else {
-            log.warn("Policy event has neither fieldName nor category — skipping");
+            log.warn("Policy event has wildcards in all dimensions — skipping");
         }
     }
 
     private void handlePolicyAllRevoked(String tenantId, JsonNode node) {
-        String subjectId = node.get("subjectId").asText();
-        long deleted = consentRepo.deleteAllCachedKeysForSubject(subjectId);
-        log.debug("Deleted {} cached keys for subject '{}'", deleted, subjectId);
+        String subjectId = requiredText(node, "subjectId");
+        consentRepo.removeAllConsent(subjectId);
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, subjectId,
             null, null, null, null, InvalidationAction.ALL_REVOKED
@@ -195,14 +161,13 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
     }
 
     // -----------------------------------------------------------------------
-    // Field ↔ Category metadata
+    // Field ↔ Category metadata (publish-only)
     // -----------------------------------------------------------------------
 
     private void handleFieldCategoryLinked(String tenantId, JsonNode node) {
-        String entityName = node.get("entityName").asText();
-        String fieldName = node.get("fieldName").asText();
-        String categoryName = node.get("categoryName").asText();
-        mappingRepo.addFieldToCategory(entityName, fieldName, categoryName);
+        String entityName = requiredText(node, "entityName");
+        String fieldName = requiredText(node, "fieldName");
+        String categoryName = requiredText(node, "categoryName");
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, null,
             entityName, fieldName, categoryName, null, InvalidationAction.CATEGORY_CHANGED
@@ -210,10 +175,9 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
     }
 
     private void handleFieldCategoryUnlinked(String tenantId, JsonNode node) {
-        String entityName = node.get("entityName").asText();
-        String fieldName = node.get("fieldName").asText();
-        String categoryName = node.get("categoryName").asText();
-        mappingRepo.removeFieldFromCategory(entityName, fieldName, categoryName);
+        String entityName = requiredText(node, "entityName");
+        String fieldName = requiredText(node, "fieldName");
+        String categoryName = requiredText(node, "categoryName");
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, null,
             entityName, fieldName, categoryName, null, InvalidationAction.CATEGORY_CHANGED
@@ -221,13 +185,22 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
     }
 
     // -----------------------------------------------------------------------
-    // Metadata cleanup
+    // Structural deletion — reverse-index cleanup + publish
     // -----------------------------------------------------------------------
 
     private void handleCategoryDeleted(String tenantId, JsonNode node) {
-        String categoryName = node.get("categoryName").asText();
-        int removed = mappingRepo.removeAllMappingsForCategory(categoryName);
-        log.debug("Removed {} field mappings for deleted category '{}'", removed, categoryName);
+        String categoryName = requiredText(node, "categoryName");
+
+        List<AffectedEntry> affected = consentRepo.deleteByCategory(categoryName);
+
+        for (AffectedEntry entry : affected) {
+            publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, entry.subject(),
+                null, null, categoryName, entry.purpose(),
+                InvalidationAction.REVOKED
+            ));
+        }
+
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, null,
             null, null, categoryName, null, InvalidationAction.CATEGORY_CHANGED
@@ -235,23 +208,80 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
     }
 
     private void handleEntityFieldRemoved(String tenantId, JsonNode node) {
-        String entityName = node.get("entityName").asText();
-        String fieldName = node.get("fieldName").asText();
-        int removed = mappingRepo.removeAllMappingsForField(entityName, fieldName);
-        log.debug("Removed {} category mappings for removed field '{}/{}'", removed, entityName, fieldName);
+        String entityName = requiredText(node, "entityName");
+        String fieldName = requiredText(node, "fieldName");
+        String qualifiedField = ConsentPolicyRedisRepository.qualifyField(entityName, fieldName);
+
+        List<AffectedEntry> affected = consentRepo.deleteByField(qualifiedField);
+
+        for (AffectedEntry entry : affected) {
+            publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, entry.subject(),
+                entityName, fieldName, null, entry.purpose(),
+                InvalidationAction.REVOKED
+            ));
+        }
+
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, null,
             entityName, fieldName, null, null, InvalidationAction.FIELD_REMOVED
         ));
     }
 
+    private void handleEntityDeleted(String tenantId, JsonNode node) {
+        String entityName = requiredText(node, "entityName");
+        // The entity deletion event doesn't carry the field list.
+        // Log and publish a broad invalidation — individual field cleanup
+        // happens when each ENTITY_FIELD_REMOVED event is processed.
+        log.info("Entity '{}' deleted — consent cleanup deferred to per-field removal events", entityName);
+        publishInvalidation(new CacheInvalidationMessage(
+            UUID.randomUUID().toString(), tenantId, null,
+            entityName, null, null, null, InvalidationAction.FIELD_REMOVED
+        ));
+    }
+
+    private void handlePurposeDeleted(String tenantId, JsonNode node) {
+        String purposeName = requiredText(node, "purposeName");
+
+        List<AffectedEntry> affected = consentRepo.deleteByPurpose(purposeName);
+
+        for (AffectedEntry entry : affected) {
+            publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, entry.subject(),
+                null, null, null, purposeName,
+                InvalidationAction.REVOKED
+            ));
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
+    /** Treats both null and {@code "*"} as wildcard for backwards compatibility. */
+    private static boolean isWildcard(String value) {
+        return value == null || WILDCARD.equals(value);
+    }
+
     private static String textOrNull(JsonNode node, String field) {
         JsonNode child = node.get(field);
         return (child != null && !child.isNull()) ? child.asText() : null;
+    }
+
+    private static String requiredText(JsonNode node, String field) {
+        JsonNode child = node.get(field);
+        if (child == null || child.isNull()) {
+            throw new IllegalArgumentException("Missing required payload field: " + field);
+        }
+        return child.asText();
+    }
+
+    private static boolean requiredBoolean(JsonNode node, String field) {
+        JsonNode child = node.get(field);
+        if (child == null || child.isNull()) {
+            throw new IllegalArgumentException("Missing required payload field: " + field);
+        }
+        return child.asBoolean();
     }
 
     private static Instant instantOrNull(JsonNode node, String field) {
@@ -272,27 +302,5 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler, Ope
             log.warn("Failed to publish cache invalidation — messageId={}, action={}",
                 message.messageId(), message.action(), e);
         }
-    }
-
-    private void publishBatchInvalidation(List<CacheInvalidationMessage> messages) {
-        if (invalidationPublisher == null || messages.isEmpty()) return;
-        try {
-            invalidationPublisher.publishBatch(messages);
-        } catch (Exception e) {
-            log.warn("Failed to batch-publish {} cache invalidation messages", messages.size(), e);
-        }
-    }
-
-    /**
-     * Parses a qualified field string ({@code "entity/field"}) into its parts.
-     * Falls back to {@code ["unknown", qualifiedField]} if no separator is found.
-     */
-    private static String[] parseQualifiedField(String qualifiedField) {
-        int sep = qualifiedField.indexOf('/');
-        if (sep > 0 && sep < qualifiedField.length() - 1) {
-            return new String[]{ qualifiedField.substring(0, sep), qualifiedField.substring(sep + 1) };
-        }
-        log.warn("Malformed qualified field '{}' — expected 'entity/field' format", qualifiedField);
-        return new String[]{ "unknown", qualifiedField };
     }
 }

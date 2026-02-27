@@ -94,9 +94,9 @@ public class JooqConsentAdminCommandService
         var payload = new PolicyGrantedEvent(
             subject,
             accessRequest.purposeName(),
-            accessRequest.fieldName(),
-            accessRequest.entityName(),
-            accessRequest.category(),
+            wildcardIfNull(accessRequest.fieldName()),
+            wildcardIfNull(accessRequest.entityName()),
+            wildcardIfNull(accessRequest.category()),
             true,
             expiresAt
         );
@@ -115,9 +115,9 @@ public class JooqConsentAdminCommandService
         var payload = new PolicyRevokedEvent(
             subject,
             accessRequest.purposeName(),
-            accessRequest.fieldName(),
-            accessRequest.entityName(),
-            accessRequest.category(),
+            wildcardIfNull(accessRequest.fieldName()),
+            wildcardIfNull(accessRequest.entityName()),
+            wildcardIfNull(accessRequest.category()),
             false,
             expiresAt
         );
@@ -248,6 +248,10 @@ public class JooqConsentAdminCommandService
         eventService.publishEvent(
             PublishDomainEventInput.of(tenantId, eventType, key, payload)
         );
+    }
+
+    private static String wildcardIfNull(String value) {
+        return value != null ? value : ConsentScope.WILDCARD;
     }
 
     // -----------------------------------------------------------------------

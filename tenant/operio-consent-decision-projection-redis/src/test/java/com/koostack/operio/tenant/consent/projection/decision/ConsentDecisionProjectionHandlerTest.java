@@ -6,7 +6,7 @@ import com.koostack.operio.core.data.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.data.consent.invalidation.InvalidationPublisher;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
-import com.koostack.operio.plugin.consent.redis.FieldCategoryMappingRedisRepository;
+import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository.AffectedEntry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,14 +15,14 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Verifies that {@link ConsentDecisionProjectionHandler} publishes the correct
- * {@link CacheInvalidationMessage} for each event type.
+ * Verifies that {@link ConsentDecisionProjectionHandler} calls the correct
+ * repository methods and publishes the correct {@link CacheInvalidationMessage}
+ * for each event type using the Hash-per-subject schema.
  */
 @DisplayName("ConsentDecisionProjectionHandler")
 class ConsentDecisionProjectionHandlerTest {
@@ -32,16 +32,14 @@ class ConsentDecisionProjectionHandlerTest {
     private static final String MSG_ID = "1-0";
 
     private ConsentPolicyRedisRepository consentRepo;
-    private FieldCategoryMappingRedisRepository mappingRepo;
     private InvalidationPublisher publisher;
     private ConsentDecisionProjectionHandler handler;
 
     @BeforeEach
     void setUp() {
         consentRepo = mock(ConsentPolicyRedisRepository.class);
-        mappingRepo = mock(FieldCategoryMappingRedisRepository.class);
         publisher = mock(InvalidationPublisher.class);
-        handler = new ConsentDecisionProjectionHandler(consentRepo, mappingRepo, publisher);
+        handler = new ConsentDecisionProjectionHandler(consentRepo, publisher);
     }
 
     // -----------------------------------------------------------------------
@@ -49,14 +47,13 @@ class ConsentDecisionProjectionHandlerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("two-arg constructor still works (no publisher)")
-    void twoArgConstructor() {
-        ConsentDecisionProjectionHandler h = new ConsentDecisionProjectionHandler(consentRepo, mappingRepo);
-        // Should not throw even without a publisher
+    @DisplayName("one-arg constructor still works (no publisher)")
+    void oneArgConstructor() {
+        ConsentDecisionProjectionHandler h = new ConsentDecisionProjectionHandler(consentRepo);
         assertDoesNotThrow(() -> h.onEvent(STREAM_KEY, MSG_ID, eventFields(
             ConsentEventTypes.POLICY_GRANTED,
             """
-            {"subjectId":"s1","purposeName":"p","fieldName":"f","entityName":"e","granted":true}
+            {"subjectId":"s1","purposeName":"p","fieldName":"f","entityName":"e","category":"*","granted":true}
             """
         )));
         verifyNoInteractions(publisher);
@@ -71,14 +68,16 @@ class ConsentDecisionProjectionHandlerTest {
     class PolicyGranted {
 
         @Test
-        @DisplayName("field-level grant publishes GRANTED invalidation")
+        @DisplayName("field-level grant calls setFieldConsent and publishes GRANTED")
         void fieldLevelGrant() {
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.POLICY_GRANTED,
                 """
-                {"subjectId":"user-1","purposeName":"marketing","fieldName":"email","entityName":"User","granted":true}
+                {"subjectId":"user-1","purposeName":"marketing","fieldName":"email","entityName":"User","category":"*","granted":true}
                 """
             ));
+
+            verify(consentRepo).setFieldConsent("user-1", "User", "email", "marketing", true);
 
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
@@ -95,44 +94,17 @@ class ConsentDecisionProjectionHandlerTest {
         }
 
         @Test
-        @DisplayName("category-level grant batch-publishes one message per fan-out field")
+        @DisplayName("category-level grant calls setCategoryConsent and publishes GRANTED")
         void categoryLevelGrant() {
-            when(mappingRepo.getFieldsForCategory("PII")).thenReturn(Set.of("User/email", "User/phone"));
-
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.POLICY_GRANTED,
                 """
-                {"subjectId":"user-1","purposeName":"marketing","category":"PII","granted":true}
+                {"subjectId":"user-1","purposeName":"marketing","fieldName":"*","entityName":"*","category":"PII","granted":true}
                 """
             ));
 
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<CacheInvalidationMessage>> captor = ArgumentCaptor.forClass(List.class);
-            verify(publisher).publishBatch(captor.capture());
+            verify(consentRepo).setCategoryConsent("user-1", "PII", "marketing", true);
 
-            List<CacheInvalidationMessage> batch = captor.getValue();
-            assertEquals(2, batch.size());
-            assertTrue(batch.stream().allMatch(m -> m.action() == InvalidationAction.GRANTED));
-            assertTrue(batch.stream().allMatch(m -> m.subject().equals("user-1")));
-            assertTrue(batch.stream().allMatch(m -> m.category().equals("PII")));
-        }
-
-        @Test
-        @DisplayName("empty category fan-out still publishes invalidation for stale-metadata clients")
-        void emptyCategoryFanOutStillPublishes() {
-            when(mappingRepo.getFieldsForCategory("PII")).thenReturn(Set.of());
-
-            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
-                ConsentEventTypes.POLICY_GRANTED,
-                """
-                {"subjectId":"user-1","purposeName":"marketing","category":"PII","granted":true}
-                """
-            ));
-
-            // No cache write should have happened
-            verifyNoInteractions(consentRepo);
-
-            // But an invalidation should still be published
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
 
@@ -142,6 +114,19 @@ class ConsentDecisionProjectionHandlerTest {
             assertEquals("PII", msg.category());
             assertNull(msg.entity());
             assertNull(msg.field());
+        }
+
+        @Test
+        @DisplayName("backwards-compatible: null fieldName/entityName treated as wildcard (category-level)")
+        void nullFieldsTreatedAsWildcard() {
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.POLICY_GRANTED,
+                """
+                {"subjectId":"user-1","purposeName":"marketing","category":"PII","granted":true}
+                """
+            ));
+
+            verify(consentRepo).setCategoryConsent("user-1", "PII", "marketing", true);
         }
     }
 
@@ -155,9 +140,11 @@ class ConsentDecisionProjectionHandlerTest {
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.POLICY_REVOKED,
                 """
-                {"subjectId":"user-1","purposeName":"analytics","fieldName":"ssn","entityName":"Person","granted":false}
+                {"subjectId":"user-1","purposeName":"analytics","fieldName":"ssn","entityName":"Person","category":"*","granted":false}
                 """
             ));
+
+            verify(consentRepo).setFieldConsent("user-1", "Person", "ssn", "analytics", false);
 
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
@@ -172,16 +159,16 @@ class ConsentDecisionProjectionHandlerTest {
     class PolicyAllRevoked {
 
         @Test
-        @DisplayName("publishes ALL_REVOKED with subject only")
+        @DisplayName("calls removeAllConsent and publishes ALL_REVOKED")
         void allRevoked() {
-            when(consentRepo.deleteAllCachedKeysForSubject("user-1")).thenReturn(5L);
-
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.POLICY_ALL_REVOKED,
                 """
                 {"subjectId":"user-1"}
                 """
             ));
+
+            verify(consentRepo).removeAllConsent("user-1");
 
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
@@ -196,7 +183,7 @@ class ConsentDecisionProjectionHandlerTest {
     }
 
     // -----------------------------------------------------------------------
-    // Metadata events
+    // Metadata events (publish-only)
     // -----------------------------------------------------------------------
 
     @Nested
@@ -204,7 +191,7 @@ class ConsentDecisionProjectionHandlerTest {
     class FieldCategoryLinked {
 
         @Test
-        @DisplayName("publishes CATEGORY_CHANGED with entity, field, and category")
+        @DisplayName("publishes CATEGORY_CHANGED — no repo writes")
         void linked() {
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
@@ -212,6 +199,8 @@ class ConsentDecisionProjectionHandlerTest {
                 {"entityName":"User","fieldName":"email","categoryName":"PII"}
                 """
             ));
+
+            verifyNoInteractions(consentRepo);
 
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
@@ -230,7 +219,7 @@ class ConsentDecisionProjectionHandlerTest {
     class FieldCategoryUnlinked {
 
         @Test
-        @DisplayName("publishes CATEGORY_CHANGED on unlink")
+        @DisplayName("publishes CATEGORY_CHANGED on unlink — no repo writes")
         void unlinked() {
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED,
@@ -239,6 +228,8 @@ class ConsentDecisionProjectionHandlerTest {
                 """
             ));
 
+            verifyNoInteractions(consentRepo);
+
             ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
             verify(publisher).publish(captor.capture());
 
@@ -246,14 +237,21 @@ class ConsentDecisionProjectionHandlerTest {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Structural deletion events
+    // -----------------------------------------------------------------------
+
     @Nested
     @DisplayName("CATEGORY_DELETED")
     class CategoryDeleted {
 
         @Test
-        @DisplayName("publishes CATEGORY_CHANGED with category only")
+        @DisplayName("calls deleteByCategory, publishes per-entry REVOKED + broad CATEGORY_CHANGED")
         void deleted() {
-            when(mappingRepo.removeAllMappingsForCategory("PII")).thenReturn(3);
+            when(consentRepo.deleteByCategory("PII")).thenReturn(List.of(
+                new AffectedEntry("alice", "marketing"),
+                new AffectedEntry("bob", "analytics")
+            ));
 
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.CATEGORY_DELETED,
@@ -262,15 +260,44 @@ class ConsentDecisionProjectionHandlerTest {
                 """
             ));
 
-            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
-            verify(publisher).publish(captor.capture());
+            verify(consentRepo).deleteByCategory("PII");
 
-            CacheInvalidationMessage msg = captor.getValue();
-            assertEquals(InvalidationAction.CATEGORY_CHANGED, msg.action());
-            assertEquals("PII", msg.category());
-            assertNull(msg.subject());
-            assertNull(msg.entity());
-            assertNull(msg.field());
+            // 2 per-entry + 1 broad = 3 publishes
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(3)).publish(captor.capture());
+
+            List<CacheInvalidationMessage> msgs = captor.getAllValues();
+            // Per-entry messages
+            assertEquals(InvalidationAction.REVOKED, msgs.get(0).action());
+            assertEquals("alice", msgs.get(0).subject());
+            assertEquals("PII", msgs.get(0).category());
+            assertEquals("marketing", msgs.get(0).purpose());
+
+            assertEquals(InvalidationAction.REVOKED, msgs.get(1).action());
+            assertEquals("bob", msgs.get(1).subject());
+
+            // Broad notification
+            assertEquals(InvalidationAction.CATEGORY_CHANGED, msgs.get(2).action());
+            assertEquals("PII", msgs.get(2).category());
+            assertNull(msgs.get(2).subject());
+        }
+
+        @Test
+        @DisplayName("no affected entries still publishes broad CATEGORY_CHANGED")
+        void noAffected() {
+            when(consentRepo.deleteByCategory("EMPTY")).thenReturn(List.of());
+
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.CATEGORY_DELETED,
+                """
+                {"categoryName":"EMPTY"}
+                """
+            ));
+
+            // Only broad notification
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(1)).publish(captor.capture());
+            assertEquals(InvalidationAction.CATEGORY_CHANGED, captor.getValue().action());
         }
     }
 
@@ -279,14 +306,48 @@ class ConsentDecisionProjectionHandlerTest {
     class EntityFieldRemoved {
 
         @Test
-        @DisplayName("publishes FIELD_REMOVED with entity and field")
+        @DisplayName("calls deleteByField, publishes per-entry REVOKED + broad FIELD_REMOVED")
         void removed() {
-            when(mappingRepo.removeAllMappingsForField("User", "email")).thenReturn(2);
+            when(consentRepo.deleteByField("User/email")).thenReturn(List.of(
+                new AffectedEntry("alice", "marketing")
+            ));
 
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.ENTITY_FIELD_REMOVED,
                 """
                 {"entityName":"User","fieldName":"email"}
+                """
+            ));
+
+            verify(consentRepo).deleteByField("User/email");
+
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(2)).publish(captor.capture());
+
+            List<CacheInvalidationMessage> msgs = captor.getAllValues();
+            assertEquals(InvalidationAction.REVOKED, msgs.get(0).action());
+            assertEquals("alice", msgs.get(0).subject());
+            assertEquals("User", msgs.get(0).entity());
+            assertEquals("email", msgs.get(0).field());
+
+            assertEquals(InvalidationAction.FIELD_REMOVED, msgs.get(1).action());
+            assertEquals("User", msgs.get(1).entity());
+            assertEquals("email", msgs.get(1).field());
+            assertNull(msgs.get(1).subject());
+        }
+    }
+
+    @Nested
+    @DisplayName("ENTITY_DELETED")
+    class EntityDeleted {
+
+        @Test
+        @DisplayName("publishes broad FIELD_REMOVED for entity — cleanup deferred to per-field events")
+        void entityDeleted() {
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.ENTITY_DELETED,
+                """
+                {"entityName":"User"}
                 """
             ));
 
@@ -296,8 +357,42 @@ class ConsentDecisionProjectionHandlerTest {
             CacheInvalidationMessage msg = captor.getValue();
             assertEquals(InvalidationAction.FIELD_REMOVED, msg.action());
             assertEquals("User", msg.entity());
-            assertEquals("email", msg.field());
             assertNull(msg.subject());
+            assertNull(msg.field());
+        }
+    }
+
+    @Nested
+    @DisplayName("PURPOSE_DELETED")
+    class PurposeDeleted {
+
+        @Test
+        @DisplayName("calls deleteByPurpose and publishes per-entry REVOKED")
+        void purposeDeleted() {
+            when(consentRepo.deleteByPurpose("marketing")).thenReturn(List.of(
+                new AffectedEntry("alice", "marketing"),
+                new AffectedEntry("bob", "marketing")
+            ));
+
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.PURPOSE_DELETED,
+                """
+                {"purposeName":"marketing"}
+                """
+            ));
+
+            verify(consentRepo).deleteByPurpose("marketing");
+
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(2)).publish(captor.capture());
+
+            List<CacheInvalidationMessage> msgs = captor.getAllValues();
+            assertEquals(InvalidationAction.REVOKED, msgs.get(0).action());
+            assertEquals("alice", msgs.get(0).subject());
+            assertEquals("marketing", msgs.get(0).purpose());
+
+            assertEquals(InvalidationAction.REVOKED, msgs.get(1).action());
+            assertEquals("bob", msgs.get(1).subject());
         }
     }
 
@@ -317,11 +412,10 @@ class ConsentDecisionProjectionHandlerTest {
             assertDoesNotThrow(() -> handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.POLICY_GRANTED,
                 """
-                {"subjectId":"s1","purposeName":"p","fieldName":"f","entityName":"e","granted":true}
+                {"subjectId":"s1","purposeName":"p","fieldName":"f","entityName":"e","category":"*","granted":true}
                 """
             )));
 
-            // Cache write should still have happened
             verify(consentRepo).setFieldConsent("s1", "e", "f", "p", true);
         }
 
@@ -349,6 +443,20 @@ class ConsentDecisionProjectionHandlerTest {
             handler.onEvent(STREAM_KEY, MSG_ID, fields);
             verifyNoInteractions(publisher);
             verifyNoInteractions(consentRepo);
+        }
+
+        @Test
+        @DisplayName("malformed payload with missing required field gives clear error")
+        void malformedPayloadMissingRequired() {
+            RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                    ConsentEventTypes.POLICY_GRANTED,
+                    """
+                    {"purposeName":"p","granted":true}
+                    """
+                )));
+            assertTrue(ex.getCause() instanceof IllegalArgumentException);
+            assertTrue(ex.getCause().getMessage().contains("subjectId"));
         }
     }
 
