@@ -924,6 +924,50 @@ No change needed in the bundle unless `configure()` signature changes.
 > **Note:** This phase modifies the command side — `JooqConsentAdminCommandService` and adds
 > new SPI interfaces to `operio-core`. It can be implemented independently of Phase 1.
 
+#### Phase 1 context relevant to Phase 2
+
+> **⚠️ `isCategoryScoped()`/`isFieldScoped()` and deprecated `to()` callers:**
+> Phase 2 Task 2.4 uses `accessRequest.isCategoryScoped()` and `accessRequest.isFieldScoped()`
+> to decide which validations to run. However, these predicates check for `"*"` (WILDCARD) in
+> the respective fields. The deprecated `ConsentScope.to()` methods pass `null` instead of `"*"`,
+> so `to("PII", null, null, "marketing").isCategoryScoped()` returns **false** (fieldName is null,
+> not `"*"`). There are ~152 `to()` callers in the codebase (~140 in tests, ~6 in README).
+>
+> **Fix required:** Either (a) make `isCategoryScoped()`/`isFieldScoped()` also handle null
+> (`return fieldName == null || WILDCARD.equals(fieldName)`), or (b) migrate all `to()` callers
+> to `forCategory()`/`forField()` before implementing validation. Option (a) is safer and
+> backward-compatible.
+>
+> **⚠️ `PolicyGrantedEvent` constructor takes individual fields**, not a `ConsentScope` object:
+> `PolicyGrantedEvent(subjectId, purposeName, fieldName, entityName, category, granted, expiresAt)`.
+> The plan's Task 2.4 code sample shows `new PolicyGrantedEvent(subject, accessRequest, true, expiresAt)`
+> — this is pseudocode and doesn't match the actual signature.
+>
+> **⚠️ `qualifyField("*", field)` now returns `"_default_/{field}"`** — Phase 1 hardening
+> fixed `qualifyField()` to treat `"*"` as missing entity. The plan's Gotcha #9 says not to
+> call `qualifyField()` when `entityName == "*"`, but the actual implementation handles it safely.
+>
+> **⚠️ Handler field-level condition changed from plan:** The plan's Task 1.4 code sample checks
+> `!WILDCARD.equals(fieldName) && !WILDCARD.equals(entityName)`. Phase 1 hardening relaxed this
+> to only `!isWildcard(fieldName)` — a concrete fieldName alone triggers field-level storage,
+> even if entity is null/wildcard. `setFieldConsent()` → `qualifyField()` defaults to `_default_`.
+>
+> **⚠️ `ConsentAdminQueryService.findExpiredPolicies()` does NOT exist yet.** The interface exists
+> with `findPoliciesBySubject()`, `listFields()`, `listCategories()`, etc., but no expiration
+> query. Task 2.6 must add this method to the interface and implement it in
+> `JooqConsentAdminQueryService`.
+>
+> **⚠️ `EventRepository.listAggregateIds()` does NOT exist yet.** Must be added per Task 2.3.
+>
+> **⚠️ Hydration repo injection:** `JooqConsentAdminCommandService` receives dependencies via
+> `configure(ConsentAdminCommandConfig)`. Hydration repos should be added to the
+> `ConsentAdminCommandConfig` record and injected through the same configure path.
+>
+> **⚠️ `cleanupReverseIndex` uses second-colon parsing** (not the split-with-limit-3 approach
+> mentioned in Gotcha #8). This handles purposes with colons correctly but will break if
+> category or entity names contain colons. Consider adding name validation (reject `:` and `\0`
+> in names) as part of the Task 2.4 command-side validation.
+
 #### Existing infrastructure (no changes needed)
 
 The event sourcing infrastructure already supports aggregate hydration:
@@ -1351,14 +1395,19 @@ the index becomes inconsistent. This is acceptable because:
 | Task 1.8c — Add handlePurposeDeleted for purpose cleanup | ✅ Done | deleteByPurpose() + per-entry REVOKED |
 | Task 1.9 — Update RedisConsentDecisionService | ✅ Done | Removed AppNameAware; deprecated fieldCategoryMappingRepository() |
 | Task 1.10 — Update tests | ✅ Done | Rewrote handler + repo + service tests for new Hash API |
-| **Phase 2: Command Side — Validation + Sweeper** | | |
-| Task 2.1 — Create hydration repository interfaces | | |
-| Task 2.2 — Implement JOOQ hydration repositories | | |
-| Task 2.3 — Add listAggregateIds to EventRepository | | |
-| Task 2.4 — Add validation to grantConsent/revokeConsent | | |
-| Task 2.5 — Create ExpirationSweeperService SPI | | |
-| Task 2.6 — Implement ExpirationSweeperService | | |
-| Task 2.7 — Unit tests for validation and sweeper | | |
+| **Phase 1 Post-Commit Hardening** | ✅ Complete | |
+| Fix: handler field routing | ✅ Done | Condition required both fieldName AND entityName non-wildcard; null/`"*"` entity misrouted to category. Relaxed to only check fieldName. |
+| Fix: qualifyField wildcard | ✅ Done | `"*"` entity produced `"*/field"` instead of `"_default_/field"`. Now treats `"*"` same as null/blank. |
+| Fix: cleanupReverseIndex parsing | ✅ Done | `lastColon` parsing broke for purposes with colons. Changed to `secondColon` approach. |
+| Fix: dead code + stale docs | ✅ Done | Removed unused `instantOrNull`; fixed stale javadoc in service test. |
+| **Phase 2: Command Side — Validation + Sweeper** | ✅ Complete | |
+| Task 2.1 — Create hydration repository interfaces | ✅ Done | 5 interfaces in operio-core hydration package (Entity, Category, Purpose, Regulation, ConsentPolicy) |
+| Task 2.2 — Implement JOOQ hydration repositories | ✅ Done | 5 JOOQ implementations using TenantEventService.getAggregate(); promoted operio-tenant-event-jooq to impl dep |
+| Task 2.3 — Add listAggregateIds to EventRepository | ✅ Done | Parameterized with aggregateType + tenantId; returns List<UUID> |
+| Task 2.4 — Add validation to grantConsent/revokeConsent | ✅ Done | Auto-create missing purpose/category/entity+field; null-guard skips validation when hydration repos absent |
+| Task 2.5 — Create ExpirationSweeperService SPI | ✅ Done | sweep() + sweepAll() in operio-core |
+| Task 2.6 — Implement ExpirationSweeperService | ✅ Done | JooqExpirationSweeperService; findExpiredPolicies added as default method on ConsentAdminQueryService |
+| Task 2.7 — Unit tests for validation and sweeper | ✅ Done | 3 Mockito test classes: validation, sweeper, hydration repos |
 | **Phase 3: Cleanup + Migration** | | |
 | Task 3.1 — Audit RedisConsentDecisionService consumers | | |
 | Task 3.2 — Decide FieldCategoryMappingRedisRepository retention | | |

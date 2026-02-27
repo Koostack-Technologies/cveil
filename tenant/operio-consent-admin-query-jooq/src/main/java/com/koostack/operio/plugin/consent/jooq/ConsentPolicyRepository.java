@@ -137,4 +137,17 @@ public class ConsentPolicyRepository {
             .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
             .fetchInto(ConsentPolicy.class);
     }
+
+    /**
+     * Finds all granted policies whose {@code expires_at} is before the
+     * given cutoff time.
+     */
+    public List<ConsentPolicy> findExpired(LocalDateTime cutoff) {
+        return dsl
+            .selectFrom(CONSENT_POLICY)
+            .where(CONSENT_POLICY.GRANTED.isTrue())
+            .and(CONSENT_POLICY.EXPIRES_AT.isNotNull())
+            .and(CONSENT_POLICY.EXPIRES_AT.le(cutoff))
+            .fetchInto(ConsentPolicy.class);
+    }
 }

@@ -206,6 +206,18 @@ public class JooqConsentAdminQueryService
     }
 
     // -----------------------------------------------------------------------
+    // Expiration queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<PolicySummaryEntry> findExpiredPolicies(Instant cutoff) {
+        getDsl(); // guard
+        var cutoffLocal = java.time.LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC);
+        List<ConsentPolicy> expired = consentPolicyRepository.findExpired(cutoffLocal);
+        return expired.stream().map(this::toPolicySummary).toList();
+    }
+
+    // -----------------------------------------------------------------------
     // Consent audit history
     // -----------------------------------------------------------------------
 

@@ -105,4 +105,23 @@ public interface ConsentAdminQueryService<T> extends Plugin<T> {
      *         first, possibly empty
      */
     List<ConsentAuditEntry> getConsentHistory(String subjectId, ConsentScope scope);
+
+    // -----------------------------------------------------------------------
+    // Expiration queries
+    // -----------------------------------------------------------------------
+
+    /**
+     * Finds all granted consent policies that have expired (i.e. their
+     * {@code expiresAt} is before the given cutoff instant).
+     *
+     * <p>Used by {@link ExpirationSweeperService} to discover policies
+     * that need automatic revocation.
+     *
+     * @param cutoff the instant to compare against — policies with
+     *               {@code expiresAt < cutoff} are considered expired
+     * @return an unmodifiable list of expired policy summaries, possibly empty
+     */
+    default List<PolicySummaryEntry> findExpiredPolicies(java.time.Instant cutoff) {
+        return List.of();
+    }
 }

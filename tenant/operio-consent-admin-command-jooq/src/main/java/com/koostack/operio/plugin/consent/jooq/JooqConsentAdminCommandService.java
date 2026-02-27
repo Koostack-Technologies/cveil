@@ -8,6 +8,9 @@ import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.data.consent.aggregates.RegulationAggregate;
 import com.koostack.operio.core.data.consent.events.*;
+import com.koostack.operio.core.data.consent.hydration.CategoryHydrationRepository;
+import com.koostack.operio.core.data.consent.hydration.EntityHydrationRepository;
+import com.koostack.operio.core.data.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
@@ -37,6 +40,9 @@ public class JooqConsentAdminCommandService
     );
 
     private TenantEventService<?> eventService;
+    private EntityHydrationRepository entityHydrationRepo;
+    private CategoryHydrationRepository categoryHydrationRepo;
+    private PurposeHydrationRepository purposeHydrationRepo;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -60,6 +66,9 @@ public class JooqConsentAdminCommandService
     @Override
     public void configure(ConsentAdminCommandConfig config) {
         this.eventService = config.eventService();
+        this.entityHydrationRepo = config.entityHydrationRepo();
+        this.categoryHydrationRepo = config.categoryHydrationRepo();
+        this.purposeHydrationRepo = config.purposeHydrationRepo();
         registerEventTypes();
         LOG.info("JooqConsentAdminCommandService configured (event-sourced)");
     }
@@ -90,6 +99,8 @@ public class JooqConsentAdminCommandService
         Instant expiresAt
     ) {
         String tenantId = TenantContext.require();
+        ensureReferencedEntitiesExist(accessRequest);
+
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyGrantedEvent(
             subject,
@@ -111,6 +122,8 @@ public class JooqConsentAdminCommandService
         Instant expiresAt
     ) {
         String tenantId = TenantContext.require();
+        ensureReferencedEntitiesExist(accessRequest);
+
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyRevokedEvent(
             subject,
@@ -231,6 +244,61 @@ public class JooqConsentAdminCommandService
         var payload = new PurposeRegulationLinkedEvent(purposeName, regulationName, legalBasis);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal — validation + auto-create
+    // -----------------------------------------------------------------------
+
+    /**
+     * Validates that all entities referenced by the consent scope exist,
+     * auto-creating them if they don't. Skipped when hydration repos are
+     * not configured (backward-compatible).
+     */
+    private void ensureReferencedEntitiesExist(ConsentScope accessRequest) {
+        ensurePurposeExists(accessRequest.purposeName());
+        if (accessRequest.isCategoryScoped()) {
+            ensureCategoryExists(accessRequest.category());
+        }
+        if (accessRequest.isFieldScoped()) {
+            ensureEntityAndFieldExist(accessRequest.entityName(), accessRequest.fieldName());
+        }
+    }
+
+    private void ensurePurposeExists(String purposeName) {
+        if (purposeHydrationRepo == null) return;
+        PurposeAggregate existing = purposeHydrationRepo.findByName(purposeName);
+        if (existing == null || existing.purposeName() == null) {
+            LOG.info("Auto-creating purpose '{}' referenced by consent grant/revoke", purposeName);
+            registerPurpose(purposeName, null);
+        }
+    }
+
+    private void ensureCategoryExists(String categoryName) {
+        if (categoryHydrationRepo == null) return;
+        CategoryAggregate existing = categoryHydrationRepo.findByName(categoryName);
+        if (existing == null || existing.categoryName() == null) {
+            LOG.info("Auto-creating category '{}' referenced by consent grant/revoke", categoryName);
+            registerCategory(categoryName, null);
+        }
+    }
+
+    private void ensureEntityAndFieldExist(String entityName, String fieldName) {
+        if (entityHydrationRepo == null) return;
+        EntityAggregate existing = entityHydrationRepo.findByName(entityName);
+        if (existing == null || existing.entityName() == null) {
+            LOG.info("Auto-creating entity '{}' and field '{}' referenced by consent grant/revoke",
+                entityName, fieldName);
+            registerField(fieldName, entityName, null);
+        } else {
+            boolean fieldExists = existing.fields().stream()
+                .anyMatch(f -> f.fieldName().equals(fieldName));
+            if (!fieldExists) {
+                LOG.info("Auto-creating field '{}' on entity '{}' referenced by consent grant/revoke",
+                    fieldName, entityName);
+                registerField(fieldName, entityName, null);
+            }
+        }
     }
 
     // -----------------------------------------------------------------------

@@ -20,10 +20,10 @@ public record ConsentScope(
     }
 
     /** {@code true} when this scope targets a category (field and entity are wildcards). */
-    public boolean isCategoryScoped() { return WILDCARD.equals(fieldName); }
+    public boolean isCategoryScoped() { return fieldName == null || WILDCARD.equals(fieldName); }
 
     /** {@code true} when this scope targets a specific field (category is wildcard). */
-    public boolean isFieldScoped() { return WILDCARD.equals(category); }
+    public boolean isFieldScoped() { return category == null || WILDCARD.equals(category); }
 
     /**
      * Backward-compatible factory — creates a scope with no entity
