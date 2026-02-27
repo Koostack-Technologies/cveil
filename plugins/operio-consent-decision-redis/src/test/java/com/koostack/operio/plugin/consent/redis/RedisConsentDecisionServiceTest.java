@@ -32,9 +32,10 @@ import redis.clients.jedis.resps.ScanResult;
  * <p>Uses an embedded {@link RedisServer} (jedis-mock) — no Docker required.
  * Each test starts with a freshly flushed database.
  *
- * <p>The underlying schema is flat key-per-field:
- * {@code operio:consent:{subject}:{field}:{purpose}} → {@code STATUS|SOURCE}.
- * Evaluation uses a single {@code MGET} round trip.
+ * <p>The underlying schema is Hash-per-subject:
+ * {@code {tenant}:consent:{subject}} → Hash of {@code c:{cat}:{purpose}} and
+ * {@code f:{entity/field}:{purpose}} fields. Evaluation uses a single
+ * {@code HMGET} round trip with field-over-category precedence.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("RedisConsentDecisionService")

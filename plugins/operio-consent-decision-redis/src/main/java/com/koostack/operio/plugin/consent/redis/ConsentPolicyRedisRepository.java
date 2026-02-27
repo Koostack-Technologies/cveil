@@ -137,7 +137,8 @@ public class ConsentPolicyRedisRepository {
      * When {@code entity} is {@code null} or blank, {@value #DEFAULT_ENTITY} is used.
      */
     public static String qualifyField(String entity, String field) {
-        String e = (entity != null && !entity.isBlank())
+        String e = (entity != null && !entity.isBlank()
+                && !ConsentScope.WILDCARD.equals(entity))
             ? entity
             : DEFAULT_ENTITY;
         return e + ENTITY_FIELD_SEP + field;
@@ -479,18 +480,18 @@ public class ConsentPolicyRedisRepository {
      * Hash field format: {@code {prefix}:{discriminator}:{purpose}} where prefix is "c" or "f".
      */
     private void cleanupReverseIndex(Pipeline p, String subject, String hashField) {
-        // Split with limit 3: prefix, discriminator, purpose
+        // Format: {prefix}:{discriminator}:{purpose}
+        // The second colon separates discriminator from purpose (purpose may contain colons).
         // c:PII:marketing → ["c", "PII", "marketing"]
-        // f:User/email:marketing → ["f", "User/email", "marketing"]
+        // f:User/email:gdpr:article6 → ["f", "User/email", "gdpr:article6"]
         int firstColon = hashField.indexOf(':');
-        int lastColon = hashField.lastIndexOf(':');
-        if (firstColon < 0 || lastColon <= firstColon) {
-            return; // malformed
-        }
+        if (firstColon < 0) { return; }
+        int secondColon = hashField.indexOf(':', firstColon + 1);
+        if (secondColon < 0) { return; }
 
         String prefix = hashField.substring(0, firstColon);
-        String discriminator = hashField.substring(firstColon + 1, lastColon);
-        String purpose = hashField.substring(lastColon + 1);
+        String discriminator = hashField.substring(firstColon + 1, secondColon);
+        String purpose = hashField.substring(secondColon + 1);
 
         if ("c".equals(prefix)) {
             p.srem(idxCatKey(discriminator), subject + IDX_SEP + purpose);

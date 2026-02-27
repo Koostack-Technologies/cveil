@@ -101,6 +101,15 @@ class ConsentPolicyRedisRepositoryTest {
                 ConsentPolicyRedisRepository.qualifyField("  ", "ssn")
             );
         }
+
+        @Test
+        @DisplayName("uses DEFAULT_ENTITY when entity is wildcard '*'")
+        void wildcardEntity() {
+            assertEquals(
+                "_default_/ssn",
+                ConsentPolicyRedisRepository.qualifyField("*", "ssn")
+            );
+        }
     }
 
     // -----------------------------------------------------------------------

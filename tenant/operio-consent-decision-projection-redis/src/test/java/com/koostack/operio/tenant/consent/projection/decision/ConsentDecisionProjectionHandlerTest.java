@@ -128,6 +128,34 @@ class ConsentDecisionProjectionHandlerTest {
 
             verify(consentRepo).setCategoryConsent("user-1", "PII", "marketing", true);
         }
+
+        @Test
+        @DisplayName("field-level grant with wildcard entity uses setFieldConsent (not category)")
+        void fieldLevelGrantWithWildcardEntity() {
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.POLICY_GRANTED,
+                """
+                {"subjectId":"user-1","purposeName":"marketing","fieldName":"email","entityName":"*","category":"*","granted":true}
+                """
+            ));
+
+            verify(consentRepo).setFieldConsent("user-1", "*", "email", "marketing", true);
+            verify(consentRepo, never()).setCategoryConsent(any(), any(), any(), anyBoolean());
+        }
+
+        @Test
+        @DisplayName("field-level grant with null entity uses setFieldConsent (not category)")
+        void fieldLevelGrantWithNullEntity() {
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.POLICY_GRANTED,
+                """
+                {"subjectId":"user-1","purposeName":"marketing","fieldName":"ssn","category":"PII","granted":true}
+                """
+            ));
+
+            verify(consentRepo).setFieldConsent("user-1", null, "ssn", "marketing", true);
+            verify(consentRepo, never()).setCategoryConsent(any(), any(), any(), anyBoolean());
+        }
     }
 
     @Nested

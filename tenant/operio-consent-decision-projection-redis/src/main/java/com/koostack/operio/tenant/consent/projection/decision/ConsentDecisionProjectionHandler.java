@@ -130,8 +130,8 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
 
-        if (!isWildcard(fieldName) && !isWildcard(entityName)) {
-            // Field-level: (*, field, entity, purpose)
+        if (!isWildcard(fieldName)) {
+            // Field-level: entity may be null/wildcard — qualifyField defaults to _default_
             consentRepo.setFieldConsent(subjectId, entityName, fieldName, purposeName, granted);
             publishInvalidation(new CacheInvalidationMessage(
                 UUID.randomUUID().toString(), tenantId, subjectId,
@@ -282,12 +282,6 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
             throw new IllegalArgumentException("Missing required payload field: " + field);
         }
         return child.asBoolean();
-    }
-
-    private static Instant instantOrNull(JsonNode node, String field) {
-        JsonNode child = node.get(field);
-        if (child == null || child.isNull()) return null;
-        return Instant.parse(child.asText());
     }
 
     // -----------------------------------------------------------------------
