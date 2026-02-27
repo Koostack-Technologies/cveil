@@ -4,10 +4,9 @@
 ## Agent Prompt
 
 > Read this plan and continue with the next incomplete task. This is a multi-phase refactoring
-> of the consent decision projection. It migrates from flat Redis string keys with category→field
-> materialization to a **Hash-per-subject** schema with **reverse indices** for O(1) invalidation.
-> The `appName` prefix is dropped — keys are prefixed by `{tenantId}` only. The command side is
-> updated with hydration repositories for entity validation and an ExpirationSweeperService.
+> of the consent decision projection. It uses a **Hash-per-subject** Redis schema with
+> **reverse indices** for O(1) invalidation. Keys are prefixed by `{tenantId}` only (no `appName`).
+> The command side uses hydration repositories for entity validation and an ExpirationSweeperService.
 > Read the full plan, check the after-action table for completed tasks, and pick up where the
 > last session left off.
 >
@@ -16,7 +15,6 @@
 >   There is NO `CATEGORY_DELETED` value — use `CATEGORY_CHANGED` or add new values as needed.
 > - `ConsentPolicyRedisRepository` is a standalone class (no interface). `DecisionDetail` comes
 >   from `com.koostack.operio.core.models.DecisionDetail`.
-> - Old flat key values are encoded as `STATUS|SOURCE` (e.g., `"GRANTED|FIELD"`). Migration must decode.
 > - `TenantContext` uses Java 21 `ScopedValue`. `runWhere()` binds tenantId for scope of operation.
 > - `Pipeline` from Jedis implements `Closeable` — `close()` auto-calls `sync()`. Don't double-sync.
 > - The handler is wired in `CoreConsentBundle` (not Spring `@Bean`). Check there for constructor changes.
@@ -138,13 +136,8 @@ The `*` wildcard sentinel indicates "all" for that dimension. Only two patterns 
 
 **Evaluate read rule:** The caller provides a **concrete** scope (no wildcards — all 4 are specific values). The read path checks `f:` first (precedence), then `c:`.
 
-> **⚠️ Migration note:** The codebase currently uses **null** (not `"*"`) for unspecified
-> dimensions in `ConsentScope`, `PolicyGrantedEvent`, and `PolicyRevokedEvent`. As part of
-> this refactoring, all null-based branching (e.g., `if (fieldName != null)`) changes to
-> wildcard-based branching (`if (!"*".equals(fieldName))`). The `ConsentScope` record, event
-> records, and command service must all be updated to emit `"*"` instead of null. Existing
-> events in the event log with null fields are handled gracefully: the projection treats
-> null the same as `"*"` for backwards compatibility.
+> All unspecified dimensions use `"*"` (not null) in `ConsentScope`, `PolicyGrantedEvent`,
+> and `PolicyRevokedEvent`. All branching uses wildcard checks (`if (!"*".equals(fieldName))`).
 
 ### Primary Data — Hash per Subject
 
@@ -366,8 +359,7 @@ replace its function. Whether to delete the class entirely or keep it for
 
 | Pattern | Type | Disposition | Reason |
 |---------|------|-------------|--------|
-| `{appName}:{tenantId}:consent:{subject}:{entity/field}:{purpose}` | String | ❌ **REPLACED** | Migrated to Hash |
-| `{tenantId}:consent:{subject}` | **Hash** | ✅ **NEW** | Primary consent data |
+| `{tenantId}:consent:{subject}` | **Hash** | ✅ **PRIMARY** | Primary consent data |
 | `{tenantId}:idx:cat:{category}` | **Set** | ✅ **NEW** | Reverse index for category invalidation |
 | `{tenantId}:idx:field:{entity/field}` | **Set** | ✅ **NEW** | Reverse index for field invalidation |
 | `{tenantId}:idx:purpose:{purpose}` | **Set** | ✅ **NEW** | Reverse index for purpose invalidation |
@@ -407,7 +399,7 @@ replace its function. Whether to delete the class entirely or keep it for
 | 9 | Command-side validation | **Hydration repositories** — verify entities exist, auto-create if missing | Prevents dangling references in consent events |
 | 10 | FieldCategoryMappingRedisRepository | **Remove from handler, defer full deletion** | Reverse indices replace its function; audit consumers in Phase 3 |
 | 11 | Metadata event handlers | **Keep in projection** — publish-only for LINKED/UNLINKED, cleanup + publish for DELETED/REMOVED | Clients need invalidation notifications |
-| 12 | Wildcard sentinel | **`"*"` replaces null** for unspecified ConsentScope dimensions | Explicit sentinel; all 4 fields always present; backwards-compatible with null |
+| 12 | Wildcard sentinel | **`"*"` replaces null** for unspecified ConsentScope dimensions | Explicit sentinel; all 4 fields always present |
 | 13 | Valid scope patterns | **`(cat, *, *, purpose)` or `(*, field, entity, purpose)` only** | No partial wildcards; clean category vs field branching |
 | 14 | Entity/purpose deletion handlers | **Add `ENTITY_DELETED` and `PURPOSE_DELETED`** to projection dispatch | Without these, deleting an entity/purpose leaves orphaned consent entries in Redis |
 | 15 | Repo return types for cleanup | **`List<AffectedEntry>`** not `List<CacheInvalidationMessage>` | Separation of concerns — repo layer returns data, handler constructs messages |
@@ -418,9 +410,9 @@ replace its function. Whether to delete the class entirely or keep it for
 
 ## Tasks
 
-### Phase 1: Redis Schema Migration + Projection Refactoring
+### Phase 1: Redis Schema + Projection Refactoring
 
-#### Task 1.0 — Migrate ConsentScope and event records to `*` wildcard sentinel
+#### Task 1.0 — Update ConsentScope and event records to `*` wildcard sentinel
 
 **Files:**
 - `operio-core/.../ConsentScope.java`
@@ -428,8 +420,7 @@ replace its function. Whether to delete the class entirely or keep it for
 - `operio-core/.../events/PolicyRevokedEvent.java`
 - `tenant/operio-consent-admin-command-jooq/.../JooqConsentAdminCommandService.java`
 
-Currently, `ConsentScope` and event records use `null` for unspecified dimensions. Migrate to
-`"*"` wildcard sentinel:
+`ConsentScope` and event records use `"*"` wildcard sentinel for unspecified dimensions:
 
 ```java
 public record ConsentScope(
@@ -455,19 +446,11 @@ public record ConsentScope(
 }
 ```
 
-Update `PolicyGrantedEvent` and `PolicyRevokedEvent` to always include all 4 fields (using `"*"`
-instead of null). Update factory methods in `ConsentScope` (`to(...)` → `forCategory()`/`forField()`).
+`PolicyGrantedEvent` and `PolicyRevokedEvent` always include all 4 fields (using `"*"`
+instead of null). Factory methods: `forCategory()`/`forField()`.
 
-Update `JooqConsentAdminCommandService.grantConsent()` and `revokeConsent()` to construct events
-with `"*"` instead of leaving fields null.
-
-**Backwards compatibility:** The projection handler should treat both null and `"*"` as wildcard
-for old events in the event log:
-```java
-private boolean isWildcard(String value) {
-    return value == null || "*".equals(value);
-}
-```
+`JooqConsentAdminCommandService.grantConsent()` and `revokeConsent()` construct events
+with `"*"` for unspecified dimensions.
 
 #### Task 1.1 — Rewrite `ConsentPolicyRedisRepository` for Hash-based storage
 
@@ -928,15 +911,8 @@ No change needed in the bundle unless `configure()` signature changes.
 
 > **⚠️ `isCategoryScoped()`/`isFieldScoped()` and deprecated `to()` callers:**
 > Phase 2 Task 2.4 uses `accessRequest.isCategoryScoped()` and `accessRequest.isFieldScoped()`
-> to decide which validations to run. However, these predicates check for `"*"` (WILDCARD) in
-> the respective fields. The deprecated `ConsentScope.to()` methods pass `null` instead of `"*"`,
-> so `to("PII", null, null, "marketing").isCategoryScoped()` returns **false** (fieldName is null,
-> not `"*"`). There are ~152 `to()` callers in the codebase (~140 in tests, ~6 in README).
->
-> **Fix required:** Either (a) make `isCategoryScoped()`/`isFieldScoped()` also handle null
-> (`return fieldName == null || WILDCARD.equals(fieldName)`), or (b) migrate all `to()` callers
-> to `forCategory()`/`forField()` before implementing validation. Option (a) is safer and
-> backward-compatible.
+> to decide which validations to run. These predicates check for `"*"` (WILDCARD) in
+> the respective fields.
 >
 > **⚠️ `PolicyGrantedEvent` constructor takes individual fields**, not a `ConsentScope` object:
 > `PolicyGrantedEvent(subjectId, purposeName, fieldName, entityName, category, granted, expiresAt)`.
@@ -1174,7 +1150,7 @@ event-driven). Implementation details depend on the runtime (Spring Boot, Quarku
   verify `revokeConsent()` called for each
 - **Test:** `JooqEntityHydrationRepository.findByName()` — verify key derivation + delegation
 
-### Phase 3: Cleanup and Data Migration
+### Phase 3: Cleanup
 
 #### Task 3.1 — Audit `RedisConsentDecisionService` usage of `FieldCategoryMappingRedisRepository`
 
@@ -1190,55 +1166,14 @@ Based on Task 3.1 findings:
 - **If consumers exist:** Keep the class but move it to an admin-side module. Document that it
   should not be used by the decision projection.
 
-#### Task 3.3 — Migrate old flat keys to new Hash format
+#### Task 3.3 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md
 
-One-time migration script/task:
-1. SCAN for old `{appName}:{tenantId}:consent:*` flat keys (pattern: `operio:{tenantId}:consent:{subject}:{qualifiedField}:{purpose}`)
-2. Parse subject, entity/field, purpose from key name
-3. **Decode value:** Old values are encoded as `STATUS|SOURCE` (e.g., `"GRANTED|FIELD"`, `"REVOKED|CATEGORY"`). Split on `|` — first part is status, second is source.
-4. Determine hash field prefix from source:
-   - If source is `"FIELD"` → hash field is `f:{qualifiedField}:{purpose}`, value is status
-   - If source is `"CATEGORY"` → these are materialized entries that shouldn't exist in new schema. **Skip them** — the category-level entry should already exist or will be re-created on next event replay.
-5. HSET into new `{tenantId}:consent:{subject}` hash
-6. SADD into reverse indices (both type-specific and purpose indices)
-7. DEL old flat keys
-
-> **⚠️ Category materialization:** The old schema materialized `N` per-field keys for each
-> category grant. The new schema stores ONE `c:{category}:{purpose}` entry. During migration,
-> you can't reliably reconstruct which category a `SOURCE_CATEGORY` entry came from (the
-> old flat key doesn't include the category name). Options:
-> (a) Replay the event log to rebuild state correctly (safest but slowest)
-> (b) Skip `SOURCE_CATEGORY` entries and let the projection catch up from the event log
-> (c) Query the admin projection's field→category mapping to reconstruct
->
-> **Recommended: Option (b)** — skip materialized entries, migrate only `SOURCE_FIELD` entries.
-> Then replay the event log from the beginning (or a known snapshot point) to rebuild
-> category-level entries. This is the safest approach.
-
-Run per-tenant. Can be implemented as a startup migration or admin endpoint.
-
-#### Task 3.4 — Clean up orphaned Redis data
-
-The `field2cat`/`cat2field` Redis sets will no longer be maintained after Phase 1 deploys.
-SCAN for `meta:field2cat:*` and `meta:cat2field:*` patterns and DEL. Run once after deployment.
-
-#### Task 3.5 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md
-
-Update references to reflect the new Hash-based schema, reverse indices, and dropped `appName`
-prefix. Update any documentation that implies flat string keys or category→field materialization.
+Update references to reflect the Hash-based schema, reverse indices, and `{tenantId}` key prefix.
+Update any documentation that implies flat string keys or category→field materialization.
 
 ---
 
 ## Risks
-
-### Phase 1 is a breaking Redis schema change
-
-All consent data in Redis must be migrated from flat keys to Hash-per-subject. During migration,
-both old and new formats may coexist.
-
-**Mitigation:** Task 3.3 provides a migration script. Can run migration before deploying new code
-(write to new format, keep old keys), then deploy, then clean up old keys. Or deploy with
-dual-read support (check new hash first, fall back to old flat key).
 
 ### Reverse index consistency
 
@@ -1268,7 +1203,7 @@ category+purpose combinations). HGETALL on small hashes is fast.
 
 ### Deployment ordering (Phase 1 vs Phase 2)
 
-Phase 1 and Phase 2 are independent. Phase 1 (schema migration) changes how data is stored.
+Phase 1 and Phase 2 are independent. Phase 1 (schema + projection) changes how data is stored.
 Phase 2 (validation + sweeper) changes command behavior. They can be deployed in any order.
 
 ---
@@ -1291,7 +1226,7 @@ not the decision cache. Leave it as-is.
 
 ### 3. `expiresAt` NOT stored in Redis hash
 
-The old flat keys used `SETEX` with TTL for expiration. The new hash stores only `"GRANTED"` or
+The Redis hash stores only `"GRANTED"` or
 `"REVOKED"` — no expiration timestamp. This is intentional (the sweeper handles expiry). But
 it means:
 - A race exists: policy expires → sweeper hasn't run yet → evaluate returns stale GRANTED.
@@ -1320,17 +1255,7 @@ to `subjects × purposes`. For a system with 1M subjects and 10 purposes, each c
 set could have 10M members. Monitor memory and consider periodic compaction if this becomes
 an issue.
 
-### 6. `ConsentScope.to()` callers
-
-The existing `ConsentScope.to(category, fieldName, forPurpose)` and 4-arg `to(...)` factory
-methods are used throughout the codebase (tests, command service, REST API). When adding
-`forCategory()`/`forField()` in Task 1.0:
-- **Do NOT delete** the old `to()` methods immediately — deprecate them
-- Search for all callers: `grep -rn "ConsentScope.to(" --include="*.java"`
-- Migrate callers incrementally (some are in test code, some in production code)
-- The old `to()` methods can be kept with `@Deprecated` annotation during migration
-
-### 7. `TenantContext.get()` vs `TenantContext.require()`
+### 6. `TenantContext.get()` vs `TenantContext.require()`
 
 The current repos use `TenantContext.get()` (returns null if unset). The new code uses
 `TenantContext.require()` (throws if unset). Verify ALL callers of `evaluateConsent()`,
@@ -1381,12 +1306,12 @@ the index becomes inconsistent. This is acceptable because:
 
 | Task | Status | Notes |
 |------|--------|-------|
-| **Phase 1: Redis Schema Migration** | ✅ Complete | |
-| Task 1.0 — Migrate ConsentScope/events to `*` wildcard | ✅ Done | Added WILDCARD, forCategory/forField factories; deprecated old to() methods |
+| **Phase 1: Redis Schema + Projection** | ✅ Complete | |
+| Task 1.0 — Update ConsentScope/events to `*` wildcard | ✅ Done | Added WILDCARD, forCategory/forField factories; deprecated old to() methods |
 | Task 1.1 — Rewrite ConsentPolicyRedisRepository for Hash | ✅ Done | Hash-per-subject + reverse indices (cat, field, purpose); Pipeline-based writes |
-| Task 1.2 — Drop appName from key prefix | ✅ Done | Merged with 1.1; deprecated DEFAULT_APP_NAME kept for FieldCategoryMappingRedisRepository compat |
-| Task 1.3 — Remove FieldCategoryMappingRedisRepository dependency | ✅ Done | Removed from handler + service; class retained (Phase 3 decides deletion) |
-| Task 1.4 — Refactor handlePolicyGrantedOrRevoked for Hash | ✅ Done | Wildcard-based branching; isWildcard() treats null + "*" for backward compat |
+| Task 1.2 — Drop appName from key prefix | ✅ Done | Merged with 1.1 |
+| Task 1.3 — Remove FieldCategoryMappingRedisRepository dependency | ✅ Done | Removed from handler + service; class deleted in Phase 3 |
+| Task 1.4 — Refactor handlePolicyGrantedOrRevoked for Hash | ✅ Done | Wildcard-based branching; isWildcard() helper |
 | Task 1.5 — Refactor handlePolicyAllRevoked for Hash | ✅ Done | Uses removeAllConsent() |
 | Task 1.6 — Refactor handleCategoryDeleted with reverse-index cleanup | ✅ Done | deleteByCategory() + per-entry REVOKED + broad CATEGORY_CHANGED |
 | Task 1.7 — Refactor handleEntityFieldRemoved with reverse-index cleanup | ✅ Done | deleteByField() + per-entry REVOKED + broad FIELD_REMOVED |
@@ -1404,13 +1329,11 @@ the index becomes inconsistent. This is acceptable because:
 | Task 2.1 — Create hydration repository interfaces | ✅ Done | 5 interfaces in operio-core hydration package (Entity, Category, Purpose, Regulation, ConsentPolicy) |
 | Task 2.2 — Implement JOOQ hydration repositories | ✅ Done | 5 JOOQ implementations using TenantEventService.getAggregate(); promoted operio-tenant-event-jooq to impl dep |
 | Task 2.3 — Add listAggregateIds to EventRepository | ✅ Done | Parameterized with aggregateType + tenantId; returns List<UUID> |
-| Task 2.4 — Add validation to grantConsent/revokeConsent | ✅ Done | Auto-create missing purpose/category/entity+field; null-guard skips validation when hydration repos absent |
+| Task 2.4 — Add validation to grantConsent/revokeConsent | ✅ Done | Auto-create missing purpose/category/entity+field; all hydration repos required |
 | Task 2.5 — Create ExpirationSweeperService SPI | ✅ Done | sweep() + sweepAll() in operio-core |
 | Task 2.6 — Implement ExpirationSweeperService | ✅ Done | JooqExpirationSweeperService; findExpiredPolicies added as default method on ConsentAdminQueryService |
 | Task 2.7 — Unit tests for validation and sweeper | ✅ Done | 3 Mockito test classes: validation, sweeper, hydration repos |
-| **Phase 3: Cleanup + Migration** | ✅ Complete | |
+| **Phase 3: Cleanup** | ✅ Complete | |
 | Task 3.1 — Audit RedisConsentDecisionService consumers | ✅ Done | Redis version: zero runtime consumers (getter was @Deprecated, handler removed in Phase 1). Caffeine version: kept — used by embedded sync module. |
 | Task 3.2 — Decide FieldCategoryMappingRedisRepository retention | ✅ Done | Deleted FieldCategoryMappingRedisRepository class + test + deprecated getter. Updated DEFAULT_APP_NAME javadoc. Removed mapping repo tests from RedisConsentDecisionServiceTest. Kept CaffeineFieldCategoryMappingRepository (embedded sync depends on it). |
-| Task 3.3 — Migrate old flat keys to new Hash format | ✅ Done | ConsentKeyMigrationService: SCANs old flat keys, parses STATUS\|SOURCE values, migrates SOURCE_FIELD to Hash format (Option B), skips+deletes SOURCE_CATEGORY. 12 unit tests. |
-| Task 3.4 — Clean up orphaned Redis data | ✅ Done | ConsentKeyCleanupService: SCANs meta:field2cat:* and meta:cat2field:* patterns, batch DELetes. Supports per-tenant + legacy single-tenant cleanup. 7 unit tests. |
-| Task 3.5 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md | ✅ Done | Updated Redis Key Namespace Reference (flat keys → Hash + reverse indices), ConsentPolicyRedisRepository description, handler constructor, ACL pattern. Removed FieldCategoryMappingRedisRepository reference, added migration/cleanup service entries. |
+| Task 3.3 — Update CONSENT_CACHE_INVALIDATION_PIPELINE.md | ✅ Done | Updated Redis Key Namespace Reference (Hash + reverse indices), ConsentPolicyRedisRepository description, handler constructor, ACL pattern. |
