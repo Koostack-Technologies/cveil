@@ -6,6 +6,7 @@ import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.service.TokenVerifier;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
+import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
 import com.koostack.operio.plugin.platform.jooq.PlatformJooqConfig;
@@ -14,6 +15,11 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
+import com.koostack.operio.plugin.redis.common.pubsub.RedisInvalidationPublisher;
+import com.koostack.operio.tenant.consent.projection.decision.ConsentDecisionProjectionHandler;
+import com.koostack.operio.tenant.event.jooq.ShardedStreamConsumer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
@@ -209,6 +215,70 @@ public class OperioProducers {
     }
 
     // -----------------------------------------------------------------------
+    // Decision cache projection (production only)
+    // -----------------------------------------------------------------------
+
+    private ShardedStreamConsumer decisionProjectionConsumer;
+
+    /**
+     * Produces the {@link ShardedStreamConsumer} that runs the consent
+     * decision projection — materializing domain events into the Redis
+     * decision cache.
+     *
+     * <p>Only activated in production mode (when {@code adminRedisPool} and
+     * {@code tenantAwareJedisProvider} are available). In embedded mode this
+     * returns {@code null} (no stream consumer needed).
+     *
+     * <p>The consumer is started eagerly at construction. Shutdown is handled
+     * by the {@link #onShutdown} CDI lifecycle callback.
+     *
+     * @param operio the built {@link Operio} instance (triggers bundle initialization first)
+     * @return the started stream consumer, or {@code null} in embedded mode
+     */
+    @Produces
+    @ApplicationScoped
+    public ShardedStreamConsumer consentDecisionProjectionConsumer(Operio operio) {
+        if (adminRedisPool == null || tenantAwareJedisProvider == null) {
+            LOG.info("Operio REST API: decision projection consumer not wired (embedded mode)");
+            return null;
+        }
+
+        ConsentPolicyRedisRepository consentRepo =
+            new ConsentPolicyRedisRepository(tenantAwareJedisProvider);
+
+        RedisInvalidationPublisher invalidationPublisher =
+            new RedisInvalidationPublisher(adminRedisPool, new ObjectMapper().registerModule(new JavaTimeModule()));
+
+        ConsentDecisionProjectionHandler handler =
+            new ConsentDecisionProjectionHandler(consentRepo, invalidationPublisher);
+
+        String consumerName = System.getenv().getOrDefault("HOSTNAME", "operio-api-" + ProcessHandle.current().pid());
+        this.decisionProjectionConsumer = new ShardedStreamConsumer(
+            JedisProvider.shared(adminRedisPool),
+            handler,
+            "decision-projection",
+            consumerName
+        );
+        decisionProjectionConsumer.start();
+
+        LOG.info("Operio REST API: decision projection consumer started (group=decision-projection, consumer={})",
+            consumerName);
+        return decisionProjectionConsumer;
+    }
+
+    /**
+     * CDI shutdown hook — stops the stream consumer gracefully.
+     */
+    public void onShutdown(@jakarta.enterprise.event.Observes
+                           @jakarta.enterprise.context.BeforeDestroyed(ApplicationScoped.class)
+                           Object event) {
+        if (decisionProjectionConsumer != null && decisionProjectionConsumer.isRunning()) {
+            LOG.info("Operio REST API: stopping decision projection consumer");
+            decisionProjectionConsumer.stop();
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Internal wiring helpers
     // -----------------------------------------------------------------------
 
@@ -251,6 +321,12 @@ public class OperioProducers {
      * shut down cleanly.
      */
     private TenantAwareJedisProvider tenantAwareJedisProvider;
+
+    /**
+     * Holds the admin Redis pool created during consent bundle construction
+     * so it can be shared with the invalidation publisher and stream consumer.
+     */
+    private JedisPooled adminRedisPool;
 
     private CoreConsentBundle createCoreConsentBundle() {
         OperioConfig.DbConfig db = config
@@ -340,6 +416,7 @@ public class OperioProducers {
             redisPw,
             redisTlsConfig
         );
+        this.adminRedisPool = adminPool;
 
         // -- Build the TenantAwareJedisProvider ------------------------------
         // This provider returns per-tenant JedisPooled connections that

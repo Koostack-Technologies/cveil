@@ -53,6 +53,8 @@ dependencies {
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
     implementation(project(":plugins:operio-jooq-common"))
     implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Decision cache projection handler
+    implementation(project(":tenant:operio-tenant-event-jooq"))                  // ShardedStreamConsumer
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")

@@ -9,6 +9,9 @@ package com.koostack.operio.core.data.consent.invalidation;
  *   <li>{@link #ALL_REVOKED} — flush all entries for the subject.</li>
  *   <li>{@link #CATEGORY_CHANGED} — refresh field↔category metadata (not consent decisions).</li>
  *   <li>{@link #FIELD_REMOVED} — flush all entries for the affected field across all subjects.</li>
+ *   <li>{@link #ENTITY_REMOVED} — flush all entries for all fields of the affected entity
+ *       across all subjects. The {@code entity} field identifies the deleted entity;
+ *       {@code field} is {@code null}.</li>
  * </ul>
  */
 public enum InvalidationAction {
@@ -17,5 +20,7 @@ public enum InvalidationAction {
     ALL_REVOKED,
     /** Field↔category mapping changed — clients re-fetch metadata. */
     CATEGORY_CHANGED,
-    FIELD_REMOVED
+    FIELD_REMOVED,
+    /** Entire entity deleted — clients flush all fields belonging to this entity. */
+    ENTITY_REMOVED
 }

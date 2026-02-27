@@ -230,13 +230,23 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
 
     private void handleEntityDeleted(String tenantId, JsonNode node) {
         String entityName = requiredText(node, "entityName");
-        // The entity deletion event doesn't carry the field list.
-        // Log and publish a broad invalidation — individual field cleanup
-        // happens when each ENTITY_FIELD_REMOVED event is processed.
-        log.info("Entity '{}' deleted — consent cleanup deferred to per-field removal events", entityName);
+
+        // Clean up all consent entries for every field belonging to this entity.
+        // The admin projection cascade-deletes fields via SQL, but no per-field
+        // ENTITY_FIELD_REMOVED events are emitted — so we clean Redis directly.
+        List<AffectedEntry> affected = consentRepo.deleteByEntity(entityName);
+
+        for (AffectedEntry entry : affected) {
+            publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, entry.subject(),
+                entityName, null, null, entry.purpose(),
+                InvalidationAction.REVOKED
+            ));
+        }
+
         publishInvalidation(new CacheInvalidationMessage(
             UUID.randomUUID().toString(), tenantId, null,
-            entityName, null, null, null, InvalidationAction.FIELD_REMOVED
+            entityName, null, null, null, InvalidationAction.ENTITY_REMOVED
         ));
     }
 

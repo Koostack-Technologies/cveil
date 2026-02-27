@@ -79,7 +79,7 @@ public class RedisInvalidationPublisher implements InvalidationPublisher {
                     pipeline.publish(entry.getKey(), json);
                 }
             }
-            pipeline.sync();
+            // Pipeline.close() auto-calls sync() — no explicit sync needed
             log.debug("Batch-published {} invalidation messages across {} channels",
                 messages.size(), channelPayloads.size());
         } catch (Exception e) {

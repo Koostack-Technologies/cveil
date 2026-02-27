@@ -370,8 +370,13 @@ class ConsentDecisionProjectionHandlerTest {
     class EntityDeleted {
 
         @Test
-        @DisplayName("publishes broad FIELD_REMOVED for entity — cleanup deferred to per-field events")
+        @DisplayName("calls deleteByEntity, publishes per-entry REVOKED + broad ENTITY_REMOVED")
         void entityDeleted() {
+            when(consentRepo.deleteByEntity("User")).thenReturn(List.of(
+                new AffectedEntry("alice", "marketing"),
+                new AffectedEntry("bob", "analytics")
+            ));
+
             handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
                 ConsentEventTypes.ENTITY_DELETED,
                 """
@@ -379,14 +384,45 @@ class ConsentDecisionProjectionHandlerTest {
                 """
             ));
 
-            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
-            verify(publisher).publish(captor.capture());
+            verify(consentRepo).deleteByEntity("User");
 
-            CacheInvalidationMessage msg = captor.getValue();
-            assertEquals(InvalidationAction.FIELD_REMOVED, msg.action());
-            assertEquals("User", msg.entity());
-            assertNull(msg.subject());
-            assertNull(msg.field());
+            // 2 per-entry REVOKED + 1 broad ENTITY_REMOVED = 3 publishes
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(3)).publish(captor.capture());
+
+            List<CacheInvalidationMessage> msgs = captor.getAllValues();
+            // Per-entry messages
+            assertEquals(InvalidationAction.REVOKED, msgs.get(0).action());
+            assertEquals("alice", msgs.get(0).subject());
+            assertEquals("User", msgs.get(0).entity());
+            assertEquals("marketing", msgs.get(0).purpose());
+
+            assertEquals(InvalidationAction.REVOKED, msgs.get(1).action());
+            assertEquals("bob", msgs.get(1).subject());
+
+            // Broad notification
+            assertEquals(InvalidationAction.ENTITY_REMOVED, msgs.get(2).action());
+            assertEquals("User", msgs.get(2).entity());
+            assertNull(msgs.get(2).subject());
+            assertNull(msgs.get(2).field());
+        }
+
+        @Test
+        @DisplayName("no affected entries still publishes broad ENTITY_REMOVED")
+        void noAffected() {
+            when(consentRepo.deleteByEntity("Empty")).thenReturn(List.of());
+
+            handler.onEvent(STREAM_KEY, MSG_ID, eventFields(
+                ConsentEventTypes.ENTITY_DELETED,
+                """
+                {"entityName":"Empty"}
+                """
+            ));
+
+            ArgumentCaptor<CacheInvalidationMessage> captor = ArgumentCaptor.forClass(CacheInvalidationMessage.class);
+            verify(publisher, times(1)).publish(captor.capture());
+            assertEquals(InvalidationAction.ENTITY_REMOVED, captor.getValue().action());
+            assertEquals("Empty", captor.getValue().entity());
         }
     }
 

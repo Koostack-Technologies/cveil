@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 
 /**
  * Repository for consent policy storage in Redis using a
@@ -221,8 +223,13 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * Evaluates consent for a single scope with field-over-category precedence.
+     *
+     * @throws IllegalArgumentException if the scope has wildcard purpose, or
+     *         both category and field are wildcards
      */
     public DecisionDetail evaluate(String subject, String category, String entity, String field, String purpose) {
+        requireConcreteScope(category, field, purpose);
+
         String hashKey = consentHashKey(subject);
         String qualifiedField = qualifyField(entity, field);
         String fieldHashField = "f:" + qualifiedField + ":" + purpose;
@@ -250,6 +257,9 @@ public class ConsentPolicyRedisRepository {
      * Evaluates consent for a batch of scopes against a subject.
      * Performs a single {@code HMGET} with 2N hash fields (f: + c: for each scope),
      * then resolves precedence per scope.
+     *
+     * @throws IllegalArgumentException if any scope has wildcard purpose, or
+     *         both category and field are wildcards
      */
     public Map<ConsentScope, DecisionDetail> evaluateScopes(
         String subject,
@@ -257,6 +267,10 @@ public class ConsentPolicyRedisRepository {
     ) {
         if (accessRequests == null || accessRequests.isEmpty()) {
             return Collections.emptyMap();
+        }
+
+        for (ConsentScope s : accessRequests) {
+            requireConcreteScope(s.category(), s.fieldName(), s.purposeName());
         }
 
         String hashKey = consentHashKey(subject);
@@ -360,33 +374,41 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * Deletes all category-level consent entries for the given category across all subjects.
+     * Uses SSCAN to iterate the reverse index in bounded-memory batches.
      * Returns the list of affected (subject, purpose) pairs.
      */
     public List<AffectedEntry> deleteByCategory(String category) {
         String idxKey = idxCatKey(category);
         JedisPooled jedis = jedisProvider.get();
 
-        Set<String> members = jedis.smembers(idxKey);
-        if (members.isEmpty()) {
-            return Collections.emptyList();
-        }
-
         List<AffectedEntry> affected = new ArrayList<>();
-        try (Pipeline p = jedis.pipelined()) {
-            for (String member : members) {
-                int sep = member.indexOf(IDX_SEP);
-                String subject = member.substring(0, sep);
-                String purpose = member.substring(sep + 1);
+        ScanParams params = new ScanParams().count(256);
+        String cursor = ScanParams.SCAN_POINTER_START;
 
-                String hashField = "c:" + category + ":" + purpose;
-                p.hdel(consentHashKey(subject), hashField);
-                p.srem(idxPurposeKey(purpose), subject + IDX_SEP + "c:" + category);
+        do {
+            ScanResult<String> scan = jedis.sscan(idxKey, cursor, params);
+            List<String> members = scan.getResult();
 
-                affected.add(new AffectedEntry(subject, purpose));
+            if (!members.isEmpty()) {
+                try (Pipeline p = jedis.pipelined()) {
+                    for (String member : members) {
+                        int sep = member.indexOf(IDX_SEP);
+                        String subject = member.substring(0, sep);
+                        String purpose = member.substring(sep + 1);
+
+                        String hashField = "c:" + category + ":" + purpose;
+                        p.hdel(consentHashKey(subject), hashField);
+                        p.srem(idxPurposeKey(purpose), subject + IDX_SEP + "c:" + category);
+
+                        affected.add(new AffectedEntry(subject, purpose));
+                    }
+                }
             }
-            p.del(idxKey);
-        }
 
+            cursor = scan.getCursor();
+        } while (!cursor.equals(ScanParams.SCAN_POINTER_START));
+
+        jedis.del(idxKey);
         return affected;
     }
 
@@ -396,34 +418,86 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * Deletes all field-level consent entries for the given qualified field across all subjects.
+     * Uses SSCAN to iterate the reverse index in bounded-memory batches.
      * Returns the list of affected (subject, purpose) pairs.
      */
     public List<AffectedEntry> deleteByField(String qualifiedField) {
         String idxKey = idxFieldKey(qualifiedField);
         JedisPooled jedis = jedisProvider.get();
 
-        Set<String> members = jedis.smembers(idxKey);
-        if (members.isEmpty()) {
-            return Collections.emptyList();
-        }
-
         List<AffectedEntry> affected = new ArrayList<>();
-        try (Pipeline p = jedis.pipelined()) {
-            for (String member : members) {
-                int sep = member.indexOf(IDX_SEP);
-                String subject = member.substring(0, sep);
-                String purpose = member.substring(sep + 1);
+        ScanParams params = new ScanParams().count(256);
+        String cursor = ScanParams.SCAN_POINTER_START;
 
-                String hashField = "f:" + qualifiedField + ":" + purpose;
-                p.hdel(consentHashKey(subject), hashField);
-                p.srem(idxPurposeKey(purpose), subject + IDX_SEP + "f:" + qualifiedField);
+        do {
+            ScanResult<String> scan = jedis.sscan(idxKey, cursor, params);
+            List<String> members = scan.getResult();
 
-                affected.add(new AffectedEntry(subject, purpose));
+            if (!members.isEmpty()) {
+                try (Pipeline p = jedis.pipelined()) {
+                    for (String member : members) {
+                        int sep = member.indexOf(IDX_SEP);
+                        String subject = member.substring(0, sep);
+                        String purpose = member.substring(sep + 1);
+
+                        String hashField = "f:" + qualifiedField + ":" + purpose;
+                        p.hdel(consentHashKey(subject), hashField);
+                        p.srem(idxPurposeKey(purpose), subject + IDX_SEP + "f:" + qualifiedField);
+
+                        affected.add(new AffectedEntry(subject, purpose));
+                    }
+                }
             }
-            p.del(idxKey);
-        }
 
+            cursor = scan.getCursor();
+        } while (!cursor.equals(ScanParams.SCAN_POINTER_START));
+
+        jedis.del(idxKey);
         return affected;
+    }
+
+    // -----------------------------------------------------------------------
+    // Reverse-index cleanup — by entity (all fields for an entity)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Deletes all field-level consent entries for every field belonging to the
+     * given entity across all subjects.
+     *
+     * <p>Uses {@code SCAN} to find all field reverse index keys matching
+     * {@code {tenantId}:idx:field:{entityName}/*} and delegates to
+     * {@link #deleteByField(String)} for each.
+     *
+     * <p>This is the fix for the entity-deletion orphan problem: when an
+     * entity is deleted, the admin projection cascade-deletes fields in SQL
+     * but no per-field {@code ENTITY_FIELD_REMOVED} events are emitted.
+     * This method cleans up the Redis consent cache directly.
+     *
+     * @param entityName the entity whose fields should be purged
+     * @return the aggregate list of affected (subject, purpose) pairs
+     */
+    public List<AffectedEntry> deleteByEntity(String entityName) {
+        JedisPooled jedis = jedisProvider.get();
+        String tenantId = TenantContext.require();
+        String scanPattern = tenantId + ":idx:field:" + entityName + ENTITY_FIELD_SEP + "*";
+
+        List<AffectedEntry> allAffected = new ArrayList<>();
+        ScanParams params = new ScanParams().match(scanPattern).count(256);
+        String cursor = ScanParams.SCAN_POINTER_START;
+
+        do {
+            ScanResult<String> scan = jedis.scan(cursor, params);
+            for (String idxKey : scan.getResult()) {
+                // Extract the qualified field from the key:
+                // {tenantId}:idx:field:{entity/field} → {entity/field}
+                String prefix = tenantId + ":idx:field:";
+                String qualifiedField = idxKey.substring(prefix.length());
+                allAffected.addAll(deleteByField(qualifiedField));
+            }
+            cursor = scan.getCursor();
+        } while (!cursor.equals(ScanParams.SCAN_POINTER_START));
+
+        return allAffected;
     }
 
     // -----------------------------------------------------------------------
@@ -432,41 +506,49 @@ public class ConsentPolicyRedisRepository {
 
     /**
      * Deletes all consent entries for the given purpose across all subjects.
+     * Uses SSCAN to iterate the reverse index in bounded-memory batches.
      * Returns the list of affected (subject, purpose) pairs.
      */
     public List<AffectedEntry> deleteByPurpose(String purpose) {
         String idxKey = idxPurposeKey(purpose);
         JedisPooled jedis = jedisProvider.get();
 
-        Set<String> members = jedis.smembers(idxKey);
-        if (members.isEmpty()) {
-            return Collections.emptyList();
-        }
-
         List<AffectedEntry> affected = new ArrayList<>();
-        try (Pipeline p = jedis.pipelined()) {
-            for (String member : members) {
-                int sep = member.indexOf(IDX_SEP);
-                String subject = member.substring(0, sep);
-                String discriminator = member.substring(sep + 1); // "c:{cat}" or "f:{entity/field}"
+        ScanParams params = new ScanParams().count(256);
+        String cursor = ScanParams.SCAN_POINTER_START;
 
-                String hashField = discriminator + ":" + purpose;
-                p.hdel(consentHashKey(subject), hashField);
+        do {
+            ScanResult<String> scan = jedis.sscan(idxKey, cursor, params);
+            List<String> members = scan.getResult();
 
-                // Clean up the type-specific reverse index
-                if (discriminator.startsWith("c:")) {
-                    String cat = discriminator.substring(2);
-                    p.srem(idxCatKey(cat), subject + IDX_SEP + purpose);
-                } else if (discriminator.startsWith("f:")) {
-                    String qf = discriminator.substring(2);
-                    p.srem(idxFieldKey(qf), subject + IDX_SEP + purpose);
+            if (!members.isEmpty()) {
+                try (Pipeline p = jedis.pipelined()) {
+                    for (String member : members) {
+                        int sep = member.indexOf(IDX_SEP);
+                        String subject = member.substring(0, sep);
+                        String discriminator = member.substring(sep + 1); // "c:{cat}" or "f:{entity/field}"
+
+                        String hashField = discriminator + ":" + purpose;
+                        p.hdel(consentHashKey(subject), hashField);
+
+                        // Clean up the type-specific reverse index
+                        if (discriminator.startsWith("c:")) {
+                            String cat = discriminator.substring(2);
+                            p.srem(idxCatKey(cat), subject + IDX_SEP + purpose);
+                        } else if (discriminator.startsWith("f:")) {
+                            String qf = discriminator.substring(2);
+                            p.srem(idxFieldKey(qf), subject + IDX_SEP + purpose);
+                        }
+
+                        affected.add(new AffectedEntry(subject, purpose));
+                    }
                 }
-
-                affected.add(new AffectedEntry(subject, purpose));
             }
-            p.del(idxKey);
-        }
 
+            cursor = scan.getCursor();
+        } while (!cursor.equals(ScanParams.SCAN_POINTER_START));
+
+        jedis.del(idxKey);
         return affected;
     }
 
@@ -498,6 +580,27 @@ public class ConsentPolicyRedisRepository {
         } else if ("f".equals(prefix)) {
             p.srem(idxFieldKey(discriminator), subject + IDX_SEP + purpose);
             p.srem(idxPurposeKey(purpose), subject + IDX_SEP + "f:" + discriminator);
+        }
+    }
+
+    /**
+     * Validates that the scope has a concrete (non-wildcard) purpose and at least
+     * one concrete dimension (category or field).
+     */
+    private static void requireConcreteScope(String category, String field, String purpose) {
+        boolean wildcardPurpose = purpose == null || ConsentScope.WILDCARD.equals(purpose);
+        if (wildcardPurpose) {
+            throw new IllegalArgumentException(
+                "evaluateScopes() requires a concrete purpose — wildcard purpose is not supported"
+            );
+        }
+        boolean wildcardCategory = category == null || ConsentScope.WILDCARD.equals(category);
+        boolean wildcardField = field == null || ConsentScope.WILDCARD.equals(field);
+        if (wildcardCategory && wildcardField) {
+            throw new IllegalArgumentException(
+                "evaluateScopes() requires at least one concrete dimension (category or field) — " +
+                "both category and field are wildcards"
+            );
         }
     }
 }

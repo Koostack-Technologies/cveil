@@ -89,10 +89,9 @@ public class SubscriptionManager implements AutoCloseable {
         Set<InvalidationSubscriber.Subscription> subs = connections.remove(connectionId);
         if (subs == null) return 0;
 
-        int count = 0;
+        int count = subs.size();
         for (InvalidationSubscriber.Subscription sub : subs) {
             sub.cancel();
-            count++;
         }
         totalSubscriptions.addAndGet(-count);
         return count;
