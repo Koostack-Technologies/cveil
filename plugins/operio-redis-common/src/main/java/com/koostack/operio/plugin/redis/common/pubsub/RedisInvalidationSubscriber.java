@@ -65,7 +65,9 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
             new ConcurrentHashMap<>();
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final CountDownLatch subscribedLatch = new CountDownLatch(1);
+
+    /** Resettable latch — replaced on each reconnect so awaitSubscribed() blocks until the new handler is active. */
+    private volatile CountDownLatch subscribedLatch = new CountDownLatch(1);
 
     private volatile InternalPubSub pubSubHandler;
     private volatile Thread subscriberThread;
@@ -152,6 +154,7 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
     private void runSubscribeLoop() {
         while (!closed.get()) {
             try {
+                subscribedLatch = new CountDownLatch(1);
                 pubSubHandler = new InternalPubSub();
                 log.info("Starting Redis Pub/Sub subscription on control channel");
 
@@ -203,15 +206,22 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
     }
 
     private void removeSink(SinkEntry entry, String channel) {
-        CopyOnWriteArraySet<SinkEntry> sinks = channelSinks.get(channel);
-        if (sinks == null) return;
-
-        sinks.remove(entry);
         sinkErrorCounts.remove(entry);
 
-        // If last sink for this channel, unsubscribe from Redis
-        if (sinks.isEmpty()) {
-            channelSinks.remove(channel, sinks);
+        // Atomically remove the entry and, if the set becomes empty, remove the
+        // channel mapping.  computeIfPresent holds the bucket lock, preventing a
+        // concurrent subscribe() from inserting into a set we're about to discard.
+        boolean[] lastSinkRemoved = {false};
+        channelSinks.computeIfPresent(channel, (k, sinks) -> {
+            sinks.remove(entry);
+            if (sinks.isEmpty()) {
+                lastSinkRemoved[0] = true;
+                return null;
+            }
+            return sinks;
+        });
+
+        if (lastSinkRemoved[0]) {
             JedisPubSub handler = this.pubSubHandler;
             if (handler != null && handler.isSubscribed() && !channel.equals(CONTROL_CHANNEL)) {
                 try {
