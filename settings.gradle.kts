@@ -16,7 +16,7 @@ include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
 
 include("plugins:operio-audit-slf4j")
 include("tenant:operio-consent-admin-jooq")
-include("tenant:operio-consent-admin-command-jooq")
+include("tenant:operio-consent-admin-command")
 include("tenant:operio-consent-admin-query-jooq")
 include("plugins:operio-jooq-common")
 include("plugins:operio-redis-common")
@@ -35,3 +35,39 @@ include("platform:operio-platform-event-jooq")
 include("tenant:operio-tenant-event-jooq")
 include("tenant:operio-consent-admin-projection-jooq")
 include("tenant:operio-consent-decision-projection-redis")
+
+// --- Tenant Authz ---
+include("tenant:operio-authz-schema")
+include("tenant:operio-authz-jooq-common")
+include("tenant:operio-authz-command")
+include("tenant:operio-authz-query-jooq")
+include("tenant:operio-authz-projection-jooq")
+
+// --- Platform Billing ---
+include("platform:operio-billing-schema")
+include("platform:operio-billing-jooq-common")
+include("platform:operio-billing-command")
+include("platform:operio-billing-query-jooq")
+include("platform:operio-billing-projection-jooq")
+
+// --- Platform Core ---
+include("platform:operio-core-schema")
+include("platform:operio-core-jooq-common")
+include("platform:operio-core-command")
+include("platform:operio-core-query-jooq")
+include("platform:operio-core-projection-jooq")
+
+// --- Platform IAM ---
+include("platform:operio-iam-schema")
+include("platform:operio-iam-jooq-common")
+include("platform:operio-iam-command")
+include("platform:operio-iam-query-jooq")
+include("platform:operio-iam-projection-jooq")
+
+// --- Platform Tenant Manager ---
+include("platform:operio-tenant-manager-jooq")
+
+// --- Metrics ---
+include("platform:operio-platform-metrics-redis")
+include("tenant:operio-tenant-metrics-redis")
+include("common:operio-metrics-worker")

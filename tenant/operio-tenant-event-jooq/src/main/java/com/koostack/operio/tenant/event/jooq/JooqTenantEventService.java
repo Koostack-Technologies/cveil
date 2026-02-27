@@ -12,7 +12,6 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
-import com.koostack.operio.plugin.jooq.common.JooqService;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import org.jooq.DSLContext;
@@ -34,7 +33,6 @@ import java.util.concurrent.LinkedBlockingQueue;
  * prevents duplicate writes.
  */
 public class JooqTenantEventService
-    extends JooqService
     implements TenantEventService<TenantEventJooqConfig>
 {
 
@@ -73,11 +71,9 @@ public class JooqTenantEventService
 
     @Override
     public void configure(TenantEventJooqConfig config) {
-        String migrationLocation = resolveMigrationLocation(config.dialect());
         this.dslContext = JooqContextFactory.createTenantAwareContext(
             config,
-            "operio-tenant-event-jooq",
-            migrationLocation
+            "operio-tenant-event-jooq"
         );
 
         this.eventRepository = new EventRepository(dslContext);
@@ -284,12 +280,4 @@ public class JooqTenantEventService
         }
     }
 
-    // -----------------------------------------------------------------------
-    // JooqService
-    // -----------------------------------------------------------------------
-
-    @Override
-    protected String getSchemaName() {
-        return "tenant-event";
-    }
 }

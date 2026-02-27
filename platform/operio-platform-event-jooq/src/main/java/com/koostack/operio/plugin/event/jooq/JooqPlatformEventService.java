@@ -12,7 +12,6 @@ import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
-import com.koostack.operio.plugin.jooq.common.JooqService;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import org.jooq.DSLContext;
@@ -34,7 +33,6 @@ import java.util.concurrent.LinkedBlockingQueue;
  * duplicate writes.
  */
 public class JooqPlatformEventService
-    extends JooqService
     implements PlatformEventService<PlatformEventJooqConfig>
 {
 
@@ -73,11 +71,9 @@ public class JooqPlatformEventService
 
     @Override
     public void configure(PlatformEventJooqConfig config) {
-        String migrationLocation = resolveMigrationLocation(config.dialect());
         this.dslContext = JooqContextFactory.createTenantAwareContext(
             config,
-            "operio-platform-event-jooq",
-            migrationLocation
+            "operio-platform-event-jooq"
         );
 
         this.eventRepository = new EventRepository(dslContext);
@@ -311,12 +307,4 @@ public class JooqPlatformEventService
         }
     }
 
-    // -----------------------------------------------------------------------
-    // JooqService
-    // -----------------------------------------------------------------------
-
-    @Override
-    protected String getSchemaName() {
-        return "platform-event";
-    }
 }
