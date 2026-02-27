@@ -200,6 +200,11 @@ public final class RedisClientFactory {
         TlsConfig tlsConfig
     ) {
         // Validate ACL constraints
+        if (username != null && (username.isBlank())) {
+            throw new IllegalArgumentException(
+                "Redis ACL username must not be blank — use null for default user"
+            );
+        }
         if (username != null && !username.isBlank()) {
             if (password == null || password.isBlank()) {
                 throw new IllegalArgumentException(

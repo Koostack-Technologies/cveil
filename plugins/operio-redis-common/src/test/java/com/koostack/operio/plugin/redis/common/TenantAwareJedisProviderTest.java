@@ -615,9 +615,10 @@ class TenantAwareJedisProviderTest {
     class FactoryAclOverload {
 
         @Test
-        @DisplayName("rejects null username")
+        @DisplayName("null username creates client with default user (no ACL)")
         void nullUsername() {
-            assertThrows(IllegalArgumentException.class, () ->
+            // null username means "use default Redis user" — should not throw
+            assertDoesNotThrow(() ->
                 RedisClientFactory.createClient(HOST, PORT, null, "password")
             );
         }
@@ -634,7 +635,7 @@ class TenantAwareJedisProviderTest {
         @DisplayName("rejects null password")
         void nullPassword() {
             assertThrows(IllegalArgumentException.class, () ->
-                RedisClientFactory.createClient(HOST, PORT, "t_acme", null)
+                RedisClientFactory.createClient(HOST, PORT, "t_acme", (String) null)
             );
         }
 
