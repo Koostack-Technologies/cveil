@@ -70,11 +70,6 @@ public class JooqConsentAdminCommandService
         this.categoryHydrationRepo = config.categoryHydrationRepo();
         this.purposeHydrationRepo = config.purposeHydrationRepo();
         registerEventTypes();
-        if (entityHydrationRepo == null && categoryHydrationRepo == null
-                && purposeHydrationRepo == null) {
-            LOG.warn("JooqConsentAdminCommandService configured WITHOUT hydration repos "
-                + "— entity/category/purpose validation is DISABLED");
-        }
         LOG.info("JooqConsentAdminCommandService configured (event-sourced)");
     }
 
@@ -276,7 +271,7 @@ public class JooqConsentAdminCommandService
     }
 
     private void ensurePurposeExists(String purposeName) {
-        if (purposeHydrationRepo == null || isWildcardOrBlank(purposeName)) return;
+        if (isWildcardOrBlank(purposeName)) return;
         PurposeAggregate existing = purposeHydrationRepo.findByName(purposeName);
         if (existing == null || existing.purposeName() == null) {
             LOG.info("Auto-creating purpose '{}' referenced by consent grant/revoke", purposeName);
@@ -285,7 +280,7 @@ public class JooqConsentAdminCommandService
     }
 
     private void ensureCategoryExists(String categoryName) {
-        if (categoryHydrationRepo == null || isWildcardOrBlank(categoryName)) return;
+        if (isWildcardOrBlank(categoryName)) return;
         CategoryAggregate existing = categoryHydrationRepo.findByName(categoryName);
         if (existing == null || existing.categoryName() == null) {
             LOG.info("Auto-creating category '{}' referenced by consent grant/revoke", categoryName);
@@ -294,7 +289,7 @@ public class JooqConsentAdminCommandService
     }
 
     private void ensureEntityAndFieldExist(String entityName, String fieldName) {
-        if (entityHydrationRepo == null || isWildcardOrBlank(fieldName)) return;
+        if (isWildcardOrBlank(fieldName)) return;
         if (isWildcardOrBlank(entityName)) return;
         EntityAggregate existing = entityHydrationRepo.findByName(entityName);
         if (existing == null || existing.entityName() == null) {

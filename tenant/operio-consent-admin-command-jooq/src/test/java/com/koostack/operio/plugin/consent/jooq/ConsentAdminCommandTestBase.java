@@ -1,5 +1,11 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.data.consent.aggregates.CategoryAggregate;
+import com.koostack.operio.core.data.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.data.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.data.consent.hydration.CategoryHydrationRepository;
+import com.koostack.operio.core.data.consent.hydration.EntityHydrationRepository;
+import com.koostack.operio.core.data.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
@@ -91,8 +97,23 @@ abstract class ConsentAdminCommandTestBase {
         eventService.configure(eventConfig);
 
         // -- Command service under test --
+        // Hydration repos stubbed to always "find" aggregates — integration test
+        // focuses on event publishing, not validation/auto-create logic.
+        var entityRepo = org.mockito.Mockito.mock(EntityHydrationRepository.class);
+        var categoryRepo = org.mockito.Mockito.mock(CategoryHydrationRepository.class);
+        var purposeRepo = org.mockito.Mockito.mock(PurposeHydrationRepository.class);
+        org.mockito.Mockito.lenient().when(entityRepo.findByName(org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> EntityAggregate.create(TEST_TENANT, inv.getArgument(0))
+                .withField("*", null));
+        org.mockito.Mockito.lenient().when(categoryRepo.findByName(org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> CategoryAggregate.create(TEST_TENANT, inv.getArgument(0), null));
+        org.mockito.Mockito.lenient().when(purposeRepo.findByName(org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> PurposeAggregate.create(TEST_TENANT, inv.getArgument(0), null));
+
         commandService = new JooqConsentAdminCommandService();
-        commandService.configure(new ConsentAdminCommandConfig(eventService));
+        commandService.configure(new ConsentAdminCommandConfig(
+            eventService, entityRepo, categoryRepo, purposeRepo
+        ));
 
         // Re-register one type to trigger a synchronous cache reload after
         // all 10 types are in the DB, ensuring the cache is fully populated.

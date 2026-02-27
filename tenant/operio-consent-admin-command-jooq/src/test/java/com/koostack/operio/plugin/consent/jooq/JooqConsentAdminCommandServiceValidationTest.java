@@ -218,30 +218,6 @@ class JooqConsentAdminCommandServiceValidationTest {
     }
 
     // -----------------------------------------------------------------------
-    // Backward compatibility — no hydration repos
-    // -----------------------------------------------------------------------
-
-    @Nested
-    class BackwardCompatibility {
-
-        @Test
-        void noHydrationReposSkipsValidation() {
-            var serviceNoValidation = new JooqConsentAdminCommandService();
-            serviceNoValidation.configure(new ConsentAdminCommandConfig(eventService));
-
-            TenantContext.runWhere(TENANT, () ->
-                serviceNoValidation.grantConsent("alice",
-                    ConsentScope.forField("email", "User", "marketing"))
-            );
-
-            // Only POLICY_GRANTED — no validation, no auto-create
-            assertEquals(1, publishedEvents.size());
-            assertEquals(ConsentEventTypes.POLICY_GRANTED,
-                publishedEvents.get(0).eventType());
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // Grant with expiresAt
     // -----------------------------------------------------------------------
 
