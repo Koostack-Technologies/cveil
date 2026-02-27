@@ -267,4 +267,63 @@ class JooqConsentAdminCommandServiceValidationTest {
                 publishedEvents.get(0).eventType());
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Edge cases — wildcard / null guards
+    // -----------------------------------------------------------------------
+
+    @Nested
+    class WildcardAndNullGuards {
+
+        @Test
+        void wildcardEntityNameSkipsEntityValidation() {
+            when(purposeRepo.findByName("marketing"))
+                .thenReturn(PurposeAggregate.create(TENANT, "marketing", null));
+
+            // forField with wildcard entity — should NOT try to look up entity "*"
+            TenantContext.runWhere(TENANT, () ->
+                service.grantConsent("alice",
+                    ConsentScope.forField("email", "*", "marketing"))
+            );
+
+            verify(entityRepo, never()).findByName(any());
+            assertEquals(1, publishedEvents.size());
+        }
+
+        @Test
+        void wildcardFieldNameSkipsFieldValidation() {
+            when(purposeRepo.findByName("marketing"))
+                .thenReturn(PurposeAggregate.create(TENANT, "marketing", null));
+            when(categoryRepo.findByName("PII"))
+                .thenReturn(CategoryAggregate.create(TENANT, "PII", null));
+
+            // Scope with both category and wildcard field — category validation runs,
+            // entity/field validation should be skipped
+            var scope = new ConsentScope("PII", "*", "User", "marketing");
+            TenantContext.runWhere(TENANT, () ->
+                service.grantConsent("alice", scope)
+            );
+
+            verify(entityRepo, never()).findByName(any());
+            assertEquals(1, publishedEvents.size());
+        }
+
+        @Test
+        void deprecatedToFactoryWithBothDimensionsSkipsValidation() {
+            // to("PII", "email", "marketing") creates (PII, email, null, marketing)
+            // Neither isCategoryScoped (fieldName=email ≠ wildcard) nor
+            // isFieldScoped (category=PII ≠ wildcard) — validation silently skipped
+            @SuppressWarnings("deprecation")
+            var scope = ConsentScope.to("PII", "email", "marketing");
+
+            TenantContext.runWhere(TENANT, () ->
+                service.grantConsent("alice", scope)
+            );
+
+            verify(entityRepo, never()).findByName(any());
+            verify(categoryRepo, never()).findByName(any());
+            // Only purpose is always checked when non-null
+            verify(purposeRepo).findByName("marketing");
+        }
+    }
 }

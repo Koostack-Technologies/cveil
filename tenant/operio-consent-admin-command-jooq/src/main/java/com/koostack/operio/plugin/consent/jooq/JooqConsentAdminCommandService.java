@@ -253,7 +253,8 @@ public class JooqConsentAdminCommandService
     /**
      * Validates that all entities referenced by the consent scope exist,
      * auto-creating them if they don't. Skipped when hydration repos are
-     * not configured (backward-compatible).
+     * not configured (backward-compatible). Wildcard and null values are
+     * silently skipped — they represent "all" rather than a specific entity.
      */
     private void ensureReferencedEntitiesExist(ConsentScope accessRequest) {
         ensurePurposeExists(accessRequest.purposeName());
@@ -265,8 +266,12 @@ public class JooqConsentAdminCommandService
         }
     }
 
+    private static boolean isWildcardOrBlank(String value) {
+        return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
+    }
+
     private void ensurePurposeExists(String purposeName) {
-        if (purposeHydrationRepo == null) return;
+        if (purposeHydrationRepo == null || isWildcardOrBlank(purposeName)) return;
         PurposeAggregate existing = purposeHydrationRepo.findByName(purposeName);
         if (existing == null || existing.purposeName() == null) {
             LOG.info("Auto-creating purpose '{}' referenced by consent grant/revoke", purposeName);
@@ -275,7 +280,7 @@ public class JooqConsentAdminCommandService
     }
 
     private void ensureCategoryExists(String categoryName) {
-        if (categoryHydrationRepo == null) return;
+        if (categoryHydrationRepo == null || isWildcardOrBlank(categoryName)) return;
         CategoryAggregate existing = categoryHydrationRepo.findByName(categoryName);
         if (existing == null || existing.categoryName() == null) {
             LOG.info("Auto-creating category '{}' referenced by consent grant/revoke", categoryName);
@@ -284,7 +289,8 @@ public class JooqConsentAdminCommandService
     }
 
     private void ensureEntityAndFieldExist(String entityName, String fieldName) {
-        if (entityHydrationRepo == null) return;
+        if (entityHydrationRepo == null || isWildcardOrBlank(fieldName)) return;
+        if (isWildcardOrBlank(entityName)) return;
         EntityAggregate existing = entityHydrationRepo.findByName(entityName);
         if (existing == null || existing.entityName() == null) {
             LOG.info("Auto-creating entity '{}' and field '{}' referenced by consent grant/revoke",
@@ -292,7 +298,7 @@ public class JooqConsentAdminCommandService
             registerField(fieldName, entityName, null);
         } else {
             boolean fieldExists = existing.fields().stream()
-                .anyMatch(f -> f.fieldName().equals(fieldName));
+                .anyMatch(f -> fieldName.equals(f.fieldName()));
             if (!fieldExists) {
                 LOG.info("Auto-creating field '{}' on entity '{}' referenced by consent grant/revoke",
                     fieldName, entityName);

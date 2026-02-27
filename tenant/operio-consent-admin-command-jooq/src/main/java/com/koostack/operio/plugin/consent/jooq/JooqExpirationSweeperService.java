@@ -84,14 +84,23 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
     }
 
     private static ConsentScope buildScope(PolicySummaryEntry policy) {
-        if (policy.categoryName() != null
-            && (policy.fieldName() == null || ConsentScope.WILDCARD.equals(policy.fieldName()))) {
+        boolean hasCategory = policy.categoryName() != null
+            && !ConsentScope.WILDCARD.equals(policy.categoryName());
+        boolean hasField = policy.fieldName() != null
+            && !ConsentScope.WILDCARD.equals(policy.fieldName());
+
+        if (hasCategory && !hasField) {
             return ConsentScope.forCategory(policy.categoryName(), policy.purposeName());
         }
-        return ConsentScope.forField(
-            policy.fieldName(),
-            policy.entityName() != null ? policy.entityName() : ConsentScope.WILDCARD,
-            policy.purposeName()
-        );
+        if (hasField) {
+            String entity = policy.entityName() != null
+                ? policy.entityName() : ConsentScope.WILDCARD;
+            return ConsentScope.forField(policy.fieldName(), entity, policy.purposeName());
+        }
+        // Fallback: neither field nor category — use category-scoped with wildcard
+        // to revoke at the broadest scope. This shouldn't happen with well-formed data.
+        LOG.warn("Expired policy for subject={} has neither field nor category; "
+            + "falling back to wildcard scope", policy.subject());
+        return ConsentScope.forCategory(ConsentScope.WILDCARD, policy.purposeName());
     }
 }
