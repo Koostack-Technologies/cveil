@@ -118,4 +118,38 @@ public interface TenantService extends OperioService {
     // -----------------------------------------------------------------------
 
     int deleteAuditLogBySubject(String subject);
+
+    // -----------------------------------------------------------------------
+    // IAM — Role Management (delegated to the tenant's IdP)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Assign a role to a user in the current tenant's identity provider.
+     *
+     * @param userId the user's IdP identifier
+     * @param role   the role name to assign
+     */
+    default void assignUserRole(String userId, String role) {
+        throw new UnsupportedOperationException("IAM role management not available");
+    }
+
+    /**
+     * Remove a role from a user in the current tenant's identity provider.
+     *
+     * @param userId the user's IdP identifier
+     * @param role   the role name to remove
+     */
+    default void removeUserRole(String userId, String role) {
+        throw new UnsupportedOperationException("IAM role management not available");
+    }
+
+    /**
+     * List all roles assigned to a user in the current tenant's identity provider.
+     *
+     * @param userId the user's IdP identifier
+     * @return the user's roles, possibly empty
+     */
+    default Set<String> listUserRoles(String userId) {
+        throw new UnsupportedOperationException("IAM role management not available");
+    }
 }

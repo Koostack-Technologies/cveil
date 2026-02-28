@@ -2,6 +2,8 @@ package com.koostack.operio.rest.filter;
 
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.exception.OperioAuthException;
+import com.koostack.operio.core.platform.iam.IdpProvider;
+import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
@@ -17,7 +19,9 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -153,6 +157,15 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     @Inject
     OperioRequestHolder requestHolder;
 
+    /**
+     * Tenant-aware IdP resolver for JWT verification. Resolves which
+     * {@link IdpProvider} to use for a given tenant (defaults to
+     * Keycloak, overridable per tenant). May be {@code null} in embedded
+     * mode when no IdP is configured.
+     */
+    @Inject
+    Instance<IdpTenantResolver> idpTenantResolverInstance;
+
     // -----------------------------------------------------------------------
     // Filter implementation
     // -----------------------------------------------------------------------
@@ -263,6 +276,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
+        // 4d. JWT detection — if the token looks like a JWT (3 dot-separated
+        //     base64url segments), verify via the tenant's IdpProvider.
+        if (isJwt(token)) {
+            verifyJwt(ctx, token);
+            return;
+        }
+
         // 5. Verify via TokenValidationService (API key hash lookup)
         TokenValidationService<?> tokenValidationService =
             tokenValidationServiceInstance.isResolvable()
@@ -353,6 +373,135 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             tenantId,
             "config-api-key"
         );
+    }
+
+    /**
+     * Checks whether the bearer token looks like a JWT (three
+     * dot-separated base64url segments).
+     */
+    private static boolean isJwt(String token) {
+        int firstDot = token.indexOf('.');
+        if (firstDot <= 0) return false;
+        int secondDot = token.indexOf('.', firstDot + 1);
+        if (secondDot <= firstDot + 1) return false;
+        // Must have exactly two dots (header.payload.signature)
+        return token.indexOf('.', secondDot + 1) < 0;
+    }
+
+    /**
+     * Extracts the tenant ID from a JWT's payload without verifying the
+     * signature. Used to route the token to the correct IdP for full
+     * verification.
+     *
+     * <p>Looks for {@code tenant_id}, {@code tenantId}, or extracts
+     * from the {@code iss} claim (Keycloak issuers end with
+     * {@code /realms/{tenantId}}).
+     */
+    private static String extractTenantFromJwt(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return null;
+
+            String payload = new String(
+                Base64.getUrlDecoder().decode(parts[1]),
+                StandardCharsets.UTF_8
+            );
+
+            // Lightweight JSON extraction without a full parser
+            String tenantId = extractJsonStringValue(payload, "tenant_id");
+            if (tenantId == null) {
+                tenantId = extractJsonStringValue(payload, "tenantId");
+            }
+
+            if (tenantId == null) {
+                // For Keycloak JWTs: iss = http://host/realms/{realmName}
+                String issuer = extractJsonStringValue(payload, "iss");
+                if (issuer != null && issuer.contains("/realms/")) {
+                    tenantId = issuer.substring(issuer.lastIndexOf("/realms/") + "/realms/".length());
+                }
+            }
+
+            return tenantId;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Minimal JSON string value extraction — avoids a full JSON parser
+     * dependency in the auth filter hot path. Handles backslash-escaped quotes.
+     */
+    private static String extractJsonStringValue(String json, String key) {
+        String searchKey = "\"" + key + "\"";
+        int keyIndex = json.indexOf(searchKey);
+        if (keyIndex < 0) return null;
+
+        int colonIndex = json.indexOf(':', keyIndex + searchKey.length());
+        if (colonIndex < 0) return null;
+
+        int quoteStart = json.indexOf('"', colonIndex + 1);
+        if (quoteStart < 0) return null;
+
+        // Walk forward handling escaped quotes
+        int pos = quoteStart + 1;
+        while (pos < json.length()) {
+            char c = json.charAt(pos);
+            if (c == '"' && json.charAt(pos - 1) != '\\') {
+                return json.substring(quoteStart + 1, pos);
+            }
+            pos++;
+        }
+        return null;
+    }
+
+    /**
+     * Verifies a JWT bearer token via the tenant's IdpProvider.
+     *
+     * <p>Extracts the tenant ID from the JWT payload (without
+     * verification), resolves the IdpProvider for that tenant,
+     * and delegates to its {@code verifyToken()} method for full
+     * JWKS-based signature verification.
+     */
+    private void verifyJwt(ContainerRequestContext ctx, String token) {
+        IdpTenantResolver idpResolver = idpTenantResolverInstance.isResolvable()
+            ? idpTenantResolverInstance.get()
+            : null;
+
+        if (idpResolver == null) {
+            LOG.error("JWT received but no IdpTenantResolver configured");
+            abortUnauthorized(ctx, "JWT authentication not available — server configuration error");
+            return;
+        }
+
+        String tenantId = extractTenantFromJwt(token);
+        if (tenantId == null || tenantId.isBlank()) {
+            abortUnauthorized(ctx, "JWT does not contain a tenant identifier");
+            return;
+        }
+
+        try {
+            IdpProvider<?> idpProvider = idpResolver.resolve(tenantId);
+            IdentityContext identity = idpProvider.verifyToken(tenantId, token);
+            LOG.debug(
+                "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}",
+                identity.subject(),
+                identity.tenantId(),
+                identity.provider(),
+                identity.roles()
+            );
+            applyAuthentication(
+                ctx,
+                identity,
+                resolveRemoteAddress(ctx),
+                ctx.getHeaderString("User-Agent")
+            );
+        } catch (OperioAuthException e) {
+            LOG.debug("JWT authentication failed: {}", e.getMessage());
+            abortUnauthorized(ctx, e.getMessage());
+        } catch (Exception e) {
+            LOG.error("Unexpected error during JWT verification", e);
+            abortUnauthorized(ctx, "Authentication failed — internal error");
+        }
     }
 
     /**
@@ -483,7 +632,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         String normalized = path.startsWith("/") ? path.substring(1) : path;
         return (
             normalized.startsWith("q/health") ||
-            normalized.startsWith("api/v1/health")
+            normalized.startsWith("api/v1/health") ||
+            normalized.equals("api/v1/auth") ||
+            normalized.startsWith("api/v1/auth/")
         );
     }
 

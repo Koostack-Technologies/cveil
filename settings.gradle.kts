@@ -60,10 +60,7 @@ include("platform:operio-core-projection-jooq")
 
 // --- Platform IAM ---
 include("platform:operio-iam-schema")
-include("platform:operio-iam-jooq-common")
-include("platform:operio-iam-command")
-include("platform:operio-iam-query-jooq")
-include("platform:operio-iam-projection-jooq")
+include("platform:operio-platform-keycloak")
 
 // --- Platform Tenant Manager ---
 include("platform:operio-tenant-manager-jooq")

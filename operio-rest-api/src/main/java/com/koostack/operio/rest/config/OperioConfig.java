@@ -200,9 +200,45 @@ public interface OperioConfig {
     @WithName("api-keys")
     Map<String, String> apiKeys();
 
+    /**
+     * Keycloak identity provider configuration.
+     *
+     * <p>When present and {@code operio.mode=production}, the platform
+     * initializes a {@code KeycloakIdpProvider} as the default IdP.
+     * Tenants can override with their own IdP via the
+     * {@code idp_config} table.
+     */
+    Optional<KeycloakConfig> keycloak();
+
     // -------------------------------------------------------------------
     // Nested configuration interfaces
     // -------------------------------------------------------------------
+
+    /**
+     * Keycloak connection configuration.
+     */
+    interface KeycloakConfig {
+        /** Keycloak base URL (e.g. {@code http://localhost:8180}). */
+        String url();
+
+        /** Admin username for the Keycloak master realm. */
+        @WithName("admin-username")
+        @WithDefault("admin")
+        String adminUsername();
+
+        /** Admin password for the Keycloak master realm. */
+        @WithName("admin-password")
+        String adminPassword();
+
+        /** Client ID used by Operio in each tenant realm. */
+        @WithName("client-id")
+        @WithDefault("operio-backend")
+        String clientId();
+
+        /** Optional global client secret (if all realms share one). */
+        @WithName("client-secret")
+        Optional<String> clientSecret();
+    }
 
     /**
      * Database configuration — JDBC URL and jOOQ SQL dialect.

@@ -6,6 +6,8 @@ import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
+import com.koostack.operio.core.platform.iam.IdpProvider;
+import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
@@ -29,6 +31,7 @@ import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
@@ -248,6 +251,81 @@ public class OperioProducers {
             "Operio REST API: TokenValidationService not available (embedded mode)"
         );
         return null;
+    }
+
+    /**
+     * Produces the {@link IdpProvider} singleton — the platform default
+     * identity provider (Keycloak).
+     *
+     * <p>In production mode with Keycloak configured, this returns a
+     * {@code KeycloakIdpProvider} connected to the configured Keycloak
+     * instance. In embedded mode or when Keycloak is not configured,
+     * returns {@code null}.
+     */
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public IdpProvider idpProvider() {
+        if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
+            LOG.debug("Operio REST API: IdpProvider not available (embedded mode)");
+            return null;
+        }
+
+        return config.keycloak().map(kc -> {
+            com.koostack.operio.plugin.platform.keycloak.KeycloakConfig kcConfig =
+                new com.koostack.operio.plugin.platform.keycloak.KeycloakConfig(
+                    kc.url(),
+                    "master",
+                    "admin-cli",
+                    kc.adminUsername(),
+                    kc.adminPassword(),
+                    kc.clientId(),
+                    kc.clientSecret().orElse(null)
+                );
+            com.koostack.operio.plugin.platform.keycloak.KeycloakIdpProvider provider =
+                new com.koostack.operio.plugin.platform.keycloak.KeycloakIdpProvider(kcConfig);
+            LOG.info("Operio REST API: KeycloakIdpProvider wired (url={})", kc.url());
+            return (IdpProvider) provider;
+        }).orElseGet(() -> {
+            LOG.info("Operio REST API: No Keycloak configuration — IdpProvider not available");
+            return null;
+        });
+    }
+
+    /**
+     * Produces the {@link IdpTenantResolver} singleton — resolves which
+     * {@link IdpProvider} to use for a given tenant.
+     *
+     * <p>Falls back to the platform default (Keycloak) when no
+     * per-tenant IdP override is configured.
+     */
+    @Produces
+    @ApplicationScoped
+    public IdpTenantResolver idpTenantResolver(Instance<IdpProvider<?>> defaultIdpProviderInstance) {
+        if (!defaultIdpProviderInstance.isResolvable()) {
+            LOG.debug("Operio REST API: IdpTenantResolver not available (no default IdP)");
+            return null;
+        }
+        IdpProvider<?> defaultIdpProvider = defaultIdpProviderInstance.get();
+        if (defaultIdpProvider == null) {
+            LOG.debug("Operio REST API: IdpTenantResolver not available (IdP returned null)");
+            return null;
+        }
+
+        // TODO: Wire per-tenant IdP config lookup from IdpConfigRepository
+        // For now, all tenants use the platform default (Keycloak).
+        return new IdpTenantResolver() {
+            @Override
+            public IdpProvider<?> resolve(String tenantId) {
+                // Future: check idp_config table for tenant-specific override
+                return defaultIdpProvider;
+            }
+
+            @Override
+            public IdpProvider<?> defaultProvider() {
+                return defaultIdpProvider;
+            }
+        };
     }
 
     // -----------------------------------------------------------------------
