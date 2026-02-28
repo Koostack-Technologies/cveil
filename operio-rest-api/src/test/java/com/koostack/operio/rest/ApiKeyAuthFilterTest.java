@@ -7,7 +7,7 @@ import static org.mockito.Mockito.doReturn;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.filter.ApiKeyAuthFilter;
@@ -665,9 +665,9 @@ class ApiKeyAuthFilterTest {
                 Set.of("admin")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_abc123def456")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_abc123def456")).thenReturn(
                 identity
             );
 
@@ -698,9 +698,9 @@ class ApiKeyAuthFilterTest {
                 Set.of("consent-writer")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_valid_key")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_valid_key")).thenReturn(
                 identity
             );
 
@@ -738,9 +738,9 @@ class ApiKeyAuthFilterTest {
                 Set.of("reader")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_prop_key")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_prop_key")).thenReturn(
                 identity
             );
 
@@ -776,9 +776,9 @@ class ApiKeyAuthFilterTest {
                 roles
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_multi_role")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_multi_role")).thenReturn(
                 identity
             );
 
@@ -808,7 +808,7 @@ class ApiKeyAuthFilterTest {
 
         @Test
         @DisplayName("token verifier throws OperioAuthException → 401")
-        void tokenVerifierRejectsToken() throws IOException {
+        void tokenValidationServiceRejectsToken() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_invalid_key");
             when(
@@ -819,9 +819,9 @@ class ApiKeyAuthFilterTest {
             ).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_invalid_key")).thenThrow(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_invalid_key")).thenThrow(
                 new OperioAuthException("Invalid or expired API key")
             );
 
@@ -835,7 +835,7 @@ class ApiKeyAuthFilterTest {
         @DisplayName(
             "token verifier throws OperioAuthException → holder NOT populated"
         )
-        void tokenVerifierRejectsNoHolder() throws IOException {
+        void tokenValidationServiceRejectsNoHolder() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_bad_key");
             when(
@@ -846,9 +846,9 @@ class ApiKeyAuthFilterTest {
             ).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_bad_key")).thenThrow(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_bad_key")).thenThrow(
                 new OperioAuthException("Key revoked")
             );
 
@@ -870,9 +870,9 @@ class ApiKeyAuthFilterTest {
             ).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_revoked")).thenThrow(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_revoked")).thenThrow(
                 new OperioAuthException("API key has been revoked")
             );
 
@@ -913,9 +913,9 @@ class ApiKeyAuthFilterTest {
             ).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_crash_key")).thenThrow(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_crash_key")).thenThrow(
                 new RuntimeException("Database connection lost")
             );
 
@@ -938,9 +938,9 @@ class ApiKeyAuthFilterTest {
             ).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_npe_key")).thenThrow(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_npe_key")).thenThrow(
                 new NullPointerException("Null config")
             );
 
@@ -968,13 +968,13 @@ class ApiKeyAuthFilterTest {
 
     @Nested
     @DisplayName("No token verifier configured → 401")
-    class NoTokenVerifier {
+    class NoTokenValidationService {
 
         @Test
         @DisplayName(
             "null token verifier → 401 with configuration error message"
         )
-        void nullTokenVerifier() throws IOException {
+        void nullTokenValidationService() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_some_key");
             when(
@@ -983,7 +983,7 @@ class ApiKeyAuthFilterTest {
             when(
                 bootstrapLifecycle.isBootstrapKeyValue("opr_live_some_key")
             ).thenReturn(false);
-            when(operio.tokenVerifier()).thenReturn(null);
+            when(operio.tokenValidationService()).thenReturn(null);
 
             filter.filter(requestContext);
 
@@ -1212,9 +1212,9 @@ class ApiKeyAuthFilterTest {
                 Set.of("consent-writer")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_tenant_key")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_tenant_key")).thenReturn(
                 identity
             );
 
@@ -1255,10 +1255,10 @@ class ApiKeyAuthFilterTest {
                 Set.of("reader")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
             when(
-                tokenVerifier.verifyToken("opr_live_principal_key")
+                tokenValidationService.verifyToken("opr_live_principal_key")
             ).thenReturn(identity);
 
             filter.filter(requestContext);
@@ -1388,9 +1388,9 @@ class ApiKeyAuthFilterTest {
                 Set.of("admin")
             );
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_padded_key")).thenReturn(
+            TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
+            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationService.verifyToken("opr_live_padded_key")).thenReturn(
                 identity
             );
 

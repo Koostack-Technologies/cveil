@@ -7,7 +7,7 @@ import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.models.IdpConfigInfo;
 import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.spi.Plugin;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -20,14 +20,14 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Contract tests for the core SPI interfaces: {@link TokenVerifier} and
+ * Contract tests for the core SPI interfaces: {@link TokenValidationService} and
  * {@link PlatformAdminService}.
  *
  * <p>These tests verify the structural contracts of the SPI interfaces:
  * <ul>
  *   <li>Both are interfaces (not abstract classes)</li>
  *   <li>Both extend {@link Plugin}</li>
- *   <li>{@code verifyToken(String)} on {@code TokenVerifier} is abstract (no default)</li>
+ *   <li>{@code verifyToken(String)} on {@code TokenValidationService} is abstract (no default)</li>
  *   <li>All domain methods on {@code PlatformAdminService} are abstract (no defaults)</li>
  *   <li>Stub implementations can be created and wired into {@code Operio}</li>
  *   <li>The {@code Plugin} super-interface provides sensible defaults for
@@ -43,35 +43,35 @@ import org.junit.jupiter.api.Test;
 class SpiContractTest {
 
     // -----------------------------------------------------------------------
-    // TokenVerifier
+    // TokenValidationService
     // -----------------------------------------------------------------------
 
     @Nested
-    @DisplayName("TokenVerifier contract")
-    class TokenVerifierContract {
+    @DisplayName("TokenValidationService contract")
+    class TokenValidationServiceContract {
 
         @Test
-        @DisplayName("TokenVerifier is an interface")
+        @DisplayName("TokenValidationService is an interface")
         void isInterface() {
             assertTrue(
-                TokenVerifier.class.isInterface(),
-                "TokenVerifier must be an interface, not an abstract class"
+                TokenValidationService.class.isInterface(),
+                "TokenValidationService must be an interface, not an abstract class"
             );
         }
 
         @Test
-        @DisplayName("TokenVerifier extends Plugin")
+        @DisplayName("TokenValidationService extends Plugin")
         void extendsPlugin() {
             assertTrue(
-                Plugin.class.isAssignableFrom(TokenVerifier.class),
-                "TokenVerifier must extend Plugin"
+                Plugin.class.isAssignableFrom(TokenValidationService.class),
+                "TokenValidationService must extend Plugin"
             );
         }
 
         @Test
-        @DisplayName("verifyToken(String) is declared on TokenVerifier")
+        @DisplayName("verifyToken(String) is declared on TokenValidationService")
         void verifyTokenDeclared() throws NoSuchMethodException {
-            Method method = TokenVerifier.class.getMethod(
+            Method method = TokenValidationService.class.getMethod(
                 "verifyToken",
                 String.class
             );
@@ -88,7 +88,7 @@ class SpiContractTest {
             "verifyToken(String) is abstract (no default implementation)"
         )
         void verifyTokenIsAbstract() throws NoSuchMethodException {
-            Method method = TokenVerifier.class.getMethod(
+            Method method = TokenValidationService.class.getMethod(
                 "verifyToken",
                 String.class
             );
@@ -101,7 +101,7 @@ class SpiContractTest {
         @Test
         @DisplayName("verifyToken takes exactly one String parameter")
         void verifyTokenParameterTypes() throws NoSuchMethodException {
-            Method method = TokenVerifier.class.getMethod(
+            Method method = TokenValidationService.class.getMethod(
                 "verifyToken",
                 String.class
             );
@@ -113,7 +113,7 @@ class SpiContractTest {
         @Test
         @DisplayName("Plugin defaults are inherited: isReady() returns true")
         void isReadyDefault() {
-            TokenVerifier<?> stub = new StubTokenVerifier();
+            TokenValidationService<?> stub = new StubTokenVerifier();
             assertTrue(
                 stub.isReady(),
                 "Default isReady() from Plugin should return true"
@@ -135,10 +135,10 @@ class SpiContractTest {
         @DisplayName("stub can be wired into Operio via builder")
         void stubCanBeWiredIntoOperio() {
             StubTokenVerifier stub = new StubTokenVerifier();
-            Operio operio = Operio.builder().withTokenVerifier(stub).build();
+            Operio operio = Operio.builder().withTokenValidationService(stub).build();
 
-            assertNotNull(operio.tokenVerifier());
-            assertSame(stub, operio.tokenVerifier());
+            assertNotNull(operio.tokenValidationService());
+            assertSame(stub, operio.tokenValidationService());
         }
     }
 
@@ -402,31 +402,31 @@ class SpiContractTest {
 
         @Test
         @DisplayName(
-            "TokenVerifier and PlatformAdminService can coexist in Operio"
+            "TokenValidationService and PlatformAdminService can coexist in Operio"
         )
         void bothCanCoexist() {
             StubTokenVerifier tv = new StubTokenVerifier();
             StubPlatformAdminService pas = new StubPlatformAdminService();
 
             Operio operio = Operio.builder()
-                .withTokenVerifier(tv)
+                .withTokenValidationService(tv)
                 .withPlatformAdmin(pas)
                 .build();
 
-            assertSame(tv, operio.tokenVerifier());
+            assertSame(tv, operio.tokenValidationService());
             assertSame(pas, operio.platformAdminService());
         }
 
         @Test
         @DisplayName(
-            "Operio can be built without TokenVerifier or PlatformAdminService (embedded mode)"
+            "Operio can be built without TokenValidationService or PlatformAdminService (embedded mode)"
         )
         void canBuildWithoutPlatformPlugins() {
             Operio operio = Operio.builder().build();
 
             assertNull(
-                operio.tokenVerifier(),
-                "TokenVerifier should be null in embedded mode (no platform plugins)"
+                operio.tokenValidationService(),
+                "TokenValidationService should be null in embedded mode (no platform plugins)"
             );
             assertNull(
                 operio.platformAdminService(),
@@ -440,10 +440,10 @@ class SpiContractTest {
     // =======================================================================
 
     /**
-     * Minimal {@link TokenVerifier} implementation for contract testing.
+     * Minimal {@link TokenValidationService} implementation for contract testing.
      * Returns a fixed {@link IdentityContext} for any token.
      */
-    private static class StubTokenVerifier implements TokenVerifier<Void> {
+    private static class StubTokenVerifier implements TokenValidationService<Void> {
 
         @Override
         public IdentityContext verifyToken(String token) {

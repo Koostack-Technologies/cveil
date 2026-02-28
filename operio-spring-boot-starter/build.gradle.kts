@@ -46,7 +46,7 @@ dependencies {
     // The auto-configuration references IdentitySpringSecurity via SPI /
     // reflection.  Users who want Spring Security-based identity resolution
     // add this to their own runtime classpath.
-    compileOnly(project(":plugins:operio-identity-spring-security"))
+    compileOnly(project(":sdk:operio-identity-spring-security"))
 
     // -- Optional at runtime: consent bundles --------------------------------
     // The auto-configuration instantiates bundle classes reflectively so the

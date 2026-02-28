@@ -3,7 +3,7 @@ package com.koostack.operio.rest.config;
 import com.koostack.operio.bundle.core.CoreConsentBundle;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
@@ -62,7 +62,7 @@ import redis.clients.jedis.JedisPooled;
  *   <li>{@link Operio} — the primary entry point for consent operations</li>
  *   <li>{@link PlatformAdminService} — tenant/API-key management
  *       (production only; {@code null} in embedded mode)</li>
- *   <li>{@link TokenVerifier} — bearer token verification
+ *   <li>{@link TokenValidationService} — bearer token verification
  *       (production only; {@code null} in embedded mode)</li>
  * </ul>
  *
@@ -134,7 +134,7 @@ public class OperioProducers {
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
             PlatformJooqConfig platformConfig = createPlatformConfig();
             builder.withPlatformAdmin("jooq-platform", platformConfig);
-            builder.withTokenVerifier("api-key", platformConfig);
+            builder.withTokenValidationService("api-key", platformConfig);
             LOG.info(
                 "Operio REST API: platform admin and token verifier wired (jooq-platform / api-key)"
             );
@@ -188,7 +188,7 @@ public class OperioProducers {
     }
 
     /**
-     * Produces the {@link TokenVerifier} singleton — used by
+     * Produces the {@link TokenValidationService} singleton — used by
      * {@code ApiKeyAuthFilter} to authenticate bearer tokens on every
      * request.
      *
@@ -197,21 +197,21 @@ public class OperioProducers {
      * returns {@code null}.
      *
      * @param operio the built {@link Operio} instance (injected by CDI)
-     * @return the token verifier, or {@code null} in embedded mode
+     * @return the token validation service, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public TokenVerifier tokenVerifier(Operio operio) {
-        TokenVerifier verifier = operio.tokenVerifier();
-        if (verifier != null) {
-            LOG.debug("Operio REST API: TokenVerifier available");
+    public TokenValidationService tokenValidationService(Operio operio) {
+        TokenValidationService service = operio.tokenValidationService();
+        if (service != null) {
+            LOG.debug("Operio REST API: TokenValidationService available");
         } else {
             LOG.debug(
-                "Operio REST API: TokenVerifier not available (embedded mode)"
+                "Operio REST API: TokenValidationService not available (embedded mode)"
             );
         }
-        return verifier;
+        return service;
     }
 
     // -----------------------------------------------------------------------

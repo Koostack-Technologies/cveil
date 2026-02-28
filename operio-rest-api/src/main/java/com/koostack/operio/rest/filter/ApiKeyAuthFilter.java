@@ -3,7 +3,7 @@ package com.koostack.operio.rest.filter;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
@@ -47,7 +47,7 @@ import org.slf4j.MDC;
  *       is granted {@code super-admin} role with no tenant scope. This
  *       allows initial platform setup before any real API keys exist.</li>
  *   <li><strong>Token verification</strong> — delegates to
- *       {@link TokenVerifier#verifyToken(String)} (the
+ *       {@link TokenValidationService#verifyToken(String)} (the
  *       {@code ApiKeyTokenVerifier} implementation SHA-256 hashes the token
  *       and looks it up in the platform {@code api_key} table).</li>
  *   <li><strong>Security context</strong> — on success, sets a JAX-RS
@@ -65,7 +65,7 @@ import org.slf4j.MDC;
  * separate CDI interceptor ({@code TenantScopeInterceptor}) that reads the
  * {@link IdentityContext} from the request property set here.
  *
- * @see com.koostack.operio.core.service.TokenVerifier
+ * @see com.koostack.operio.core.platform.iam.TokenValidationService
  * @see OperioConfig.SuperAdminConfig
  */
 @Provider
@@ -102,9 +102,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * The primary Operio instance — used to obtain the {@link TokenVerifier}
+     * The primary Operio instance — used to obtain the {@link TokenValidationService}
      * at request time. We inject {@code Operio} rather than
-     * {@code TokenVerifier} directly because the token verifier producer can
+     * {@code TokenValidationService} directly because the token validation service producer can
      * return {@code null} in embedded mode, and CDI client proxies for
      * {@code @ApplicationScoped} null beans cause NPE on method invocation.
      */
@@ -265,11 +265,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 5. Verify via TokenVerifier (API key hash lookup)
-        TokenVerifier<?> tokenVerifier = operio.tokenVerifier();
-        if (tokenVerifier == null) {
+        // 5. Verify via TokenValidationService (API key hash lookup)
+        TokenValidationService<?> tokenValidationService = operio.tokenValidationService();
+        if (tokenValidationService == null) {
             LOG.error(
-                "No TokenVerifier configured — cannot authenticate requests. " +
+                "No TokenValidationService configured — cannot authenticate requests. " +
                     "Is operio.mode=production with platform-db configured?"
             );
             abortUnauthorized(
@@ -281,7 +281,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         try {
-            IdentityContext identity = tokenVerifier.verifyToken(token);
+            IdentityContext identity = tokenValidationService.verifyToken(token);
             LOG.debug(
                 "Authenticated: subject={}, tenantId={}, provider={}, roles={}",
                 identity.subject(),

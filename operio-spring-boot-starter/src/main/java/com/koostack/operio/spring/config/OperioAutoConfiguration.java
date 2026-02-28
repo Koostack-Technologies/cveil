@@ -1,7 +1,7 @@
 package com.koostack.operio.spring.config;
 
 import com.koostack.operio.core.Operio;
-import com.koostack.operio.core.service.IdentityResolver;
+import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.spring.aspect.ConsentRequiredAspect;
 import com.koostack.operio.spring.aspect.SensitiveAspect;

@@ -20,7 +20,7 @@ import java.util.List;
  * methods ({@link #registerField}, {@link #registerCategory},
  * {@link #linkFieldToCategory}) that allow callers to populate the consent
  * admin schema with field and category metadata discovered by a
- * {@link SensitiveDiscovery} plugin.
+ * {@link com.koostack.operio.core.sdk.SensitiveDiscovery} plugin.
  *
  * <p>The registration methods use <strong>upsert semantics</strong> — calling
  * them for an entity/field/category that already exists updates the

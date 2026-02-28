@@ -12,12 +12,12 @@ import com.koostack.operio.core.service.AuditLogger;
 import com.koostack.operio.core.service.ConsentAdminService;
 import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.service.ConsentSyncService;
-import com.koostack.operio.core.service.IdentityResolver;
+import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.core.service.SensitiveDiscovery;
+import com.koostack.operio.core.sdk.SensitiveDiscovery;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.spi.Plugin;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.core.spi.PluginConfig;
@@ -78,7 +78,7 @@ public class Operio {
     private final ConsentSyncService<?> consentSyncService;
 
     // -- Platform plugins -----------------------------------------------------
-    private final TokenVerifier<?> tokenVerifier;
+    private final TokenValidationService<?> tokenValidationService;
     private final PlatformAdminService<?> platformAdminService;
 
     // -- Discovery plugins ----------------------------------------------------
@@ -94,7 +94,7 @@ public class Operio {
         this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
         this.consentAdminService = builder.consentAdminService;
         this.consentSyncService = builder.consentSyncService;
-        this.tokenVerifier = builder.tokenVerifier;
+        this.tokenValidationService = builder.tokenValidationService;
         this.platformAdminService = builder.platformAdminService;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
@@ -404,11 +404,11 @@ public class Operio {
     }
 
     /**
-     * Returns the configured {@link TokenVerifier}, or {@code null}
+     * Returns the configured {@link TokenValidationService}, or {@code null}
      * if none was registered.
      */
-    public TokenVerifier<?> tokenVerifier() {
-        return tokenVerifier;
+    public TokenValidationService<?> tokenValidationService() {
+        return tokenValidationService;
     }
 
     /**
@@ -625,7 +625,7 @@ public class Operio {
         private ConsentSyncService<?> consentSyncService;
 
         // -- Platform ---------------------------------------------------------
-        private TokenVerifier<?> tokenVerifier;
+        private TokenValidationService<?> tokenValidationService;
         private PlatformAdminService<?> platformAdminService;
 
         // -- Discovery --------------------------------------------------------
@@ -912,26 +912,26 @@ public class Operio {
         // -- Platform wiring --------------------------------------------------
 
         /**
-         * Resolves a {@link TokenVerifier} by name via
+         * Resolves a {@link TokenValidationService} by name via
          * {@link PluginRegistry} (no configuration).
          */
-        public Builder withTokenVerifier(String name) {
-            this.tokenVerifier = PluginRegistry.resolve(
-                TokenVerifier.class,
+        public Builder withTokenValidationService(String name) {
+            this.tokenValidationService = PluginRegistry.resolve(
+                TokenValidationService.class,
                 name
             );
             return this;
         }
 
         /**
-         * Resolves and configures a {@link TokenVerifier} by name.
+         * Resolves and configures a {@link TokenValidationService} by name.
          */
-        public <C extends PluginConfig> Builder withTokenVerifier(
+        public <C extends PluginConfig> Builder withTokenValidationService(
             String name,
             C config
         ) {
-            this.tokenVerifier = PluginRegistry.resolve(
-                TokenVerifier.class,
+            this.tokenValidationService = PluginRegistry.resolve(
+                TokenValidationService.class,
                 name,
                 config
             );
@@ -939,13 +939,13 @@ public class Operio {
         }
 
         /**
-         * Registers a pre-built {@link TokenVerifier} instance.
+         * Registers a pre-built {@link TokenValidationService} instance.
          *
-         * @param service the pre-built token verifier
+         * @param service the pre-built token validation service
          * @return this builder
          */
-        public Builder withTokenVerifier(TokenVerifier<?> service) {
-            this.tokenVerifier = service;
+        public Builder withTokenValidationService(TokenValidationService<?> service) {
+            this.tokenValidationService = service;
             return this;
         }
 

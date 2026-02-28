@@ -7,7 +7,7 @@ import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.annotation.Sensitive;
 import com.koostack.operio.core.service.AuditLogger;
 import com.koostack.operio.core.service.ConsentDecisionService;
-import com.koostack.operio.core.service.IdentityResolver;
+import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
 import java.util.Set;
 import org.aspectj.lang.ProceedingJoinPoint;

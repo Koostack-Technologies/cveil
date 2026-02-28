@@ -31,16 +31,16 @@ import java.util.Set;
  * </ul>
  *
  * <h2>Design rationale</h2>
- * <p>This interface is deliberately separate from {@link IdentityResolver}
- * (passive, read-only, ambient context) and {@link TokenVerifier} (active,
+ * <p>This interface is deliberately separate from {@link com.koostack.operio.core.sdk.IdentityResolver}
+ * (passive, read-only, ambient context) and {@link com.koostack.operio.core.platform.iam.TokenValidationService} (active,
  * hot-path credential validation). A Spring Security plugin implements
  * {@code IdentityResolver} but never touches tenant provisioning; the jOOQ
  * platform layer implements {@code PlatformAdminService} and
- * {@code TokenVerifier} but never reads {@code SecurityContextHolder}.
+ * {@code TokenValidationService} but never reads {@code SecurityContextHolder}.
  *
  * @param <T> the plugin configuration type
- * @see TokenVerifier
- * @see IdentityResolver
+ * @see com.koostack.operio.core.platform.iam.TokenValidationService
+ * @see com.koostack.operio.core.sdk.IdentityResolver
  */
 public interface PlatformAdminService<T> extends Plugin<T> {
 
@@ -119,7 +119,7 @@ public interface PlatformAdminService<T> extends Plugin<T> {
      * Revoke an API key by its prefix.
      *
      * <p>Sets the key status to {@code REVOKED}. Subsequent calls to
-     * {@link TokenVerifier#verifyToken} with this key will fail.
+     * {@link com.koostack.operio.core.platform.iam.TokenValidationService#verifyToken} with this key will fail.
      *
      * @param keyPrefix the first 8 characters of the raw key
      * @throws com.koostack.operio.core.exception.OperioServiceException

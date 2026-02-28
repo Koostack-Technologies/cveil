@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.platform.jooq;
 
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.plugin.platform.jooq.generated.tables.pojos.ApiKey;
 
 import org.jooq.DSLContext;
@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 /**
  * API key bearer token verifier — the auth filter hot path.
  *
- * <p>Implements {@link TokenVerifier} by SHA-256 hashing the raw bearer token,
+ * <p>Implements {@link TokenValidationService} by SHA-256 hashing the raw bearer token,
  * looking up the hash in the platform {@code api_key} table, and validating
  * the key's status and expiration before building an {@link IdentityContext}.
  *
@@ -60,10 +60,10 @@ import java.util.stream.Collectors;
  * short TTL (e.g. 30 seconds) to avoid the DB round trip on every request.
  * Not a v1 concern — profile first.
  *
- * @see TokenVerifier
+ * @see TokenValidationService
  * @see JooqPlatformAdminService
  */
-public class ApiKeyTokenVerifier implements TokenVerifier<PlatformJooqConfig> {
+public class ApiKeyTokenVerifier implements TokenValidationService<PlatformJooqConfig> {
 
     private DSLContext platformDslContext;
     private ApiKeyRepository apiKeyRepository;

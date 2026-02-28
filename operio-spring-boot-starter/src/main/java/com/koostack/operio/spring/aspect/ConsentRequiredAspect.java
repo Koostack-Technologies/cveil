@@ -8,7 +8,7 @@ import com.koostack.operio.core.annotation.ConsentRequired;
 import com.koostack.operio.core.exception.ConsentDeniedException;
 import com.koostack.operio.core.service.AuditLogger;
 import com.koostack.operio.core.service.ConsentDecisionService;
-import com.koostack.operio.core.service.IdentityResolver;
+import com.koostack.operio.core.sdk.IdentityResolver;
 import java.util.Set;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;

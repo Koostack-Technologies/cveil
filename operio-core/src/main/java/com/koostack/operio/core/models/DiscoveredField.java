@@ -3,7 +3,7 @@ package com.koostack.operio.core.models;
 import java.util.Objects;
 /**
  * A single sensitive field discovered by a {@link
- * com.koostack.operio.core.service.SensitiveDiscovery} plugin.
+ * com.koostack.operio.core.sdk.SensitiveDiscovery} plugin.
  *
  * <p>Captures all the metadata needed to register the field in the
  * consent admin schema: the field name, its owning entity (optional),

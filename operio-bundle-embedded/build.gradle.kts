@@ -11,7 +11,7 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":plugins:operio-consent-decision-caffeine"))
     implementation(project(":plugins:operio-consent-sync-embedded"))
-    implementation(project(":plugins:operio-discovery-sensitive-annotation"))
+    implementation(project(":sdk:operio-discovery-sensitive-annotation"))
 
     // Transitive dependencies needed for config type resolution
     implementation(project(":plugins:operio-jooq-common"))

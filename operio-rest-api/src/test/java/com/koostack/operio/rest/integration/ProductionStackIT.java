@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -115,7 +115,7 @@ class ProductionStackIT {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    TokenVerifier tokenVerifier;
+    TokenValidationService tokenValidationService;
 
     // =======================================================================
     // 1. Container startup & CDI wiring
@@ -190,11 +190,11 @@ class ProductionStackIT {
 
         @Test
         @Order(5)
-        @DisplayName("TokenVerifier is wired (not null)")
-        void tokenVerifierWired() {
+        @DisplayName("TokenValidationService is wired (not null)")
+        void tokenValidationServiceWired() {
             assertNotNull(
-                tokenVerifier,
-                "TokenVerifier must be wired in production mode"
+                tokenValidationService,
+                "TokenValidationService must be wired in production mode"
             );
         }
 
