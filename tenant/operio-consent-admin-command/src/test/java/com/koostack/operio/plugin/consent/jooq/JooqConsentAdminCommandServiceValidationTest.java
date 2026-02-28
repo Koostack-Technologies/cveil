@@ -7,7 +7,7 @@ import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationRepository;
 import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
 import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
-import com.koostack.operio.core.event.TenantEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.TenantContext;
@@ -30,7 +30,7 @@ class JooqConsentAdminCommandServiceValidationTest {
 
     private static final String TENANT = "test-tenant";
 
-    private TenantEventService<?> eventService;
+    private EventService<?> eventService;
     private EntityHydrationRepository entityRepo;
     private CategoryHydrationRepository categoryRepo;
     private PurposeHydrationRepository purposeRepo;
@@ -41,7 +41,7 @@ class JooqConsentAdminCommandServiceValidationTest {
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        eventService = mock(TenantEventService.class);
+        eventService = mock(EventService.class);
         entityRepo = mock(EntityHydrationRepository.class);
         categoryRepo = mock(CategoryHydrationRepository.class);
         purposeRepo = mock(PurposeHydrationRepository.class);

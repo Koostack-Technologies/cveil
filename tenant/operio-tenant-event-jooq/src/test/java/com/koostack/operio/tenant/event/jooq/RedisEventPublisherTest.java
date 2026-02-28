@@ -2,15 +2,12 @@ package com.koostack.operio.tenant.event.jooq;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link RedisEventPublisher} sharding logic.
+ * Unit tests for {@link RedisEventPublisher} per-tenant stream routing.
  */
 class RedisEventPublisherTest {
 
@@ -23,15 +20,21 @@ class RedisEventPublisherTest {
     }
 
     @Test
-    void resultAlwaysInValidRange() {
-        String prefix = "operio:stream:domain:";
-        for (int i = 0; i < 1_000; i++) {
+    void keyContainsTenantId() {
+        String tenantId = "acme_corp";
+        String key = RedisEventPublisher.streamKeyForTenant(tenantId);
+        assertEquals("operio:stream:tenant:acme_corp", key);
+    }
+
+    @Test
+    void keyHasExpectedPrefix() {
+        for (int i = 0; i < 100; i++) {
             String tenantId = UUID.randomUUID().toString();
             String key = RedisEventPublisher.streamKeyForTenant(tenantId);
-            assertTrue(key.startsWith(prefix), "Key must start with " + prefix);
-            int index = Integer.parseInt(key.substring(prefix.length()));
-            assertTrue(index >= 0 && index < RedisEventPublisher.SHARD_COUNT,
-                "Partition index must be in [0, " + RedisEventPublisher.SHARD_COUNT + ")");
+            assertTrue(key.startsWith(RedisEventPublisher.STREAM_KEY_PREFIX),
+                "Key must start with " + RedisEventPublisher.STREAM_KEY_PREFIX);
+            assertEquals(tenantId, key.substring(RedisEventPublisher.STREAM_KEY_PREFIX.length()),
+                "Key suffix must be the tenant ID");
         }
     }
 
@@ -42,34 +45,9 @@ class RedisEventPublisherTest {
     }
 
     @Test
-    void keyHasExpectedPrefix() {
-        assertTrue(RedisEventPublisher.streamKeyForTenant("x").startsWith("operio:stream:domain:"));
-    }
-
-    @Test
-    void allStreamKeysReturnsCorrectCount() {
-        List<String> keys = RedisEventPublisher.allStreamKeys();
-        assertEquals(RedisEventPublisher.SHARD_COUNT, keys.size());
-    }
-
-    @Test
-    void allStreamKeysAreUnique() {
-        List<String> keys = RedisEventPublisher.allStreamKeys();
-        Set<String> unique = new HashSet<>(keys);
-        assertEquals(keys.size(), unique.size(), "All stream keys must be unique");
-    }
-
-    @Test
-    void allStreamKeysHaveExpectedFormat() {
-        List<String> keys = RedisEventPublisher.allStreamKeys();
-        for (int i = 0; i < keys.size(); i++) {
-            assertEquals("operio:stream:domain:" + i, keys.get(i));
-        }
-    }
-
-    @Test
-    void allStreamKeysIsUnmodifiable() {
-        List<String> keys = RedisEventPublisher.allStreamKeys();
-        assertThrows(UnsupportedOperationException.class, () -> keys.add("extra"));
+    void differentTenantsGetDifferentKeys() {
+        String key1 = RedisEventPublisher.streamKeyForTenant("tenant_a");
+        String key2 = RedisEventPublisher.streamKeyForTenant("tenant_b");
+        assertNotEquals(key1, key2, "Different tenants must get different stream keys");
     }
 }

@@ -13,7 +13,7 @@ import java.util.Map;
  *
  * <p>Each event is appended to a Redis Stream keyed by
  * {@code {appName}:platform-events}. Consumers (e.g.
- * {@link com.koostack.operio.core.event.PlatformEventListener}
+ * {@link com.koostack.operio.core.event.EventListener}
  * implementations) can subscribe via Redis consumer groups for
  * reliable, at-least-once delivery.
  */

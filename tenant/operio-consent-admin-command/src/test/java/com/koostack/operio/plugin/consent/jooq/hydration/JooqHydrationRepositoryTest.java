@@ -5,7 +5,7 @@ import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate
 import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
-import com.koostack.operio.core.event.TenantEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.tenant.event.jooq.EventRepository;
@@ -26,13 +26,13 @@ class JooqHydrationRepositoryTest {
 
     private static final String TENANT = "test-tenant";
 
-    private TenantEventService<?> eventService;
+    private EventService<?> eventService;
     private EventRepository eventRepository;
 
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        eventService = mock(TenantEventService.class);
+        eventService = mock(EventService.class);
         eventRepository = mock(EventRepository.class);
     }
 

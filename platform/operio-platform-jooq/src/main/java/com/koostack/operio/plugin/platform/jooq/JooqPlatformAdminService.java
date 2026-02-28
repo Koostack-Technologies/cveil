@@ -262,6 +262,23 @@ public class JooqPlatformAdminService
         }
     }
 
+    /**
+     * Sets the per-tenant stream consumer on the underlying {@link TenantManager}.
+     *
+     * <p>Must be called after {@link #configure} and before
+     * {@link TenantManager#migrateAllTenants()} so that startup reconciliation
+     * can add tenants to the consumer.
+     *
+     * @param consumer the stream consumer, or {@code null} to disable
+     */
+    public void setStreamConsumer(
+        com.koostack.operio.tenant.event.jooq.TenantStreamConsumer consumer
+    ) {
+        if (tenantManager != null) {
+            tenantManager.setStreamConsumer(consumer);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Tenant lifecycle
     // -----------------------------------------------------------------------

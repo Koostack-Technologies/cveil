@@ -112,18 +112,16 @@ abstract class TenantEventServiceTestBase {
     }
 
     /**
-     * Starts a background thread that reads from all sharded Redis streams
+     * Starts a background thread that reads from the test tenant's Redis stream
      * and appends consumed entries to {@link #consumedEvents}.
      */
     private static void startRedisConsumer() {
         consumedEvents.clear();
         consumerRunning = true;
 
-        List<String> allKeys = RedisEventPublisher.allStreamKeys();
+        String streamKey = RedisEventPublisher.streamKeyForTenant(TEST_TENANT);
         Map<String, StreamEntryID> lastIds = new java.util.HashMap<>();
-        for (String key : allKeys) {
-            lastIds.put(key, new StreamEntryID());
-        }
+        lastIds.put(streamKey, new StreamEntryID());
 
         Thread consumerThread = new Thread(() -> {
             while (consumerRunning) {

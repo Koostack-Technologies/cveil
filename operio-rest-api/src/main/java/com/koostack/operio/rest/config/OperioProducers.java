@@ -16,13 +16,15 @@ import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import com.koostack.operio.plugin.redis.common.pubsub.RedisInvalidationPublisher;
+import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentDecisionProjectionHandler;
-import com.koostack.operio.tenant.event.jooq.ShardedStreamConsumer;
+import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
+import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
@@ -215,55 +217,86 @@ public class OperioProducers {
     }
 
     // -----------------------------------------------------------------------
-    // Decision cache projection (production only)
+    // Per-tenant stream consumer (production only)
     // -----------------------------------------------------------------------
 
-    private ShardedStreamConsumer decisionProjectionConsumer;
+    private TenantStreamConsumer tenantStreamConsumer;
 
     /**
-     * Produces the {@link ShardedStreamConsumer} that runs the consent
-     * decision projection — materializing domain events into the Redis
-     * decision cache.
+     * Produces the {@link TenantStreamConsumer} that runs both the consent
+     * decision projection and admin projection — materializing domain
+     * events into the Redis decision cache and SQL admin tables respectively.
      *
      * <p>Only activated in production mode (when {@code adminRedisPool} and
      * {@code tenantAwareJedisProvider} are available). In embedded mode this
      * returns {@code null} (no stream consumer needed).
      *
-     * <p>The consumer is started eagerly at construction. Shutdown is handled
-     * by the {@link #onShutdown} CDI lifecycle callback.
+     * <p>The consumer is NOT started here — tenants are added dynamically
+     * by {@link TenantManager} during provisioning and startup reconciliation.
+     * Shutdown is handled by the {@link #onShutdown} CDI lifecycle callback.
      *
      * @param operio the built {@link Operio} instance (triggers bundle initialization first)
-     * @return the started stream consumer, or {@code null} in embedded mode
+     * @return the tenant stream consumer, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
-    public ShardedStreamConsumer consentDecisionProjectionConsumer(Operio operio) {
+    public TenantStreamConsumer tenantStreamConsumer(Operio operio) {
         if (adminRedisPool == null || tenantAwareJedisProvider == null) {
-            LOG.info("Operio REST API: decision projection consumer not wired (embedded mode)");
+            LOG.info("Operio REST API: tenant stream consumer not wired (embedded mode)");
             return null;
         }
 
+        // Decision projection handler
         ConsentPolicyRedisRepository consentRepo =
             new ConsentPolicyRedisRepository(tenantAwareJedisProvider);
 
         RedisInvalidationPublisher invalidationPublisher =
             new RedisInvalidationPublisher(adminRedisPool, new ObjectMapper().registerModule(new JavaTimeModule()));
 
-        ConsentDecisionProjectionHandler handler =
+        ConsentDecisionProjectionHandler decisionHandler =
             new ConsentDecisionProjectionHandler(consentRepo, invalidationPublisher);
 
-        String consumerName = System.getenv().getOrDefault("HOSTNAME", "operio-api-" + ProcessHandle.current().pid());
-        this.decisionProjectionConsumer = new ShardedStreamConsumer(
-            JedisProvider.shared(adminRedisPool),
-            handler,
-            "decision-projection",
-            consumerName
-        );
-        decisionProjectionConsumer.start();
+        // Admin projection handler — uses the consent DB config to create a
+        // tenant-aware DSLContext that routes to per-tenant schemas via
+        // TenantContext + TenantAwareExecuteListener.
+        OperioConfig.DbConfig db = config.db().orElse(null);
+        DSLContext tenantDsl = null;
+        if (db != null) {
+            String dbUrl = appendSslParameters(db.url(), db);
+            JooqConsentAdminServiceConfig consentDbConfig = new JooqConsentAdminServiceConfig(
+                dbUrl, db.dialect(), db.username().orElse(null), db.password().orElse(null));
+            tenantDsl = com.koostack.operio.plugin.jooq.common.JooqContextFactory
+                .createTenantAwareContext(consentDbConfig, "operio-admin-projection");
+        }
 
-        LOG.info("Operio REST API: decision projection consumer started (group=decision-projection, consumer={})",
-            consumerName);
-        return decisionProjectionConsumer;
+        // Build consumer with both handlers
+        TenantStreamConsumer consumer = new TenantStreamConsumer(
+            JedisProvider.shared(adminRedisPool), 2000L, 100);
+        consumer.registerHandler("decision-projection", decisionHandler);
+
+        if (tenantDsl != null) {
+            ConsentAdminProjectionHandler adminHandler = new ConsentAdminProjectionHandler(tenantDsl);
+            consumer.registerHandler("admin-projection", adminHandler);
+            LOG.info("Operio REST API: admin projection handler wired (group=admin-projection)");
+        } else {
+            LOG.warn("Operio REST API: admin projection handler NOT wired — consent DB config missing");
+        }
+
+        this.tenantStreamConsumer = consumer;
+
+        // Inject consumer into TenantManager for lifecycle orchestration,
+        // then trigger startup reconciliation (adds consumers for all
+        // existing active tenants).
+        @SuppressWarnings("rawtypes")
+        PlatformAdminService rawService = operio.platformAdminService();
+        if (rawService instanceof JooqPlatformAdminService platformService) {
+            platformService.setStreamConsumer(consumer);
+            platformService.tenantManager().migrateAllTenants();
+            LOG.info("Operio REST API: startup reconciliation complete — stream consumers added for all active tenants");
+        }
+
+        LOG.info("Operio REST API: tenant stream consumer created (groups=decision-projection,admin-projection)");
+        return consumer;
     }
 
     /**
@@ -272,9 +305,9 @@ public class OperioProducers {
     public void onShutdown(@jakarta.enterprise.event.Observes
                            @jakarta.enterprise.context.BeforeDestroyed(ApplicationScoped.class)
                            Object event) {
-        if (decisionProjectionConsumer != null && decisionProjectionConsumer.isRunning()) {
-            LOG.info("Operio REST API: stopping decision projection consumer");
-            decisionProjectionConsumer.stop();
+        if (tenantStreamConsumer != null) {
+            LOG.info("Operio REST API: stopping tenant stream consumer");
+            tenantStreamConsumer.close();
         }
     }
 

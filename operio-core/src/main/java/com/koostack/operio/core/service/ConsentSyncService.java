@@ -28,7 +28,14 @@ import java.time.Instant;
  * @param <T> the configuration type for this plugin
  * @see ConsentAdminService
  * @see ConsentDecisionService
+ * @deprecated The dual-write pattern is replaced by per-tenant Redis Streams
+ *     with event-driven projections. The multi-tenant REST API deployment
+ *     uses {@code ConsentAdminService} for writes and stream consumers for
+ *     cache updates. The embedded bundle retains synchronous dual-write as
+ *     an internal implementation detail. This interface will be removed in
+ *     a future release.
  */
+@Deprecated(forRemoval = true)
 public interface ConsentSyncService<T> extends Plugin<T> {
 
     /**

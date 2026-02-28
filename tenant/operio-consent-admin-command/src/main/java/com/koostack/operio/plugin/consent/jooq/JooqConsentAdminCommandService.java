@@ -12,7 +12,7 @@ import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationReposi
 import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
 import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.DomainEvent;
-import com.koostack.operio.core.event.TenantEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
  * Event-sourced {@link ConsentAdminCommandService} implementation.
  *
  * <p>All write operations publish semantic domain events via
- * {@link TenantEventService} instead of writing directly to the database.
+ * {@link EventService} instead of writing directly to the database.
  * A separate projection is responsible for materializing the event stream
  * into the consent read model.
  */
@@ -39,7 +39,7 @@ public class JooqConsentAdminCommandService
         JooqConsentAdminCommandService.class
     );
 
-    private TenantEventService<?> eventService;
+    private EventService<?> eventService;
     private EntityHydrationRepository entityHydrationRepo;
     private CategoryHydrationRepository categoryHydrationRepo;
     private PurposeHydrationRepository purposeHydrationRepo;

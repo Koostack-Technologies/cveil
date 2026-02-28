@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.consent.jooq.hydration;
 
 import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
-import com.koostack.operio.core.event.TenantEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import java.util.UUID;
@@ -12,9 +12,9 @@ import java.util.UUID;
  */
 public class JooqPurposeHydrationRepository implements PurposeHydrationRepository {
 
-    private final TenantEventService<?> eventService;
+    private final EventService<?> eventService;
 
-    public JooqPurposeHydrationRepository(TenantEventService<?> eventService) {
+    public JooqPurposeHydrationRepository(EventService<?> eventService) {
         this.eventService = eventService;
     }
 

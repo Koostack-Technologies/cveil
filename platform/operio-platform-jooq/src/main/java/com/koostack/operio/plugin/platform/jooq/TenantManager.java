@@ -3,6 +3,8 @@ package com.koostack.operio.plugin.platform.jooq;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
+import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
+import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.regex.Pattern;
@@ -88,6 +90,7 @@ public class TenantManager {
     private final RedisPluginConfig redisConfig;
     private volatile String appName;
     private final String consentMigrationLocation;
+    private volatile TenantStreamConsumer streamConsumer; // nullable — null in embedded mode
 
     /**
      * Result of a successful tenant provisioning operation.
@@ -155,6 +158,20 @@ public class TenantManager {
      */
     public void setAppName(String appName) {
         this.appName = appName != null ? appName : "operio";
+    }
+
+    /**
+     * Sets the per-tenant stream consumer for lifecycle orchestration.
+     *
+     * <p>When set, {@link #provisionTenant} will add the tenant to the
+     * consumer (starting stream readers), and {@link #dropTenant} will
+     * remove it. When {@code null} (embedded mode), all consumer lifecycle
+     * calls are no-ops.
+     *
+     * @param streamConsumer the stream consumer, or {@code null} to disable
+     */
+    public void setStreamConsumer(TenantStreamConsumer streamConsumer) {
+        this.streamConsumer = streamConsumer;
     }
 
     // -----------------------------------------------------------------------
@@ -292,6 +309,11 @@ public class TenantManager {
             schemaName,
             redisAclUser
         );
+
+        // 4. Start stream consumers for the new tenant
+        if (streamConsumer != null) {
+            streamConsumer.addTenant(tenantId);
+        }
 
         return new ProvisionResult(
             schemaName,
@@ -567,7 +589,12 @@ public class TenantManager {
 
         log.info("Dropping tenant '{}': schema={}", tenantId, schemaName);
 
-        // 1. Drop Postgres schema
+        // 1. Stop stream consumers first (before schema drop, so in-flight projections complete)
+        if (streamConsumer != null) {
+            streamConsumer.removeTenant(tenantId);
+        }
+
+        // 2. Drop Postgres schema
         try {
             platformDsl.execute(
                 "DROP SCHEMA IF EXISTS " + schemaName + " CASCADE"
@@ -584,7 +611,7 @@ public class TenantManager {
             );
         }
 
-        // 2. Remove Redis ACL user (if Redis is configured)
+        // 3. Remove Redis ACL user (if Redis is configured)
         if (redisConfig != null) {
             try {
                 String redisAclUser =
@@ -605,6 +632,15 @@ public class TenantManager {
                     e
                 );
                 // Don't fail — schema is already dropped
+            }
+
+            // 4. Delete the per-tenant Redis stream
+            try (Jedis jedis = createJedisConnection()) {
+                jedis.del(RedisEventPublisher.streamKeyForTenant(tenantId));
+                log.debug("Deleted Redis stream for tenant '{}'", tenantId);
+            } catch (Exception e) {
+                log.warn("Failed to delete Redis stream for tenant '{}' — can be retried",
+                    tenantId, e);
             }
         }
 
@@ -674,6 +710,19 @@ public class TenantManager {
                 .filter(t -> "active".equals(t.getStatus()))
                 .count()
         );
+
+        // Reconcile stream consumers for all active tenants (idempotent)
+        if (streamConsumer != null) {
+            int reconciled = 0;
+            for (var tenant : tenants) {
+                if ("active".equals(tenant.getStatus())) {
+                    streamConsumer.addTenant(tenant.getTenantId());
+                    reconciled++;
+                }
+            }
+            log.info("Reconciled stream consumers for {} tenants", reconciled);
+        }
+
         return migrated;
     }
 

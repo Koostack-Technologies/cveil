@@ -4,7 +4,7 @@ import java.util.Map;
 
 /**
  * Callback interface for processing tenant domain events consumed from
- * Redis Streams by {@link ShardedStreamConsumer}.
+ * Redis Streams by {@link TenantStreamConsumer}.
  *
  * <p>Implementations handle the deserialization and projection logic for
  * specific use cases (e.g., SQL admin projection, Redis decision projection).

@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.consent.jooq.hydration;
 
 import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
-import com.koostack.operio.core.event.TenantEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.tenant.event.jooq.EventRepository;
@@ -17,11 +17,11 @@ import java.util.UUID;
  */
 public class JooqEntityHydrationRepository implements EntityHydrationRepository {
 
-    private final TenantEventService<?> eventService;
+    private final EventService<?> eventService;
     private final EventRepository eventRepository;
 
     public JooqEntityHydrationRepository(
-        TenantEventService<?> eventService,
+        EventService<?> eventService,
         EventRepository eventRepository
     ) {
         this.eventService = eventService;

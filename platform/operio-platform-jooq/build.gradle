@@ -13,6 +13,8 @@ dependencies {
     implementation project(':plugins:operio-redis-common')
     // Needs access to consent migrations for TenantManager.provisionTenant()
     implementation project(":tenant:operio-consent-admin-schema")
+    // TenantManager orchestrates per-tenant stream consumer lifecycle
+    implementation project(":tenant:operio-tenant-event-jooq")
 
     // --- Test ----------------------------------------------------------------
     testImplementation 'com.h2database:h2:2.2.224'

@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 class ConsentDecisionProjectionHandlerTest {
 
     private static final String TENANT = "tenant-1";
-    private static final String STREAM_KEY = "operio:stream:domain:0";
+    private static final String STREAM_KEY = "operio:stream:tenant:tenant-1";
     private static final String MSG_ID = "1-0";
 
     private ConsentPolicyRedisRepository consentRepo;

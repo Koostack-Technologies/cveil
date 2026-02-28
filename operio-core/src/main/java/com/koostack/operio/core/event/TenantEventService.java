@@ -6,14 +6,14 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.spi.Plugin;
 
-public interface TenantEventService<T> extends Plugin<T> {
-
-    void publishEvent(PublishDomainEventInput input);
-
-    Long getAggregateVersion(AggregateKey key);
-
-    <U> U getAggregate(AggregateKey key, Class<U> type);
-
-    <U> void registerEventType(RegisterEventTypeInput<U> input);
+/**
+ * Tenant-scoped event service SPI.
+ *
+ * @deprecated Use {@link EventService} instead. This interface is retained
+ *             for backward compatibility and will be removed in a future
+ *             release.
+ */
+@Deprecated(forRemoval = true)
+public interface TenantEventService<T> extends EventService<T> {
 
 }
