@@ -5,7 +5,6 @@ import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.doReturn;
 
 import com.koostack.operio.core.models.IdentityContext;
-import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -67,7 +66,7 @@ class ApiKeyAuthFilterTest {
     // -----------------------------------------------------------------------
 
     @Mock
-    private Operio operio;
+    private Instance<TokenValidationService<?>> tokenValidationServiceInstance;
 
     @Mock
     private BootstrapKeyLifecycleService bootstrapLifecycle;
@@ -102,7 +101,7 @@ class ApiKeyAuthFilterTest {
         filter = new ApiKeyAuthFilter();
 
         // Inject mocks into the filter via reflection (simulating CDI @Inject)
-        injectField(filter, "operio", operio);
+        injectField(filter, "tokenValidationServiceInstance", tokenValidationServiceInstance);
         injectField(filter, "bootstrapLifecycle", bootstrapLifecycle);
         injectField(filter, "requestHolder", requestHolder);
         injectField(filter, "configInstance", configInstance);
@@ -666,7 +665,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_abc123def456")).thenReturn(
                 identity
             );
@@ -699,7 +699,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_valid_key")).thenReturn(
                 identity
             );
@@ -739,7 +740,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_prop_key")).thenReturn(
                 identity
             );
@@ -777,7 +779,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_multi_role")).thenReturn(
                 identity
             );
@@ -820,7 +823,8 @@ class ApiKeyAuthFilterTest {
 
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_invalid_key")).thenThrow(
                 new OperioAuthException("Invalid or expired API key")
             );
@@ -847,7 +851,8 @@ class ApiKeyAuthFilterTest {
 
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_bad_key")).thenThrow(
                 new OperioAuthException("Key revoked")
             );
@@ -871,7 +876,8 @@ class ApiKeyAuthFilterTest {
 
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_revoked")).thenThrow(
                 new OperioAuthException("API key has been revoked")
             );
@@ -914,7 +920,8 @@ class ApiKeyAuthFilterTest {
 
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_crash_key")).thenThrow(
                 new RuntimeException("Database connection lost")
             );
@@ -939,7 +946,8 @@ class ApiKeyAuthFilterTest {
 
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_npe_key")).thenThrow(
                 new NullPointerException("Null config")
             );
@@ -983,7 +991,7 @@ class ApiKeyAuthFilterTest {
             when(
                 bootstrapLifecycle.isBootstrapKeyValue("opr_live_some_key")
             ).thenReturn(false);
-            when(operio.tokenValidationService()).thenReturn(null);
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(false);
 
             filter.filter(requestContext);
 
@@ -1213,7 +1221,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_tenant_key")).thenReturn(
                 identity
             );
@@ -1256,7 +1265,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(
                 tokenValidationService.verifyToken("opr_live_principal_key")
             ).thenReturn(identity);
@@ -1389,7 +1399,8 @@ class ApiKeyAuthFilterTest {
             );
             @SuppressWarnings("unchecked")
             TokenValidationService<Object> tokenValidationService = mock(TokenValidationService.class);
-            doReturn(tokenValidationService).when(operio).tokenValidationService();
+            when(tokenValidationServiceInstance.isResolvable()).thenReturn(true);
+            doReturn(tokenValidationService).when(tokenValidationServiceInstance).get();
             when(tokenValidationService.verifyToken("opr_live_padded_key")).thenReturn(
                 identity
             );

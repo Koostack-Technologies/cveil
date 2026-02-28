@@ -6,11 +6,9 @@ import com.koostack.operio.core.models.ConsentAuditEntry;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.PolicySummaryEntry;
-import com.koostack.operio.core.Operio;
-import com.koostack.operio.core.models.RequestContext;
+import com.koostack.operio.core.DefaultTenantService;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.models.TenantContext;
-import com.koostack.operio.core.service.ConsentAdminService;
-import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
@@ -93,7 +91,7 @@ public class ConsentResource {
     );
 
     @Inject
-    Operio operio;
+    TenantService tenantService;
 
     @Inject
     OperioConfig operioConfig;
@@ -159,7 +157,7 @@ public class ConsentResource {
             request.scope()
         );
 
-        operio.grantConsent(
+        tenantService.grantConsent(
             request.subject(),
             request.scope().toModel(),
             request.expiresAt()
@@ -224,7 +222,7 @@ public class ConsentResource {
             request.scope()
         );
 
-        operio.revokeConsent(
+        tenantService.revokeConsent(
             request.subject(),
             request.scope().toModel(),
             request.expiresAt()
@@ -298,7 +296,7 @@ public class ConsentResource {
             .map(dto -> dto.toModel())
             .toList();
 
-        BatchConsentResult result = operio.grantConsentBatch(
+        BatchConsentResult result = tenantService.grantConsentBatch(
             request.subject(),
             entries
         );
@@ -371,7 +369,7 @@ public class ConsentResource {
             .map(dto -> dto.toModel())
             .toList();
 
-        BatchConsentResult result = operio.revokeConsentBatch(
+        BatchConsentResult result = tenantService.revokeConsentBatch(
             request.subject(),
             entries
         );
@@ -445,9 +443,9 @@ public class ConsentResource {
             .map(ConsentScopeDto::toModel)
             .collect(Collectors.toSet());
 
-        ConsentResponse response = operio
-            .consentService()
-            .evaluateConsent(request.subject(), coreScopes);
+        ConsentResponse response = tenantService.evaluateConsent(
+            request.subject(), coreScopes
+        );
 
         return Response.ok(EvaluateResponse.fromModel(response)).build();
     }
@@ -503,8 +501,7 @@ public class ConsentResource {
 
         LOG.debug("GET /consent/subjects/{}/summary", subjectId);
 
-        ConsentAdminService<?> adminService = operio.consentAdminService();
-        List<PolicySummaryEntry> entries = adminService.findPoliciesBySubject(
+        List<PolicySummaryEntry> entries = tenantService.findPoliciesBySubject(
             subjectId
         );
 
@@ -586,7 +583,6 @@ public class ConsentResource {
             purposeName
         );
 
-        ConsentAdminService<?> adminService = operio.consentAdminService();
         List<ConsentAuditEntry> entries;
 
         if (fieldName != null && !fieldName.isBlank()) {
@@ -596,9 +592,9 @@ public class ConsentResource {
                 entityName,
                 purposeName
             );
-            entries = adminService.getConsentHistory(subjectId, filterScope);
+            entries = tenantService.getConsentHistory(subjectId, filterScope);
         } else {
-            entries = adminService.getConsentHistory(subjectId);
+            entries = tenantService.getConsentHistory(subjectId);
         }
 
         List<ConsentAuditEntryDto> dtos = entries
@@ -688,11 +684,10 @@ public class ConsentResource {
         LOG.debug("GET /consent/subjects/{}/export", subjectId);
 
         try {
-            ConsentAdminService<?> adminService = operio.consentAdminService();
 
             // Fetch all consent policies for the subject
             List<PolicySummaryEntry> policies =
-                adminService.findPoliciesBySubject(subjectId);
+                tenantService.findPoliciesBySubject(subjectId);
             List<PolicySummaryDto> policyDtos = policies
                 .stream()
                 .map(PolicySummaryDto::fromModel)
@@ -700,7 +695,7 @@ public class ConsentResource {
 
             // Fetch audit trail entries for the subject
             List<ConsentAuditEntry> auditEntries =
-                adminService.getConsentHistory(subjectId);
+                tenantService.getConsentHistory(subjectId);
             List<ConsentAuditEntryDto> auditDtos = auditEntries
                 .stream()
                 .map(ConsentAuditEntryDto::fromModel)
@@ -708,12 +703,14 @@ public class ConsentResource {
 
             // Count cached Redis keys for the subject (if applicable)
             long cachedKeyCount = 0;
-            ConsentDecisionService<?> decisionService = operio.consentService();
-            if (
-                decisionService instanceof
-                    com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
-            ) {
-                cachedKeyCount = redis.countCachedKeysForSubject(subjectId);
+            if (tenantService instanceof DefaultTenantService dts) {
+                var decisionService = dts.consentService();
+                if (
+                    decisionService instanceof
+                        com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
+                ) {
+                    cachedKeyCount = redis.countCachedKeysForSubject(subjectId);
+                }
             }
 
             SubjectDataExport export = new SubjectDataExport(
@@ -846,15 +843,13 @@ public class ConsentResource {
         Instant completedAt = Instant.now();
 
         try {
-            ConsentAdminService<?> adminService = operio.consentAdminService();
-            ConsentDecisionService<?> decisionService = operio.consentService();
 
             // Step 1: Count policies BEFORE deletion, then bulk delete
             try {
-                policiesDeleted = adminService.countPoliciesBySubject(
+                policiesDeleted = tenantService.countPoliciesBySubject(
                     subjectId
                 );
-                adminService.revokeAllConsent(subjectId);
+                tenantService.revokeAllConsent(subjectId);
                 LOG.info(
                     "Deleted {} consent policies for subject: {}",
                     policiesDeleted,
@@ -871,18 +866,21 @@ public class ConsentResource {
 
             // Step 2: Delete cached keys from Redis (if applicable)
             try {
-                if (
-                    decisionService instanceof
-                        com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
-                ) {
-                    cachedKeysDeleted = redis.deleteAllCachedKeysForSubject(
-                        subjectId
-                    );
-                    LOG.info(
-                        "Deleted {} cached keys for subject: {}",
-                        cachedKeysDeleted,
-                        subjectId
-                    );
+                if (tenantService instanceof DefaultTenantService dts) {
+                    var decisionService = dts.consentService();
+                    if (
+                        decisionService instanceof
+                            com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
+                    ) {
+                        cachedKeysDeleted = redis.deleteAllCachedKeysForSubject(
+                            subjectId
+                        );
+                        LOG.info(
+                            "Deleted {} cached keys for subject: {}",
+                            cachedKeysDeleted,
+                            subjectId
+                        );
+                    }
                 }
             } catch (Exception e) {
                 LOG.error(
@@ -895,7 +893,7 @@ public class ConsentResource {
 
             // Step 3: Delete audit log entries (consent_audit_log)
             try {
-                auditEntriesDeleted = adminService.deleteAuditLogBySubject(
+                auditEntriesDeleted = tenantService.deleteAuditLogBySubject(
                     subjectId
                 );
                 LOG.info(
@@ -915,47 +913,13 @@ public class ConsentResource {
             completedAt = Instant.now();
 
             // Step 4: Log the erasure in DSAR audit table (durable forensic record)
-            try {
-                if (
-                    adminService instanceof
-                        com.koostack.operio.plugin.consent.jooq.JooqConsentAdminService jooqAdmin
-                ) {
-                    jooqAdmin
-                        .dsarAuditLogRepository()
-                        .insert(
-                            subjectId,
-                            requestId,
-                            (int) policiesDeleted,
-                            (int) cachedKeysDeleted,
-                            (int) auditEntriesDeleted,
-                            status,
-                            RequestContext.actor(),
-                            RequestContext.ipAddress(),
-                            RequestContext.userAgent(),
-                            null
-                        );
-                    LOG.info(
-                        "DSAR erasure request {} for subject {} recorded in dsar_audit_log with status {}",
-                        requestId,
-                        subjectId,
-                        status
-                    );
-                } else {
-                    LOG.info(
-                        "DSAR erasure request {} for subject {} completed with status {} (no DSAR audit log — admin service is not jOOQ-backed)",
-                        requestId,
-                        subjectId,
-                        status
-                    );
-                }
-            } catch (Exception e) {
-                LOG.error(
-                    "Failed to log DSAR erasure for subject: {}",
-                    subjectId,
-                    e
-                );
-                // Don't change status here — logging failure is not critical
-            }
+            // TODO: Wire DsarAuditLogRepository into TenantService or a dedicated DsarService
+            LOG.info(
+                "DSAR erasure request {} for subject {} completed with status {}",
+                requestId,
+                subjectId,
+                status
+            );
 
             DsarDeletionReceipt receipt = new DsarDeletionReceipt(
                 subjectId,

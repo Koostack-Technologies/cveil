@@ -48,7 +48,7 @@ class JooqExpirationSweeperServiceTest {
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(0, result);
-            verify(commandService, never()).revokeConsent(any(), any());
+            verify(commandService, never()).revokeConsentCommand(any(), any());
         }
 
         @Test
@@ -64,7 +64,7 @@ class JooqExpirationSweeperServiceTest {
 
             assertEquals(1, result);
             var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsent(eq("alice"), scopeCaptor.capture());
+            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
 
             ConsentScope revokedScope = scopeCaptor.getValue();
             assertTrue(revokedScope.isFieldScoped());
@@ -86,7 +86,7 @@ class JooqExpirationSweeperServiceTest {
 
             assertEquals(1, result);
             var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsent(eq("bob"), scopeCaptor.capture());
+            verify(commandService).revokeConsentCommand(eq("bob"), scopeCaptor.capture());
 
             ConsentScope revokedScope = scopeCaptor.getValue();
             assertTrue(revokedScope.isCategoryScoped());
@@ -110,7 +110,7 @@ class JooqExpirationSweeperServiceTest {
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(2, result);
-            verify(commandService, times(2)).revokeConsent(any(), any());
+            verify(commandService, times(2)).revokeConsentCommand(any(), any());
         }
 
         @Test
@@ -129,12 +129,12 @@ class JooqExpirationSweeperServiceTest {
             // First revoke throws, second succeeds
             doThrow(new RuntimeException("transient error"))
                 .doNothing()
-                .when(commandService).revokeConsent(any(), any());
+                .when(commandService).revokeConsentCommand(any(), any());
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(1, result); // only second succeeded
-            verify(commandService, times(2)).revokeConsent(any(), any());
+            verify(commandService, times(2)).revokeConsentCommand(any(), any());
         }
 
         @Test
@@ -150,7 +150,7 @@ class JooqExpirationSweeperServiceTest {
 
             assertEquals(1, result);
             var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsent(eq("alice"), scopeCaptor.capture());
+            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
 
             ConsentScope scope = scopeCaptor.getValue();
             assertTrue(scope.isFieldScoped());
@@ -171,7 +171,7 @@ class JooqExpirationSweeperServiceTest {
 
             assertEquals(1, result);
             var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsent(eq("alice"), scopeCaptor.capture());
+            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
 
             ConsentScope scope = scopeCaptor.getValue();
             assertTrue(scope.isFieldScoped());

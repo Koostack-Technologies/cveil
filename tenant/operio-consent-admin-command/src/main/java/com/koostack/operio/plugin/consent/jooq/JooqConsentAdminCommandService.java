@@ -8,9 +8,6 @@ import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
 import com.koostack.operio.core.tenant.consent.events.*;
-import com.koostack.operio.core.tenant.consent.hydration.CategoryHydrationRepository;
-import com.koostack.operio.core.tenant.consent.hydration.EntityHydrationRepository;
-import com.koostack.operio.core.tenant.consent.hydration.PurposeHydrationRepository;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
@@ -40,9 +37,6 @@ public class JooqConsentAdminCommandService
     );
 
     private EventService<?> eventService;
-    private EntityHydrationRepository entityHydrationRepo;
-    private CategoryHydrationRepository categoryHydrationRepo;
-    private PurposeHydrationRepository purposeHydrationRepo;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -66,9 +60,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void configure(ConsentAdminCommandConfig config) {
         this.eventService = config.eventService();
-        this.entityHydrationRepo = config.entityHydrationRepo();
-        this.categoryHydrationRepo = config.categoryHydrationRepo();
-        this.purposeHydrationRepo = config.purposeHydrationRepo();
         registerEventTypes();
         LOG.info("JooqConsentAdminCommandService configured (event-sourced)");
     }
@@ -83,23 +74,22 @@ public class JooqConsentAdminCommandService
     // -----------------------------------------------------------------------
 
     @Override
-    public void grantConsent(String subject, ConsentScope accessRequest) {
-        grantConsent(subject, accessRequest, null);
+    public void grantConsentCommand(String subject, ConsentScope accessRequest) {
+        grantConsentCommand(subject, accessRequest, null);
     }
 
     @Override
-    public void revokeConsent(String subject, ConsentScope accessRequest) {
-        revokeConsent(subject, accessRequest, null);
+    public void revokeConsentCommand(String subject, ConsentScope accessRequest) {
+        revokeConsentCommand(subject, accessRequest, null);
     }
 
     @Override
-    public void grantConsent(
+    public void grantConsentCommand(
         String subject,
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
         String tenantId = TenantContext.require();
-        ensureReferencedEntitiesExist(accessRequest);
 
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyGrantedEvent(
@@ -116,13 +106,12 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void revokeConsent(
+    public void revokeConsentCommand(
         String subject,
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
         String tenantId = TenantContext.require();
-        ensureReferencedEntitiesExist(accessRequest);
 
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyRevokedEvent(
@@ -139,7 +128,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void revokeAllConsent(String subject) {
+    public void revokeAllConsentCommand(String subject) {
         String tenantId = TenantContext.require();
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyAllRevokedEvent(subject);
@@ -149,7 +138,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public int deleteAuditLogBySubject(String subject) {
+    public int deleteAuditLogBySubjectCommand(String subject) {
         String tenantId = TenantContext.require();
         UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
         var payload = new PolicyAuditDeletedEvent(subject);
@@ -167,7 +156,7 @@ public class JooqConsentAdminCommandService
     // -----------------------------------------------------------------------
 
     @Override
-    public void registerField(
+    public void registerFieldCommand(
         String fieldName,
         String entityName,
         String description
@@ -181,7 +170,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void registerCategory(String categoryName, String description) {
+    public void registerCategoryCommand(String categoryName, String description) {
         String tenantId = TenantContext.require();
         UUID aggregateId = CategoryAggregate.deriveId(categoryName);
         var payload = new CategoryRegisteredEvent(categoryName, description);
@@ -190,7 +179,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void linkFieldToCategory(
+    public void linkFieldToCategoryCommand(
         String fieldName,
         String entityName,
         String categoryName
@@ -208,7 +197,7 @@ public class JooqConsentAdminCommandService
     // -----------------------------------------------------------------------
 
     @Override
-    public void registerPurpose(String purposeName, String description) {
+    public void registerPurposeCommand(String purposeName, String description) {
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
         var payload = new PurposeRegisteredEvent(purposeName, description);
@@ -217,7 +206,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void registerRegulation(
+    public void registerRegulationCommand(
         String regulationName,
         String fullName,
         String jurisdiction,
@@ -234,7 +223,7 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void linkPurposeToRegulation(
+    public void linkPurposeToRegulationCommand(
         String purposeName,
         String regulationName,
         String legalBasis
@@ -244,67 +233,6 @@ public class JooqConsentAdminCommandService
         var payload = new PurposeRegulationLinkedEvent(purposeName, regulationName, legalBasis);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    // -----------------------------------------------------------------------
-    // Internal — validation + auto-create
-    // -----------------------------------------------------------------------
-
-    /**
-     * Validates that all entities referenced by the consent scope exist,
-     * auto-creating them if they don't. Skipped when hydration repos are
-     * not configured (backward-compatible). Wildcard and null values are
-     * silently skipped — they represent "all" rather than a specific entity.
-     */
-    private void ensureReferencedEntitiesExist(ConsentScope accessRequest) {
-        ensurePurposeExists(accessRequest.purposeName());
-        if (accessRequest.isCategoryScoped()) {
-            ensureCategoryExists(accessRequest.category());
-        }
-        if (accessRequest.isFieldScoped()) {
-            ensureEntityAndFieldExist(accessRequest.entityName(), accessRequest.fieldName());
-        }
-    }
-
-    private static boolean isWildcardOrBlank(String value) {
-        return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
-    }
-
-    private void ensurePurposeExists(String purposeName) {
-        if (isWildcardOrBlank(purposeName)) return;
-        PurposeAggregate existing = purposeHydrationRepo.findByName(purposeName);
-        if (existing == null || existing.purposeName() == null) {
-            LOG.info("Auto-creating purpose '{}' referenced by consent grant/revoke", purposeName);
-            registerPurpose(purposeName, null);
-        }
-    }
-
-    private void ensureCategoryExists(String categoryName) {
-        if (isWildcardOrBlank(categoryName)) return;
-        CategoryAggregate existing = categoryHydrationRepo.findByName(categoryName);
-        if (existing == null || existing.categoryName() == null) {
-            LOG.info("Auto-creating category '{}' referenced by consent grant/revoke", categoryName);
-            registerCategory(categoryName, null);
-        }
-    }
-
-    private void ensureEntityAndFieldExist(String entityName, String fieldName) {
-        if (isWildcardOrBlank(fieldName)) return;
-        if (isWildcardOrBlank(entityName)) return;
-        EntityAggregate existing = entityHydrationRepo.findByName(entityName);
-        if (existing == null || existing.entityName() == null) {
-            LOG.info("Auto-creating entity '{}' and field '{}' referenced by consent grant/revoke",
-                entityName, fieldName);
-            registerField(fieldName, entityName, null);
-        } else {
-            boolean fieldExists = existing.fields().stream()
-                .anyMatch(f -> fieldName.equals(f.fieldName()));
-            if (!fieldExists) {
-                LOG.info("Auto-creating field '{}' on entity '{}' referenced by consent grant/revoke",
-                    fieldName, entityName);
-                registerField(fieldName, entityName, null);
-            }
-        }
     }
 
     // -----------------------------------------------------------------------

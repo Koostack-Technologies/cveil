@@ -101,6 +101,9 @@ public class CoreConsentBundle implements PluginBundle {
 
     private final String appName;
     private final JooqConsentAdminServiceConfig jooqConfig;
+
+    /** Returns the jOOQ config for the command/query service wiring. */
+    public JooqConsentAdminServiceConfig jooqConfig() { return jooqConfig; }
     private final RedisConsentDecisionServiceConfig redisConfig;
     private final JedisProvider jedisProvider;
     private final AnnotationDiscoveryConfig discoveryConfig;
@@ -306,12 +309,6 @@ public class CoreConsentBundle implements PluginBundle {
             // Read-path: Redis evaluation (single-MGET)
             builder.withConsentProvider("redis", redisConfig);
         }
-
-        // Standalone admin provider for schema registration (discovery
-        // pipeline). This is a separate instance from the one embedded in
-        // the sync service, sharing the same DB config so both point at
-        // the same relational schema.
-        builder.withConsentAdminProvider("jooq", jooqConfig);
 
         // Optional: annotation-based discovery
         if (discoveryConfig != null) {

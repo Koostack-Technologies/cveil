@@ -4,7 +4,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -104,7 +104,7 @@ class ProductionStackIT {
     // -----------------------------------------------------------------------
 
     @Inject
-    Operio operio;
+    TenantService tenantService;
 
     @Inject
     OperioConfig config;
@@ -146,10 +146,10 @@ class ProductionStackIT {
         @Order(2)
         @DisplayName("Operio bean is injected (production mode)")
         void operioInjected() {
-            assertNotNull(operio, "Operio bean must be injected");
+            assertNotNull(tenantService, "TenantService bean must be injected");
             assertEquals(
                 "operio-integration-test",
-                operio.appName(),
+                tenantService.appName(),
                 "App name should match test application.yml"
             );
         }

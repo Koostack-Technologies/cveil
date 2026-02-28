@@ -4,7 +4,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -110,7 +110,7 @@ class RedisTenantAclIsolationIT {
     private static volatile String redisAdminPassword; // may be null (no-auth)
 
     @Inject
-    Operio operio;
+    TenantService tenantService;
 
     @Inject
     OperioConfig config;

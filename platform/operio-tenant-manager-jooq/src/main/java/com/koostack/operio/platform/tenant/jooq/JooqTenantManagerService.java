@@ -56,6 +56,7 @@ public class JooqTenantManagerService
     private RedisPluginConfig redisConfig;
     private volatile String appName;
     private String consentMigrationLocation;
+    private String metricsMigrationLocation;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -87,6 +88,7 @@ public class JooqTenantManagerService
             config.consentMigrationLocation() != null
                 ? config.consentMigrationLocation()
                 : "classpath:db/migration/consent";
+        this.metricsMigrationLocation = config.metricsMigrationLocation();
         log.info("JooqTenantManagerService configured");
     }
 
@@ -196,6 +198,28 @@ public class JooqTenantManagerService
                     "Failed to provision Redis ACL user for tenant '{}'. " +
                         "Schema was created successfully — Redis ACL can be retried.",
                     tenantId, e
+                );
+            }
+        }
+
+        // 4. Provision tenant metrics schema (if metrics migration is configured)
+        if (metricsMigrationLocation != null) {
+            String metricsSchema = schemaName + "_metrics";
+            try {
+                platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
+                Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas(metricsSchema)
+                    .defaultSchema(metricsSchema)
+                    .locations(metricsMigrationLocation)
+                    .load()
+                    .migrate();
+                log.debug("Applied metrics migrations to schema '{}'", metricsSchema);
+            } catch (Exception e) {
+                log.warn(
+                    "Failed to provision metrics schema '{}' for tenant '{}'. " +
+                        "Core schema was created successfully — metrics can be retried.",
+                    metricsSchema, tenantId, e
                 );
             }
         }
@@ -371,6 +395,20 @@ public class JooqTenantManagerService
             }
         }
 
+        // Drop tenant metrics schema
+        if (metricsMigrationLocation != null) {
+            String metricsSchema = schemaName + "_metrics";
+            try {
+                platformDsl.execute(
+                    "DROP SCHEMA IF EXISTS " + metricsSchema + " CASCADE"
+                );
+                log.debug("Dropped metrics schema '{}'", metricsSchema);
+            } catch (Exception e) {
+                log.warn("Failed to drop metrics schema '{}' for tenant '{}' — can be retried",
+                    metricsSchema, tenantId, e);
+            }
+        }
+
         log.info("Tenant '{}' infrastructure torn down", tenantId);
     }
 
@@ -404,6 +442,26 @@ public class JooqTenantManagerService
             } catch (Exception e) {
                 log.error("Failed to migrate tenant '{}' schema '{}': {}",
                     tenant.getTenantId(), schemaName, e.getMessage(), e);
+            }
+
+            // Migrate tenant metrics schema
+            if (metricsMigrationLocation != null) {
+                String metricsSchema = schemaName + "_metrics";
+                try {
+                    platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
+                    Flyway.configure()
+                        .dataSource(dataSource)
+                        .schemas(metricsSchema)
+                        .defaultSchema(metricsSchema)
+                        .locations(metricsMigrationLocation)
+                        .load()
+                        .migrate();
+                    log.debug("Migrated tenant '{}' metrics schema '{}'",
+                        tenant.getTenantId(), metricsSchema);
+                } catch (Exception e) {
+                    log.error("Failed to migrate tenant '{}' metrics schema '{}': {}",
+                        tenant.getTenantId(), metricsSchema, e.getMessage(), e);
+                }
             }
         }
 

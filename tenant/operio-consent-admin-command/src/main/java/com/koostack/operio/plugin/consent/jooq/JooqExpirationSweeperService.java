@@ -57,7 +57,7 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
         for (PolicySummaryEntry policy : expired) {
             try {
                 ConsentScope scope = buildScope(policy);
-                commandService.revokeConsent(policy.subject(), scope);
+                commandService.revokeConsentCommand(policy.subject(), scope);
                 revoked++;
             } catch (Exception e) {
                 LOG.warn("Failed to revoke expired policy for subject={}, purpose={}",

@@ -1,17 +1,9 @@
 package com.koostack.operio.core;
 
-import com.koostack.operio.core.models.BatchConsentEntry;
-import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.BatchConsentResult.BatchItemError;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.DiscoveredField;
-import com.koostack.operio.core.models.DiscoveryResult;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.registry.PluginRegistry;
 import com.koostack.operio.core.service.AuditLogger;
-import com.koostack.operio.core.service.ConsentAdminService;
 import com.koostack.operio.core.service.ConsentDecisionService;
-import com.koostack.operio.core.service.ConsentSyncService;
 import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.PlatformAdminService;
@@ -21,42 +13,24 @@ import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.spi.Plugin;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.core.spi.PluginConfig;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
 /**
- * Primary entry point to the Operio consent management API.
+ * Abstract base class for Operio application services.
  *
- * <p>Provides both the <strong>read path</strong> (consent evaluation +
- * data masking via {@link #access(Object)}) and the <strong>write path</strong>
- * (granting / revoking consent via {@link #grantConsent} and
- * {@link #revokeConsent}).
- *
- * <h2>Write-Path Routing</h2>
- * <p>When a {@link ConsentSyncService} is configured it is preferred for all
- * consent writes because it coordinates a dual-write to both the relational
- * store and the cache layer. If only a {@link ConsentAdminService} is present,
- * writes go directly to the relational store. If neither is configured the
- * write methods throw {@link OperioConfigurationException}.
+ * <p>Provides the {@link Builder} and plugin-wiring infrastructure shared
+ * by all concrete service implementations ({@link TenantService},
+ * {@link PlatformService}). Manages plugin lifecycle, namespacing, and
+ * health checks.
  *
  * <h2>Construction</h2>
  * <p>Use {@link #builder()} to obtain a {@link Builder}, wire up the desired
- * providers, then call {@link Builder#build()}.
- *
- * <pre>{@code
- * Operio operio = Operio.builder()
- *     .withConsentProvider("redis")
- *     .withConsentSyncProvider("consent-sync", syncConfig)
- *     .withIdentityProvider("http")
- *     .withAuditProvider("slf4j")
- *     .withMaskingProvider("jackson")
- *     .withSensitiveFieldResolver("annotation")
- *     .build();
- * }</pre>
+ * providers, then call {@link Builder#build()} to obtain a concrete
+ * service implementation (typically via a bundle).
  */
-public class Operio {
+public abstract class Operio implements OperioService {
 
     private static final Logger LOG = Logger.getLogger(Operio.class.getName());
 
@@ -73,10 +47,6 @@ public class Operio {
     private final MaskingStrategy<?> maskingStrategy;
     private final SensitiveFieldResolver<?> sensitiveFieldResolver;
 
-    // -- Write-path plugins ---------------------------------------------------
-    private final ConsentAdminService<?> consentAdminService;
-    private final ConsentSyncService<?> consentSyncService;
-
     // -- Platform plugins -----------------------------------------------------
     private final TokenValidationService<?> tokenValidationService;
     private final PlatformAdminService<?> platformAdminService;
@@ -84,7 +54,7 @@ public class Operio {
     // -- Discovery plugins ----------------------------------------------------
     private final SensitiveDiscovery<?> sensitiveDiscovery;
 
-    public Operio(Builder builder) {
+    protected Operio(Builder builder) {
         this.appName =
             builder.appName != null ? builder.appName : DEFAULT_APP_NAME;
         this.consentService = builder.consentService;
@@ -92,16 +62,12 @@ public class Operio {
         this.auditLogger = builder.auditLogger;
         this.maskingStrategy = builder.maskingStrategy;
         this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
-        this.consentAdminService = builder.consentAdminService;
-        this.consentSyncService = builder.consentSyncService;
         this.tokenValidationService = builder.tokenValidationService;
         this.platformAdminService = builder.platformAdminService;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
         // Propagate appName to any service that supports namespacing
         propagateAppName(consentService);
-        propagateAppName(consentAdminService);
-        propagateAppName(consentSyncService);
         propagateAppName(platformAdminService);
     }
 
@@ -141,235 +107,27 @@ public class Operio {
     }
 
     // =======================================================================
-    // Read path
+    // OperioService
     // =======================================================================
 
-    /**
-     * High-level method to handle a data access request.
-     *
-     * <p>Resolves the caller's identity, discovers which fields in
-     * {@code rawData} are sensitive, evaluates consent for each field,
-     * logs the outcome, and returns a masked copy of the data with denied
-     * fields redacted.
-     *
-     * @param rawData the data object to govern
-     * @return a masked copy of the data with denied fields redacted
-     */
-    public Object access(Object rawData) {
-        var identity = identityResolver.resolve();
-        var scopes = sensitiveFieldResolver.resolveScopes(rawData);
-        var response = consentService.evaluateConsent(
-            identity.subject(),
-            scopes
-        );
-        for (ConsentScope scope : response.granted()) {
-            auditLogger.logAccessGranted(identity.subject(), scope);
-        }
-        for (ConsentScope scope : response.denied()) {
-            auditLogger.logAccessDenied(
-                identity.subject(),
-                scope,
-                response.reasons().get(scope.fieldName())
-            );
-        }
-        return maskingStrategy.mask(rawData, response.denied());
-    }
-
-    // =======================================================================
-    // Write path — grant
-    // =======================================================================
-
-    /**
-     * Grants consent for the given subject and scope.
-     *
-     * <p>If a {@link ConsentSyncService} is configured the grant is
-     * dual-written (relational DB + cache). Otherwise the
-     * {@link ConsentAdminService} is used for a DB-only write.
-     *
-     * @param subject the data subject identifier
-     * @param scope   the consent scope (field-level or category-level)
-     * @throws OperioConfigurationException if neither a sync service nor an admin
-     *                                      service is configured
-     */
-    public void grantConsent(String subject, ConsentScope scope) {
-        grantConsent(subject, scope, null);
-    }
-
-    /**
-     * Grants consent with an expiration timestamp.
-     *
-     * @param subject   the data subject identifier
-     * @param scope     the consent scope (field-level or category-level)
-     * @param expiresAt when this consent grant expires, or {@code null}
-     *                  for no expiration
-     * @throws OperioConfigurationException if neither a sync service nor an admin
-     *                                      service is configured
-     */
-    public void grantConsent(
-        String subject,
-        ConsentScope scope,
-        Instant expiresAt
-    ) {
-        if (consentSyncService != null) {
-            consentSyncService.syncGrant(subject, scope, expiresAt);
-        } else if (consentAdminService != null) {
-            consentAdminService.grantConsent(subject, scope, expiresAt);
-        } else {
-            throw new OperioConfigurationException(
-                "No consent write provider configured. " +
-                    "Register a ConsentSyncService (dual-write) or a " +
-                    "ConsentAdminService (DB-only) via the builder."
-            );
-        }
-    }
-
-    // =======================================================================
-    // Write path — revoke
-    // =======================================================================
-
-    /**
-     * Revokes consent for the given subject and scope.
-     *
-     * <p>If a {@link ConsentSyncService} is configured the revocation is
-     * dual-written (relational DB + cache). Otherwise the
-     * {@link ConsentAdminService} is used for a DB-only write.
-     *
-     * @param subject the data subject identifier
-     * @param scope   the consent scope (field-level or category-level)
-     * @throws OperioConfigurationException if neither a sync service nor an admin
-     *                                      service is configured
-     */
-    public void revokeConsent(String subject, ConsentScope scope) {
-        revokeConsent(subject, scope, null);
-    }
-
-    /**
-     * Revokes consent with an expiration timestamp.
-     *
-     * @param subject   the data subject identifier
-     * @param scope     the consent scope (field-level or category-level)
-     * @param expiresAt when this consent revocation expires, or {@code null}
-     *                  for no expiration
-     * @throws OperioConfigurationException if neither a sync service nor an admin
-     *                                      service is configured
-     */
-    public void revokeConsent(
-        String subject,
-        ConsentScope scope,
-        Instant expiresAt
-    ) {
-        if (consentSyncService != null) {
-            consentSyncService.syncRevoke(subject, scope, expiresAt);
-        } else if (consentAdminService != null) {
-            consentAdminService.revokeConsent(subject, scope, expiresAt);
-        } else {
-            throw new OperioConfigurationException(
-                "No consent write provider configured. " +
-                    "Register a ConsentSyncService (dual-write) or a " +
-                    "ConsentAdminService (DB-only) via the builder."
-            );
-        }
-    }
-
-    // =======================================================================
-    // Write path — batch grant
-    // =======================================================================
-
-    /**
-     * Grants consent for multiple scopes in a single call.
-     *
-     * <p>Each grant is atomic individually — partial success is possible.
-     * Failed items are caught and collected; the batch continues processing
-     * remaining items. This is <em>not</em> a DB transaction wrapping all
-     * items; each item is independently atomic.
-     *
-     * <p>Each item delegates to the same {@link #grantConsent} path (sync
-     * service if configured, else admin).
-     *
-     * @param subject the data subject identifier
-     * @param entries the list of scopes (with optional expiration) to grant
-     * @return a result summarising successes, failures, and per-item errors
-     */
-    public BatchConsentResult grantConsentBatch(
-        String subject,
-        List<BatchConsentEntry> entries
-    ) {
-        int succeeded = 0;
-        List<BatchItemError> errors = new ArrayList<>();
-
-        for (int i = 0; i < entries.size(); i++) {
-            BatchConsentEntry entry = entries.get(i);
-            try {
-                grantConsent(subject, entry.scope(), entry.expiresAt());
-                succeeded++;
-            } catch (Exception e) {
-                errors.add(
-                    new BatchItemError(i, entry.scope(), e.getMessage())
-                );
-            }
-        }
-
-        return new BatchConsentResult(
-            succeeded,
-            errors.size(),
-            List.copyOf(errors)
-        );
-    }
-
-    // =======================================================================
-    // Write path — batch revoke
-    // =======================================================================
-
-    /**
-     * Revokes consent for multiple scopes in a single call.
-     *
-     * <p>Same semantics as {@link #grantConsentBatch} — each revocation is
-     * independently atomic, partial success is possible, and failed items
-     * are collected in the result.
-     *
-     * @param subject the data subject identifier
-     * @param entries the list of scopes (with optional expiration) to revoke
-     * @return a result summarising successes, failures, and per-item errors
-     */
-    public BatchConsentResult revokeConsentBatch(
-        String subject,
-        List<BatchConsentEntry> entries
-    ) {
-        int succeeded = 0;
-        List<BatchItemError> errors = new ArrayList<>();
-
-        for (int i = 0; i < entries.size(); i++) {
-            BatchConsentEntry entry = entries.get(i);
-            try {
-                revokeConsent(subject, entry.scope(), entry.expiresAt());
-                succeeded++;
-            } catch (Exception e) {
-                errors.add(
-                    new BatchItemError(i, entry.scope(), e.getMessage())
-                );
-            }
-        }
-
-        return new BatchConsentResult(
-            succeeded,
-            errors.size(),
-            List.copyOf(errors)
-        );
-    }
-
-    // =======================================================================
-    // Accessors
-    // =======================================================================
-
-    /**
-     * Returns the application name that namespaces all entities, fields,
-     * and Redis keys managed by this instance.
-     *
-     * @return the application name, never {@code null}
-     */
+    @Override
     public String appName() {
         return appName;
     }
+
+    @Override
+    public boolean isReady() {
+        try {
+            verifyReady();
+            return true;
+        } catch (OperioConfigurationException e) {
+            return false;
+        }
+    }
+
+    // =======================================================================
+    // Accessors — read-path plugins
+    // =======================================================================
 
     /**
      * Returns the configured {@link SensitiveDiscovery}, or {@code null}
@@ -385,22 +143,6 @@ public class Operio {
      */
     public ConsentDecisionService<?> consentService() {
         return consentService;
-    }
-
-    /**
-     * Returns the configured {@link ConsentAdminService}, or {@code null}
-     * if none was registered.
-     */
-    public ConsentAdminService<?> consentAdminService() {
-        return consentAdminService;
-    }
-
-    /**
-     * Returns the configured {@link ConsentSyncService}, or {@code null}
-     * if none was registered.
-     */
-    public ConsentSyncService<?> consentSyncService() {
-        return consentSyncService;
     }
 
     /**
@@ -422,9 +164,6 @@ public class Operio {
     /**
      * Returns the configured {@link IdentityResolver}, or {@code null}
      * if none was registered.
-     *
-     * <p>Used by the Spring Boot starter's AOP aspects to resolve the
-     * current subject's identity for annotation-driven consent checks.
      */
     public IdentityResolver<?> identityResolver() {
         return identityResolver;
@@ -433,9 +172,6 @@ public class Operio {
     /**
      * Returns the configured {@link MaskingStrategy}, or {@code null}
      * if none was registered.
-     *
-     * <p>Used by the Spring Boot starter's {@code @Sensitive} aspect to
-     * mask return values when consent has not been granted.
      */
     public MaskingStrategy<?> maskingStrategy() {
         return maskingStrategy;
@@ -444,125 +180,17 @@ public class Operio {
     /**
      * Returns the configured {@link AuditLogger}, or {@code null}
      * if none was registered.
-     *
-     * <p>Used by the Spring Boot starter's AOP aspects to log consent
-     * evaluation outcomes (granted / denied) for each intercepted call.
      */
     public AuditLogger<?> auditLogger() {
         return auditLogger;
     }
 
     /**
-     * Returns {@code true} if a consent write provider (sync or admin) is
-     * available.
+     * Returns the configured {@link SensitiveFieldResolver}, or {@code null}
+     * if none was registered.
      */
-    public boolean hasConsentWriteProvider() {
-        return consentSyncService != null || consentAdminService != null;
-    }
-
-    // =======================================================================
-    // Discovery → Registration pipeline
-    // =======================================================================
-
-    /**
-     * Runs the configured {@link SensitiveDiscovery} plugin to scan for
-     * sensitive fields and categories, then registers every discovered item
-     * into the consent admin schema via the configured
-     * {@link ConsentAdminService}.
-     *
-     * <p>This method orchestrates the full pipeline:
-     * <ol>
-     *   <li>Calls {@link SensitiveDiscovery#discover()} to obtain a
-     *       {@link DiscoveryResult}.</li>
-     *   <li>Registers each discovered category via
-     *       {@link ConsentAdminService#registerCategory}.</li>
-     *   <li>Registers each discovered field via
-     *       {@link ConsentAdminService#registerField}.</li>
-     *   <li>Links each field to its category (when present) via
-     *       {@link ConsentAdminService#linkFieldToCategory}.</li>
-     * </ol>
-     *
-     * <p>All registration methods use <strong>upsert / idempotent</strong>
-     * semantics, so calling this method multiple times is safe — existing
-     * rows are updated rather than duplicated.
-     *
-     * @return the {@link DiscoveryResult} that was discovered and registered
-     * @throws OperioConfigurationException if no {@code SensitiveDiscovery}
-     *         or no {@code ConsentAdminService} is configured
-     */
-    public DiscoveryResult syncDiscoveredFields() {
-        if (sensitiveDiscovery == null) {
-            throw new OperioConfigurationException(
-                "No SensitiveDiscovery plugin configured. Wire one via " +
-                    "withSensitiveDiscovery() on the builder."
-            );
-        }
-
-        // Resolve the admin service — prefer the sync service's embedded
-        // admin (if it exposes one in the future), otherwise fall back to
-        // the directly wired admin service.
-        ConsentAdminService<?> admin = consentAdminService;
-        if (admin == null) {
-            throw new OperioConfigurationException(
-                "No ConsentAdminService configured. Schema registration " +
-                    "requires a consent admin provider (e.g. jOOQ)."
-            );
-        }
-
-        // 1. Discover
-        DiscoveryResult result = sensitiveDiscovery.discover();
-        LOG.info(
-            () ->
-                "SensitiveDiscovery found " +
-                result.fields().size() +
-                " field(s) and " +
-                result.categories().size() +
-                " category/ies"
-        );
-
-        // 2. Register categories first (fields may reference them)
-        for (String category : result.categories()) {
-            admin.registerCategory(category, null);
-            LOG.fine(() -> "Registered category: " + category);
-        }
-
-        // 3. Register fields (upserts entity if entityName is present)
-        for (DiscoveredField field : result.fields()) {
-            admin.registerField(
-                field.fieldName(),
-                field.entityName(),
-                field.description()
-            );
-            LOG.fine(
-                () ->
-                    "Registered field: " +
-                    field.fieldName() +
-                    " (entity=" +
-                    field.entityName() +
-                    ")"
-            );
-        }
-
-        // 4. Link fields to categories
-        for (DiscoveredField field : result.fields()) {
-            if (field.category() != null && !field.category().isBlank()) {
-                admin.linkFieldToCategory(
-                    field.fieldName(),
-                    field.entityName(),
-                    field.category()
-                );
-                LOG.fine(
-                    () ->
-                        "Linked field '" +
-                        field.fieldName() +
-                        "' → category '" +
-                        field.category() +
-                        "'"
-                );
-            }
-        }
-
-        return result;
+    public SensitiveFieldResolver<?> sensitiveFieldResolver() {
+        return sensitiveFieldResolver;
     }
 
     // =======================================================================
@@ -572,19 +200,12 @@ public class Operio {
     /**
      * Verifies that all configured plugins are ready.
      *
-     * <p>Calls {@link Plugin#isReady()} on every registered plugin and throws
-     * {@link OperioConfigurationException} if any returns {@code false}.
-     * Intended to be called at application startup (e.g. in a Spring
-     * {@code @PostConstruct} or health-check endpoint).
-     *
-     * @throws OperioConfigurationException if any plugin is not ready, with a
-     *         message listing the failing plugin names
+     * @throws OperioConfigurationException if any plugin is not ready
      */
+    @Override
     public void verifyReady() {
         List<String> notReady = new ArrayList<>();
         checkReady(consentService, notReady);
-        checkReady(consentAdminService, notReady);
-        checkReady(consentSyncService, notReady);
         checkReady(identityResolver, notReady);
         checkReady(auditLogger, notReady);
         checkReady(maskingStrategy, notReady);
@@ -620,10 +241,6 @@ public class Operio {
         private MaskingStrategy<?> maskingStrategy;
         private SensitiveFieldResolver<?> sensitiveFieldResolver;
 
-        // -- Write-path -------------------------------------------------------
-        private ConsentAdminService<?> consentAdminService;
-        private ConsentSyncService<?> consentSyncService;
-
         // -- Platform ---------------------------------------------------------
         private TokenValidationService<?> tokenValidationService;
         private PlatformAdminService<?> platformAdminService;
@@ -634,12 +251,25 @@ public class Operio {
         // -- Health check -----------------------------------------------------
         private boolean verifyOnBuild = false;
 
-        public Operio build() {
-            Operio operio = new Operio(this);
+        /** Returns this builder's appName (used by subclass build methods). */
+        public String appName() { return appName; }
+
+        /**
+         * Builds a {@link DefaultTenantService} from this builder's configuration.
+         *
+         * @param commandService the consent admin command service
+         * @param queryService   the consent admin query service
+         * @return a fully-wired DefaultTenantService
+         */
+        public DefaultTenantService buildTenantService(
+            com.koostack.operio.core.tenant.consent.ConsentAdminCommandService<?> commandService,
+            com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> queryService
+        ) {
+            DefaultTenantService service = new DefaultTenantService(this, commandService, queryService);
             if (verifyOnBuild) {
-                operio.verifyReady();
+                service.verifyReady();
             }
-            return operio;
+            return service;
         }
 
         /**
@@ -803,109 +433,6 @@ public class Operio {
                 name,
                 config
             );
-            return this;
-        }
-
-        // -- Write-path wiring ------------------------------------------------
-
-        /**
-         * Resolves a {@link ConsentAdminService} by name via
-         * {@link PluginRegistry} (no configuration).
-         *
-         * <p>Used for DB-only consent writes. If a
-         * {@link ConsentSyncService} is also registered it takes precedence
-         * for write operations.
-         */
-        public Builder withConsentAdminProvider(String name) {
-            this.consentAdminService = PluginRegistry.resolve(
-                ConsentAdminService.class,
-                name
-            );
-            return this;
-        }
-
-        /**
-         * Resolves and configures a {@link ConsentAdminService} by name.
-         */
-        public <C extends PluginConfig> Builder withConsentAdminProvider(
-            String name,
-            C config
-        ) {
-            this.consentAdminService = PluginRegistry.resolve(
-                ConsentAdminService.class,
-                name,
-                config
-            );
-            return this;
-        }
-
-        /**
-         * Registers a pre-built {@link ConsentAdminService} instance.
-         *
-         * <p>This overload bypasses the {@link PluginRegistry} and uses the
-         * given instance directly. It is intended for bundles that construct
-         * the admin service internally and need to share the same instance
-         * with a sync service (e.g. the embedded bundle shares a single
-         * jOOQ admin between the sync layer and the schema-registration
-         * path).
-         *
-         * @param service the pre-built consent admin service
-         * @return this builder
-         */
-        public Builder withConsentAdminProvider(
-            ConsentAdminService<?> service
-        ) {
-            this.consentAdminService = service;
-            return this;
-        }
-
-        /**
-         * Resolves a {@link ConsentSyncService} by name via
-         * {@link PluginRegistry} (no configuration).
-         *
-         * <p>Used for dual-write consent operations (relational DB + cache).
-         * When registered, this service takes precedence over any
-         * {@link ConsentAdminService} for write operations.
-         */
-        public Builder withConsentSyncProvider(String name) {
-            this.consentSyncService = PluginRegistry.resolve(
-                ConsentSyncService.class,
-                name
-            );
-            return this;
-        }
-
-        /**
-         * Resolves and configures a {@link ConsentSyncService} by name.
-         */
-        public <C extends PluginConfig> Builder withConsentSyncProvider(
-            String name,
-            C config
-        ) {
-            this.consentSyncService = PluginRegistry.resolve(
-                ConsentSyncService.class,
-                name,
-                config
-            );
-            return this;
-        }
-
-        /**
-         * Registers a pre-built {@link ConsentSyncService} instance.
-         *
-         * <p>This overload bypasses the {@link PluginRegistry} and uses the
-         * given instance directly. It is intended for bundles that
-         * construct the sync service internally and extract its child
-         * services (admin, decision) for shared wiring — for example, the
-         * embedded bundle creates the sync service first and then reuses
-         * its internal jOOQ admin and Caffeine decision service instances
-         * as the builder's admin and consent providers.
-         *
-         * @param service the pre-built consent sync service
-         * @return this builder
-         */
-        public Builder withConsentSyncProvider(ConsentSyncService<?> service) {
-            this.consentSyncService = service;
             return this;
         }
 

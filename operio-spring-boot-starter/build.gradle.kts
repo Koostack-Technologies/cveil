@@ -55,5 +55,6 @@ dependencies {
     //   operio-bundle-embedded  → H2 + Caffeine  (dev / testing default)
     //   operio-bundle-core      → Postgres + Redis (production)
     compileOnly(project(":operio-bundle-core"))
-    compileOnly(project(":operio-bundle-embedded"))
+    // TODO: re-enable once operio-consent-sync-embedded is fixed
+    // compileOnly(project(":operio-bundle-embedded"))
 }

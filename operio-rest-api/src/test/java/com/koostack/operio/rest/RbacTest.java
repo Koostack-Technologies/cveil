@@ -6,10 +6,8 @@ import static org.mockito.Mockito.*;
 import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.ConsentAdminService;
-import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
@@ -455,24 +453,18 @@ class RbacTest {
     class ConsentResourceRbac {
 
         private ConsentResource resource;
-        private Operio operio;
-        private ConsentDecisionService<?> consentService;
-        private ConsentAdminService<?> consentAdminService;
+        private TenantService tenantService;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new ConsentResource();
-            operio = mock(Operio.class);
-            consentService = mock(ConsentDecisionService.class);
-            consentAdminService = mock(ConsentAdminService.class);
-            doReturn(consentService).when(operio).consentService();
-            doReturn(consentAdminService).when(operio).consentAdminService();
+            tenantService = mock(TenantService.class);
 
-            // Inject Operio via reflection
-            var operioField = ConsentResource.class.getDeclaredField("operio");
+            // Inject TenantService via reflection
+            var operioField = ConsentResource.class.getDeclaredField("tenantService");
             operioField.setAccessible(true);
-            operioField.set(resource, operio);
+            operioField.set(resource, tenantService);
         }
 
         // -- Test data helpers --
@@ -616,7 +608,7 @@ class RbacTest {
             @BeforeEach
             void stubBatch() {
                 when(
-                    operio.grantConsentBatch(anyString(), anyList())
+                    tenantService.grantConsentBatch(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -674,7 +666,7 @@ class RbacTest {
             @BeforeEach
             void stubBatch() {
                 when(
-                    operio.revokeConsentBatch(anyString(), anyList())
+                    tenantService.revokeConsentBatch(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -729,7 +721,7 @@ class RbacTest {
                     Collections.emptyMap()
                 );
                 doReturn(stubResponse)
-                    .when(consentService)
+                    .when(tenantService)
                     .evaluateConsent(anyString(), anySet());
             }
 
@@ -802,7 +794,7 @@ class RbacTest {
             @BeforeEach
             void stubSummary() {
                 when(
-                    consentAdminService.findPoliciesBySubject(anyString())
+                    tenantService.findPoliciesBySubject(anyString())
                 ).thenReturn(Collections.emptyList());
             }
 
@@ -849,7 +841,7 @@ class RbacTest {
             @BeforeEach
             void stubHistory() {
                 when(
-                    consentAdminService.getConsentHistory(anyString())
+                    tenantService.getConsentHistory(anyString())
                 ).thenReturn(Collections.emptyList());
             }
 
@@ -915,12 +907,12 @@ class RbacTest {
             @SuppressWarnings("unchecked")
             void stubAll() {
                 when(
-                    operio.grantConsentBatch(anyString(), anyList())
+                    tenantService.grantConsentBatch(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
                 when(
-                    operio.revokeConsentBatch(anyString(), anyList())
+                    tenantService.revokeConsentBatch(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -932,13 +924,13 @@ class RbacTest {
                     Collections.emptyMap()
                 );
                 doReturn(stubResponse)
-                    .when(consentService)
+                    .when(tenantService)
                     .evaluateConsent(anyString(), anySet());
                 when(
-                    consentAdminService.findPoliciesBySubject(anyString())
+                    tenantService.findPoliciesBySubject(anyString())
                 ).thenReturn(Collections.emptyList());
                 when(
-                    consentAdminService.getConsentHistory(anyString())
+                    tenantService.getConsentHistory(anyString())
                 ).thenReturn(Collections.emptyList());
             }
 
@@ -1023,38 +1015,35 @@ class RbacTest {
     class AdminResourceRbac {
 
         private AdminResource resource;
-        private Operio operio;
-        private ConsentAdminService<?> consentAdminService;
+        private TenantService tenantService;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new AdminResource();
-            operio = mock(Operio.class);
-            consentAdminService = mock(ConsentAdminService.class);
-            doReturn(consentAdminService).when(operio).consentAdminService();
+            tenantService = mock(TenantService.class);
 
             // Stub listing methods to return empty lists
-            when(consentAdminService.listFields()).thenReturn(
+            when(tenantService.listFields()).thenReturn(
                 Collections.emptyList()
             );
-            when(consentAdminService.listCategories()).thenReturn(
+            when(tenantService.listCategories()).thenReturn(
                 Collections.emptyList()
             );
-            when(consentAdminService.listEntities()).thenReturn(
+            when(tenantService.listEntities()).thenReturn(
                 Collections.emptyList()
             );
-            when(consentAdminService.listPurposes()).thenReturn(
+            when(tenantService.listPurposes()).thenReturn(
                 Collections.emptyList()
             );
-            when(consentAdminService.listRegulations()).thenReturn(
+            when(tenantService.listRegulations()).thenReturn(
                 Collections.emptyList()
             );
 
-            // Inject Operio via reflection
-            var operioField = AdminResource.class.getDeclaredField("operio");
-            operioField.setAccessible(true);
-            operioField.set(resource, operio);
+            // Inject TenantService via reflection
+            var field = AdminResource.class.getDeclaredField("tenantService");
+            field.setAccessible(true);
+            field.set(resource, tenantService);
         }
 
         // -- Read endpoints --

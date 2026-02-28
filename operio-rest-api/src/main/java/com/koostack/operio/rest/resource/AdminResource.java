@@ -5,8 +5,7 @@ import com.koostack.operio.core.models.EntityInfo;
 import com.koostack.operio.core.models.FieldInfo;
 import com.koostack.operio.core.models.PurposeInfo;
 import com.koostack.operio.core.models.RegulationInfo;
-import com.koostack.operio.core.Operio;
-import com.koostack.operio.core.service.ConsentAdminService;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.CategoryResponse;
@@ -74,7 +73,7 @@ public class AdminResource {
     );
 
     @Inject
-    Operio operio;
+    TenantService tenantService;
 
     // -------------------------------------------------------------------
     // Fields
@@ -114,8 +113,7 @@ public class AdminResource {
 
         LOG.debug("GET /admin/fields");
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        List<FieldInfo> fields = admin.listFields();
+        List<FieldInfo> fields = tenantService.listFields();
 
         List<FieldResponse> dtos = fields
             .stream()
@@ -172,8 +170,7 @@ public class AdminResource {
             request.entityName()
         );
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.registerField(
+        tenantService.registerField(
             request.fieldName(),
             request.entityName(),
             request.description()
@@ -224,8 +221,7 @@ public class AdminResource {
 
         LOG.debug("GET /admin/categories");
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        List<CategoryInfo> categories = admin.listCategories();
+        List<CategoryInfo> categories = tenantService.listCategories();
 
         List<CategoryResponse> dtos = categories
             .stream()
@@ -280,8 +276,7 @@ public class AdminResource {
             request.categoryName()
         );
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.registerCategory(request.categoryName(), request.description());
+        tenantService.registerCategory(request.categoryName(), request.description());
 
         return Response.status(Response.Status.CREATED)
             .entity(
@@ -331,8 +326,7 @@ public class AdminResource {
 
         LOG.debug("GET /admin/entities");
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        List<EntityInfo> entities = admin.listEntities();
+        List<EntityInfo> entities = tenantService.listEntities();
 
         List<EntityResponse> dtos = entities
             .stream()
@@ -380,8 +374,7 @@ public class AdminResource {
 
         LOG.debug("GET /admin/purposes");
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        List<PurposeInfo> purposes = admin.listPurposes();
+        List<PurposeInfo> purposes = tenantService.listPurposes();
 
         List<PurposeResponse> dtos = purposes
             .stream()
@@ -433,8 +426,7 @@ public class AdminResource {
 
         LOG.debug("POST /admin/purposes - purpose={}", request.purposeName());
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.registerPurpose(request.purposeName(), request.description());
+        tenantService.registerPurpose(request.purposeName(), request.description());
 
         return Response.status(Response.Status.CREATED)
             .entity(
@@ -483,8 +475,7 @@ public class AdminResource {
 
         LOG.debug("GET /admin/regulations");
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        List<RegulationInfo> regulations = admin.listRegulations();
+        List<RegulationInfo> regulations = tenantService.listRegulations();
 
         List<RegulationResponse> dtos = regulations
             .stream()
@@ -539,8 +530,7 @@ public class AdminResource {
             request.regulationName()
         );
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.registerRegulation(
+        tenantService.registerRegulation(
             request.regulationName(),
             request.fullName(),
             request.jurisdiction(),
@@ -608,8 +598,7 @@ public class AdminResource {
             request.categoryName()
         );
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.linkFieldToCategory(
+        tenantService.linkFieldToCategory(
             request.fieldName(),
             request.entityName(),
             request.categoryName()
@@ -678,8 +667,7 @@ public class AdminResource {
             request.legalBasis()
         );
 
-        ConsentAdminService<?> admin = operio.consentAdminService();
-        admin.linkPurposeToRegulation(
+        tenantService.linkPurposeToRegulation(
             request.purposeName(),
             request.regulationName(),
             request.legalBasis()

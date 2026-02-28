@@ -6,15 +6,15 @@ import java.time.Instant;
 
 public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
-    void grantConsent(String subject, ConsentScope accessRequest);
+    void grantConsentCommand(String subject, ConsentScope accessRequest);
 
-    void revokeConsent(String subject, ConsentScope accessRequest);
+    void revokeConsentCommand(String subject, ConsentScope accessRequest);
 
     /**
      * Grants consent with an expiration timestamp.
      *
      * <p>Default implementation delegates to
-     * {@link #grantConsent(String, ConsentScope)}, ignoring the expiration.
+     * {@link #grantConsentCommand(String, ConsentScope)}, ignoring the expiration.
      * Implementations that support expiration should override this method.
      *
      * @param subject       the data subject identifier
@@ -22,19 +22,19 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * @param expiresAt     when the consent expires, or {@code null} for no
      *                      expiration
      */
-    default void grantConsent(
+    default void grantConsentCommand(
         String subject,
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
-        grantConsent(subject, accessRequest);
+        grantConsentCommand(subject, accessRequest);
     }
 
     /**
      * Revokes consent with an expiration timestamp.
      *
      * <p>Default implementation delegates to
-     * {@link #revokeConsent(String, ConsentScope)}, ignoring the expiration.
+     * {@link #revokeConsentCommand(String, ConsentScope)}, ignoring the expiration.
      * Implementations that support expiration should override this method.
      *
      * @param subject       the data subject identifier
@@ -42,12 +42,12 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * @param expiresAt     when the revocation expires, or {@code null} for
      *                      no expiration
      */
-    default void revokeConsent(
+    default void revokeConsentCommand(
         String subject,
         ConsentScope accessRequest,
         Instant expiresAt
     ) {
-        revokeConsent(subject, accessRequest);
+        revokeConsentCommand(subject, accessRequest);
     }
 
     /**
@@ -66,9 +66,9 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * </ul>
      *
      * @param subject the data subject identifier (e.g. {@code "user_123"})
-     * @see #revokeConsent(String, ConsentScope)
+     * @see #revokeConsentCommand(String, ConsentScope)
      */
-    void revokeAllConsent(String subject);
+    void revokeAllConsentCommand(String subject);
 
     // -----------------------------------------------------------------------
     // Schema registration — used by SensitiveDiscovery pipeline
@@ -86,7 +86,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      *                    {@code null} for entity-less fields
      * @param description optional human-readable description, or {@code null}
      */
-    void registerField(String fieldName, String entityName, String description);
+    void registerFieldCommand(String fieldName, String entityName, String description);
 
     /**
      * Registers a consent category in the consent admin schema.
@@ -98,14 +98,14 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      *                     {@code "HEALTH"})
      * @param description  optional human-readable description, or {@code null}
      */
-    void registerCategory(String categoryName, String description);
+    void registerCategoryCommand(String categoryName, String description);
 
     /**
      * Links a field to a category in the consent admin schema.
      *
      * <p>Uses idempotent semantics — if the link already exists, this is a
      * no-op. Both the field and the category must already be registered
-     * (via {@link #registerField} and {@link #registerCategory}).
+     * (via {@link #registerFieldCommand} and {@link #registerCategoryCommand}).
      *
      * @param fieldName    the field name to link
      * @param entityName   the owning entity name, or {@code null} for
@@ -113,7 +113,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * @param categoryName the category name to link to
      * @throws IllegalArgumentException if the field or category does not exist
      */
-    void linkFieldToCategory(String fieldName, String entityName, String categoryName);
+    void linkFieldToCategoryCommand(String fieldName, String entityName, String categoryName);
 
     // -----------------------------------------------------------------------
     // Purpose & regulation registration
@@ -129,7 +129,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      *                    {@code "analytics"})
      * @param description optional human-readable description, or {@code null}
      */
-    void registerPurpose(String purposeName, String description);
+    void registerPurposeCommand(String purposeName, String description);
 
     /**
      * Registers a regulation in the consent admin schema.
@@ -144,7 +144,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * @param description    optional human-readable description, or {@code null}
      * @param url            optional URL to the regulation text, or {@code null}
      */
-    void registerRegulation(
+    void registerRegulationCommand(
         String regulationName,
         String fullName,
         String jurisdiction,
@@ -158,7 +158,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      *
      * <p>Uses idempotent semantics — if the link already exists, this is a
      * no-op. Both the purpose and the regulation must already be registered
-     * (via {@link #registerPurpose} and {@link #registerRegulation}).
+     * (via {@link #registerPurposeCommand} and {@link #registerRegulationCommand}).
      *
      * @param purposeName    the purpose to link
      * @param regulationName the regulation to link to
@@ -168,7 +168,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      * @throws IllegalArgumentException if the purpose or regulation does not
      *                                  exist
      */
-    void linkPurposeToRegulation(String purposeName, String regulationName, String legalBasis);
+    void linkPurposeToRegulationCommand(String purposeName, String regulationName, String legalBasis);
 
     // -----------------------------------------------------------------------
     // DSAR erasure support
@@ -187,5 +187,5 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
      *         deletion is eventual (e.g. event-sourced implementations that
      *         publish a deletion-requested event)
      */
-    int deleteAuditLogBySubject(String subject);
+    int deleteAuditLogBySubjectCommand(String subject);
 }

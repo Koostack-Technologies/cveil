@@ -7,12 +7,14 @@ import org.jooq.DSLContext;
 /**
  * Configuration for {@link JooqTenantManagerService}.
  *
- * @param platformDsl               the platform {@link DSLContext}
- * @param dataSource                the {@link DataSource} for Flyway migrations
- * @param tenantRepository          repository for tenant queries
- * @param redisConfig               Redis connection config, or {@code null} to skip Redis
- * @param appName                   application name for Redis key prefix
- * @param consentMigrationLocation  Flyway migration location
+ * @param platformDsl                the platform {@link DSLContext}
+ * @param dataSource                 the {@link DataSource} for Flyway migrations
+ * @param tenantRepository           repository for tenant queries
+ * @param redisConfig                Redis connection config, or {@code null} to skip Redis
+ * @param appName                    application name for Redis key prefix
+ * @param consentMigrationLocation   Flyway migration location for consent schema
+ * @param metricsMigrationLocation   Flyway migration location for per-tenant metrics schema,
+ *                                   or {@code null} to skip metrics provisioning
  */
 public record JooqTenantManagerConfig(
     DSLContext platformDsl,
@@ -20,7 +22,8 @@ public record JooqTenantManagerConfig(
     TenantRepository tenantRepository,
     RedisPluginConfig redisConfig,
     String appName,
-    String consentMigrationLocation
+    String consentMigrationLocation,
+    String metricsMigrationLocation
 ) {
     public JooqTenantManagerConfig {
         if (platformDsl == null) {
@@ -29,5 +32,20 @@ public record JooqTenantManagerConfig(
         if (dataSource == null) {
             throw new IllegalArgumentException("dataSource must not be null");
         }
+    }
+
+    /**
+     * Backward-compatible constructor without metrics migration location.
+     */
+    public JooqTenantManagerConfig(
+        DSLContext platformDsl,
+        DataSource dataSource,
+        TenantRepository tenantRepository,
+        RedisPluginConfig redisConfig,
+        String appName,
+        String consentMigrationLocation
+    ) {
+        this(platformDsl, dataSource, tenantRepository, redisConfig,
+             appName, consentMigrationLocation, null);
     }
 }

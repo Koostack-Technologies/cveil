@@ -47,7 +47,8 @@ dependencies {
     // when operio.mode=embedded, giving a clear error if the classes are absent.
     // For local IDE development with mode=embedded, add the module to your run
     // configuration's classpath manually or switch to mode=production.
-    compileOnly(project(":operio-bundle-embedded"))
+    // TODO: re-enable once operio-consent-sync-embedded is fixed
+    // compileOnly(project(":operio-bundle-embedded"))
     implementation(project(":platform:operio-platform-jooq"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
@@ -56,6 +57,8 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-projection-jooq"))       // Admin schema projection handler
     implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Decision cache projection handler
     implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer
+    implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
+    implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")
@@ -71,7 +74,8 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.18.0")
     // Embedded bundle + H2 available in tests for embedded-mode coverage
-    testImplementation(project(":operio-bundle-embedded"))
+    // TODO: re-enable once operio-consent-sync-embedded is fixed
+    // testImplementation(project(":operio-bundle-embedded"))
     testRuntimeOnly("com.h2database:h2:2.2.224")
 
     // -- Testcontainers (Postgres + Redis for production-mode integration tests)

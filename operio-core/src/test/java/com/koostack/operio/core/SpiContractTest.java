@@ -135,7 +135,7 @@ class SpiContractTest {
         @DisplayName("stub can be wired into Operio via builder")
         void stubCanBeWiredIntoOperio() {
             StubTokenVerifier stub = new StubTokenVerifier();
-            Operio operio = Operio.builder().withTokenValidationService(stub).build();
+            Operio operio = Operio.builder().withTokenValidationService(stub).buildTenantService(null, null);
 
             assertNotNull(operio.tokenValidationService());
             assertSame(stub, operio.tokenValidationService());
@@ -356,7 +356,7 @@ class SpiContractTest {
         )
         void stubCanBeWiredIntoOperio() {
             StubPlatformAdminService stub = new StubPlatformAdminService();
-            Operio operio = Operio.builder().withPlatformAdmin(stub).build();
+            Operio operio = Operio.builder().withPlatformAdmin(stub).buildTenantService(null, null);
 
             assertNotNull(operio.platformAdminService());
             assertSame(stub, operio.platformAdminService());
@@ -411,7 +411,7 @@ class SpiContractTest {
             Operio operio = Operio.builder()
                 .withTokenValidationService(tv)
                 .withPlatformAdmin(pas)
-                .build();
+                .buildTenantService(null, null);
 
             assertSame(tv, operio.tokenValidationService());
             assertSame(pas, operio.platformAdminService());
@@ -422,7 +422,7 @@ class SpiContractTest {
             "Operio can be built without TokenValidationService or PlatformAdminService (embedded mode)"
         )
         void canBuildWithoutPlatformPlugins() {
-            Operio operio = Operio.builder().build();
+            Operio operio = Operio.builder().buildTenantService(null, null);
 
             assertNull(
                 operio.tokenValidationService(),

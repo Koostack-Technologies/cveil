@@ -1,10 +1,15 @@
 package com.koostack.operio.rest.config;
 
 import com.koostack.operio.bundle.core.CoreConsentBundle;
+import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.spi.PluginBundle;
+import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
@@ -19,6 +24,8 @@ import com.koostack.operio.plugin.redis.common.pubsub.RedisInvalidationPublisher
 import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentDecisionProjectionHandler;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
+import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
+import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -106,19 +113,19 @@ public class OperioProducers {
      *   <li>Sets the application name if configured.</li>
      * </ol>
      *
-     * @return the fully-wired {@link Operio} instance
+     * @return the fully-wired {@link TenantService} instance
      * @throws IllegalStateException if required configuration is missing for
      *                               the selected mode
      */
     @Produces
     @ApplicationScoped
-    public Operio operio() {
+    public TenantService tenantService() {
         String mode = config.mode();
         LOG.info("Operio REST API: initializing (mode={})", mode);
 
         Operio.Builder builder = Operio.builder();
 
-        // -- Consent bundle ---------------------------------------------------
+        // -- Consent bundle (wires read-path: Redis decision service) ---------
         PluginBundle consentBundle = createConsentBundle(mode);
         builder.withBundle(consentBundle);
 
@@ -146,13 +153,36 @@ public class OperioProducers {
             );
         }
 
-        Operio operio = builder.build();
+        // -- Command + query services (production: event-sourced + jOOQ) ------
+        JooqConsentAdminCommandService commandService = new JooqConsentAdminCommandService();
+        JooqConsentAdminQueryService queryService = new JooqConsentAdminQueryService();
+
+        if (MODE_PRODUCTION.equalsIgnoreCase(mode) && consentBundle instanceof CoreConsentBundle coreBundle) {
+            // Event service for the command service (publishes to event store + Redis streams)
+            JooqConsentAdminServiceConfig jooqConfig = coreBundle.jooqConfig();
+            TenantEventJooqConfig eventConfig = new TenantEventJooqConfig(
+                jooqConfig.connectionString(), jooqConfig.dialect(),
+                jooqConfig.username(), jooqConfig.password(),
+                null, null, null
+            );
+            JooqTenantEventService eventService = new JooqTenantEventService();
+            eventService.configure(eventConfig);
+
+            commandService.configure(new ConsentAdminCommandConfig(eventService));
+            queryService.configure(jooqConfig);
+
+            LOG.info("Operio REST API: command service (event-sourced) and query service (jOOQ) wired");
+        }
+
+        DefaultTenantService tenantService = builder.buildTenantService(
+            commandService, queryService
+        );
 
         LOG.info(
             "Operio REST API: initialized successfully (appName={})",
-            operio.appName()
+            tenantService.appName()
         );
-        return operio;
+        return tenantService;
     }
 
     // -----------------------------------------------------------------------
@@ -171,22 +201,24 @@ public class OperioProducers {
      * null-check or use {@code @Inject Instance<PlatformAdminService>} for
      * optional injection when running in embedded mode.
      *
-     * @param operio the built {@link Operio} instance (injected by CDI)
+     * @param tenantService the built {@link TenantService} instance (injected by CDI)
      * @return the platform admin service, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public PlatformAdminService platformAdminService(Operio operio) {
-        PlatformAdminService service = operio.platformAdminService();
-        if (service != null) {
-            LOG.debug("Operio REST API: PlatformAdminService available");
-        } else {
-            LOG.debug(
-                "Operio REST API: PlatformAdminService not available (embedded mode)"
-            );
+    public PlatformAdminService platformAdminService(TenantService tenantService) {
+        if (tenantService instanceof DefaultTenantService dts) {
+            PlatformAdminService service = dts.platformAdminService();
+            if (service != null) {
+                LOG.debug("Operio REST API: PlatformAdminService available");
+                return service;
+            }
         }
-        return service;
+        LOG.debug(
+            "Operio REST API: PlatformAdminService not available (embedded mode)"
+        );
+        return null;
     }
 
     /**
@@ -198,22 +230,24 @@ public class OperioProducers {
      * wired during {@link #operio()} construction. In embedded mode it
      * returns {@code null}.
      *
-     * @param operio the built {@link Operio} instance (injected by CDI)
+     * @param tenantService the built {@link TenantService} instance (injected by CDI)
      * @return the token validation service, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public TokenValidationService tokenValidationService(Operio operio) {
-        TokenValidationService service = operio.tokenValidationService();
-        if (service != null) {
-            LOG.debug("Operio REST API: TokenValidationService available");
-        } else {
-            LOG.debug(
-                "Operio REST API: TokenValidationService not available (embedded mode)"
-            );
+    public TokenValidationService tokenValidationService(TenantService tenantService) {
+        if (tenantService instanceof DefaultTenantService dts) {
+            TokenValidationService service = dts.tokenValidationService();
+            if (service != null) {
+                LOG.debug("Operio REST API: TokenValidationService available");
+                return service;
+            }
         }
-        return service;
+        LOG.debug(
+            "Operio REST API: TokenValidationService not available (embedded mode)"
+        );
+        return null;
     }
 
     // -----------------------------------------------------------------------
@@ -235,12 +269,12 @@ public class OperioProducers {
      * by {@link TenantManager} during provisioning and startup reconciliation.
      * Shutdown is handled by the {@link #onShutdown} CDI lifecycle callback.
      *
-     * @param operio the built {@link Operio} instance (triggers bundle initialization first)
+     * @param tenantService the built {@link TenantService} instance (triggers bundle initialization first)
      * @return the tenant stream consumer, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
-    public TenantStreamConsumer tenantStreamConsumer(Operio operio) {
+    public TenantStreamConsumer tenantStreamConsumer(TenantService tenantService) {
         if (adminRedisPool == null || tenantAwareJedisProvider == null) {
             LOG.info("Operio REST API: tenant stream consumer not wired (embedded mode)");
             return null;
@@ -287,12 +321,14 @@ public class OperioProducers {
         // Inject consumer into TenantManager for lifecycle orchestration,
         // then trigger startup reconciliation (adds consumers for all
         // existing active tenants).
-        @SuppressWarnings("rawtypes")
-        PlatformAdminService rawService = operio.platformAdminService();
-        if (rawService instanceof JooqPlatformAdminService platformService) {
-            platformService.setStreamConsumer(consumer);
-            platformService.tenantManager().migrateAllTenants();
-            LOG.info("Operio REST API: startup reconciliation complete — stream consumers added for all active tenants");
+        if (tenantService instanceof DefaultTenantService dts) {
+            @SuppressWarnings("rawtypes")
+            PlatformAdminService rawService = dts.platformAdminService();
+            if (rawService instanceof JooqPlatformAdminService platformService) {
+                platformService.setStreamConsumer(consumer);
+                platformService.tenantManager().migrateAllTenants();
+                LOG.info("Operio REST API: startup reconciliation complete — stream consumers added for all active tenants");
+            }
         }
 
         LOG.info("Operio REST API: tenant stream consumer created (groups=decision-projection,admin-projection)");

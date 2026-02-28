@@ -1,7 +1,6 @@
 package com.koostack.operio.rest.filter;
 
 import com.koostack.operio.core.models.IdentityContext;
-import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -102,14 +101,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * The primary Operio instance — used to obtain the {@link TokenValidationService}
-     * at request time. We inject {@code Operio} rather than
-     * {@code TokenValidationService} directly because the token validation service producer can
-     * return {@code null} in embedded mode, and CDI client proxies for
-     * {@code @ApplicationScoped} null beans cause NPE on method invocation.
+     * The {@link TokenValidationService} used to verify bearer tokens.
+     * May be {@code null} in embedded mode (no platform DB configured).
+     * Injected as {@code Instance<>} so CDI doesn't fail when the
+     * producer returns {@code null}.
      */
     @Inject
-    Operio operio;
+    Instance<TokenValidationService<?>> tokenValidationServiceInstance;
 
     /**
      * Operio configuration — used to read the bootstrap key from
@@ -266,7 +264,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         // 5. Verify via TokenValidationService (API key hash lookup)
-        TokenValidationService<?> tokenValidationService = operio.tokenValidationService();
+        TokenValidationService<?> tokenValidationService =
+            tokenValidationServiceInstance.isResolvable()
+                ? tokenValidationServiceInstance.get()
+                : null;
         if (tokenValidationService == null) {
             LOG.error(
                 "No TokenValidationService configured — cannot authenticate requests. " +
