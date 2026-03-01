@@ -62,6 +62,16 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
     implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
 
+    // -- Platform CQRS modules ------------------------------------------------
+    implementation(project(":platform:operio-platform-event-jooq"))              // JooqPlatformEventService
+    implementation(project(":platform:operio-core-command"))                      // JooqCoreCommandService
+    implementation(project(":platform:operio-billing-command"))                   // JooqBillingCommandService
+    implementation(project(":platform:operio-core-query-jooq"))                  // JooqCoreQueryService
+    implementation(project(":platform:operio-billing-query-jooq"))               // JooqBillingQueryService
+    implementation(project(":platform:operio-core-projection-jooq"))             // CoreProjectionHandler
+    implementation(project(":platform:operio-billing-projection-jooq"))          // BillingProjectionHandler
+    implementation(project(":platform:operio-tenant-manager-jooq"))              // TenantManagerProjectionHandler
+
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")
     // H2 is only needed for embedded mode (not production).  Kept as

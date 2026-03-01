@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operio | Enterprise Consent & Data Masking API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        operio: {
+                            50: '#f0fdfa',
+                            500: '#14b8a6', // Teal primary
+                            600: '#0d9488',
+                            900: '#134e4a',
+                            950: '#042f2e',
+                        },
+                        gray: {
+                            900: '#0a0f1c', // Slightly deeper for premium SaaS feel
+                            800: '#172136',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0a0f1c; color: #f8fafc; }
+        .bg-glow {
+            position: absolute;
+            top: 0; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 400px;
+            background: radial-gradient(circle, rgba(20, 184, 166, 0.15) 0%, rgba(10, 15, 28, 0) 70%);
+            pointer-events: none; z-index: 0;
+        }
+        .text-glow { text-shadow: 0 0 30px rgba(20, 184, 166, 0.4); }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden">
+
+<div class="bg-glow"></div>
+
+<nav class="relative z-10 border-b border-gray-800 bg-gray-900/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded bg-gradient-to-br from-operio-500 to-cyan-500 flex items-center justify-center font-bold text-gray-900">O</div>
+            <span class="text-xl font-bold tracking-tight text-white">operio</span>
+        </div>
+        <div class="hidden md:flex space-x-8 text-sm font-medium text-gray-400">
+            <a href="#product" class="hover:text-white transition-colors">Product</a>
+            <a href="#docs" class="hover:text-white transition-colors">Documentation</a>
+            <a href="#pricing" class="hover:text-white transition-colors">Pricing</a>
+        </div>
+        <div class="flex items-center space-x-4">
+            <a href="#" class="text-gray-300 hover:text-white text-sm font-medium py-2">Sign In</a>
+            <a href="#" class="bg-white text-gray-900 hover:bg-gray-100 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-[0_0_15px_rgba(255,255,255,0.1)]">Get API Keys</a>
+        </div>
+    </div>
+</nav>
+
+<main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-20 text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-operio-900/30 border border-operio-500/20 text-operio-500 text-xs font-semibold uppercase tracking-wide mb-8">
+        <span class="w-2 h-2 rounded-full bg-operio-500 animate-pulse"></span>
+        Enterprise SOC2 & GDPR Ready
+    </div>
+
+    <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-6 max-w-4xl leading-tight">
+        Consent & Data Masking.<br>
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-operio-500 to-cyan-400 text-glow">Done in 10 minutes.</span>
+    </h1>
+
+    <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
+        Pass your compliance audits without derailing your product roadmap.
+        Drop-in APIs backed by an immutable ledger and sub-millisecond edge routing.
+    </p>
+
+    <div class="flex flex-col sm:flex-row gap-4 mb-20">
+        <a href="#" class="bg-operio-500 text-gray-900 hover:bg-operio-600 px-8 py-3.5 rounded-lg font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] flex items-center justify-center gap-2">
+            Start for Free
+        </a>
+        <a href="#" class="bg-gray-800 text-white hover:bg-gray-700 border border-gray-700 px-8 py-3.5 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-2">
+            Book a Demo
+        </a>
+    </div>
+
+
+    <div class="w-full max-w-3xl bg-[#0d1117] rounded-xl border border-gray-700 shadow-2xl overflow-hidden text-left relative">
+        <div class="absolute top-0 right-0 px-4 py-2 text-xs font-mono text-gray-500 border-b border-l border-gray-700 rounded-bl-lg bg-gray-800/50">Node.js SDK</div>
+        <div class="p-6 font-mono text-sm overflow-x-auto text-gray-300 leading-relaxed">
+            <p><span class="text-purple-400">import</span> { Operio } <span class="text-purple-400">from</span> <span class="text-green-300">'@operio/node'</span>;</p>
+            <br>
+            <p><span class="text-gray-500">// 1. Initialize with your isolated Workspace Key</span></p>
+            <p><span class="text-purple-400">const</span> operio = <span class="text-purple-400">new</span> Operio(<span class="text-green-300">'op_live_sk_8f92...'</span>);</p>
+            <br>
+            <p><span class="text-gray-500">// 2. Check consent in < 1ms at the Edge</span></p>
+            <p><span class="text-purple-400">const</span> isAllowed = <span class="text-purple-400">await</span> operio.consent.evaluate({</p>
+            <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
+            <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span></p>
+            <p>});</p>
+            <br>
+            <p><span class="text-purple-400">if</span> (!isAllowed) <span class="text-blue-400">return</span> res.status(<span class="text-orange-300">403</span>).send(<span class="text-green-300">'Consent missing or expired.'</span>);</p>
+        </div>
+    </div>
+</main>
+
+<section id="product" class="relative z-10 border-t border-gray-800 bg-gray-900/30 py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-20">
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">Enterprise infrastructure, delivered as an API.</h2>
+            <p class="text-gray-400 max-w-2xl mx-auto text-lg">You focus on building your core product. We handle the strict data residency, audit logs, and compliance routing.</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-10">
+            <div>
+                <div class="w-12 h-12 bg-operio-900/50 rounded-xl flex items-center justify-center mb-6 text-operio-500 border border-operio-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h3 class="text-xl font-semibold mb-3">Zero-Latency Edge</h3>
+                <p class="text-gray-400 leading-relaxed">
+                    Consent checks live in the critical path of your application. Our global Rust proxies evaluate policies in sub-milliseconds, ensuring your API never slows down.
+                </p>
+            </div>
+            <div>
+                <div class="w-12 h-12 bg-operio-900/50 rounded-xl flex items-center justify-center mb-6 text-operio-500 border border-operio-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                </div>
+                <h3 class="text-xl font-semibold mb-3">Auditor-Proof Ledger</h3>
+                <p class="text-gray-400 leading-relaxed">
+                    Say goodbye to easily manipulated CRUD databases. Every grant and revocation is permanently recorded in a cryptographically verifiable Event Store.
+                </p>
+            </div>
+            <div>
+                <div class="w-12 h-12 bg-operio-900/50 rounded-xl flex items-center justify-center mb-6 text-operio-500 border border-operio-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 class="text-xl font-semibold mb-3">Strict Data Residency</h3>
+                <p class="text-gray-400 leading-relaxed">
+                    Enterprise clients demand isolation. We dynamically provision physically isolated schemas and Redis streams for your workspaces to satisfy EU/US residency laws out of the box.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="relative z-10 border-t border-gray-800 bg-[#0a0f1c] py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6 text-sm text-gray-500">
+        <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-gray-400 text-xs">O</div>
+            <span>&copy; 2026 Operio Inc. All rights reserved.</span>
+        </div>
+        <div class="flex space-x-6">
+            <a href="#" class="hover:text-gray-300">API Reference</a>
+            <a href="#" class="hover:text-gray-300">Security & SOC2</a>
+            <a href="#" class="hover:text-gray-300">Privacy Policy</a>
+        </div>
+    </div>
+</footer>
+</body>
+</html>

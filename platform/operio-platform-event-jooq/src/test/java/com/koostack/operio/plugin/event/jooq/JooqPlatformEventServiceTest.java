@@ -1,8 +1,8 @@
 package com.koostack.operio.plugin.event.jooq;
 
-import com.koostack.operio.core.platform.events.PlatformEventTypes;
-import com.koostack.operio.core.platform.events.TenantRegisteredEvent;
-import com.koostack.operio.core.platform.events.BillingPlanChangedEvent;
+import com.koostack.operio.core.platform.core.CoreEventTypes;
+import com.koostack.operio.core.platform.core.events.TenantCreatedEvent;
+import com.koostack.operio.core.platform.core.events.TenantPlanChangedEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
@@ -25,12 +25,12 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         AggregateKey key = new AggregateKey(aggregateId, "tenant-lifecycle", tenantId);
 
         service.registerEventType(new RegisterEventTypeInput<>(
-            PlatformEventTypes.TENANT_REGISTERED, "Tenant Registered", TenantRegisteredEvent.class
+            CoreEventTypes.TENANT_CREATED, "Tenant Created", TenantCreatedEvent.class
         ));
 
-        TenantRegisteredEvent payload = new TenantRegisteredEvent(tenantId, "Acme Corp", "enterprise");
+        TenantCreatedEvent payload = new TenantCreatedEvent(tenantId, "Acme Corp", "enterprise");
         service.publishEvent(PublishDomainEventInput.of(
-            tenantId, PlatformEventTypes.TENANT_REGISTERED, key, payload
+            tenantId, CoreEventTypes.TENANT_CREATED, key, payload
         ));
 
         EventRecord record = dsl.selectFrom(EVENT)
@@ -39,7 +39,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
 
         assertNotNull(record);
         assertEquals("tenant-lifecycle", record.getAggregateType());
-        assertEquals(PlatformEventTypes.TENANT_REGISTERED, record.getEventType());
+        assertEquals(CoreEventTypes.TENANT_CREATED, record.getEventType());
         assertEquals(1L, record.getVersion());
         assertNotNull(record.getPayload());
         assertTrue(record.getPayload().contains("Acme Corp"));
@@ -55,19 +55,19 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         AggregateKey key = new AggregateKey(aggregateId, "tenant-lifecycle", tenantId);
 
         service.registerEventType(new RegisterEventTypeInput<>(
-            PlatformEventTypes.TENANT_REGISTERED, "Tenant Registered", TenantRegisteredEvent.class
+            CoreEventTypes.TENANT_CREATED, "Tenant Created", TenantCreatedEvent.class
         ));
         service.registerEventType(new RegisterEventTypeInput<>(
-            PlatformEventTypes.BILLING_PLAN_CHANGED, "Billing Plan Changed", BillingPlanChangedEvent.class
+            CoreEventTypes.TENANT_PLAN_CHANGED, "Tenant Plan Changed", TenantPlanChangedEvent.class
         ));
 
         service.publishEvent(PublishDomainEventInput.of(
-            tenantId, PlatformEventTypes.TENANT_REGISTERED, key,
-            new TenantRegisteredEvent(tenantId, "Beta Inc", "starter")
+            tenantId, CoreEventTypes.TENANT_CREATED, key,
+            new TenantCreatedEvent(tenantId, "Beta Inc", "starter")
         ));
         service.publishEvent(PublishDomainEventInput.of(
-            tenantId, PlatformEventTypes.BILLING_PLAN_CHANGED, key,
-            new BillingPlanChangedEvent(tenantId, "starter", "growth")
+            tenantId, CoreEventTypes.TENANT_PLAN_CHANGED, key,
+            new TenantPlanChangedEvent(tenantId, "starter", "growth")
         ));
 
         Long version = service.getAggregateVersion(key);
@@ -78,8 +78,8 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
             .orderBy(EVENT.VERSION.asc())
             .fetch();
         assertEquals(2, events.size());
-        assertEquals(PlatformEventTypes.TENANT_REGISTERED, events.get(0).getEventType());
-        assertEquals(PlatformEventTypes.BILLING_PLAN_CHANGED, events.get(1).getEventType());
+        assertEquals(CoreEventTypes.TENANT_CREATED, events.get(0).getEventType());
+        assertEquals(CoreEventTypes.TENANT_PLAN_CHANGED, events.get(1).getEventType());
     }
 
     @Test
@@ -89,13 +89,13 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         AggregateKey key = new AggregateKey(aggregateId, "snap-aggregate", tenantId);
 
         service.registerEventType(new RegisterEventTypeInput<>(
-            PlatformEventTypes.BILLING_PLAN_CHANGED, "Billing Plan Changed", BillingPlanChangedEvent.class
+            CoreEventTypes.TENANT_PLAN_CHANGED, "Tenant Plan Changed", TenantPlanChangedEvent.class
         ));
 
         for (int i = 1; i <= 21; i++) {
             service.publishEvent(PublishDomainEventInput.of(
-                tenantId, PlatformEventTypes.BILLING_PLAN_CHANGED, key,
-                new BillingPlanChangedEvent(tenantId, "plan-" + (i - 1), "plan-" + i)
+                tenantId, CoreEventTypes.TENANT_PLAN_CHANGED, key,
+                new TenantPlanChangedEvent(tenantId, "plan-" + (i - 1), "plan-" + i)
             ));
         }
 
@@ -124,7 +124,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         assertThrows(Exception.class, () ->
             service.publishEvent(PublishDomainEventInput.of(
                 tenantId, "nonexistent.event.type", key,
-                new TenantRegisteredEvent(tenantId, "Test", "free")
+                new TenantCreatedEvent(tenantId, "Test", "free")
             ))
         );
     }

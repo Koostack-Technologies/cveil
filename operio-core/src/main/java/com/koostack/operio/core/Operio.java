@@ -9,6 +9,10 @@ import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.sdk.SensitiveDiscovery;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.platform.billing.BillingCommandService;
+import com.koostack.operio.core.platform.billing.BillingQueryService;
+import com.koostack.operio.core.platform.core.CoreCommandService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
@@ -53,6 +57,10 @@ public abstract class Operio implements OperioService {
     private final TokenValidationService<?> tokenValidationService;
     private final PlatformAdminService<?> platformAdminService;
     private final IdpProvider<?> idpProvider;
+    private final CoreCommandService<?> coreCommandService;
+    private final CoreQueryService<?> coreQueryService;
+    private final BillingCommandService<?> billingCommandService;
+    private final BillingQueryService<?> billingQueryService;
 
     // -- Tenant plugins -------------------------------------------------------
     private final AuthzProvider<?> authzProvider;
@@ -71,6 +79,10 @@ public abstract class Operio implements OperioService {
         this.tokenValidationService = builder.tokenValidationService;
         this.platformAdminService = builder.platformAdminService;
         this.idpProvider = builder.idpProvider;
+        this.coreCommandService = builder.coreCommandService;
+        this.coreQueryService = builder.coreQueryService;
+        this.billingCommandService = builder.billingCommandService;
+        this.billingQueryService = builder.billingQueryService;
         this.authzProvider = builder.authzProvider;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
@@ -177,6 +189,26 @@ public abstract class Operio implements OperioService {
         return idpProvider;
     }
 
+    /** Returns the configured {@link CoreCommandService}, or {@code null}. */
+    public CoreCommandService<?> coreCommandService() {
+        return coreCommandService;
+    }
+
+    /** Returns the configured {@link CoreQueryService}, or {@code null}. */
+    public CoreQueryService<?> coreQueryService() {
+        return coreQueryService;
+    }
+
+    /** Returns the configured {@link BillingCommandService}, or {@code null}. */
+    public BillingCommandService<?> billingCommandService() {
+        return billingCommandService;
+    }
+
+    /** Returns the configured {@link BillingQueryService}, or {@code null}. */
+    public BillingQueryService<?> billingQueryService() {
+        return billingQueryService;
+    }
+
     /**
      * Returns the configured {@link AuthzProvider}, or {@code null}
      * if none was registered.
@@ -269,6 +301,10 @@ public abstract class Operio implements OperioService {
         private TokenValidationService<?> tokenValidationService;
         private PlatformAdminService<?> platformAdminService;
         private IdpProvider<?> idpProvider;
+        private CoreCommandService<?> coreCommandService;
+        private CoreQueryService<?> coreQueryService;
+        private BillingCommandService<?> billingCommandService;
+        private BillingQueryService<?> billingQueryService;
 
         // -- Tenant -----------------------------------------------------------
         private AuthzProvider<?> authzProvider;
@@ -294,6 +330,21 @@ public abstract class Operio implements OperioService {
             com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> queryService
         ) {
             DefaultTenantService service = new DefaultTenantService(this, commandService, queryService);
+            if (verifyOnBuild) {
+                service.verifyReady();
+            }
+            return service;
+        }
+
+        /**
+         * Builds a {@link DefaultPlatformService} from this builder's configuration.
+         * Uses the registered IdpProvider, CoreCommandService, and BillingCommandService.
+         *
+         * @return a fully-wired DefaultPlatformService
+         */
+        public DefaultPlatformService buildPlatformService() {
+            DefaultPlatformService service = new DefaultPlatformService(
+                appName, idpProvider, coreCommandService, billingCommandService);
             if (verifyOnBuild) {
                 service.verifyReady();
             }
@@ -551,6 +602,38 @@ public abstract class Operio implements OperioService {
          */
         public Builder withIdpProvider(IdpProvider<?> idpProvider) {
             this.idpProvider = idpProvider;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link CoreCommandService} instance.
+         */
+        public Builder withCoreCommandService(CoreCommandService<?> service) {
+            this.coreCommandService = service;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link CoreQueryService} instance.
+         */
+        public Builder withCoreQueryService(CoreQueryService<?> service) {
+            this.coreQueryService = service;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link BillingCommandService} instance.
+         */
+        public Builder withBillingCommandService(BillingCommandService<?> service) {
+            this.billingCommandService = service;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link BillingQueryService} instance.
+         */
+        public Builder withBillingQueryService(BillingQueryService<?> service) {
+            this.billingQueryService = service;
             return this;
         }
 

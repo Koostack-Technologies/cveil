@@ -7,20 +7,43 @@ import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.billing.BillingCommandService;
+import com.koostack.operio.core.platform.billing.BillingQueryService;
+import com.koostack.operio.core.platform.core.CoreCommandService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.spi.PluginBundle;
+import com.koostack.operio.platform.billing.jooq.BillingProjectionHandler;
+import com.koostack.operio.platform.billing.jooq.JooqBillingCommandConfig;
+import com.koostack.operio.platform.billing.jooq.JooqBillingCommandService;
+import com.koostack.operio.platform.billing.jooq.JooqBillingQueryConfig;
+import com.koostack.operio.platform.billing.jooq.JooqBillingQueryService;
+import com.koostack.operio.platform.core.jooq.CoreProjectionHandler;
+import com.koostack.operio.platform.core.jooq.JooqCoreCommandConfig;
+import com.koostack.operio.platform.core.jooq.JooqCoreCommandService;
+import com.koostack.operio.platform.core.jooq.JooqCoreQueryConfig;
+import com.koostack.operio.platform.core.jooq.JooqCoreQueryService;
+import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
+import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerConfig;
+import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
 import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
+import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
+import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
+import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
+import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
 import com.koostack.operio.plugin.platform.jooq.PlatformJooqConfig;
 import com.koostack.operio.plugin.platform.jooq.TenantRepository;
+import com.koostack.operio.plugin.redis.common.stream.AbstractStreamConsumer;
+import com.koostack.operio.plugin.redis.common.stream.StreamHandler;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
@@ -38,9 +61,12 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
+
+import javax.sql.DataSource;
 
 /**
  * CDI producer that wires the {@link Operio} instance and its key sub-services
@@ -97,6 +123,10 @@ public class OperioProducers {
 
     private static final String MODE_PRODUCTION = "production";
     private static final String MODE_EMBEDDED = "embedded";
+
+    // -- Platform CQRS services (set during tenantService() production init) --
+    private CoreCommandService<?> coreCommandService;
+    private BillingCommandService<?> billingCommandService;
 
     @Inject
     OperioConfig config;
@@ -204,6 +234,11 @@ public class OperioProducers {
             LOG.info("Operio REST API: command service (event-sourced) and query service (jOOQ) wired");
         }
 
+        // -- Platform CQRS services (production only) -------------------------
+        if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
+            wirePlatformCqrsServices(builder);
+        }
+
         DefaultTenantService tenantService = builder.buildTenantService(
             commandService, queryService
         );
@@ -248,6 +283,36 @@ public class OperioProducers {
         LOG.debug(
             "Operio REST API: PlatformAdminService not available (embedded mode)"
         );
+        return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public CoreCommandService coreCommandService(TenantService tenantService) {
+        if (tenantService instanceof DefaultTenantService dts) {
+            CoreCommandService service = dts.coreCommandService();
+            if (service != null) {
+                LOG.debug("Operio REST API: CoreCommandService available");
+                return service;
+            }
+        }
+        LOG.debug("Operio REST API: CoreCommandService not available (embedded mode)");
+        return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public CoreQueryService coreQueryService(TenantService tenantService) {
+        if (tenantService instanceof DefaultTenantService dts) {
+            CoreQueryService service = dts.coreQueryService();
+            if (service != null) {
+                LOG.debug("Operio REST API: CoreQueryService available");
+                return service;
+            }
+        }
+        LOG.debug("Operio REST API: CoreQueryService not available (embedded mode)");
         return null;
     }
 
@@ -413,8 +478,10 @@ public class OperioProducers {
         }
 
         String appName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
-        PlatformService service = new DefaultPlatformService(appName, idp);
-        LOG.info("Operio REST API: PlatformService wired (DefaultPlatformService)");
+        PlatformService service = new DefaultPlatformService(
+            appName, idp, coreCommandService, billingCommandService);
+        LOG.info("Operio REST API: PlatformService wired (DefaultPlatformService, coreCmd={}, billingCmd={})",
+            coreCommandService != null, billingCommandService != null);
         return service;
     }
 
@@ -423,6 +490,7 @@ public class OperioProducers {
     // -----------------------------------------------------------------------
 
     private TenantStreamConsumer tenantStreamConsumer;
+    private AbstractStreamConsumer platformStreamConsumer;
 
     /**
      * Produces the {@link TenantStreamConsumer} that runs both the consent
@@ -513,6 +581,129 @@ public class OperioProducers {
             LOG.info("Operio REST API: stopping tenant stream consumer");
             tenantStreamConsumer.close();
         }
+        if (platformStreamConsumer != null) {
+            LOG.info("Operio REST API: stopping platform stream consumer");
+            platformStreamConsumer.close();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Platform CQRS wiring (production only)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Creates and wires all platform CQRS services: event service, command
+     * services, query services, projection handlers, and the platform stream
+     * consumer.
+     *
+     * <p>Called once during {@link #tenantService()} initialization in
+     * production mode. The command services are stored as instance fields
+     * so that {@link #platformService()} can pass them to
+     * {@link DefaultPlatformService}.
+     */
+    private void wirePlatformCqrsServices(Operio.Builder builder) {
+        OperioConfig.DbConfig platformDb = config.platformDb().orElse(null);
+        if (platformDb == null) {
+            LOG.warn("Operio REST API: platform CQRS services NOT wired — operio.platform-db not configured");
+            return;
+        }
+
+        String platformDbUrl = appendSslParameters(platformDb.url(), platformDb);
+        String appName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
+
+        // -- Redis config (optional) ------------------------------------------
+        RedisPluginConfig redisPluginConfig = config
+            .redis()
+            .map(redis ->
+                (RedisPluginConfig) new RedisConsentDecisionServiceConfig(
+                    redis.host(),
+                    redis.port(),
+                    redis.password().filter(pw -> !pw.isBlank()).orElse(null)
+                )
+            )
+            .orElse(null);
+
+        // -- Platform event service -------------------------------------------
+        PlatformEventJooqConfig eventConfig = new PlatformEventJooqConfig(
+            platformDbUrl,
+            platformDb.dialect(),
+            platformDb.username().orElse(null),
+            platformDb.password().orElse(null),
+            redisPluginConfig
+        );
+
+        JooqPlatformEventService platformEventService = new JooqPlatformEventService();
+        platformEventService.configure(eventConfig);
+
+        // -- Command services -------------------------------------------------
+        JooqCoreCommandService coreCmdSvc = new JooqCoreCommandService();
+        coreCmdSvc.configure(new JooqCoreCommandConfig(platformEventService));
+
+        JooqBillingCommandService billingCmdSvc = new JooqBillingCommandService();
+        billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService));
+
+        this.coreCommandService = coreCmdSvc;
+        this.billingCommandService = billingCmdSvc;
+
+        builder.withCoreCommandService(coreCmdSvc);
+        builder.withBillingCommandService(billingCmdSvc);
+
+        // -- Platform DSLContext for queries + projections ---------------------
+        DSLContext platformDsl = JooqContextFactory.createContext(
+            eventConfig, "operio-platform-cqrs"
+        );
+
+        // -- Query services ---------------------------------------------------
+        JooqCoreQueryService coreQuerySvc = new JooqCoreQueryService();
+        coreQuerySvc.configure(new JooqCoreQueryConfig(platformDsl));
+
+        JooqBillingQueryService billingQuerySvc = new JooqBillingQueryService();
+        billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
+
+        builder.withCoreQueryService(coreQuerySvc);
+        builder.withBillingQueryService(billingQuerySvc);
+
+        LOG.info("Operio REST API: platform command + query services wired");
+
+        // -- Projection handlers + stream consumer (requires Redis) -----------
+        if (redisPluginConfig == null || adminRedisPool == null) {
+            LOG.warn("Operio REST API: platform stream consumer NOT wired — Redis not configured");
+            return;
+        }
+
+        CoreProjectionHandler coreProjection = new CoreProjectionHandler(platformDsl);
+        BillingProjectionHandler billingProjection = new BillingProjectionHandler(platformDsl);
+
+        // Tenant manager projection handler — provisions infra on TenantCreated
+        DataSource platformDataSource = JooqDataSourceFactory.createDataSource(
+            eventConfig, "operio-tenant-manager"
+        );
+        JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
+        tenantManagerSvc.configure(new JooqTenantManagerConfig(
+            platformDsl, platformDataSource, null,
+            redisPluginConfig, appName, "classpath:db/migration/consent"
+        ));
+
+        TenantManagerProjectionHandler tenantMgrProjection =
+            new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc);
+
+        // -- Platform stream consumer -----------------------------------------
+        AbstractStreamConsumer consumer = new AbstractStreamConsumer(
+                JedisProvider.shared(adminRedisPool), 2000L, 100) {
+            @Override
+            protected String streamKeyForTenant(String tenantId) {
+                return appName + ":platform-events";
+            }
+        };
+
+        consumer.registerHandler("core-projection", (StreamHandler) coreProjection::onEvent);
+        consumer.registerHandler("billing-projection", (StreamHandler) billingProjection::onEvent);
+        consumer.registerHandler("tenant-manager-projection", (StreamHandler) tenantMgrProjection::onEvent);
+        consumer.addTenant("platform");
+
+        this.platformStreamConsumer = consumer;
+        LOG.info("Operio REST API: platform stream consumer started " +
+            "(groups=core-projection,billing-projection,tenant-manager-projection)");
     }
 
     // -----------------------------------------------------------------------

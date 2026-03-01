@@ -476,20 +476,6 @@ class SpiContractTest {
     {
 
         @Override
-        public void createTenant(
-            String tenantId,
-            String displayName,
-            String plan
-        ) {
-            throw new UnsupportedOperationException("stub");
-        }
-
-        @Override
-        public void deleteTenant(String tenantId) {
-            throw new UnsupportedOperationException("stub");
-        }
-
-        @Override
         public TenantInfo getTenant(String tenantId) {
             throw new UnsupportedOperationException("stub");
         }

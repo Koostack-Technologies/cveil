@@ -284,14 +284,12 @@ public class JooqPlatformAdminService
     // -----------------------------------------------------------------------
 
     /**
-     * {@inheritDoc}
+     * Create a tenant imperatively (inserts row + provisions infra).
      *
-     * <p>Creates a tenant row in the platform schema, then delegates to
-     * {@link TenantManager#provisionTenant} to create the dedicated
-     * Postgres schema with consent migrations and provision a Redis ACL
-     * user.
+     * <p>Prefer {@code CoreCommandService.createTenant()} for event-sourced
+     * tenant creation. This method is retained for backward compatibility
+     * and test helpers.
      */
-    @Override
     public void createTenant(String tenantId, String displayName, String plan) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new OperioServiceException(
@@ -334,14 +332,12 @@ public class JooqPlatformAdminService
     }
 
     /**
-     * {@inheritDoc}
+     * Delete a tenant imperatively (drops infra + deletes rows).
      *
-     * <p>Delegates to {@link TenantManager#dropTenant} to tear down the
-     * Postgres schema and Redis ACL user, then deletes all related rows
-     * (API keys, IdP configs, rate limit counters) and the tenant row
-     * itself.
+     * <p>Prefer {@code CoreCommandService.deleteTenant()} for event-sourced
+     * tenant deletion. This method is retained for backward compatibility
+     * and test helpers.
      */
-    @Override
     public void deleteTenant(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new OperioServiceException(

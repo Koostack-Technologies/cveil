@@ -2,8 +2,8 @@ package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.models.ApiKeyInfo;
 import com.koostack.operio.core.models.TenantInfo;
+import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
@@ -68,6 +68,10 @@ public class PlatformResource {
     PlatformAdminService platformAdminService;
 
     @Inject
+    @SuppressWarnings("rawtypes")
+    CoreCommandService coreCommandService;
+
+    @Inject
     BootstrapKeyLifecycleService bootstrapLifecycle;
 
     @Inject
@@ -85,6 +89,15 @@ public class PlatformResource {
         if (platformAdminService == null) {
             throw new IllegalStateException(
                 "Platform administration is not available in embedded mode. " +
+                    "Set operio.mode=production to enable tenant management."
+            );
+        }
+    }
+
+    private void requireCoreCommandService() {
+        if (coreCommandService == null) {
+            throw new IllegalStateException(
+                "Core command service is not available in embedded mode. " +
                     "Set operio.mode=production to enable tenant management."
             );
         }
@@ -144,7 +157,7 @@ public class PlatformResource {
         @Valid CreateTenantRequest request
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCoreCommandService();
 
         LOG.info(
             "POST /platform/tenants - creating tenant={}, plan={}",
@@ -152,16 +165,25 @@ public class PlatformResource {
             request.plan()
         );
 
-        platformAdminService.createTenant(
+        coreCommandService.createTenant(
             request.tenantId(),
             request.displayName(),
             request.plan()
         );
 
-        TenantInfo tenant = platformAdminService.getTenant(request.tenantId());
+        // Return the accepted data directly — the projection materializes
+        // asynchronously so a DB read-back would return null or stale data.
+        TenantResponse response = new TenantResponse(
+            request.tenantId(),
+            request.displayName(),
+            request.plan(),
+            "created",
+            0, 0, 0,
+            null
+        );
 
         return Response.status(Response.Status.CREATED)
-            .entity(TenantResponse.fromModel(tenant))
+            .entity(response)
             .build();
     }
 
@@ -312,11 +334,11 @@ public class PlatformResource {
         ) @PathParam("id") String tenantId
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCoreCommandService();
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        platformAdminService.deleteTenant(tenantId);
+        coreCommandService.deleteTenant(tenantId);
 
         return Response.ok(
             MessageResponse.of("Tenant '" + tenantId + "' deleted successfully")
@@ -591,6 +613,7 @@ public class PlatformResource {
         @Valid UpdatePlanRequest request
     ) {
         requireSuperAdmin(securityContext);
+        requireCoreCommandService();
         requirePlatformAdmin();
 
         LOG.info(
@@ -599,40 +622,25 @@ public class PlatformResource {
             request.plan()
         );
 
-        // Update plan + limits in Postgres
-        if (
-            platformAdminService instanceof JooqPlatformAdminService jooqAdmin
-        ) {
-            String actor =
-                securityContext.getUserPrincipal() != null
-                    ? securityContext.getUserPrincipal().getName()
-                    : "super-admin";
-            int updated = jooqAdmin
-                .tenantRepository()
-                .updatePlan(tenantId, request.plan(), actor);
-
-            if (updated == 0) {
-                return Response.status(Response.Status.NOT_FOUND)
-                    .entity(
-                        ErrorResponse.of(
-                            "not_found",
-                            "Tenant '" + tenantId + "' not found"
-                        )
-                    )
-                    .build();
-            }
-        } else {
-            throw new IllegalStateException(
-                "Plan management requires the jOOQ platform admin service"
-            );
-        }
+        coreCommandService.changeTenantPlan(tenantId, request.plan());
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);
 
-        // Re-fetch and return the updated tenant
+        // Read the existing tenant for metadata; override the plan field
+        // because the plan-changed event is projected asynchronously.
         TenantInfo tenant = platformAdminService.getTenant(tenantId);
+        TenantResponse response = new TenantResponse(
+            tenant.tenantId(),
+            tenant.displayName(),
+            request.plan(),
+            tenant.status(),
+            tenant.evalLimitMonthly(),
+            tenant.subjectLimit(),
+            tenant.burstLimitPerMin(),
+            tenant.createdAt()
+        );
 
-        return Response.ok(TenantResponse.fromModel(tenant)).build();
+        return Response.ok(response).build();
     }
 }

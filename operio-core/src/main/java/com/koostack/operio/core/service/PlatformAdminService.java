@@ -49,35 +49,6 @@ public interface PlatformAdminService<T> extends Plugin<T> {
     // -------------------------------------------------------------------
 
     /**
-     * Create a new tenant.
-     *
-     * <p>This inserts a row into the platform {@code tenant} table, creates
-     * a dedicated Postgres schema (e.g. {@code t_acme_corp}) with
-     * Flyway-applied consent migrations, and provisions a tenant-scoped
-     * Redis ACL user restricted to the tenant's key prefix.
-     *
-     * @param tenantId    unique tenant identifier (e.g. {@code "acme_corp"})
-     * @param displayName human-readable tenant name
-     * @param plan        the subscription plan (e.g. {@code "free"},
-     *                    {@code "pro"}, {@code "enterprise"})
-     * @throws com.koostack.operio.core.exception.OperioServiceException
-     *         if the tenant already exists or provisioning fails
-     */
-    void createTenant(String tenantId, String displayName, String plan);
-
-    /**
-     * Delete a tenant and all associated resources.
-     *
-     * <p>Removes the tenant row, drops the dedicated Postgres schema, and
-     * removes the tenant-scoped Redis ACL user and cached keys.
-     *
-     * @param tenantId the tenant to delete
-     * @throws com.koostack.operio.core.exception.OperioServiceException
-     *         if the tenant does not exist or teardown fails
-     */
-    void deleteTenant(String tenantId);
-
-    /**
      * Retrieve information about a single tenant.
      *
      * @param tenantId the tenant to look up

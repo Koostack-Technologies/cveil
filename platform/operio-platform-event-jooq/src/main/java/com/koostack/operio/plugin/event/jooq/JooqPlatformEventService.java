@@ -13,6 +13,7 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
+import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 /**
  * jOOQ-backed {@link PlatformEventService} implementation — durable event
@@ -80,24 +82,27 @@ public class JooqPlatformEventService
         this.eventTypeCache = new EventTypeCache(eventRepository);
 
         if (config.redis() != null) {
-            if (config.tenantCredentialLookup() == null) {
-                throw new IllegalStateException(
-                    "Redis is enabled but no TenantCredentialLookup was provided. " +
-                    "A tenant credential lookup is required for per-tenant Redis ACL isolation."
+            JedisProvider jedisProvider;
+            if (config.tenantCredentialLookup() != null) {
+                jedisProvider = RedisContextFactory.createProvider(
+                    config.redis(), config.tenantCredentialLookup()
+                );
+            } else {
+                // Platform-only mode: no per-tenant Redis ACL needed
+                jedisProvider = JedisProvider.shared(
+                    RedisClientFactory.createClient(
+                        config.redis().host(),
+                        config.redis().port(),
+                        config.redis().password()
+                    )
                 );
             }
-            if (config.tenantDiscovery() == null) {
-                throw new IllegalStateException(
-                    "Redis is enabled but no tenantDiscovery supplier was provided. " +
-                    "A tenant discovery supplier is required so the outbox poller can " +
-                    "iterate per-tenant schemas."
-                );
-            }
-            JedisProvider jedisProvider = RedisContextFactory.createProvider(
-                config.redis(), config.tenantCredentialLookup()
-            );
             this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio");
-            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, config.tenantDiscovery());
+
+            Supplier<List<String>> discovery = config.tenantDiscovery() != null
+                ? config.tenantDiscovery()
+                : () -> List.of("platform");
+            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, discovery);
             this.outboxPoller.start(2);
         }
 

@@ -11,8 +11,14 @@ import com.koostack.operio.core.models.IdpUser;
  * {@link com.koostack.operio.core.models.TenantContext} used by
  * {@link TenantService}.
  *
- * <p>All IAM methods delegate to the configured
+ * <p>Also orchestrates tenant onboarding: creating a tenant, billing
+ * profile, and initial subscription as part of user registration.
+ *
+ * <p>IAM methods delegate to the configured
  * {@link com.koostack.operio.core.platform.iam.IdpProvider}.
+ * Tenant/billing methods delegate to
+ * {@link com.koostack.operio.core.platform.core.CoreCommandService} and
+ * {@link com.koostack.operio.core.platform.billing.BillingCommandService}.
  */
 public interface PlatformService extends OperioService {
 
@@ -57,4 +63,39 @@ public interface PlatformService extends OperioService {
      * @param newPassword the new password
      */
     void completePasswordReset(String tenantId, String resetToken, String newPassword);
+
+    // -----------------------------------------------------------------------
+    // Tenant Onboarding
+    // -----------------------------------------------------------------------
+
+    /**
+     * Create a new tenant and publish a {@code TenantCreated} domain event.
+     *
+     * @param tenantId    the unique tenant identifier
+     * @param displayName human-readable display name
+     * @param plan        the initial plan tier (e.g. "free", "pro")
+     */
+    void createTenant(String tenantId, String displayName, String plan);
+
+    /**
+     * Create a billing profile for the given tenant and publish a
+     * {@code BillingProfileCreated} domain event.
+     *
+     * @param tenantId     the tenant identifier
+     * @param billingEmail the billing contact email
+     */
+    void createBillingProfile(String tenantId, String billingEmail);
+
+    /**
+     * Create an initial subscription for the given tenant and publish a
+     * {@code SubscriptionCreated} domain event.
+     *
+     * @param tenantId     the tenant identifier
+     * @param planTier     the subscription plan tier
+     * @param evalLimit    monthly evaluation limit
+     * @param subjectLimit subject limit
+     * @param burstLimit   burst limit per minute
+     */
+    void createSubscription(String tenantId, String planTier,
+                            int evalLimit, int subjectLimit, int burstLimit);
 }
