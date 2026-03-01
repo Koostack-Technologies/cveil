@@ -45,6 +45,8 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     private final ConsentAdminCommandService<?> commandService;
     private final ConsentAdminQueryService<?> queryService;
+    private com.koostack.operio.core.metrics.MetricPublisherService<?> platformMetricPublisher;
+    private com.koostack.operio.core.metrics.MetricPublisherService<?> tenantMetricPublisher;
 
     public DefaultTenantService(
         Builder builder,
@@ -54,6 +56,14 @@ public class DefaultTenantService extends Operio implements TenantService {
         super(builder);
         this.commandService = commandService;
         this.queryService = queryService;
+    }
+
+    public void setPlatformMetricPublisher(com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
+        this.platformMetricPublisher = publisher;
+    }
+
+    public void setTenantMetricPublisher(com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
+        this.tenantMetricPublisher = publisher;
     }
 
     // -----------------------------------------------------------------------

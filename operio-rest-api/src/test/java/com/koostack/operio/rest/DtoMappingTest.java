@@ -804,7 +804,8 @@ class DtoMappingTest {
             CreateTenantRequest req = new CreateTenantRequest(
                 "acme_corp",
                 "Acme Corp",
-                "pro"
+                "pro",
+                null
             );
 
             assertEquals("acme_corp", req.tenantId());

@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     api(project(":operio-core"))
+    implementation(project(":platform:operio-iam-command"))
     implementation(project(":plugins:operio-jooq-common"))
     implementation(project(":plugins:operio-redis-common"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))

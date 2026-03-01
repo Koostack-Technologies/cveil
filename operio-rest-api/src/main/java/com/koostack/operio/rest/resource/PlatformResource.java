@@ -72,6 +72,9 @@ public class PlatformResource {
     CoreCommandService coreCommandService;
 
     @Inject
+    com.koostack.operio.core.PlatformService platformService;
+
+    @Inject
     BootstrapKeyLifecycleService bootstrapLifecycle;
 
     @Inject
@@ -157,7 +160,13 @@ public class PlatformResource {
         @Valid CreateTenantRequest request
     ) {
         requireSuperAdmin(securityContext);
-        requireCoreCommandService();
+
+        if (platformService == null) {
+            throw new IllegalStateException(
+                "PlatformService is not available in embedded mode. " +
+                    "Set operio.mode=production to enable tenant management."
+            );
+        }
 
         LOG.info(
             "POST /platform/tenants - creating tenant={}, plan={}",
@@ -165,10 +174,15 @@ public class PlatformResource {
             request.plan()
         );
 
-        coreCommandService.createTenant(
+        String billingEmail = request.billingEmail() != null
+            ? request.billingEmail()
+            : request.tenantId() + "@billing.operio.local";
+
+        platformService.createTenant(
             request.tenantId(),
             request.displayName(),
-            request.plan()
+            request.plan(),
+            billingEmail
         );
 
         // Return the accepted data directly — the projection materializes

@@ -71,6 +71,10 @@ dependencies {
     implementation(project(":platform:operio-core-projection-jooq"))             // CoreProjectionHandler
     implementation(project(":platform:operio-billing-projection-jooq"))          // BillingProjectionHandler
     implementation(project(":platform:operio-tenant-manager-jooq"))              // TenantManagerProjectionHandler
+    implementation(project(":platform:operio-iam-command"))                       // JooqIamCommandService
+    implementation(project(":platform:operio-iam-query"))                         // JooqIamQueryService
+    implementation(project(":platform:operio-iam-projection-jooq"))              // IamProjectionHandler
+    implementation(project(":platform:operio-plan-query-jooq"))                  // JooqPlanQueryService
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")
@@ -85,6 +89,7 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.27.3")
     testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.18.0")
+    testImplementation("org.awaitility:awaitility:4.2.2")
     // Embedded bundle + H2 available in tests for embedded-mode coverage
     // TODO: re-enable once operio-consent-sync-embedded is fixed
     // testImplementation(project(":operio-bundle-embedded"))

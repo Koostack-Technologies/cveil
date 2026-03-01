@@ -790,7 +790,7 @@ class DtoValidationTest {
         @Test
         void valid_noViolations() {
             assertTrue(validator.validate(
-                new CreateTenantRequest("acme_corp", "Acme Corp", "pro")
+                new CreateTenantRequest("acme_corp", "Acme Corp", "pro", null)
             ).isEmpty());
         }
 
@@ -798,28 +798,28 @@ class DtoValidationTest {
         void validMinimal_noViolations() {
             // displayName is optional
             assertTrue(validator.validate(
-                new CreateTenantRequest("acme", null, "free")
+                new CreateTenantRequest("acme", null, "free", null)
             ).isEmpty());
         }
 
         @Test
         void nullTenantId_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest(null, "Acme", "free")
+                new CreateTenantRequest(null, "Acme", "free", null)
             ).isEmpty());
         }
 
         @Test
         void blankTenantId_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("", "Acme", "free")
+                new CreateTenantRequest("", "Acme", "free", null)
             ).isEmpty());
         }
 
         @Test
         void tenantIdTooLong_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest(stringOfLength(64), "Acme", "free")
+                new CreateTenantRequest(stringOfLength(64), "Acme", "free", null)
             ).isEmpty());
         }
 
@@ -828,7 +828,7 @@ class DtoValidationTest {
             // 63 chars, starting with letter
             String id = "a" + "x".repeat(62);
             assertTrue(validator.validate(
-                new CreateTenantRequest(id, null, "free")
+                new CreateTenantRequest(id, null, "free", null)
             ).isEmpty());
         }
 
@@ -836,7 +836,7 @@ class DtoValidationTest {
         void tenantIdWithInvalidChars_violation() {
             // contains a hyphen which is not allowed by the pattern
             var violations = validator.validate(
-                new CreateTenantRequest("acme-corp", "Acme", "free")
+                new CreateTenantRequest("acme-corp", "Acme", "free", null)
             );
             assertFalse(violations.isEmpty());
             assertTrue(violationMessages(violations).stream()
@@ -846,56 +846,56 @@ class DtoValidationTest {
         @Test
         void tenantIdStartsWithNumber_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("1acme", "Acme", "free")
+                new CreateTenantRequest("1acme", "Acme", "free", null)
             ).isEmpty());
         }
 
         @Test
         void tenantIdStartsWithUnderscore_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("_acme", "Acme", "free")
+                new CreateTenantRequest("_acme", "Acme", "free", null)
             ).isEmpty());
         }
 
         @Test
         void tenantIdWithSpaces_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("acme corp", "Acme", "free")
+                new CreateTenantRequest("acme corp", "Acme", "free", null)
             ).isEmpty());
         }
 
         @Test
         void tenantIdSingleLetter_noViolations() {
             assertTrue(validator.validate(
-                new CreateTenantRequest("a", null, "free")
+                new CreateTenantRequest("a", null, "free", null)
             ).isEmpty());
         }
 
         @Test
         void nullPlan_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", null)
+                new CreateTenantRequest("acme", "Acme", null, null)
             ).isEmpty());
         }
 
         @Test
         void blankPlan_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", "  ")
+                new CreateTenantRequest("acme", "Acme", "  ", null)
             ).isEmpty());
         }
 
         @Test
         void planTooLong_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", stringOfLength(51))
+                new CreateTenantRequest("acme", "Acme", stringOfLength(51), null)
             ).isEmpty());
         }
 
         @Test
         void displayNameTooLong_violation() {
             assertFalse(validator.validate(
-                new CreateTenantRequest("acme", stringOfLength(256), "free")
+                new CreateTenantRequest("acme", stringOfLength(256), "free", null)
             ).isEmpty());
         }
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
+import com.koostack.operio.core.platform.iam.IamCommandService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,9 +16,9 @@ import java.util.Map;
  *
  * <p>Handles:
  * <ul>
- *   <li>{@code core.tenant.created} → provisions Postgres schema, Flyway
- *       migrations, Redis ACL, then emits {@code TenantProvisioned} via
- *       {@link CoreCommandService}.</li>
+ *   <li>{@code core.tenant.provisioning-started} → provisions Postgres schema,
+ *       Flyway migrations, Redis ACL, generates 3 API tokens (DEV/TEST/PROD),
+ *       then emits {@code TenantProvisioned} via {@link CoreCommandService}.</li>
  *   <li>{@code core.tenant.deleted} → tears down Postgres schema and
  *       Redis ACL user.</li>
  * </ul>
@@ -29,15 +30,20 @@ public class TenantManagerProjectionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(TenantManagerProjectionHandler.class);
 
+    private static final String[] API_KEY_ENVIRONMENTS = {"DEV", "TEST", "PROD"};
+
     private final JooqTenantManagerService tenantManager;
     private final CoreCommandService<?> coreCommandService;
+    private final IamCommandService<?> iamCommandService;
     private final ObjectMapper mapper;
 
     public TenantManagerProjectionHandler(
             JooqTenantManagerService tenantManager,
-            CoreCommandService<?> coreCommandService) {
+            CoreCommandService<?> coreCommandService,
+            IamCommandService<?> iamCommandService) {
         this.tenantManager = tenantManager;
         this.coreCommandService = coreCommandService;
+        this.iamCommandService = iamCommandService;
         this.mapper = new ObjectMapper();
     }
 
@@ -54,7 +60,7 @@ public class TenantManagerProjectionHandler {
 
         try {
             switch (eventType) {
-                case CoreEventTypes.TENANT_CREATED -> handleTenantCreated(payload);
+                case CoreEventTypes.TENANT_PROVISIONING_STARTED -> handleProvisioningStarted(payload);
                 case CoreEventTypes.TENANT_DELETED -> handleTenantDeleted(payload);
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
@@ -64,15 +70,27 @@ public class TenantManagerProjectionHandler {
         }
     }
 
-    private void handleTenantCreated(String payload) throws Exception {
+    private void handleProvisioningStarted(String payload) throws Exception {
         JsonNode node = mapper.readTree(payload);
         String tenantId = node.get("tenantId").asText();
 
+        // 1. Provision Postgres schema + Flyway migrations + Redis ACL
         LOG.info("Provisioning infrastructure for tenant '{}'", tenantId);
         JooqTenantManagerService.ProvisionResult result = tenantManager.provisionTenant(tenantId);
 
+        // 2. Generate 3 API tokens (DEV, TEST, PROD)
+        for (String env : API_KEY_ENVIRONMENTS) {
+            String keyName = tenantId + "-" + env.toLowerCase();
+            IamCommandService.CreateApiTokenResult tokenResult =
+                iamCommandService.createApiToken(tenantId, keyName, env);
+            LOG.info("Generated {} API token for tenant '{}': keyId={}, prefix={}",
+                env, tenantId, tokenResult.keyId(), tokenResult.keyPrefix());
+        }
+
+        // 3. Emit TenantProvisioned event
         coreCommandService.provisionTenant(tenantId, result.schemaName(), result.redisAclUser());
-        LOG.info("Tenant '{}' provisioned and TenantProvisioned event emitted", tenantId);
+        LOG.info("Tenant '{}' fully provisioned: schema={}, redisUser={}, apiKeys=3",
+            tenantId, result.schemaName(), result.redisAclUser());
     }
 
     private void handleTenantDeleted(String payload) throws Exception {

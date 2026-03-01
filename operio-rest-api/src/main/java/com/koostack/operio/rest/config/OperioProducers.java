@@ -62,11 +62,13 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
 
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 
 /**
  * CDI producer that wires the {@link Operio} instance and its key sub-services
@@ -127,6 +129,9 @@ public class OperioProducers {
     // -- Platform CQRS services (set during tenantService() production init) --
     private CoreCommandService<?> coreCommandService;
     private BillingCommandService<?> billingCommandService;
+    private CoreQueryService<?> coreQueryService;
+    private com.koostack.operio.core.platform.plan.PlanQueryService<?> planQueryService;
+    private com.koostack.operio.core.platform.iam.IamCommandService<?> iamCommandService;
 
     @Inject
     OperioConfig config;
@@ -225,6 +230,13 @@ public class OperioProducers {
                 jooqConfig.username(), jooqConfig.password(),
                 null, null, null
             );
+            // Run tenant-event schema migrations before the event service
+            // tries to register event types (needs the event_type table).
+            DataSource tenantEventDs = JooqDataSourceFactory.createDataSource(
+                eventConfig, "operio-tenant-event-migrations"
+            );
+            runFlyway(tenantEventDs, "classpath:db/migration/tenant-event-postgresql", "flyway_schema_history_tenant_event");
+
             JooqTenantEventService eventService = new JooqTenantEventService();
             eventService.configure(eventConfig);
 
@@ -363,20 +375,22 @@ public class OperioProducers {
             return null;
         }
 
-        return config.keycloak().map(kc -> {
+        return config.keycloak()
+            .filter(kc -> kc.url().isPresent() && !kc.url().get().isBlank())
+            .map(kc -> {
             com.koostack.operio.plugin.platform.keycloak.KeycloakConfig kcConfig =
                 new com.koostack.operio.plugin.platform.keycloak.KeycloakConfig(
-                    kc.url(),
+                    kc.url().get(),
                     "master",
                     "admin-cli",
                     kc.adminUsername(),
-                    kc.adminPassword(),
+                    kc.adminPassword().orElse(""),
                     kc.clientId(),
                     kc.clientSecret().orElse(null)
                 );
             com.koostack.operio.plugin.platform.keycloak.KeycloakIdpProvider provider =
                 new com.koostack.operio.plugin.platform.keycloak.KeycloakIdpProvider(kcConfig);
-            LOG.info("Operio REST API: KeycloakIdpProvider wired (url={})", kc.url());
+            LOG.info("Operio REST API: KeycloakIdpProvider wired (url={})", kc.url().get());
             return (IdpProvider) provider;
         }).orElseGet(() -> {
             LOG.info("Operio REST API: No Keycloak configuration — IdpProvider not available");
@@ -401,18 +415,20 @@ public class OperioProducers {
             return null;
         }
 
-        return config.keycloak().map(kc -> {
+        return config.keycloak()
+            .filter(kc -> kc.url().isPresent() && !kc.url().get().isBlank())
+            .map(kc -> {
             com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzConfig authzConfig =
                 new com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzConfig(
-                    kc.url(),
+                    kc.url().get(),
                     "master",
                     "admin-cli",
                     kc.adminUsername(),
-                    kc.adminPassword()
+                    kc.adminPassword().orElse("")
                 );
             com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzProvider provider =
                 new com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzProvider(authzConfig);
-            LOG.info("Operio REST API: KeycloakAuthzProvider wired (url={})", kc.url());
+            LOG.info("Operio REST API: KeycloakAuthzProvider wired (url={})", kc.url().get());
             return (AuthzProvider) provider;
         }).orElseGet(() -> {
             LOG.info("Operio REST API: No Keycloak configuration — AuthzProvider not available");
@@ -466,22 +482,35 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
-    public PlatformService platformService() {
-        if (!idpProviderInstance.isResolvable()) {
-            LOG.debug("Operio REST API: PlatformService not available (no IdpProvider)");
-            return null;
+    public PlatformService platformService(TenantService tenantService) {
+        // Force TenantService initialization — this triggers wirePlatformCqrsServices()
+        // which sets coreCommandService, billingCommandService, etc. on this producer bean.
+        // Without this call, the proxy would remain uninitialized.
+        String appName = tenantService.appName();
+        LOG.info("Operio REST API: platformService() — TenantService initialized (appName={}), coreCommandService={}",
+            appName, coreCommandService);
+
+        IdpProvider<?> idp = null;
+        if (idpProviderInstance.isResolvable()) {
+            try {
+                idp = idpProviderInstance.get();
+            } catch (Exception e) {
+                LOG.debug("Operio REST API: IdpProvider not available: {}", e.getMessage());
+            }
         }
-        IdpProvider<?> idp = idpProviderInstance.get();
-        if (idp == null) {
-            LOG.debug("Operio REST API: PlatformService not available (IdpProvider returned null)");
+
+        // PlatformService can operate without IdpProvider (createTenant doesn't need it)
+        if (idp == null && coreCommandService == null) {
+            LOG.debug("Operio REST API: PlatformService not available (no IdpProvider and no CQRS services)");
             return null;
         }
 
-        String appName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
+        String resolvedAppName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
         PlatformService service = new DefaultPlatformService(
-            appName, idp, coreCommandService, billingCommandService);
-        LOG.info("Operio REST API: PlatformService wired (DefaultPlatformService, coreCmd={}, billingCmd={})",
-            coreCommandService != null, billingCommandService != null);
+            resolvedAppName, idp, coreCommandService, billingCommandService,
+            coreQueryService, planQueryService, null, null);
+        LOG.info("Operio REST API: PlatformService wired (DefaultPlatformService, idp={}, coreCmd={}, billingCmd={}, planQuery={})",
+            idp != null, coreCommandService != null, billingCommandService != null, planQueryService != null);
         return service;
     }
 
@@ -632,6 +661,29 @@ public class OperioProducers {
             redisPluginConfig
         );
 
+        // Run CQRS schema migrations (event store + domain schemas).
+        // The platform admin service (JooqPlatformAdminService) only runs
+        // db/migration/platform (old admin tables). The event-sourced CQRS
+        // modules need their own migrations.
+        DataSource migrationDs = JooqDataSourceFactory.createDataSource(
+            eventConfig, "operio-cqrs-migrations"
+        );
+
+        // Platform event store lives in t_platform schema (TenantAwareExecuteListener
+        // sets search_path to t_platform for platform events).
+        try (var conn = migrationDs.getConnection()) {
+            conn.createStatement().execute("CREATE SCHEMA IF NOT EXISTS t_platform");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create t_platform schema", e);
+        }
+        runFlywayInSchema(migrationDs, "classpath:db/migration/platform-event-postgresql",
+            "flyway_schema_history_platform_event", "t_platform");
+
+        // Domain projection schemas (self-contained — each V1 creates its own schema)
+        runFlyway(migrationDs, "classpath:db/migration/platform-core", "flyway_schema_history_platform_core");
+        runFlyway(migrationDs, "classpath:db/migration/platform-billing", "flyway_schema_history_platform_billing");
+        runFlyway(migrationDs, "classpath:db/migration/platform-iam", "flyway_schema_history_platform_iam");
+
         JooqPlatformEventService platformEventService = new JooqPlatformEventService();
         platformEventService.configure(eventConfig);
 
@@ -642,15 +694,39 @@ public class OperioProducers {
         JooqBillingCommandService billingCmdSvc = new JooqBillingCommandService();
         billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService));
 
+        com.koostack.operio.platform.iam.jooq.JooqIamCommandService iamCmdSvc =
+            new com.koostack.operio.platform.iam.jooq.JooqIamCommandService();
+        iamCmdSvc.configure(new com.koostack.operio.platform.iam.jooq.JooqIamCommandConfig(platformEventService));
+
         this.coreCommandService = coreCmdSvc;
         this.billingCommandService = billingCmdSvc;
+        this.iamCommandService = iamCmdSvc;
 
         builder.withCoreCommandService(coreCmdSvc);
         builder.withBillingCommandService(billingCmdSvc);
 
         // -- Platform DSLContext for queries + projections ---------------------
-        DSLContext platformDsl = JooqContextFactory.createContext(
-            eventConfig, "operio-platform-cqrs"
+        // Set search_path on every connection so unqualified table names
+        // resolve to the correct CQRS projection schemas.
+        com.zaxxer.hikari.HikariConfig hikariCfg = new com.zaxxer.hikari.HikariConfig();
+        String cqrsJdbcUrl = eventConfig.connectionString();
+        if (cqrsJdbcUrl != null && cqrsJdbcUrl.startsWith("jdbc:postgresql")) {
+            String sep = cqrsJdbcUrl.contains("?") ? "&" : "?";
+            cqrsJdbcUrl = cqrsJdbcUrl + sep + "stringtype=unspecified";
+        }
+        hikariCfg.setJdbcUrl(cqrsJdbcUrl);
+        hikariCfg.setPoolName("operio-platform-cqrs");
+        if (eventConfig.username() != null) hikariCfg.setUsername(eventConfig.username());
+        if (eventConfig.password() != null) hikariCfg.setPassword(eventConfig.password());
+        hikariCfg.setConnectionInitSql(
+            "SET search_path TO platform_core, platform_billing, platform_iam, t_platform, public"
+        );
+        DataSource platformDataSource = new com.zaxxer.hikari.HikariDataSource(hikariCfg);
+        DSLContext platformDsl = DSL.using(
+            platformDataSource, SQLDialect.POSTGRES,
+            new org.jooq.conf.Settings()
+                .withRenderNameCase(org.jooq.conf.RenderNameCase.LOWER)
+                .withRenderSchema(false)
         );
 
         // -- Query services ---------------------------------------------------
@@ -659,6 +735,13 @@ public class OperioProducers {
 
         JooqBillingQueryService billingQuerySvc = new JooqBillingQueryService();
         billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
+
+        com.koostack.operio.platform.plan.jooq.JooqPlanQueryService planQuerySvc =
+            new com.koostack.operio.platform.plan.jooq.JooqPlanQueryService();
+        planQuerySvc.configure(new com.koostack.operio.platform.plan.jooq.JooqPlanQueryConfig(platformDsl));
+
+        this.coreQueryService = coreQuerySvc;
+        this.planQueryService = planQuerySvc;
 
         builder.withCoreQueryService(coreQuerySvc);
         builder.withBillingQueryService(billingQuerySvc);
@@ -673,37 +756,42 @@ public class OperioProducers {
 
         CoreProjectionHandler coreProjection = new CoreProjectionHandler(platformDsl);
         BillingProjectionHandler billingProjection = new BillingProjectionHandler(platformDsl);
+        com.koostack.operio.platform.iam.jooq.IamProjectionHandler iamProjection =
+            new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(platformDsl);
 
-        // Tenant manager projection handler — provisions infra on TenantCreated
-        DataSource platformDataSource = JooqDataSourceFactory.createDataSource(
+        // Tenant manager projection handler — provisions infra on TenantProvisioningStarted
+        DataSource tenantMgrDataSource = JooqDataSourceFactory.createDataSource(
             eventConfig, "operio-tenant-manager"
         );
         JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
         tenantManagerSvc.configure(new JooqTenantManagerConfig(
-            platformDsl, platformDataSource, null,
+            platformDsl, tenantMgrDataSource, null,
             redisPluginConfig, appName, "classpath:db/migration/consent"
         ));
 
         TenantManagerProjectionHandler tenantMgrProjection =
-            new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc);
+            new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc, iamCmdSvc);
 
         // -- Platform stream consumer -----------------------------------------
         AbstractStreamConsumer consumer = new AbstractStreamConsumer(
                 JedisProvider.shared(adminRedisPool), 2000L, 100) {
             @Override
             protected String streamKeyForTenant(String tenantId) {
-                return appName + ":platform-events";
+                // Must match the hardcoded "operio" prefix in
+                // JooqPlatformEventService → RedisEventPublisher
+                return "operio:platform-events";
             }
         };
 
         consumer.registerHandler("core-projection", (StreamHandler) coreProjection::onEvent);
         consumer.registerHandler("billing-projection", (StreamHandler) billingProjection::onEvent);
+        consumer.registerHandler("iam-projection", (StreamHandler) iamProjection::onEvent);
         consumer.registerHandler("tenant-manager-projection", (StreamHandler) tenantMgrProjection::onEvent);
         consumer.addTenant("platform");
 
         this.platformStreamConsumer = consumer;
         LOG.info("Operio REST API: platform stream consumer started " +
-            "(groups=core-projection,billing-projection,tenant-manager-projection)");
+            "(groups=core-projection,billing-projection,iam-projection,tenant-manager-projection)");
     }
 
     // -----------------------------------------------------------------------
@@ -1276,5 +1364,34 @@ public class OperioProducers {
                     "application.yml property before starting the API."
             );
         }
+    }
+
+    private void runFlyway(DataSource ds, String location, String historyTable) {
+        LOG.debug("Running Flyway migrations: location={}, historyTable={}", location, historyTable);
+        var result = Flyway.configure()
+            .dataSource(ds)
+            .locations(location)
+            .table(historyTable)
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
+            .load()
+            .migrate();
+        LOG.debug("Flyway migration result: location={}, migrationsExecuted={}, success={}",
+            location, result.migrationsExecuted, result.success);
+    }
+
+    private void runFlywayInSchema(DataSource ds, String location, String historyTable, String schema) {
+        LOG.debug("Running Flyway migrations: location={}, historyTable={}, schema={}", location, historyTable, schema);
+        var result = Flyway.configure()
+            .dataSource(ds)
+            .locations(location)
+            .table(historyTable)
+            .schemas(schema)
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
+            .load()
+            .migrate();
+        LOG.debug("Flyway migration result: location={}, migrationsExecuted={}, success={}",
+            location, result.migrationsExecuted, result.success);
     }
 }

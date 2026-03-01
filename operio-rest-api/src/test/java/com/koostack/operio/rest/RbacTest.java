@@ -1650,7 +1650,8 @@ class RbacTest {
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
-                    "free"
+                    "free",
+                    null
                 );
                 Response response = resource.createTenant(ctx, request);
                 assertEquals(201, response.getStatus());
@@ -1663,7 +1664,8 @@ class RbacTest {
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
-                    "free"
+                    "free",
+                    null
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.createTenant(ctx, request)
@@ -1677,7 +1679,8 @@ class RbacTest {
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
-                    "free"
+                    "free",
+                    null
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.createTenant(ctx, request)
@@ -1690,7 +1693,8 @@ class RbacTest {
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
-                    "free"
+                    "free",
+                    null
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.createTenant(emptySecurityContext(), request)
@@ -1703,7 +1707,8 @@ class RbacTest {
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
-                    "free"
+                    "free",
+                    null
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.createTenant(null, request)
@@ -1947,7 +1952,7 @@ class RbacTest {
                         () ->
                             resource.createTenant(
                                 ctx,
-                                new CreateTenantRequest("t1", "T", "free")
+                                new CreateTenantRequest("t1", "T", "free", null)
                             ),
                         "Role '" + role + "' should not access createTenant"
                     );
@@ -1971,7 +1976,7 @@ class RbacTest {
                 assertThrows(OperioAuthException.class, () ->
                     resource.createTenant(
                         ctx,
-                        new CreateTenantRequest("t1", "T", "free")
+                        new CreateTenantRequest("t1", "T", "free", null)
                     )
                 );
             }

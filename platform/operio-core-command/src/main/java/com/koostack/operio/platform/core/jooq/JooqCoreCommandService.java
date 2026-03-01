@@ -78,6 +78,12 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
         publishEvent(CoreEventTypes.TENANT_PROVISIONED, tenantId, payload);
     }
 
+    @Override
+    public void emitProvisioningStarted(String tenantId, String displayName, String plan) {
+        var payload = new TenantProvisioningStartedEvent(tenantId, displayName, plan);
+        publishEvent(CoreEventTypes.TENANT_PROVISIONING_STARTED, tenantId, payload);
+    }
+
     // -- Internal helpers -----------------------------------------------------
 
     private TenantAggregate getAggregate(String tenantId) {
@@ -103,6 +109,7 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
         register(CoreEventTypes.TENANT_ACTIVATED, "Tenant Activated", TenantActivatedEvent.class);
         register(CoreEventTypes.TENANT_DELETED, "Tenant Deleted", TenantDeletedEvent.class);
         register(CoreEventTypes.TENANT_PROVISIONED, "Tenant Provisioned", TenantProvisionedEvent.class);
+        register(CoreEventTypes.TENANT_PROVISIONING_STARTED, "Tenant Provisioning Started", TenantProvisioningStartedEvent.class);
     }
 
     private <U> void register(String name, String displayName, Class<U> eventClass) {

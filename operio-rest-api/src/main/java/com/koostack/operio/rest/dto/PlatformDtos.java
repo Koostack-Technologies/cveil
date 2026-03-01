@@ -74,7 +74,10 @@ public final class PlatformDtos {
         @NotBlank(message = "plan must not be blank") @Size(
             max = 50,
             message = "plan must not exceed 50 characters"
-        ) String plan
+        ) String plan,
+        @jakarta.validation.constraints.Email(
+            message = "billingEmail must be a valid email address"
+        ) String billingEmail
     ) {}
 
     /**

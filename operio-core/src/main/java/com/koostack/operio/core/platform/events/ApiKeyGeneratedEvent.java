@@ -8,5 +8,8 @@ public record ApiKeyGeneratedEvent(
     String tenantId,
     String keyId,
     String keyPrefix,
+    String keyHash,
+    String name,
+    String environment,
     Instant expiresAt
 ) implements DomainEvent {}

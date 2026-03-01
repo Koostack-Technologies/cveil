@@ -69,13 +69,17 @@ public interface PlatformService extends OperioService {
     // -----------------------------------------------------------------------
 
     /**
-     * Create a new tenant and publish a {@code TenantCreated} domain event.
+     * Atomically onboard a new tenant: validates the tenant ID is unique and
+     * the plan is active, then creates the tenant record, billing profile,
+     * and initial subscription. Emits a {@code TenantProvisioningStarted}
+     * event as the last step to trigger async infrastructure provisioning.
      *
-     * @param tenantId    the unique tenant identifier
-     * @param displayName human-readable display name
-     * @param plan        the initial plan tier (e.g. "free", "pro")
+     * @param tenantId     the unique tenant identifier
+     * @param displayName  human-readable display name
+     * @param plan         the plan tier (must exist and be active in platform_core.plan)
+     * @param billingEmail the billing contact email
      */
-    void createTenant(String tenantId, String displayName, String plan);
+    void createTenant(String tenantId, String displayName, String plan, String billingEmail);
 
     /**
      * Create a billing profile for the given tenant and publish a

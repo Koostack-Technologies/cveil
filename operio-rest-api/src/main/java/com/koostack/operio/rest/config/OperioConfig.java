@@ -219,7 +219,7 @@ public interface OperioConfig {
      */
     interface KeycloakConfig {
         /** Keycloak base URL (e.g. {@code http://localhost:8180}). */
-        String url();
+        Optional<String> url();
 
         /** Admin username for the Keycloak master realm. */
         @WithName("admin-username")
@@ -228,7 +228,7 @@ public interface OperioConfig {
 
         /** Admin password for the Keycloak master realm. */
         @WithName("admin-password")
-        String adminPassword();
+        Optional<String> adminPassword();
 
         /** Client ID used by Operio in each tenant realm. */
         @WithName("client-id")

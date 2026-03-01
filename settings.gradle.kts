@@ -61,10 +61,16 @@ include("platform:operio-core-projection-jooq")
 
 // --- Platform IAM ---
 include("platform:operio-iam-schema")
+include("platform:operio-iam-command")
+include("platform:operio-iam-query")
+include("platform:operio-iam-projection-jooq")
 include("platform:operio-platform-keycloak")
 
 // --- Platform Tenant Manager ---
 include("platform:operio-tenant-manager-jooq")
+
+// --- Platform Plan Query ---
+include("platform:operio-plan-query-jooq")
 
 // --- Metrics ---
 include("platform:operio-platform-metrics-redis")
