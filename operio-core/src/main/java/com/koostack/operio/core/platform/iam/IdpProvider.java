@@ -5,11 +5,12 @@ import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.spi.Plugin;
 
-import java.util.Set;
-
 /**
  * Identity provider abstraction — the core SPI for authentication,
- * user management, role management, and tenant lifecycle.
+ * user management, token verification, and tenant lifecycle.
+ *
+ * <p>Role management (authorization) is handled by the separate
+ * {@link com.koostack.operio.core.tenant.authz.AuthzProvider} SPI.
  *
  * <p>The platform defaults to a Keycloak implementation, but tenants
  * can override with any IdP (Auth0, Okta, Azure AD, etc.) by
@@ -140,37 +141,6 @@ public interface IdpProvider<T> extends Plugin<T> {
      *         if the token is invalid, expired, or the signature fails
      */
     IdentityContext verifyToken(String tenantId, String accessToken);
-
-    // -------------------------------------------------------------------
-    // Role Management
-    // -------------------------------------------------------------------
-
-    /**
-     * Assign a role to a user in the tenant's realm.
-     *
-     * @param tenantId the tenant realm
-     * @param userId   the user's IdP identifier
-     * @param role     the role name to assign
-     */
-    void assignRole(String tenantId, String userId, String role);
-
-    /**
-     * Remove a role from a user in the tenant's realm.
-     *
-     * @param tenantId the tenant realm
-     * @param userId   the user's IdP identifier
-     * @param role     the role name to remove
-     */
-    void removeRole(String tenantId, String userId, String role);
-
-    /**
-     * Get all roles assigned to a user in the tenant's realm.
-     *
-     * @param tenantId the tenant realm
-     * @param userId   the user's IdP identifier
-     * @return the user's roles, possibly empty — never {@code null}
-     */
-    Set<String> getUserRoles(String tenantId, String userId);
 
     // -------------------------------------------------------------------
     // Realm / Tenant Lifecycle

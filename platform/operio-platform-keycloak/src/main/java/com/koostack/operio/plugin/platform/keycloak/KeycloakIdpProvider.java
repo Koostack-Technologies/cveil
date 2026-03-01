@@ -14,7 +14,6 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
-import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,11 +26,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -373,39 +369,6 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     @Override
     public IdentityContext verifyToken(String tenantId, String accessToken) {
         return jwksVerifier.verify(jwksUrl(tenantId), accessToken, tenantId);
-    }
-
-    // -------------------------------------------------------------------
-    // Role Management
-    // -------------------------------------------------------------------
-
-    @Override
-    public void assignRole(String tenantId, String userId, String role) {
-        RealmResource realm = adminClient.realm(tenantId);
-        RoleRepresentation roleRep = realm.roles().get(role).toRepresentation();
-        realm.users().get(userId).roles().realmLevel().add(List.of(roleRep));
-        LOG.debug("Assigned role '{}' to user '{}' in tenant '{}'", role, userId, tenantId);
-    }
-
-    @Override
-    public void removeRole(String tenantId, String userId, String role) {
-        RealmResource realm = adminClient.realm(tenantId);
-        RoleRepresentation roleRep = realm.roles().get(role).toRepresentation();
-        realm.users().get(userId).roles().realmLevel().remove(List.of(roleRep));
-        LOG.debug("Removed role '{}' from user '{}' in tenant '{}'", role, userId, tenantId);
-    }
-
-    @Override
-    public Set<String> getUserRoles(String tenantId, String userId) {
-        List<RoleRepresentation> roles = adminClient.realm(tenantId)
-            .users().get(userId)
-            .roles().realmLevel().listEffective();
-
-        Set<String> roleNames = new HashSet<>();
-        for (RoleRepresentation r : roles) {
-            roleNames.add(r.getName());
-        }
-        return Collections.unmodifiableSet(roleNames);
     }
 
     // -------------------------------------------------------------------

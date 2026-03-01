@@ -15,6 +15,8 @@ import com.koostack.operio.core.models.FieldInfo;
 import com.koostack.operio.core.models.PolicySummaryEntry;
 import com.koostack.operio.core.models.PurposeInfo;
 import com.koostack.operio.core.models.RegulationInfo;
+import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
 import java.time.Instant;
@@ -303,6 +305,37 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public int deleteAuditLogBySubject(String subject) {
         return commandService().deleteAuditLogBySubjectCommand(subject);
+    }
+
+    // -----------------------------------------------------------------------
+    // IAM — Role Management (delegated to AuthzProvider via TenantContext)
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void assignUserRole(String userId, String role) {
+        AuthzProvider<?> authz = authzProvider();
+        if (authz == null) {
+            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+        }
+        authz.assignRole(TenantContext.require(), userId, role);
+    }
+
+    @Override
+    public void removeUserRole(String userId, String role) {
+        AuthzProvider<?> authz = authzProvider();
+        if (authz == null) {
+            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+        }
+        authz.removeRole(TenantContext.require(), userId, role);
+    }
+
+    @Override
+    public Set<String> listUserRoles(String userId) {
+        AuthzProvider<?> authz = authzProvider();
+        if (authz == null) {
+            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+        }
+        return authz.getUserRoles(TenantContext.require(), userId);
     }
 
     // -----------------------------------------------------------------------

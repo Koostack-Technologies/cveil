@@ -1,13 +1,16 @@
 package com.koostack.operio.rest.config;
 
 import com.koostack.operio.bundle.core.CoreConsentBundle;
+import com.koostack.operio.core.DefaultPlatformService;
 import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
+import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
@@ -98,6 +101,12 @@ public class OperioProducers {
     @Inject
     OperioConfig config;
 
+    @Inject
+    Instance<IdpProvider<?>> idpProviderInstance;
+
+    @Inject
+    Instance<AuthzProvider<?>> authzProviderInstance;
+
     // -----------------------------------------------------------------------
     // Primary Operio bean
     // -----------------------------------------------------------------------
@@ -154,6 +163,24 @@ public class OperioProducers {
             LOG.info(
                 "Operio REST API: embedded mode — platform admin and token verifier not wired"
             );
+        }
+
+        // -- IdP provider (production only, when Keycloak is configured) ------
+        if (idpProviderInstance.isResolvable()) {
+            IdpProvider<?> idp = idpProviderInstance.get();
+            if (idp != null) {
+                builder.withIdpProvider(idp);
+                LOG.info("Operio REST API: IdpProvider wired into builder");
+            }
+        }
+
+        // -- Authz provider (production only, when Keycloak is configured) ----
+        if (authzProviderInstance.isResolvable()) {
+            AuthzProvider<?> authz = authzProviderInstance.get();
+            if (authz != null) {
+                builder.withAuthzProvider(authz);
+                LOG.info("Operio REST API: AuthzProvider wired into builder");
+            }
         }
 
         // -- Command + query services (production: event-sourced + jOOQ) ------
@@ -293,6 +320,42 @@ public class OperioProducers {
     }
 
     /**
+     * Produces the {@link AuthzProvider} singleton — tenant-scoped
+     * authorization (role management) backed by Keycloak.
+     *
+     * <p>In production mode with Keycloak configured, returns a
+     * {@code KeycloakAuthzProvider}. In embedded mode or when Keycloak
+     * is not configured, returns {@code null}.
+     */
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public AuthzProvider authzProvider() {
+        if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
+            LOG.debug("Operio REST API: AuthzProvider not available (embedded mode)");
+            return null;
+        }
+
+        return config.keycloak().map(kc -> {
+            com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzConfig authzConfig =
+                new com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzConfig(
+                    kc.url(),
+                    "master",
+                    "admin-cli",
+                    kc.adminUsername(),
+                    kc.adminPassword()
+                );
+            com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzProvider provider =
+                new com.koostack.operio.tenant.authz.keycloak.KeycloakAuthzProvider(authzConfig);
+            LOG.info("Operio REST API: KeycloakAuthzProvider wired (url={})", kc.url());
+            return (AuthzProvider) provider;
+        }).orElseGet(() -> {
+            LOG.info("Operio REST API: No Keycloak configuration — AuthzProvider not available");
+            return null;
+        });
+    }
+
+    /**
      * Produces the {@link IdpTenantResolver} singleton — resolves which
      * {@link IdpProvider} to use for a given tenant.
      *
@@ -326,6 +389,33 @@ public class OperioProducers {
                 return defaultIdpProvider;
             }
         };
+    }
+
+    /**
+     * Produces the {@link PlatformService} singleton — handles cross-tenant
+     * IAM operations (user registration, email verification, password reset).
+     *
+     * <p>In production mode with an IdpProvider configured, returns a
+     * {@link DefaultPlatformService} backed by the IdpProvider. In embedded
+     * mode or when no IdpProvider is available, returns {@code null}.
+     */
+    @Produces
+    @ApplicationScoped
+    public PlatformService platformService() {
+        if (!idpProviderInstance.isResolvable()) {
+            LOG.debug("Operio REST API: PlatformService not available (no IdpProvider)");
+            return null;
+        }
+        IdpProvider<?> idp = idpProviderInstance.get();
+        if (idp == null) {
+            LOG.debug("Operio REST API: PlatformService not available (IdpProvider returned null)");
+            return null;
+        }
+
+        String appName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
+        PlatformService service = new DefaultPlatformService(appName, idp);
+        LOG.info("Operio REST API: PlatformService wired (DefaultPlatformService)");
+        return service;
     }
 
     // -----------------------------------------------------------------------

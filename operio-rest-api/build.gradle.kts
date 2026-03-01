@@ -51,6 +51,7 @@ dependencies {
     // compileOnly(project(":operio-bundle-embedded"))
     implementation(project(":platform:operio-platform-jooq"))
     implementation(project(":platform:operio-platform-keycloak"))
+    implementation(project(":tenant:operio-authz-keycloak"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
     implementation(project(":plugins:operio-jooq-common"))

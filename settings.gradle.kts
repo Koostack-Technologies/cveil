@@ -43,6 +43,7 @@ include("tenant:operio-authz-jooq-common")
 include("tenant:operio-authz-command")
 include("tenant:operio-authz-query-jooq")
 include("tenant:operio-authz-projection-jooq")
+include("tenant:operio-authz-keycloak")
 
 // --- Platform Billing ---
 include("platform:operio-billing-schema")

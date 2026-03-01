@@ -9,7 +9,9 @@ import com.koostack.operio.core.service.MaskingStrategy;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.sdk.SensitiveDiscovery;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
+import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
+import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.spi.Plugin;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.core.spi.PluginConfig;
@@ -50,6 +52,10 @@ public abstract class Operio implements OperioService {
     // -- Platform plugins -----------------------------------------------------
     private final TokenValidationService<?> tokenValidationService;
     private final PlatformAdminService<?> platformAdminService;
+    private final IdpProvider<?> idpProvider;
+
+    // -- Tenant plugins -------------------------------------------------------
+    private final AuthzProvider<?> authzProvider;
 
     // -- Discovery plugins ----------------------------------------------------
     private final SensitiveDiscovery<?> sensitiveDiscovery;
@@ -64,6 +70,8 @@ public abstract class Operio implements OperioService {
         this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
         this.tokenValidationService = builder.tokenValidationService;
         this.platformAdminService = builder.platformAdminService;
+        this.idpProvider = builder.idpProvider;
+        this.authzProvider = builder.authzProvider;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
         // Propagate appName to any service that supports namespacing
@@ -162,6 +170,22 @@ public abstract class Operio implements OperioService {
     }
 
     /**
+     * Returns the configured {@link IdpProvider}, or {@code null}
+     * if none was registered.
+     */
+    public IdpProvider<?> idpProvider() {
+        return idpProvider;
+    }
+
+    /**
+     * Returns the configured {@link AuthzProvider}, or {@code null}
+     * if none was registered.
+     */
+    public AuthzProvider<?> authzProvider() {
+        return authzProvider;
+    }
+
+    /**
      * Returns the configured {@link IdentityResolver}, or {@code null}
      * if none was registered.
      */
@@ -244,6 +268,10 @@ public abstract class Operio implements OperioService {
         // -- Platform ---------------------------------------------------------
         private TokenValidationService<?> tokenValidationService;
         private PlatformAdminService<?> platformAdminService;
+        private IdpProvider<?> idpProvider;
+
+        // -- Tenant -----------------------------------------------------------
+        private AuthzProvider<?> authzProvider;
 
         // -- Discovery --------------------------------------------------------
         private SensitiveDiscovery<?> sensitiveDiscovery;
@@ -511,6 +539,30 @@ public abstract class Operio implements OperioService {
          */
         public Builder withPlatformAdmin(PlatformAdminService<?> service) {
             this.platformAdminService = service;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link IdpProvider} instance for identity
+         * management (user registration, token verification, tenant lifecycle).
+         *
+         * @param idpProvider the identity provider
+         * @return this builder
+         */
+        public Builder withIdpProvider(IdpProvider<?> idpProvider) {
+            this.idpProvider = idpProvider;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link AuthzProvider} instance for
+         * tenant-scoped authorization (role management).
+         *
+         * @param authzProvider the authorization provider
+         * @return this builder
+         */
+        public Builder withAuthzProvider(AuthzProvider<?> authzProvider) {
+            this.authzProvider = authzProvider;
             return this;
         }
 
