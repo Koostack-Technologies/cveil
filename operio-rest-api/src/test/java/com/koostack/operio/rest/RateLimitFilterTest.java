@@ -464,7 +464,7 @@ class RateLimitFilterTest {
         void burstExceededSkipsMonthly() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstExceeded(60)
@@ -490,7 +490,7 @@ class RateLimitFilterTest {
         void monthlyAllowedPassesThrough() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -512,7 +512,7 @@ class RateLimitFilterTest {
         void monthlyExceededAborts() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -535,7 +535,7 @@ class RateLimitFilterTest {
         void monthlyExceededMessage() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -563,7 +563,7 @@ class RateLimitFilterTest {
         void monthlyExceededRetryAfter() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -648,37 +648,37 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("/evaluate is an evaluation endpoint")
         void evaluatePath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/evaluate");
+            assertMonthlyChecked("api/v1/subjects/consent/evaluate");
         }
 
         @Test
         @DisplayName("/grant is an evaluation endpoint")
         void grantPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/grant");
+            assertMonthlyChecked("api/v1/subjects/consent/grant");
         }
 
         @Test
         @DisplayName("/revoke is an evaluation endpoint")
         void revokePath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/revoke");
+            assertMonthlyChecked("api/v1/subjects/consent/revoke");
         }
 
         @Test
         @DisplayName("/grant-batch is an evaluation endpoint")
         void grantBatchPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/grant-batch");
+            assertMonthlyChecked("api/v1/subjects/consent/grant-batch");
         }
 
         @Test
         @DisplayName("/revoke-batch is an evaluation endpoint")
         void revokeBatchPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/revoke-batch");
+            assertMonthlyChecked("api/v1/subjects/consent/revoke-batch");
         }
 
         @Test
         @DisplayName("path with leading slash is recognized")
         void pathWithLeadingSlash() throws IOException {
-            assertMonthlyChecked("/api/v1/consent/evaluate");
+            assertMonthlyChecked("/api/v1/subjects/consent/evaluate");
         }
 
         @Test
@@ -701,18 +701,18 @@ class RateLimitFilterTest {
 
         @Test
         @DisplayName(
-            "/consent/subjects/{id}/summary is NOT an evaluation endpoint"
+            "/subjects/{id}/summary is NOT an evaluation endpoint"
         )
         void subjectSummaryNotEvaluation() throws IOException {
-            assertMonthlyNotChecked("api/v1/consent/subjects/user-1/summary");
+            assertMonthlyNotChecked("api/v1/subjects/user-1/summary");
         }
 
         @Test
         @DisplayName(
-            "/consent/subjects/{id}/history is NOT an evaluation endpoint"
+            "/subjects/{id}/history is NOT an evaluation endpoint"
         )
         void subjectHistoryNotEvaluation() throws IOException {
-            assertMonthlyNotChecked("api/v1/consent/subjects/user-1/history");
+            assertMonthlyNotChecked("api/v1/subjects/user-1/history");
         }
 
         @Test
@@ -990,7 +990,7 @@ class RateLimitFilterTest {
             // --- Request phase ---
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             RateLimitResult burst = burstAllowed(60, 55);
             RateLimitResult monthly = monthlyAllowed(10_000, 500, true);
@@ -1181,7 +1181,7 @@ class RateLimitFilterTest {
         void consentNonEvalPath() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/subjects/user-1/summary");
+            givenPath("api/v1/subjects/user-1/summary");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -1225,7 +1225,7 @@ class RateLimitFilterTest {
         void burstAbortsPreventsMonthly() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstExceeded(60)
@@ -1251,7 +1251,7 @@ class RateLimitFilterTest {
         void grantBatch() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/grant-batch");
+            givenPath("api/v1/subjects/consent/grant-batch");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -1277,7 +1277,7 @@ class RateLimitFilterTest {
         void revokeBatch() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/revoke-batch");
+            givenPath("api/v1/subjects/consent/revoke-batch");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)
@@ -1352,7 +1352,7 @@ class RateLimitFilterTest {
         void monthlyAbortHeaderSet() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             when(rateLimitService.checkBurst("acme")).thenReturn(
                 burstAllowed(60, 55)

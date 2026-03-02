@@ -492,7 +492,7 @@ class RequestTracingFilterTest {
             lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
             lenient()
                 .when(uriInfo.getRequestUri())
-                .thenReturn(URI.create("/api/v1/consent/grant"));
+                .thenReturn(URI.create("/api/v1/subjects/consent/grant"));
 
             // Pre-set placeholder values (as request filter would)
             MDC.put(RequestTracingFilter.MDC_TENANT_ID, "-");
@@ -665,7 +665,7 @@ class RequestTracingFilterTest {
             lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
             lenient()
                 .when(uriInfo.getRequestUri())
-                .thenReturn(URI.create("/api/v1/consent/grant"));
+                .thenReturn(URI.create("/api/v1/subjects/consent/grant"));
 
             filter.filter(requestContext, responseContext);
 
@@ -948,7 +948,7 @@ class RequestTracingFilterTest {
             lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
             lenient()
                 .when(uriInfo.getRequestUri())
-                .thenReturn(URI.create("/api/v1/consent/evaluate"));
+                .thenReturn(URI.create("/api/v1/subjects/consent/evaluate"));
 
             lenient().when(responseContext.getStatus()).thenReturn(200);
 

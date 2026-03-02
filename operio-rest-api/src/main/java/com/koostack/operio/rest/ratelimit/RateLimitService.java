@@ -375,7 +375,7 @@ public class RateLimitService {
      * publishes a {@code consent_evaluations} metric.
      *
      * <p>This method should be called only for consent evaluation endpoints
-     * (e.g. {@code POST /api/v1/consent/evaluate}). It reads the current
+     * (e.g. {@code POST /api/v1/subjects/consent/evaluate}). It reads the current
      * Redis counter (maintained by {@code RateLimitRedisMetricProjection})
      * and publishes a metric to the tenant stream. The projection
      * asynchronously increments the counter.

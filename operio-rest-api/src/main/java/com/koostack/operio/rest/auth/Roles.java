@@ -53,7 +53,7 @@ import com.koostack.operio.core.models.IdentityContext;
  *
  * @see com.koostack.operio.rest.filter.ApiKeyAuthFilter
  * @see com.koostack.operio.rest.resource.ConsentResource
- * @see com.koostack.operio.rest.resource.AdminResource
+ * @see com.koostack.operio.rest.resource.CatalogueResource
  * @see com.koostack.operio.rest.resource.PlatformResource
  */
 public final class Roles {

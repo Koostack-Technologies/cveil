@@ -75,7 +75,7 @@ import org.slf4j.LoggerFactory;
  *
  * @see Roles
  */
-@Path("/api/v1/consent")
+@Path("/api/v1/subjects")
 @TenantScoped
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -98,7 +98,7 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @POST
-    @Path("/grant")
+    @Path("/consent/grant")
     @Operation(
         operationId = "grantConsent",
         summary = "Grant consent for a single scope",
@@ -149,7 +149,7 @@ public class ConsentResource {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/grant - subject={}, scope={}",
+            "POST /subjects/consent/grant - subject={}, scope={}",
             request.subject(),
             request.scope()
         );
@@ -164,7 +164,7 @@ public class ConsentResource {
     }
 
     @POST
-    @Path("/revoke")
+    @Path("/consent/revoke")
     @Operation(
         operationId = "revokeConsent",
         summary = "Revoke consent for a single scope",
@@ -214,7 +214,7 @@ public class ConsentResource {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/revoke - subject={}, scope={}",
+            "POST /subjects/consent/revoke - subject={}, scope={}",
             request.subject(),
             request.scope()
         );
@@ -228,7 +228,7 @@ public class ConsentResource {
     }
 
     @POST
-    @Path("/grant-all")
+    @Path("/consent/grant-all")
     @Operation(
         operationId = "grantAllConsent",
         summary = "Grant consent for multiple scopes in a single request",
@@ -281,7 +281,7 @@ public class ConsentResource {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/grant-all - subject={}, count={}",
+            "POST /subjects/consent/grant-all - subject={}, count={}",
             request.subject(),
             request.grants() != null ? request.grants().size() : 0
         );
@@ -301,7 +301,7 @@ public class ConsentResource {
     }
 
     @POST
-    @Path("/revoke-all")
+    @Path("/consent/revoke-all")
     @Operation(
         operationId = "revokeAllConsent",
         summary = "Revoke consent for multiple scopes in a single request",
@@ -354,7 +354,7 @@ public class ConsentResource {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/revoke-all - subject={}, count={}",
+            "POST /subjects/consent/revoke-all - subject={}, count={}",
             request.subject(),
             request.revokes() != null ? request.revokes().size() : 0
         );
@@ -378,7 +378,7 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @POST
-    @Path("/evaluate")
+    @Path("/consent/evaluate")
     @Operation(
         operationId = "evaluateConsent",
         summary = "Evaluate consent for a subject against a set of scopes",
@@ -428,7 +428,7 @@ public class ConsentResource {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
         LOG.debug(
-            "POST /consent/evaluate - subject={}, scopeCount={}",
+            "POST /subjects/consent/evaluate - subject={}, scopeCount={}",
             request.subject(),
             request.scopes() != null ? request.scopes().size() : 0
         );
@@ -447,7 +447,7 @@ public class ConsentResource {
     }
 
     @GET
-    @Path("/subjects/{id}/summary")
+    @Path("/{id}/summary")
     @Operation(
         operationId = "getSubjectSummary",
         summary = "List all consent policies for a subject",
@@ -495,7 +495,7 @@ public class ConsentResource {
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
-        LOG.debug("GET /consent/subjects/{}/summary", subjectId);
+        LOG.debug("GET /subjects/{}/summary", subjectId);
 
         SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
 
@@ -503,7 +503,7 @@ public class ConsentResource {
     }
 
     @GET
-    @Path("/subjects/{id}/history")
+    @Path("/{id}/history")
     @Operation(
         operationId = "getSubjectHistory",
         summary = "Get current consent state for a subject",
@@ -550,7 +550,7 @@ public class ConsentResource {
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
-        LOG.debug("GET /consent/subjects/{}/history", subjectId);
+        LOG.debug("GET /subjects/{}/history", subjectId);
 
         // In the new schema, the event stream is the historical record.
         // The consent ledger shows current state per subject.
@@ -563,7 +563,7 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @GET
-    @Path("/subjects/{id}/export")
+    @Path("/{id}/export")
     @Operation(
         operationId = "exportSubjectData",
         summary = "Export all data for a subject (GDPR Article 20)",
@@ -634,7 +634,7 @@ public class ConsentResource {
             LOG.debug("DSAR export scoped to tenant: {}", TenantContext.get());
         }
 
-        LOG.debug("GET /consent/subjects/{}/export", subjectId);
+        LOG.debug("GET /subjects/{}/export", subjectId);
 
         try {
             SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
@@ -665,7 +665,7 @@ public class ConsentResource {
     }
 
     @DELETE
-    @Path("/subjects/{id}")
+    @Path("/{id}")
     @Operation(
         operationId = "deleteSubjectData",
         summary = "Erase all data for a subject (GDPR Article 17)",
@@ -758,7 +758,7 @@ public class ConsentResource {
         }
 
         LOG.debug(
-            "DELETE /consent/subjects/{} (with valid confirmation)",
+            "DELETE /subjects/{} (with valid confirmation)",
             subjectId
         );
 

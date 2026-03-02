@@ -3,9 +3,10 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
-import com.koostack.operio.rest.resource.AdminResource;
+import com.koostack.operio.rest.resource.CatalogueResource;
 import com.koostack.operio.rest.resource.ConsentResource;
 import com.koostack.operio.rest.resource.HealthResource;
+import com.koostack.operio.rest.resource.LegalResource;
 import com.koostack.operio.rest.resource.PlatformResource;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -103,18 +104,20 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("defines all four tags in correct order")
+        @DisplayName("defines all six tags")
         void definesAllTags() {
             OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
                 OpenAPIDefinition.class
             );
             Tag[] tags = def.tags();
-            assertEquals(4, tags.length, "Should define 4 tags");
+            assertEquals(6, tags.length, "Should define 6 tags");
 
             Set<String> tagNames = Arrays.stream(tags)
                 .map(Tag::name)
                 .collect(Collectors.toSet());
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CONSENT));
+            assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CATALOGUE));
+            assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_LEGAL));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_ADMIN));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_PLATFORM));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_HEALTH));
@@ -193,10 +196,14 @@ class OpenApiAnnotationTest {
         @DisplayName("tag constants are non-null and non-blank")
         void tagConstantsAreValid() {
             assertNotNull(OperioOpenApiConfig.TAG_CONSENT);
+            assertNotNull(OperioOpenApiConfig.TAG_CATALOGUE);
+            assertNotNull(OperioOpenApiConfig.TAG_LEGAL);
             assertNotNull(OperioOpenApiConfig.TAG_ADMIN);
             assertNotNull(OperioOpenApiConfig.TAG_PLATFORM);
             assertNotNull(OperioOpenApiConfig.TAG_HEALTH);
             assertFalse(OperioOpenApiConfig.TAG_CONSENT.isBlank());
+            assertFalse(OperioOpenApiConfig.TAG_CATALOGUE.isBlank());
+            assertFalse(OperioOpenApiConfig.TAG_LEGAL.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_ADMIN.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_PLATFORM.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_HEALTH.isBlank());
@@ -337,64 +344,126 @@ class OpenApiAnnotationTest {
     }
 
     // ===================================================================
-    // AdminResource annotations
+    // CatalogueResource annotations
     // ===================================================================
 
     @Nested
-    @DisplayName("AdminResource")
-    class AdminResourceTests {
+    @DisplayName("CatalogueResource")
+    class CatalogueResourceTests {
 
         @Test
-        @DisplayName("class has @Tag referencing Admin")
+        @DisplayName("class has @Tag referencing Catalogue")
         void hasTag() {
-            Tag tag = AdminResource.class.getAnnotation(Tag.class);
-            assertNotNull(tag, "AdminResource must have @Tag");
-            assertEquals(OperioOpenApiConfig.TAG_ADMIN, tag.ref());
+            Tag tag = CatalogueResource.class.getAnnotation(Tag.class);
+            assertNotNull(tag, "CatalogueResource must have @Tag");
+            assertEquals(OperioOpenApiConfig.TAG_CATALOGUE, tag.ref());
         }
 
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = AdminResource.class.getAnnotation(
+            SecurityRequirement sr = CatalogueResource.class.getAnnotation(
                 SecurityRequirement.class
             );
-            assertNotNull(sr, "AdminResource must have @SecurityRequirement");
+            assertNotNull(sr, "CatalogueResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
 
         @Test
         @DisplayName("all public endpoint methods have @Operation")
         void allMethodsHaveOperation() {
-            assertAllEndpointMethodsHaveOperation(AdminResource.class);
+            assertAllEndpointMethodsHaveOperation(CatalogueResource.class);
         }
 
         @Test
         @DisplayName("all public endpoint methods have @APIResponses")
         void allMethodsHaveApiResponses() {
-            assertAllEndpointMethodsHaveApiResponses(AdminResource.class);
+            assertAllEndpointMethodsHaveApiResponses(CatalogueResource.class);
         }
 
         @Test
-        @DisplayName("admin endpoints have 19 distinct operation IDs")
+        @DisplayName("catalogue endpoints have 5 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
-            long opCount = countOperationAnnotatedMethods(AdminResource.class);
+            long opCount = countOperationAnnotatedMethods(CatalogueResource.class);
             assertEquals(
-                19,
+                5,
                 opCount,
-                "AdminResource should have 19 @Operation methods"
+                "CatalogueResource should have 5 @Operation methods"
             );
         }
 
         @Test
         @DisplayName("all operation IDs are unique")
         void operationIdsAreUnique() {
-            assertOperationIdsAreUnique(AdminResource.class);
+            assertOperationIdsAreUnique(CatalogueResource.class);
         }
 
         @Test
         @DisplayName("every @Operation has a non-blank summary")
         void operationsHaveSummaries() {
-            assertAllOperationsHaveSummaries(AdminResource.class);
+            assertAllOperationsHaveSummaries(CatalogueResource.class);
+        }
+    }
+
+    // ===================================================================
+    // LegalResource annotations
+    // ===================================================================
+
+    @Nested
+    @DisplayName("LegalResource")
+    class LegalResourceTests {
+
+        @Test
+        @DisplayName("class has @Tag referencing Legal")
+        void hasTag() {
+            Tag tag = LegalResource.class.getAnnotation(Tag.class);
+            assertNotNull(tag, "LegalResource must have @Tag");
+            assertEquals(OperioOpenApiConfig.TAG_LEGAL, tag.ref());
+        }
+
+        @Test
+        @DisplayName("class has @SecurityRequirement referencing BearerAuth")
+        void hasSecurityRequirement() {
+            SecurityRequirement sr = LegalResource.class.getAnnotation(
+                SecurityRequirement.class
+            );
+            assertNotNull(sr, "LegalResource must have @SecurityRequirement");
+            assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
+        }
+
+        @Test
+        @DisplayName("all public endpoint methods have @Operation")
+        void allMethodsHaveOperation() {
+            assertAllEndpointMethodsHaveOperation(LegalResource.class);
+        }
+
+        @Test
+        @DisplayName("all public endpoint methods have @APIResponses")
+        void allMethodsHaveApiResponses() {
+            assertAllEndpointMethodsHaveApiResponses(LegalResource.class);
+        }
+
+        @Test
+        @DisplayName("legal endpoints have 14 distinct operation IDs")
+        void hasCorrectNumberOfOperations() {
+            long opCount = countOperationAnnotatedMethods(LegalResource.class);
+            assertEquals(
+                14,
+                opCount,
+                "LegalResource should have 14 @Operation methods"
+            );
+        }
+
+        @Test
+        @DisplayName("all operation IDs are unique")
+        void operationIdsAreUnique() {
+            assertOperationIdsAreUnique(LegalResource.class);
+        }
+
+        @Test
+        @DisplayName("every @Operation has a non-blank summary")
+        void operationsHaveSummaries() {
+            assertAllOperationsHaveSummaries(LegalResource.class);
         }
     }
 
@@ -590,7 +659,8 @@ class OpenApiAnnotationTest {
             Set<String> allIds = new java.util.HashSet<>();
             for (Class<?> clazz : new Class<?>[] {
                 ConsentResource.class,
-                AdminResource.class,
+                CatalogueResource.class,
+                LegalResource.class,
                 PlatformResource.class,
                 HealthResource.class,
             }) {
@@ -609,7 +679,7 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 9 consent + 19 admin + 8 platform + 1 health = 37
+            // 9 consent + 5 catalogue + 14 legal + 8 platform + 1 health = 37
             assertEquals(
                 37,
                 allIds.size(),
@@ -626,7 +696,10 @@ class OpenApiAnnotationTest {
                 ConsentResource.class.getAnnotation(SecurityRequirement.class)
             );
             assertNotNull(
-                AdminResource.class.getAnnotation(SecurityRequirement.class)
+                CatalogueResource.class.getAnnotation(SecurityRequirement.class)
+            );
+            assertNotNull(
+                LegalResource.class.getAnnotation(SecurityRequirement.class)
             );
             assertNotNull(
                 PlatformResource.class.getAnnotation(SecurityRequirement.class)
@@ -637,10 +710,11 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("all four resource classes have @Tag")
+        @DisplayName("all resource classes have @Tag")
         void allResourcesHaveTag() {
             assertNotNull(ConsentResource.class.getAnnotation(Tag.class));
-            assertNotNull(AdminResource.class.getAnnotation(Tag.class));
+            assertNotNull(CatalogueResource.class.getAnnotation(Tag.class));
+            assertNotNull(LegalResource.class.getAnnotation(Tag.class));
             assertNotNull(PlatformResource.class.getAnnotation(Tag.class));
             assertNotNull(HealthResource.class.getAnnotation(Tag.class));
         }

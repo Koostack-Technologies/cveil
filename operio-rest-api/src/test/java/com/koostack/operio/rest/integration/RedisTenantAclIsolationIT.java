@@ -933,7 +933,7 @@ class RedisTenantAclIsolationIT {
                     )
                 ))
                 .when()
-                .post("/api/v1/consent/grant")
+                .post("/api/v1/subjects/consent/grant")
                 .then()
                 .statusCode(anyOf(is(200), is(201), is(204)));
 
@@ -950,7 +950,7 @@ class RedisTenantAclIsolationIT {
                     ))
                 ))
                 .when()
-                .post("/api/v1/consent/evaluate")
+                .post("/api/v1/subjects/consent/evaluate")
                 .then()
                 .statusCode(200)
                 .body("granted", hasSize(1));
@@ -969,7 +969,7 @@ class RedisTenantAclIsolationIT {
                     ))
                 ))
                 .when()
-                .post("/api/v1/consent/evaluate")
+                .post("/api/v1/subjects/consent/evaluate")
                 .then()
                 .statusCode(200)
                 .body("granted", hasSize(0),
@@ -993,7 +993,7 @@ class RedisTenantAclIsolationIT {
                     )
                 ))
                 .when()
-                .post("/api/v1/consent/grant")
+                .post("/api/v1/subjects/consent/grant")
                 .then()
                 .statusCode(anyOf(is(200), is(201), is(204)));
 
@@ -1010,7 +1010,7 @@ class RedisTenantAclIsolationIT {
                     ))
                 ))
                 .when()
-                .post("/api/v1/consent/evaluate")
+                .post("/api/v1/subjects/consent/evaluate")
                 .then()
                 .statusCode(200)
                 .body("granted", hasSize(1));
@@ -1028,7 +1028,7 @@ class RedisTenantAclIsolationIT {
                     ))
                 ))
                 .when()
-                .post("/api/v1/consent/evaluate")
+                .post("/api/v1/subjects/consent/evaluate")
                 .then()
                 .statusCode(200)
                 .body("granted", hasSize(0),

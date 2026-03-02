@@ -26,8 +26,9 @@ import com.koostack.operio.rest.dto.ConsentScopeDto;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
-import com.koostack.operio.rest.resource.AdminResource;
+import com.koostack.operio.rest.resource.CatalogueResource;
 import com.koostack.operio.rest.resource.ConsentResource;
+import com.koostack.operio.rest.resource.LegalResource;
 import com.koostack.operio.rest.resource.PlatformResource;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -52,7 +53,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  *       super-admin bypass, null context handling</li>
  *   <li>{@link ConsentResource} — consent:read for evaluate/summary/history,
  *       consent:write for grant/revoke/batch operations</li>
- *   <li>{@link AdminResource} — admin:read for listing endpoints,
+ *   <li>{@link CatalogueResource} — admin:read for listing fields,
+ *       admin:write for register/remove/category endpoints</li>
+ *   <li>{@link LegalResource} — admin:read for listing purposes/regulations,
  *       admin:write for register/link endpoints</li>
  *   <li>{@link PlatformResource} — super-admin requirement for all endpoints</li>
  * </ul>
@@ -504,7 +507,7 @@ class RbacTest {
         // -- grant() --
 
         @Nested
-        @DisplayName("POST /consent/grant")
+        @DisplayName("POST /subjects/consent/grant")
         class Grant {
 
             @Test
@@ -562,7 +565,7 @@ class RbacTest {
         // -- revoke() --
 
         @Nested
-        @DisplayName("POST /consent/revoke")
+        @DisplayName("POST /subjects/consent/revoke")
         class Revoke {
 
             @Test
@@ -602,7 +605,7 @@ class RbacTest {
         // -- grantAll() --
 
         @Nested
-        @DisplayName("POST /consent/grant-all")
+        @DisplayName("POST /subjects/consent/grant-all")
         class GrantAll {
 
             @BeforeEach
@@ -660,7 +663,7 @@ class RbacTest {
         // -- revokeAll() --
 
         @Nested
-        @DisplayName("POST /consent/revoke-all")
+        @DisplayName("POST /subjects/consent/revoke-all")
         class RevokeAll {
 
             @BeforeEach
@@ -707,7 +710,7 @@ class RbacTest {
         // -- evaluate() --
 
         @Nested
-        @DisplayName("POST /consent/evaluate")
+        @DisplayName("POST /subjects/consent/evaluate")
         class Evaluate {
 
             @BeforeEach
@@ -788,7 +791,7 @@ class RbacTest {
         // -- subjectSummary() --
 
         @Nested
-        @DisplayName("GET /consent/subjects/{id}/summary")
+        @DisplayName("GET /subjects/{id}/summary")
         class SubjectSummary {
 
             @BeforeEach
@@ -835,7 +838,7 @@ class RbacTest {
         // -- subjectHistory() --
 
         @Nested
-        @DisplayName("GET /consent/subjects/{id}/history")
+        @DisplayName("GET /subjects/{id}/history")
         class SubjectHistory {
 
             @BeforeEach
@@ -995,35 +998,27 @@ class RbacTest {
     }
 
     // -------------------------------------------------------------------
-    // AdminResource RBAC tests
+    // CatalogueResource RBAC tests
     // -------------------------------------------------------------------
 
     @Nested
-    @DisplayName("AdminResource RBAC")
-    class AdminResourceRbac {
+    @DisplayName("CatalogueResource RBAC")
+    class CatalogueResourceRbac {
 
-        private AdminResource resource;
+        private CatalogueResource resource;
         private TenantService tenantService;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
-            resource = new AdminResource();
+            resource = new CatalogueResource();
             tenantService = mock(TenantService.class);
 
-            // Stub listing methods to return empty lists
             when(tenantService.listFields()).thenReturn(
                 Collections.emptyList()
             );
-            when(tenantService.listPurposes()).thenReturn(
-                Collections.emptyList()
-            );
-            when(tenantService.listRegulations()).thenReturn(
-                Collections.emptyList()
-            );
 
-            // Inject TenantService via reflection
-            var field = AdminResource.class.getDeclaredField("tenantService");
+            var field = CatalogueResource.class.getDeclaredField("tenantService");
             field.setAccessible(true);
             field.set(resource, tenantService);
         }
@@ -1031,7 +1026,7 @@ class RbacTest {
         // -- Read endpoints --
 
         @Nested
-        @DisplayName("GET /admin/fields (listFields)")
+        @DisplayName("GET /catalogue/fields (listFields)")
         class ListFields {
 
             @Test
@@ -1085,52 +1080,10 @@ class RbacTest {
             }
         }
 
-        @Nested
-        @DisplayName("GET /admin/purposes (listPurposes)")
-        class ListPurposes {
-
-            @Test
-            @DisplayName("admin:read → 200")
-            void adminReadAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                Response response = resource.listPurposes(ctx);
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listPurposes(emptySecurityContext())
-                );
-            }
-        }
-
-        @Nested
-        @DisplayName("GET /admin/regulations (listRegulations)")
-        class ListRegulations {
-
-            @Test
-            @DisplayName("admin:read → 200")
-            void adminReadAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                Response response = resource.listRegulations(ctx);
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listRegulations(emptySecurityContext())
-                );
-            }
-        }
-
         // -- Write endpoints --
 
         @Nested
-        @DisplayName("POST /admin/fields (registerField)")
+        @DisplayName("POST /catalogue/fields (registerField)")
         class RegisterField {
 
             private RegisterFieldRequest request() {
@@ -1194,76 +1147,7 @@ class RbacTest {
         }
 
         @Nested
-        @DisplayName("POST /admin/purposes (registerPurpose)")
-        class RegisterPurpose {
-
-            private RegisterPurposeRequest request() {
-                return new RegisterPurposeRequest(
-                    "marketing",
-                    "Marketing communications"
-                );
-            }
-
-            @Test
-            @DisplayName("admin:write → 201")
-            void adminWriteAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.registerPurpose(ctx, request());
-                assertEquals(201, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:read → 403")
-            void adminReadDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerPurpose(ctx, request())
-                );
-            }
-        }
-
-        @Nested
-        @DisplayName("POST /admin/regulations (registerRegulation)")
-        class RegisterRegulation {
-
-            private RegisterRegulationRequest request() {
-                return new RegisterRegulationRequest(
-                    "gdpr",
-                    "General Data Protection Regulation"
-                );
-            }
-
-            @Test
-            @DisplayName("admin:write → 201")
-            void adminWriteAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.registerRegulation(ctx, request());
-                assertEquals(201, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:read → 403")
-            void adminReadDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerRegulation(ctx, request())
-                );
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerRegulation(
-                        emptySecurityContext(),
-                        request()
-                    )
-                );
-            }
-        }
-
-        @Nested
-        @DisplayName("POST /admin/fields/categories (assignFieldCategory)")
+        @DisplayName("POST /catalogue/fields/categories (assignFieldCategory)")
         class AssignFieldCategory {
 
             private AssignFieldCategoryRequest request() {
@@ -1313,8 +1197,224 @@ class RbacTest {
             }
         }
 
+        // -- Cross-cutting catalogue tests --
+
         @Nested
-        @DisplayName("POST /admin/purposes/links (linkPurposeToRegulation)")
+        @DisplayName("Cross-cutting catalogue role checks")
+        class CatalogueCrossCutting {
+
+            @Test
+            @DisplayName("consent:read cannot access any catalogue endpoint")
+            void consentReadCannotAccessCatalogue() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
+                assertThrows(OperioAuthException.class, () ->
+                    resource.listFields(ctx)
+                );
+                assertThrows(OperioAuthException.class, () ->
+                    resource.registerField(
+                        ctx,
+                        new RegisterFieldRequest("f", "e", "d", "ed")
+                    )
+                );
+            }
+
+            @Test
+            @DisplayName("consent:write cannot access any catalogue endpoint")
+            void consentWriteCannotAccessCatalogue() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(OperioAuthException.class, () ->
+                    resource.listFields(ctx)
+                );
+                assertThrows(OperioAuthException.class, () ->
+                    resource.registerField(
+                        ctx,
+                        new RegisterFieldRequest("f", "e", "d", "ed")
+                    )
+                );
+            }
+
+            @Test
+            @DisplayName("both admin roles → full catalogue access")
+            void bothAdminRolesGrantFullAccess() {
+                SecurityContext ctx = securityContextWith(
+                    Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)
+                );
+                assertDoesNotThrow(() -> resource.listFields(ctx));
+                assertDoesNotThrow(() ->
+                    resource.registerField(
+                        ctx,
+                        new RegisterFieldRequest("f", "e", "d", "ed")
+                    )
+                );
+                assertDoesNotThrow(() ->
+                    resource.assignFieldCategory(
+                        ctx,
+                        new AssignFieldCategoryRequest("f", "e", "c", "desc")
+                    )
+                );
+            }
+
+            @Test
+            @DisplayName("super-admin → full catalogue access (read + write)")
+            void superAdminFullCatalogueAccess() {
+                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
+                assertDoesNotThrow(() -> resource.listFields(ctx));
+                assertDoesNotThrow(() ->
+                    resource.registerField(
+                        ctx,
+                        new RegisterFieldRequest("f", "e", "d", "ed")
+                    )
+                );
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // LegalResource RBAC tests
+    // -------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("LegalResource RBAC")
+    class LegalResourceRbac {
+
+        private LegalResource resource;
+        private TenantService tenantService;
+
+        @SuppressWarnings("unchecked")
+        @BeforeEach
+        void setUp() throws Exception {
+            resource = new LegalResource();
+            tenantService = mock(TenantService.class);
+
+            when(tenantService.listPurposes()).thenReturn(
+                Collections.emptyList()
+            );
+            when(tenantService.listRegulations()).thenReturn(
+                Collections.emptyList()
+            );
+
+            var field = LegalResource.class.getDeclaredField("tenantService");
+            field.setAccessible(true);
+            field.set(resource, tenantService);
+        }
+
+        // -- Read endpoints --
+
+        @Nested
+        @DisplayName("GET /legal/purposes (listPurposes)")
+        class ListPurposes {
+
+            @Test
+            @DisplayName("admin:read → 200")
+            void adminReadAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                Response response = resource.listPurposes(ctx);
+                assertEquals(200, response.getStatus());
+            }
+
+            @Test
+            @DisplayName("no roles → 403")
+            void noRolesDenied() {
+                assertThrows(OperioAuthException.class, () ->
+                    resource.listPurposes(emptySecurityContext())
+                );
+            }
+        }
+
+        @Nested
+        @DisplayName("GET /legal/regulations (listRegulations)")
+        class ListRegulations {
+
+            @Test
+            @DisplayName("admin:read → 200")
+            void adminReadAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                Response response = resource.listRegulations(ctx);
+                assertEquals(200, response.getStatus());
+            }
+
+            @Test
+            @DisplayName("no roles → 403")
+            void noRolesDenied() {
+                assertThrows(OperioAuthException.class, () ->
+                    resource.listRegulations(emptySecurityContext())
+                );
+            }
+        }
+
+        // -- Write endpoints --
+
+        @Nested
+        @DisplayName("POST /legal/purposes (registerPurpose)")
+        class RegisterPurpose {
+
+            private RegisterPurposeRequest request() {
+                return new RegisterPurposeRequest(
+                    "marketing",
+                    "Marketing communications"
+                );
+            }
+
+            @Test
+            @DisplayName("admin:write → 201")
+            void adminWriteAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
+                Response response = resource.registerPurpose(ctx, request());
+                assertEquals(201, response.getStatus());
+            }
+
+            @Test
+            @DisplayName("admin:read → 403")
+            void adminReadDenied() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                assertThrows(OperioAuthException.class, () ->
+                    resource.registerPurpose(ctx, request())
+                );
+            }
+        }
+
+        @Nested
+        @DisplayName("POST /legal/regulations (registerRegulation)")
+        class RegisterRegulation {
+
+            private RegisterRegulationRequest request() {
+                return new RegisterRegulationRequest(
+                    "gdpr",
+                    "General Data Protection Regulation"
+                );
+            }
+
+            @Test
+            @DisplayName("admin:write → 201")
+            void adminWriteAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
+                Response response = resource.registerRegulation(ctx, request());
+                assertEquals(201, response.getStatus());
+            }
+
+            @Test
+            @DisplayName("admin:read → 403")
+            void adminReadDenied() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                assertThrows(OperioAuthException.class, () ->
+                    resource.registerRegulation(ctx, request())
+                );
+            }
+
+            @Test
+            @DisplayName("no roles → 403")
+            void noRolesDenied() {
+                assertThrows(OperioAuthException.class, () ->
+                    resource.registerRegulation(
+                        emptySecurityContext(),
+                        request()
+                    )
+                );
+            }
+        }
+
+        @Nested
+        @DisplayName("POST /legal/purposes/links (linkPurposeToRegulation)")
         class LinkPurposeRegulation {
 
             private LinkPurposeRegulationRequest request() {
@@ -1359,65 +1459,47 @@ class RbacTest {
             }
         }
 
-        // -- Cross-cutting admin tests --
+        // -- Cross-cutting legal tests --
 
         @Nested
-        @DisplayName("Cross-cutting admin role checks")
-        class AdminCrossCutting {
+        @DisplayName("Cross-cutting legal role checks")
+        class LegalCrossCutting {
 
             @Test
-            @DisplayName("consent:read cannot access any admin endpoint")
-            void consentReadCannotAccessAdmin() {
+            @DisplayName("consent:read cannot access any legal endpoint")
+            void consentReadCannotAccessLegal() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
-                );
                 assertThrows(OperioAuthException.class, () ->
                     resource.listPurposes(ctx)
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.listRegulations(ctx)
                 );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
             }
 
             @Test
-            @DisplayName("consent:write cannot access any admin endpoint")
-            void consentWriteCannotAccessAdmin() {
+            @DisplayName("consent:write cannot access any legal endpoint")
+            void consentWriteCannotAccessLegal() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
+                    resource.listPurposes(ctx)
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(
+                    resource.registerPurpose(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
+                        new RegisterPurposeRequest("p", "desc")
                     )
                 );
             }
 
             @Test
-            @DisplayName("both admin roles → full admin access")
+            @DisplayName("both admin roles → full legal access")
             void bothAdminRolesGrantFullAccess() {
                 SecurityContext ctx = securityContextWith(
                     Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)
                 );
-                // Read endpoints
-                assertDoesNotThrow(() -> resource.listFields(ctx));
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
-                // Write endpoints
-                assertDoesNotThrow(() ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
                 assertDoesNotThrow(() ->
                     resource.registerPurpose(
                         ctx,
@@ -1427,16 +1509,7 @@ class RbacTest {
                 assertDoesNotThrow(() ->
                     resource.registerRegulation(
                         ctx,
-                        new RegisterRegulationRequest(
-                            "r",
-                            "desc"
-                        )
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.assignFieldCategory(
-                        ctx,
-                        new AssignFieldCategoryRequest("f", "e", "c", "desc")
+                        new RegisterRegulationRequest("r", "desc")
                     )
                 );
                 assertDoesNotThrow(() ->
@@ -1448,16 +1521,15 @@ class RbacTest {
             }
 
             @Test
-            @DisplayName("super-admin → full admin access (read + write)")
-            void superAdminFullAdminAccess() {
+            @DisplayName("super-admin → full legal access (read + write)")
+            void superAdminFullLegalAccess() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                assertDoesNotThrow(() -> resource.listFields(ctx));
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
                 assertDoesNotThrow(() ->
-                    resource.registerField(
+                    resource.registerPurpose(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
+                        new RegisterPurposeRequest("p", "desc")
                     )
                 );
             }

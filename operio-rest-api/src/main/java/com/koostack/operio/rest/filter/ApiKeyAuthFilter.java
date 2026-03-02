@@ -633,8 +633,6 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         return (
             normalized.startsWith("q/health") ||
             normalized.startsWith("api/v1/health") ||
-            normalized.equals("api/v1/auth") ||
-            normalized.startsWith("api/v1/auth/") ||
             // Site pages (public, unauthenticated)
             normalized.isEmpty() ||
             normalized.equals("docs") || normalized.equals("docs/") ||

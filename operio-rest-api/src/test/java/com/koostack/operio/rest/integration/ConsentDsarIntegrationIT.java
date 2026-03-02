@@ -135,7 +135,7 @@ class ConsentDsarIntegrationIT {
         given()
             .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(400);
     }
@@ -156,7 +156,7 @@ class ConsentDsarIntegrationIT {
             .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .queryParam("confirm", "WRONG_TOKEN")
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(400);
     }
@@ -271,7 +271,7 @@ class ConsentDsarIntegrationIT {
             .header("Authorization", "Bearer invalid-key-no-access")
             .queryParam("confirm", confirmToken)
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(401);
     }
@@ -292,7 +292,7 @@ class ConsentDsarIntegrationIT {
             .header("Authorization", "Bearer invalid-key-no-access")
             .contentType(ContentType.JSON)
             .when()
-            .get("/api/v1/consent/subjects/{id}/export", subject)
+            .get("/api/v1/subjects/{id}/export", subject)
             .then()
             .statusCode(401);
     }
@@ -320,7 +320,7 @@ class ConsentDsarIntegrationIT {
             .contentType(ContentType.JSON)
             .body(Map.of("subject", subject, "scope", scope))
             .when()
-            .post("/api/v1/consent/grant")
+            .post("/api/v1/subjects/consent/grant")
             .then()
             .statusCode(200);
     }
@@ -344,7 +344,7 @@ class ConsentDsarIntegrationIT {
             .contentType(ContentType.JSON)
             .body(Map.of("subject", subject, "scope", scope))
             .when()
-            .post("/api/v1/consent/revoke")
+            .post("/api/v1/subjects/consent/revoke")
             .then()
             .statusCode(200);
     }
@@ -354,7 +354,7 @@ class ConsentDsarIntegrationIT {
             .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
             .contentType(ContentType.JSON)
             .when()
-            .get("/api/v1/consent/subjects/{id}/export", subject)
+            .get("/api/v1/subjects/{id}/export", subject)
             .then()
             .statusCode(200)
             .extract()
@@ -370,7 +370,7 @@ class ConsentDsarIntegrationIT {
             .contentType(ContentType.JSON)
             .queryParam("confirm", confirmToken)
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(200)
             .extract()

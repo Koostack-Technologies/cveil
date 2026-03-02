@@ -28,7 +28,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  * resource class references its tag by name.
  *
  * @see com.koostack.operio.rest.resource.ConsentResource
- * @see com.koostack.operio.rest.resource.AdminResource
+ * @see com.koostack.operio.rest.resource.CatalogueResource
+ * @see com.koostack.operio.rest.resource.LegalResource
  * @see com.koostack.operio.rest.resource.PlatformResource
  * @see com.koostack.operio.rest.resource.HealthResource
  */
@@ -58,10 +59,20 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
                 "consent:read or consent:write roles."
         ),
         @Tag(
+            name = OperioOpenApiConfig.TAG_CATALOGUE,
+            description = "Data catalogue: manage fields, categories, " +
+                "and entities. Requires admin:read or admin:write roles."
+        ),
+        @Tag(
+            name = OperioOpenApiConfig.TAG_LEGAL,
+            description = "Legal framework: manage purposes, regulations, " +
+                "jurisdictions, and their relationships. Requires " +
+                "admin:read or admin:write roles."
+        ),
+        @Tag(
             name = OperioOpenApiConfig.TAG_ADMIN,
-            description = "Schema administration: manage fields, categories, " +
-                "entities, purposes, regulations, and their relationships. " +
-                "Requires admin:read or admin:write roles."
+            description = "Event streams: cache invalidation signals " +
+                "via SSE. Requires admin:read role."
         ),
         @Tag(
             name = OperioOpenApiConfig.TAG_PLATFORM,
@@ -101,6 +112,12 @@ public class OperioOpenApiConfig {
 
     /** Tag for admin/schema endpoints. */
     public static final String TAG_ADMIN = "Admin";
+
+    /** Tag for data catalogue endpoints (fields, categories, entities). */
+    public static final String TAG_CATALOGUE = "Catalogue";
+
+    /** Tag for legal framework endpoints (purposes, regulations, jurisdictions). */
+    public static final String TAG_LEGAL = "Legal";
 
     /** Tag for platform administration endpoints. */
     public static final String TAG_PLATFORM = "Platform";

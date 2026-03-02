@@ -39,7 +39,7 @@ import java.util.UUID;
  *
  * <p>Clients can use these signals to refresh their local caches or UI.
  */
-@Path("/api/v1/admin")
+@Path("/api/v1/events")
 @TenantScoped
 @Tag(ref = OperioOpenApiConfig.TAG_ADMIN)
 public class AdminEventsResource {
@@ -51,7 +51,7 @@ public class AdminEventsResource {
     SubscriptionManager adminSubscriptionManager;
 
     @GET
-    @Path("/events")
+    @Path("/invalidations")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     @Operation(operationId = "adminEvents",

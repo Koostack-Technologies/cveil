@@ -353,7 +353,7 @@ class DsarTenantIsolationIT {
             .header("Authorization", "Bearer " + KEY_NO_TENANT)
             .contentType(ContentType.JSON)
             .when()
-            .get("/api/v1/consent/subjects/{id}/export", subject)
+            .get("/api/v1/subjects/{id}/export", subject)
             .then()
             .statusCode(403);
     }
@@ -385,7 +385,7 @@ class DsarTenantIsolationIT {
             .contentType(ContentType.JSON)
             .queryParam("confirm", confirmToken)
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(403);
     }
@@ -412,7 +412,7 @@ class DsarTenantIsolationIT {
             .contentType(ContentType.JSON)
             .body(Map.of("subject", subject, "scope", scope))
             .when()
-            .post("/api/v1/consent/grant")
+            .post("/api/v1/subjects/consent/grant")
             .then()
             .statusCode(200);
     }
@@ -422,7 +422,7 @@ class DsarTenantIsolationIT {
             .header("Authorization", "Bearer " + apiKey)
             .contentType(ContentType.JSON)
             .when()
-            .get("/api/v1/consent/subjects/{id}/export", subject)
+            .get("/api/v1/subjects/{id}/export", subject)
             .then()
             .statusCode(200)
             .extract()
@@ -439,7 +439,7 @@ class DsarTenantIsolationIT {
             .contentType(ContentType.JSON)
             .queryParam("confirm", confirmToken)
             .when()
-            .delete("/api/v1/consent/subjects/{id}", subject)
+            .delete("/api/v1/subjects/{id}", subject)
             .then()
             .statusCode(200)
             .extract()

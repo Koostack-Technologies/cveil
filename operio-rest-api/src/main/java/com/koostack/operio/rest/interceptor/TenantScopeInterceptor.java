@@ -54,7 +54,7 @@ import org.slf4j.LoggerFactory;
  * tenant and request context:
  *
  * <pre>{@code
- * @Path("/api/v1/consent")
+ * @Path("/api/v1/subjects")
  * @TenantScoped
  * public class ConsentResource {
  *     // TenantContext.get() and RequestContext.actor() are available here

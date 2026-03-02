@@ -20,7 +20,7 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
 
 /**
  * Request and response DTOs for the consent endpoints
- * ({@code /api/v1/consent}).
+ * ({@code /api/v1/subjects}).
  *
  * <p>All types are Java records — immutable, serializable by Jackson out of
  * the box, and cheap to allocate. Each DTO provides static mapping methods
@@ -46,7 +46,7 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Request body for {@code POST /api/v1/consent/grant}.
+     * Request body for {@code POST /api/v1/subjects/consent/grant}.
      *
      * @param subject   the data subject identifier (e.g. user ID)
      * @param scope     the consent scope to grant
@@ -65,7 +65,7 @@ public final class ConsentDtos {
     ) {}
 
     /**
-     * Request body for {@code POST /api/v1/consent/revoke}.
+     * Request body for {@code POST /api/v1/subjects/consent/revoke}.
      *
      * @param subject the data subject identifier
      * @param scope   the consent scope to revoke
@@ -85,7 +85,7 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Request body for {@code POST /api/v1/consent/grant-all}.
+     * Request body for {@code POST /api/v1/subjects/consent/grant-all}.
      *
      * @param subject the data subject identifier
      * @param grants  the list of scopes (with optional expiration) to grant
@@ -104,7 +104,7 @@ public final class ConsentDtos {
     ) {}
 
     /**
-     * Request body for {@code POST /api/v1/consent/revoke-all}.
+     * Request body for {@code POST /api/v1/subjects/consent/revoke-all}.
      *
      * @param subject the data subject identifier
      * @param revokes the list of scopes (with optional expiration) to revoke
@@ -204,7 +204,7 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Request body for {@code POST /api/v1/consent/evaluate}.
+     * Request body for {@code POST /api/v1/subjects/consent/evaluate}.
      *
      * @param subject the data subject identifier to evaluate consent for
      * @param scopes  the set of consent scopes to evaluate
@@ -342,7 +342,7 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Response body for {@code GET /api/v1/consent/subjects/{id}/export}.
+     * Response body for {@code GET /api/v1/subjects/{id}/export}.
      *
      * <p>Contains a complete export of all consent-related data held for
      * a subject (GDPR Article 20 — data portability).
@@ -374,7 +374,7 @@ public final class ConsentDtos {
     ) {}
 
     /**
-     * Response body for {@code DELETE /api/v1/consent/subjects/{id}}.
+     * Response body for {@code DELETE /api/v1/subjects/{id}}.
      *
      * <p>Confirms the completion of a data subject access request (DSAR)
      * deletion operation. Contains counts of deleted records and a unique

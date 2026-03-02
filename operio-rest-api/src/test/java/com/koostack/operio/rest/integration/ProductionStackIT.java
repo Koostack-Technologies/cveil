@@ -325,7 +325,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(401);
         }
@@ -907,7 +907,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(200)
                     .body("message", containsStringIgnoringCase("granted"));
@@ -932,7 +932,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(200);
         }
@@ -958,7 +958,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .contentType(ContentType.JSON)
@@ -991,7 +991,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("subject", equalTo("user-1"))
@@ -1027,7 +1027,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(1))
@@ -1053,7 +1053,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/revoke")
+                    .post("/api/v1/subjects/consent/revoke")
                 .then()
                     .statusCode(200)
                     .body("message", containsStringIgnoringCase("revoked"));
@@ -1080,7 +1080,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(0))
@@ -1108,7 +1108,7 @@ class ProductionStackIT {
                         }
                         """)
                     .when()
-                        .post("/api/v1/consent/grant")
+                        .post("/api/v1/subjects/consent/grant")
                     .then()
                         .statusCode(200);
             }
@@ -1169,7 +1169,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant-batch")
+                    .post("/api/v1/subjects/consent/grant-batch")
                 .then()
                     .statusCode(200)
                     .contentType(ContentType.JSON)
@@ -1210,7 +1210,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(3))
@@ -1248,7 +1248,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/revoke-batch")
+                    .post("/api/v1/subjects/consent/revoke-batch")
                 .then()
                     .statusCode(200)
                     .body("succeeded", equalTo(2))
@@ -1288,7 +1288,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(1))
@@ -1322,7 +1322,7 @@ class ProductionStackIT {
             given()
                 .header("Authorization", auth())
                 .when()
-                    .get("/api/v1/consent/subjects/user-batch/summary")
+                    .get("/api/v1/subjects/user-batch/summary")
                 .then()
                     .statusCode(200)
                     .contentType(ContentType.JSON)
@@ -1337,7 +1337,7 @@ class ProductionStackIT {
             given()
                 .header("Authorization", auth())
                 .when()
-                    .get("/api/v1/consent/subjects/user-batch/history")
+                    .get("/api/v1/subjects/user-batch/history")
                 .then()
                     .statusCode(200)
                     .contentType(ContentType.JSON)
@@ -1351,7 +1351,7 @@ class ProductionStackIT {
             given()
                 .header("Authorization", auth())
                 .when()
-                    .get("/api/v1/consent/subjects/nonexistent-user/summary")
+                    .get("/api/v1/subjects/nonexistent-user/summary")
                 .then()
                     .statusCode(200)
                     .body("$", hasSize(0));
@@ -1364,7 +1364,7 @@ class ProductionStackIT {
             given()
                 .header("Authorization", auth())
                 .when()
-                    .get("/api/v1/consent/subjects/nonexistent-user/history")
+                    .get("/api/v1/subjects/nonexistent-user/history")
                 .then()
                     .statusCode(200)
                     .body("$", hasSize(0));
@@ -1425,7 +1425,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200);
 
@@ -1453,7 +1453,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(403);
 
@@ -1501,7 +1501,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(400);
         }
@@ -1519,7 +1519,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(400);
         }
@@ -1538,7 +1538,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(400);
         }
@@ -1596,7 +1596,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant-batch")
+                    .post("/api/v1/subjects/consent/grant-batch")
                 .then()
                     .statusCode(400);
         }
@@ -1636,7 +1636,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/grant")
+                    .post("/api/v1/subjects/consent/grant")
                 .then()
                     .statusCode(200);
 
@@ -1656,7 +1656,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(1))
@@ -1678,7 +1678,7 @@ class ProductionStackIT {
                     }
                     """)
                 .when()
-                    .post("/api/v1/consent/evaluate")
+                    .post("/api/v1/subjects/consent/evaluate")
                 .then()
                     .statusCode(200)
                     .body("granted", hasSize(0))

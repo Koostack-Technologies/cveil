@@ -27,7 +27,7 @@ import java.lang.annotation.Target;
  * operations:
  *
  * <pre>{@code
- * @Path("/api/v1/consent")
+ * @Path("/api/v1/subjects")
  * @TenantScoped
  * public class ConsentResource {
  *
