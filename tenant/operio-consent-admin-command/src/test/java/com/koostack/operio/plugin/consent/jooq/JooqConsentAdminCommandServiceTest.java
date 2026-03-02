@@ -1,14 +1,13 @@
 package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
-import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.DsarAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.FieldAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.SubjectConsentAggregate;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.TenantContext;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -36,404 +35,183 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     private static final String TENANT = TEST_TENANT;
 
     // -----------------------------------------------------------------------
-    // grantConsent
+    // Field Aggregate — register, update, remove, category assign/unassign
     // -----------------------------------------------------------------------
 
     @Test
     @Order(1)
-    void grantConsentCreatesNewPolicyAggregate() throws Exception {
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
-
+    void registerFieldCreatesFieldAggregate() throws Exception {
         TenantContext.runWhere(TENANT, () ->
-            commandService.grantConsentCommand("alice", scope)
+            commandService.registerFieldCommand("email", "User", "User email address", "User entity")
         );
 
-        // Verify aggregate state
         AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId("alice"),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId("User", "email"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals("alice", agg.subjectId());
-        assertEquals(1, agg.policies().size());
-        assertTrue(agg.policies().getFirst().granted());
-        assertEquals("marketing", agg.policies().getFirst().purposeName());
-        assertEquals("email", agg.policies().getFirst().fieldName());
+        assertEquals("email", agg.fieldName());
+        assertEquals("User", agg.entityName());
+        assertEquals("User email address", agg.description());
+        assertEquals("User entity", agg.entityDescription());
+        assertTrue(agg.categories().isEmpty());
 
-        // Verify Redis consumption
         awaitConsumedEvents(1, 5000);
-
-        // Diagnostic: check stream length directly
         long streamLen = testJedis.xlen(STREAM_KEY);
         assertTrue(
-            streamLen > 0 || !consumedByType(ConsentEventTypes.POLICY_GRANTED).isEmpty(),
-            "Expected POLICY_GRANTED event — stream length=" + streamLen
+            streamLen > 0 || !consumedByType(ConsentEventTypes.FIELD_REGISTERED).isEmpty(),
+            "Expected FIELD_REGISTERED event — stream length=" + streamLen
                 + ", consumed=" + consumedEvents.size()
         );
     }
 
     @Test
     @Order(2)
-    void grantConsentAddsPolicyToExistingAggregate() throws Exception {
-        ConsentScope scope = ConsentScope.to("PII", "phone", "User", "analytics");
-
+    void registerFieldWithNullEntityUsesDefault() throws Exception {
         TenantContext.runWhere(TENANT, () ->
-            commandService.grantConsentCommand("alice", scope)
+            commandService.registerFieldCommand("globalField", null, "A global field", null)
         );
 
         AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId("alice"),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId(null, "globalField"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals(2, agg.policies().size());
-        var phonePolicy = agg.policies().stream()
-            .filter(p -> "phone".equals(p.fieldName()))
-            .findFirst().orElseThrow();
-        assertTrue(phonePolicy.granted());
+        assertEquals(FieldAggregate.DEFAULT_ENTITY, agg.entityName());
+        assertEquals("globalField", agg.fieldName());
     }
 
     @Test
     @Order(3)
-    void grantConsentUpsertsExistingPolicyScope() throws Exception {
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
-
-        // Grant again for same scope — should replace, not duplicate
-        TenantContext.runWhere(TENANT, () ->
-            commandService.grantConsentCommand("alice", scope)
-        );
-
-        AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId("alice"),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
-
-        long emailCount = agg.policies().stream()
-            .filter(p -> "email".equals(p.fieldName()) && "marketing".equals(p.purposeName()))
-            .count();
-        assertEquals(1, emailCount, "Should upsert, not duplicate the same scope");
-    }
-
-    // -----------------------------------------------------------------------
-    // revokeConsent
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(10)
-    void revokeConsentSetsPolicyToNotGranted() throws Exception {
-        String subject = "bob";
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
-
+    void updateFieldChangesDescription() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
-            commandService.grantConsentCommand(subject, scope);
-            commandService.revokeConsentCommand(subject, scope);
+            commandService.registerFieldCommand("phone", "User", "Phone number", "User entity");
+            commandService.updateFieldCommand("phone", "User", "Mobile phone number");
         });
 
         AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId(subject),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId("User", "phone"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals(1, agg.policies().size());
-        assertFalse(agg.policies().getFirst().granted());
+        assertEquals("Mobile phone number", agg.description());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.FIELD_UPDATED).isEmpty());
     }
-
-    @Test
-    @Order(11)
-    void revokeConsentOnExistingPolicyWorks() throws Exception {
-        String subject = "charlie";
-        ConsentScope scope = ConsentScope.to("HEALTH", "diagnosis", "Patient", "research");
-
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.grantConsentCommand(subject, scope);
-            commandService.revokeConsentCommand(subject, scope);
-        });
-
-        AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId(subject),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
-        assertFalse(agg.policies().getFirst().granted());
-    }
-
-    // -----------------------------------------------------------------------
-    // grantConsent / revokeConsent with expiresAt
-    // -----------------------------------------------------------------------
 
     @Test
     @Order(4)
-    void grantConsentWithExpiresAtRoundTrip() throws Exception {
-        String subject = "frank-expires";
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
-        Instant expiresAt = Instant.now().plusSeconds(86400 * 30); // 30 days
+    void removeFieldPublishesEvent() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerFieldCommand("tempField", "TempEntity", "Temporary", "Temp");
+            commandService.removeFieldCommand("tempField", "TempEntity");
+        });
 
-        TenantContext.runWhere(TENANT, () ->
-            commandService.grantConsentCommand(subject, scope, expiresAt)
-        );
-
-        AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId(subject),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
-
-        assertEquals(1, agg.policies().size());
-        assertTrue(agg.policies().getFirst().granted());
-        assertNotNull(agg.policies().getFirst().expiresAt(),
-            "expiresAt should survive the event-store round-trip");
-        assertEquals(expiresAt, agg.policies().getFirst().expiresAt());
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.FIELD_REMOVED).isEmpty());
     }
 
     @Test
     @Order(5)
-    void revokeConsentWithExpiresAtRoundTrip() throws Exception {
-        String subject = "grace-expires";
-        ConsentScope scope = ConsentScope.to("PII", "phone", "User", "analytics");
-        Instant expiresAt = Instant.now().plusSeconds(86400 * 7); // 7 days
-
+    void assignFieldCategoryAddsCategory() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
-            commandService.grantConsentCommand(subject, scope);
-            commandService.revokeConsentCommand(subject, scope, expiresAt);
+            commandService.registerFieldCommand("ssn", "Person", "Social Security Number", "Person entity");
+            commandService.assignFieldCategoryCommand("ssn", "Person", "PII", "Personally Identifiable Information");
         });
 
         AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId(subject),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId("Person", "ssn"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals(1, agg.policies().size());
-        assertFalse(agg.policies().getFirst().granted());
-        assertNotNull(agg.policies().getFirst().expiresAt(),
-            "expiresAt should survive the event-store round-trip");
-        assertEquals(expiresAt, agg.policies().getFirst().expiresAt());
-    }
-
-    // -----------------------------------------------------------------------
-    // revokeAllConsent
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(20)
-    void revokeAllConsentClearsAllPolicies() throws Exception {
-        String subject = "diana";
-        ConsentScope scope1 = ConsentScope.to("PII", "email", "User", "marketing");
-        ConsentScope scope2 = ConsentScope.to("PII", "phone", "User", "analytics");
-
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.grantConsentCommand(subject, scope1);
-            commandService.grantConsentCommand(subject, scope2);
-            commandService.revokeAllConsentCommand(subject);
-        });
-
-        AggregateKey key = new AggregateKey(
-            ConsentPolicyAggregate.deriveId(subject),
-            ConsentPolicyAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        ConsentPolicyAggregate agg = eventService.getAggregate(key, ConsentPolicyAggregate.class);
-
-        assertTrue(agg.policies().isEmpty(), "All policies should be cleared");
+        assertEquals(1, agg.categories().size());
+        assertEquals("PII", agg.categories().getFirst().categoryName());
+        assertEquals("Personally Identifiable Information", agg.categories().getFirst().categoryDescription());
 
         awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.POLICY_ALL_REVOKED).isEmpty());
-    }
-
-    // -----------------------------------------------------------------------
-    // deleteAuditLogBySubject
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(30)
-    void deleteAuditLogBySubjectReturnsZeroAndPublishesEvent() throws Exception {
-        String subject = "eve";
-
-        int result = TenantContext.callWhere(TENANT, () ->
-            commandService.deleteAuditLogBySubjectCommand(subject)
-        );
-
-        assertEquals(-1, result, "Deletion is eventual — should return -1");
-
-        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.POLICY_AUDIT_DELETED).isEmpty());
-    }
-
-    // -----------------------------------------------------------------------
-    // registerField
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(40)
-    void registerFieldCreatesEntityAggregate() throws Exception {
-        TenantContext.runWhere(TENANT, () ->
-            commandService.registerFieldCommand("email", "User", "User email address")
-        );
-
-        AggregateKey key = new AggregateKey(
-            EntityAggregate.deriveId("User"),
-            EntityAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        EntityAggregate agg = eventService.getAggregate(key, EntityAggregate.class);
-
-        assertEquals("User", agg.entityName());
-        assertEquals(1, agg.fields().size());
-        assertEquals("email", agg.fields().getFirst().fieldName());
-        assertEquals("User email address", agg.fields().getFirst().description());
-
-        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.ENTITY_FIELD_REGISTERED).isEmpty());
+        assertFalse(consumedByType(ConsentEventTypes.FIELD_CATEGORY_ASSIGNED).isEmpty());
     }
 
     @Test
-    @Order(41)
-    void registerFieldWithNullEntityUsesDefault() throws Exception {
-        TenantContext.runWhere(TENANT, () ->
-            commandService.registerFieldCommand("globalField", null, "A global field")
-        );
-
-        AggregateKey key = new AggregateKey(
-            EntityAggregate.deriveId(EntityAggregate.DEFAULT_ENTITY),
-            EntityAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        EntityAggregate agg = eventService.getAggregate(key, EntityAggregate.class);
-
-        assertEquals(EntityAggregate.DEFAULT_ENTITY, agg.entityName());
-        assertTrue(agg.fields().stream().anyMatch(f -> "globalField".equals(f.fieldName())));
-    }
-
-    @Test
-    @Order(42)
-    void registerMultipleFieldsOnSameEntity() throws Exception {
+    @Order(6)
+    void assignFieldCategoryIsIdempotent() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
-            commandService.registerFieldCommand("firstName", "Employee", "First name");
-            commandService.registerFieldCommand("lastName", "Employee", "Last name");
+            commandService.registerFieldCommand("dob", "Person", "Date of birth", "Person entity");
+            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data");
+            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data"); // duplicate
         });
 
         AggregateKey key = new AggregateKey(
-            EntityAggregate.deriveId("Employee"),
-            EntityAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId("Person", "dob"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        EntityAggregate agg = eventService.getAggregate(key, EntityAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals(2, agg.fields().size());
+        long piiCount = agg.categories().stream()
+            .filter(c -> "PII".equals(c.categoryName())).count();
+        assertEquals(1, piiCount, "Duplicate category assignment should be idempotent");
     }
 
-    // -----------------------------------------------------------------------
-    // registerCategory
-    // -----------------------------------------------------------------------
-
     @Test
-    @Order(50)
-    void registerCategoryCreatesCategoryAggregate() throws Exception {
-        TenantContext.runWhere(TENANT, () ->
-            commandService.registerCategoryCommand("PII", "Personally Identifiable Information")
-        );
+    @Order(7)
+    void assignMultipleCategoriesToField() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerFieldCommand("diagnosis", "Patient", "Medical diagnosis", "Patient entity");
+            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "HEALTH", "Health data");
+            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "SENSITIVE", "Sensitive data");
+        });
 
         AggregateKey key = new AggregateKey(
-            CategoryAggregate.deriveId("PII"),
-            CategoryAggregate.AGGREGATE_TYPE,
+            FieldAggregate.deriveId("Patient", "diagnosis"),
+            FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        CategoryAggregate agg = eventService.getAggregate(key, CategoryAggregate.class);
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
 
-        assertEquals("PII", agg.categoryName());
-        assertEquals("Personally Identifiable Information", agg.description());
+        assertEquals(2, agg.categories().size());
+    }
+
+    @Test
+    @Order(8)
+    void unassignFieldCategoryRemovesCategory() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerFieldCommand("address", "User", "Mailing address", "User entity");
+            commandService.assignFieldCategoryCommand("address", "User", "PII", "PII data");
+            commandService.assignFieldCategoryCommand("address", "User", "CONTACT", "Contact info");
+            commandService.unassignFieldCategoryCommand("address", "User", "PII");
+        });
+
+        AggregateKey key = new AggregateKey(
+            FieldAggregate.deriveId("User", "address"),
+            FieldAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+
+        assertEquals(1, agg.categories().size());
+        assertEquals("CONTACT", agg.categories().getFirst().categoryName());
 
         awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.CATEGORY_REGISTERED).isEmpty());
-    }
-
-    @Test
-    @Order(51)
-    void registerCategoryUpdatesDescription() throws Exception {
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.registerCategoryCommand("HEALTH", "Health data");
-            commandService.registerCategoryCommand("HEALTH", "Protected health information (PHI)");
-        });
-
-        AggregateKey key = new AggregateKey(
-            CategoryAggregate.deriveId("HEALTH"),
-            CategoryAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        CategoryAggregate agg = eventService.getAggregate(key, CategoryAggregate.class);
-
-        assertEquals("Protected health information (PHI)", agg.description());
+        assertFalse(consumedByType(ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED).isEmpty());
     }
 
     // -----------------------------------------------------------------------
-    // linkFieldToCategory
+    // Purpose Aggregate — register, update, remove, regulation link/unlink,
+    //                      policy add/remove
     // -----------------------------------------------------------------------
 
     @Test
-    @Order(60)
-    void linkFieldToCategoryAddsLink() throws Exception {
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.registerFieldCommand("ssn", "Person", "Social Security Number");
-            commandService.linkFieldToCategoryCommand("ssn", "Person", "PII");
-        });
-
-        AggregateKey key = new AggregateKey(
-            EntityAggregate.deriveId("Person"),
-            EntityAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        EntityAggregate agg = eventService.getAggregate(key, EntityAggregate.class);
-
-        var ssnField = agg.fields().stream()
-            .filter(f -> "ssn".equals(f.fieldName()))
-            .findFirst().orElseThrow();
-        assertTrue(ssnField.categories().contains("PII"));
-
-        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED).isEmpty());
-    }
-
-    @Test
-    @Order(61)
-    void linkFieldToCategoryIsIdempotent() throws Exception {
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.registerFieldCommand("dob", "Person", "Date of birth");
-            commandService.linkFieldToCategoryCommand("dob", "Person", "PII");
-            commandService.linkFieldToCategoryCommand("dob", "Person", "PII"); // duplicate
-        });
-
-        AggregateKey key = new AggregateKey(
-            EntityAggregate.deriveId("Person"),
-            EntityAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        EntityAggregate agg = eventService.getAggregate(key, EntityAggregate.class);
-
-        var dobField = agg.fields().stream()
-            .filter(f -> "dob".equals(f.fieldName()))
-            .findFirst().orElseThrow();
-        long piiCount = dobField.categories().stream()
-            .filter("PII"::equals).count();
-        assertEquals(1, piiCount, "Duplicate category link should be idempotent");
-    }
-
-    // -----------------------------------------------------------------------
-    // registerPurpose
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(70)
+    @Order(10)
     void registerPurposeCreatesPurposeAggregate() throws Exception {
         TenantContext.runWhere(TENANT, () ->
             commandService.registerPurposeCommand("marketing", "Direct marketing communications")
@@ -449,83 +227,18 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
         assertEquals("marketing", agg.purposeName());
         assertEquals("Direct marketing communications", agg.description());
         assertTrue(agg.regulationLinks().isEmpty());
+        assertTrue(agg.policies().isEmpty());
 
         awaitConsumedEvents(consumedEvents.size() + 1, 5000);
         assertFalse(consumedByType(ConsentEventTypes.PURPOSE_REGISTERED).isEmpty());
     }
 
-    // -----------------------------------------------------------------------
-    // registerRegulation
-    // -----------------------------------------------------------------------
-
     @Test
-    @Order(80)
-    void registerRegulationCreatesRegulationAggregate() throws Exception {
-        TenantContext.runWhere(TENANT, () ->
-            commandService.registerRegulationCommand(
-                "GDPR",
-                "General Data Protection Regulation",
-                "EU",
-                "EU data protection regulation",
-                "https://gdpr.eu"
-            )
-        );
-
-        AggregateKey key = new AggregateKey(
-            RegulationAggregate.deriveId("GDPR"),
-            RegulationAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
-
-        assertEquals("GDPR", agg.regulationName());
-        assertEquals("General Data Protection Regulation", agg.fullName());
-        assertEquals("EU", agg.jurisdiction());
-        assertEquals("https://gdpr.eu", agg.url());
-
-        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
-        assertFalse(consumedByType(ConsentEventTypes.REGULATION_REGISTERED).isEmpty());
-    }
-
-    @Test
-    @Order(81)
-    void registerRegulationUpdatesExisting() throws Exception {
-        TenantContext.runWhere(TENANT, () -> {
-            commandService.registerRegulationCommand(
-                "CCPA", "California Consumer Privacy Act",
-                "California, US", "California privacy law", "https://oag.ca.gov/privacy/ccpa"
-            );
-            commandService.registerRegulationCommand(
-                "CCPA", "California Consumer Privacy Act (amended)",
-                "California, US", "Updated CCPA description", "https://oag.ca.gov/privacy/ccpa"
-            );
-        });
-
-        AggregateKey key = new AggregateKey(
-            RegulationAggregate.deriveId("CCPA"),
-            RegulationAggregate.AGGREGATE_TYPE,
-            TENANT
-        );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
-
-        assertEquals("California Consumer Privacy Act (amended)", agg.fullName());
-        assertEquals("Updated CCPA description", agg.description());
-    }
-
-    // -----------------------------------------------------------------------
-    // linkPurposeToRegulation
-    // -----------------------------------------------------------------------
-
-    @Test
-    @Order(90)
-    void linkPurposeToRegulationAddsLink() throws Exception {
+    @Order(11)
+    void updatePurposeChangesDescription() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerPurposeCommand("analytics", "Usage analytics");
-            commandService.registerRegulationCommand(
-                "LGPD", "Lei Geral de Proteção de Dados",
-                "Brazil", "Brazilian data protection", "https://lgpd.gov.br"
-            );
-            commandService.linkPurposeToRegulationCommand("analytics", "LGPD", "legitimate-interest");
+            commandService.updatePurposeCommand("analytics", "Advanced usage analytics and reporting");
         });
 
         AggregateKey key = new AggregateKey(
@@ -535,21 +248,62 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
         );
         PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
 
+        assertEquals("Advanced usage analytics and reporting", agg.description());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.PURPOSE_UPDATED).isEmpty());
+    }
+
+    @Test
+    @Order(12)
+    void removePurposePublishesEvent() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerPurposeCommand("temp-purpose", "Temporary purpose");
+            commandService.removePurposeCommand("temp-purpose");
+        });
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.PURPOSE_REMOVED).isEmpty());
+    }
+
+    @Test
+    @Order(13)
+    void linkPurposeToRegulationAddsLink() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.linkPurposeToRegulationCommand(
+                "marketing", "GDPR", "explicit-consent", "allow-processing", "block-processing"
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            PurposeAggregate.deriveId("marketing"),
+            PurposeAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+
         assertEquals(1, agg.regulationLinks().size());
-        assertEquals("LGPD", agg.regulationLinks().getFirst().regulationName());
-        assertEquals("legitimate-interest", agg.regulationLinks().getFirst().legalBasis());
+        var link = agg.regulationLinks().getFirst();
+        assertEquals("GDPR", link.regulationName());
+        assertEquals("explicit-consent", link.lawfulBasis());
+        assertEquals("allow-processing", link.onGranted());
+        assertEquals("block-processing", link.onDenied());
 
         awaitConsumedEvents(consumedEvents.size() + 1, 5000);
         assertFalse(consumedByType(ConsentEventTypes.PURPOSE_REGULATION_LINKED).isEmpty());
     }
 
     @Test
-    @Order(91)
+    @Order(14)
     void linkPurposeToMultipleRegulations() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerPurposeCommand("data-sharing", "Third-party data sharing");
-            commandService.linkPurposeToRegulationCommand("data-sharing", "GDPR", "explicit-consent");
-            commandService.linkPurposeToRegulationCommand("data-sharing", "CCPA", "opt-out");
+            commandService.linkPurposeToRegulationCommand(
+                "data-sharing", "GDPR", "explicit-consent", "share", "block"
+            );
+            commandService.linkPurposeToRegulationCommand(
+                "data-sharing", "CCPA", "opt-out", "share", "stop-sharing"
+            );
         });
 
         AggregateKey key = new AggregateKey(
@@ -562,6 +316,434 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
         assertEquals(2, agg.regulationLinks().size());
     }
 
+    @Test
+    @Order(15)
+    void unlinkPurposeFromRegulationRemovesLink() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerPurposeCommand("profiling", "User profiling");
+            commandService.linkPurposeToRegulationCommand(
+                "profiling", "GDPR", "legitimate-interest", "profile", "anonymize"
+            );
+            commandService.linkPurposeToRegulationCommand(
+                "profiling", "CCPA", "opt-out", "profile", "stop"
+            );
+            commandService.unlinkPurposeFromRegulationCommand("profiling", "GDPR");
+        });
+
+        AggregateKey key = new AggregateKey(
+            PurposeAggregate.deriveId("profiling"),
+            PurposeAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+
+        assertEquals(1, agg.regulationLinks().size());
+        assertEquals("CCPA", agg.regulationLinks().getFirst().regulationName());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.PURPOSE_REGULATION_UNLINKED).isEmpty());
+    }
+
+    @Test
+    @Order(16)
+    void addPurposePolicyAddsPolicy() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.addPurposePolicyCommand(
+                "marketing", "field", "email", "User", "PII"
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            PurposeAggregate.deriveId("marketing"),
+            PurposeAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+
+        assertEquals(1, agg.policies().size());
+        var policy = agg.policies().getFirst();
+        assertEquals("field", policy.policyType());
+        assertEquals("email", policy.fieldName());
+        assertEquals("User", policy.entityName());
+        assertEquals("PII", policy.categoryName());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.PURPOSE_POLICY_ADDED).isEmpty());
+    }
+
+    @Test
+    @Order(17)
+    void removePurposePolicyRemovesPolicy() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.addPurposePolicyCommand(
+                "marketing", "field", "phone", "User", "PII"
+            );
+            commandService.removePurposePolicyCommand(
+                "marketing", "field", "phone", "User", "PII"
+            );
+        });
+
+        AggregateKey key = new AggregateKey(
+            PurposeAggregate.deriveId("marketing"),
+            PurposeAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+
+        boolean hasPhonePolicy = agg.policies().stream()
+            .anyMatch(p -> "phone".equals(p.fieldName()));
+        assertFalse(hasPhonePolicy, "Phone policy should have been removed");
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.PURPOSE_POLICY_REMOVED).isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Regulation Aggregate — register, update, remove, jurisdiction add/remove
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(20)
+    void registerRegulationCreatesRegulationAggregate() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.registerRegulationCommand("GDPR", "General Data Protection Regulation")
+        );
+
+        AggregateKey key = new AggregateKey(
+            RegulationAggregate.deriveId("GDPR"),
+            RegulationAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+
+        assertEquals("GDPR", agg.regulationName());
+        assertEquals("General Data Protection Regulation", agg.description());
+        assertTrue(agg.jurisdictions().isEmpty());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.REGULATION_REGISTERED).isEmpty());
+    }
+
+    @Test
+    @Order(21)
+    void updateRegulationChangesDescription() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerRegulationCommand("CCPA", "California Consumer Privacy Act");
+            commandService.updateRegulationCommand("CCPA", "California Consumer Privacy Act (amended)");
+        });
+
+        AggregateKey key = new AggregateKey(
+            RegulationAggregate.deriveId("CCPA"),
+            RegulationAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+
+        assertEquals("California Consumer Privacy Act (amended)", agg.description());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.REGULATION_UPDATED).isEmpty());
+    }
+
+    @Test
+    @Order(22)
+    void removeRegulationPublishesEvent() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.registerRegulationCommand("TEMP_REG", "Temporary regulation");
+            commandService.removeRegulationCommand("TEMP_REG");
+        });
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.REGULATION_REMOVED).isEmpty());
+    }
+
+    @Test
+    @Order(23)
+    void addRegulationJurisdictionAddsJurisdiction() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.addRegulationJurisdictionCommand("GDPR", "EU", "European Union")
+        );
+
+        AggregateKey key = new AggregateKey(
+            RegulationAggregate.deriveId("GDPR"),
+            RegulationAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+
+        assertEquals(1, agg.jurisdictions().size());
+        var jurisdiction = agg.jurisdictions().getFirst();
+        assertEquals("EU", jurisdiction.jurisdictionName());
+        assertEquals("European Union", jurisdiction.description());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.REGULATION_JURISDICTION_ADDED).isEmpty());
+    }
+
+    @Test
+    @Order(24)
+    void addMultipleJurisdictionsToRegulation() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.addRegulationJurisdictionCommand("GDPR", "EEA", "European Economic Area");
+            commandService.addRegulationJurisdictionCommand("GDPR", "UK", "United Kingdom");
+        });
+
+        AggregateKey key = new AggregateKey(
+            RegulationAggregate.deriveId("GDPR"),
+            RegulationAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+
+        // EU from Order(23) + EEA + UK = 3
+        assertEquals(3, agg.jurisdictions().size());
+    }
+
+    @Test
+    @Order(25)
+    void removeRegulationJurisdictionRemovesJurisdiction() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.removeRegulationJurisdictionCommand("GDPR", "EEA")
+        );
+
+        AggregateKey key = new AggregateKey(
+            RegulationAggregate.deriveId("GDPR"),
+            RegulationAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+
+        // EU + UK remain (EEA removed)
+        assertEquals(2, agg.jurisdictions().size());
+        assertTrue(agg.jurisdictions().stream().noneMatch(j -> "EEA".equals(j.jurisdictionName())));
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.REGULATION_JURISDICTION_REMOVED).isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
+    // SubjectConsent Aggregate — grant, revoke, expire, revoke-all
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(30)
+    void grantConsentCreatesSubjectConsentAggregate() throws Exception {
+        Instant expiresAt = Instant.now().plusSeconds(86400 * 30);
+
+        TenantContext.runWhere(TENANT, () ->
+            commandService.grantConsentCommand(
+                "alice", 1001L, "marketing", "field", "email", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0", expiresAt
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("alice"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        assertEquals("alice", agg.subjectId());
+        assertEquals(1, agg.entries().size());
+        var entry = agg.entries().getFirst();
+        assertEquals(1001L, entry.policyId());
+        assertEquals("marketing", entry.purposeName());
+        assertEquals("field", entry.policyType());
+        assertEquals("email", entry.fieldName());
+        assertEquals("User", entry.entityName());
+        assertEquals("PII", entry.categoryName());
+        assertEquals("GRANT", entry.action());
+        assertEquals("admin", entry.actor());
+        assertEquals("192.168.1.1", entry.ipAddress());
+        assertEquals("TestAgent/1.0", entry.userAgent());
+        assertEquals(expiresAt, entry.expiresAt());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.CONSENT_GRANTED).isEmpty());
+    }
+
+    @Test
+    @Order(31)
+    void grantConsentAddsEntryToExistingAggregate() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.grantConsentCommand(
+                "alice", 1002L, "analytics", "field", "phone", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0", null
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("alice"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        assertEquals(2, agg.entries().size());
+        var phoneEntry = agg.entries().stream()
+            .filter(e -> e.policyId() == 1002L)
+            .findFirst().orElseThrow();
+        assertEquals("GRANT", phoneEntry.action());
+        assertEquals("phone", phoneEntry.fieldName());
+    }
+
+    @Test
+    @Order(32)
+    void grantConsentUpsertsByPolicyId() throws Exception {
+        Instant newExpiry = Instant.now().plusSeconds(86400 * 60);
+
+        TenantContext.runWhere(TENANT, () ->
+            commandService.grantConsentCommand(
+                "alice", 1001L, "marketing", "field", "email", "User", "PII",
+                "admin", "10.0.0.1", "TestAgent/2.0", newExpiry
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("alice"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        long count = agg.entries().stream().filter(e -> e.policyId() == 1001L).count();
+        assertEquals(1, count, "Should upsert, not duplicate the same policyId");
+    }
+
+    @Test
+    @Order(33)
+    void revokeConsentSetsEntryToRevoke() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.grantConsentCommand(
+                "bob", 2001L, "marketing", "field", "email", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0", null
+            );
+            commandService.revokeConsentCommand(
+                "bob", 2001L, "marketing", "field", "email", "User", "PII",
+                "admin", "192.168.1.2", "TestAgent/1.0"
+            );
+        });
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("bob"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        assertEquals(1, agg.entries().size());
+        assertEquals("REVOKE", agg.entries().getFirst().action());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.CONSENT_REVOKED).isEmpty());
+    }
+
+    @Test
+    @Order(34)
+    void expireConsentSetsEntryToExpire() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.grantConsentCommand(
+                "charlie", 3001L, "analytics", "field", "phone", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0",
+                Instant.now().minusSeconds(1) // already expired
+            );
+            commandService.expireConsentCommand(
+                "charlie", 3001L, "analytics", "field", "phone", "User", "PII"
+            );
+        });
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("charlie"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        assertEquals(1, agg.entries().size());
+        assertEquals("EXPIRE", agg.entries().getFirst().action());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.CONSENT_EXPIRED).isEmpty());
+    }
+
+    @Test
+    @Order(35)
+    void revokeAllConsentRevokesAllEntries() throws Exception {
+        TenantContext.runWhere(TENANT, () -> {
+            commandService.grantConsentCommand(
+                "diana", 4001L, "marketing", "field", "email", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0", null
+            );
+            commandService.grantConsentCommand(
+                "diana", 4002L, "analytics", "field", "phone", "User", "PII",
+                "admin", "192.168.1.1", "TestAgent/1.0", null
+            );
+            commandService.revokeAllConsentCommand("diana", "admin", "192.168.1.1", "TestAgent/1.0");
+        });
+
+        AggregateKey key = new AggregateKey(
+            SubjectConsentAggregate.deriveId("diana"),
+            SubjectConsentAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+
+        assertTrue(
+            agg.entries().stream().allMatch(e -> "REVOKE".equals(e.action())),
+            "All entries should be revoked"
+        );
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.CONSENT_ALL_REVOKED).isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
+    // DSAR Aggregate — delete subject audit
+    // -----------------------------------------------------------------------
+
+    @Test
+    @Order(40)
+    void deleteSubjectAuditCreatesDsarAggregate() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.deleteSubjectAuditCommand(
+                "eve", "del-req-001", "dpo", "10.0.0.1", "AdminUI/1.0"
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            DsarAggregate.deriveId("eve"),
+            DsarAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        DsarAggregate agg = eventService.getAggregate(key, DsarAggregate.class);
+
+        assertEquals("eve", agg.subjectId());
+        assertEquals("del-req-001", agg.lastDeletionRequestId());
+
+        awaitConsumedEvents(consumedEvents.size() + 1, 5000);
+        assertFalse(consumedByType(ConsentEventTypes.SUBJECT_AUDIT_DELETED).isEmpty());
+    }
+
+    @Test
+    @Order(41)
+    void deleteSubjectAuditUpdatesExistingAggregate() throws Exception {
+        TenantContext.runWhere(TENANT, () ->
+            commandService.deleteSubjectAuditCommand(
+                "eve", "del-req-002", "dpo", "10.0.0.1", "AdminUI/1.0"
+            )
+        );
+
+        AggregateKey key = new AggregateKey(
+            DsarAggregate.deriveId("eve"),
+            DsarAggregate.AGGREGATE_TYPE,
+            TENANT
+        );
+        DsarAggregate agg = eventService.getAggregate(key, DsarAggregate.class);
+
+        assertEquals("del-req-002", agg.lastDeletionRequestId());
+    }
+
     // -----------------------------------------------------------------------
     // Redis stream — aggregate-level verification
     // -----------------------------------------------------------------------
@@ -569,9 +751,8 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Test
     @Order(100)
     void allEventsContainRequiredStreamFields() throws Exception {
-        // Wait for outbox to flush all events produced by prior tests
         awaitConsumedEvents(consumedEvents.size() + 1, 6000);
-        Thread.sleep(3000); // additional grace for outbox polling
+        Thread.sleep(3000);
 
         assertFalse(consumedEvents.isEmpty(), "Should have consumed at least one event from Redis");
 
@@ -593,10 +774,12 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Test
     @Order(101)
     void grantConsentWithoutTenantContextThrows() {
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
         assertThrows(
             com.koostack.operio.core.exception.OperioConfigurationException.class,
-            () -> commandService.grantConsentCommand("no-tenant-subject", scope),
+            () -> commandService.grantConsentCommand(
+                "no-tenant", 9999L, "marketing", "field", "email", "User", "PII",
+                "admin", "127.0.0.1", "Test/1.0", null
+            ),
             "Should throw when no tenant context is set"
         );
     }
@@ -604,31 +787,35 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Test
     @Order(102)
     void revokeConsentWithoutTenantContextThrows() {
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
         assertThrows(
             com.koostack.operio.core.exception.OperioConfigurationException.class,
-            () -> commandService.revokeConsentCommand("no-tenant-subject", scope),
+            () -> commandService.revokeConsentCommand(
+                "no-tenant", 9999L, "marketing", "field", "email", "User", "PII",
+                "admin", "127.0.0.1", "Test/1.0"
+            ),
             "Should throw when no tenant context is set"
         );
     }
 
     @Test
     @Order(103)
-    void grantConsentWithNullSubjectThrows() {
-        ConsentScope scope = ConsentScope.to("PII", "email", "User", "marketing");
-        assertThrows(Exception.class, () ->
-            TenantContext.runWhere(TENANT, () ->
-                commandService.grantConsentCommand(null, scope)
-            )
+    void registerFieldWithoutTenantContextThrows() {
+        assertThrows(
+            com.koostack.operio.core.exception.OperioConfigurationException.class,
+            () -> commandService.registerFieldCommand("email", "User", "desc", "entity desc"),
+            "Should throw when no tenant context is set"
         );
     }
 
     @Test
     @Order(104)
-    void grantConsentWithNullScopeThrows() {
+    void grantConsentWithNullSubjectThrows() {
         assertThrows(Exception.class, () ->
             TenantContext.runWhere(TENANT, () ->
-                commandService.grantConsentCommand("null-scope-subject", null)
+                commandService.grantConsentCommand(
+                    null, 9999L, "marketing", "field", "email", "User", "PII",
+                    "admin", "127.0.0.1", "Test/1.0", null
+                )
             )
         );
     }

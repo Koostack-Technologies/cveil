@@ -71,7 +71,7 @@ class ConsentDsarIntegrationIT {
 
         // Verify export contains all three policies
         assertThat(export.subject()).isEqualTo(subject);
-        assertThat(export.consentPolicies()).hasSize(3);
+        assertThat(export.consent().entries()).hasSize(3);
         assertThat(export.exportedAt()).isNotNull();
     }
 
@@ -88,8 +88,7 @@ class ConsentDsarIntegrationIT {
         SubjectDataExport export = exportSubject(subject);
 
         assertThat(export.subject()).isEqualTo(subject);
-        assertThat(export.consentPolicies()).isEmpty();
-        assertThat(export.auditLogEntries()).isEmpty();
+        assertThat(export.consent().entries()).isEmpty();
         assertThat(export.cachedKeyCount()).isZero();
     }
 
@@ -111,12 +110,12 @@ class ConsentDsarIntegrationIT {
         // Export
         SubjectDataExport export = exportSubject(subject);
 
-        // Verify audit trail has two entries, revoke first (most recent)
-        assertThat(export.auditLogEntries()).hasSize(2);
-        assertThat(export.auditLogEntries().get(0).action()).isEqualTo(
+        // Verify consent entries have two entries, revoke first (most recent)
+        assertThat(export.consent().entries()).hasSize(2);
+        assertThat(export.consent().entries().get(0).action()).isEqualTo(
             "REVOKED"
         );
-        assertThat(export.auditLogEntries().get(1).action()).isEqualTo(
+        assertThat(export.consent().entries().get(1).action()).isEqualTo(
             "GRANTED"
         );
     }
@@ -178,7 +177,7 @@ class ConsentDsarIntegrationIT {
 
         // Verify it exists via export
         SubjectDataExport beforeDelete = exportSubject(subject);
-        assertThat(beforeDelete.consentPolicies()).isNotEmpty();
+        assertThat(beforeDelete.consent().entries()).isNotEmpty();
 
         // Delete with correct confirmation
         String confirmToken = "DELETE_" + subject;
@@ -190,8 +189,7 @@ class ConsentDsarIntegrationIT {
 
         // Verify all data is gone
         SubjectDataExport afterDelete = exportSubject(subject);
-        assertThat(afterDelete.consentPolicies()).isEmpty();
-        assertThat(afterDelete.auditLogEntries()).isEmpty();
+        assertThat(afterDelete.consent().entries()).isEmpty();
     }
 
     /**
@@ -219,7 +217,7 @@ class ConsentDsarIntegrationIT {
 
         // Verify still empty
         SubjectDataExport export = exportSubject(subject);
-        assertThat(export.consentPolicies()).isEmpty();
+        assertThat(export.consent().entries()).isEmpty();
     }
 
     /**
@@ -250,12 +248,9 @@ class ConsentDsarIntegrationIT {
         assertThat(receipt.status()).isEqualTo("SUCCESS");
         assertThat(receipt.deletionRequestId()).isNotEmpty();
         assertThat(receipt.completedAt()).isNotNull();
-        // policiesDeleted should reflect the 3 grants we just created
-        assertThat(receipt.policiesDeleted()).isEqualTo(3);
+        // ledgerEntriesRevoked should reflect the 3 grants we just created
+        assertThat(receipt.ledgerEntriesRevoked()).isEqualTo(3);
         assertThat(receipt.cachedKeysDeleted()).isGreaterThanOrEqualTo(0);
-        // auditEntriesDeleted should include the 3 grant audit entries
-        // plus the BULK_REVOKED entry from revokeAllConsent = 4 total
-        assertThat(receipt.auditEntriesDeleted()).isGreaterThanOrEqualTo(3);
     }
 
     /**

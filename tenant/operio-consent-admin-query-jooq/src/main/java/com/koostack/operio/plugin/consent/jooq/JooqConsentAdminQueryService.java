@@ -1,38 +1,35 @@
 package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
-import com.koostack.operio.core.models.CategoryInfo;
-import com.koostack.operio.core.models.ConsentAuditEntry;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.EntityInfo;
-import com.koostack.operio.core.models.FieldInfo;
-import com.koostack.operio.core.models.PolicySummaryEntry;
-import com.koostack.operio.core.models.PurposeInfo;
-import com.koostack.operio.core.models.RegulationInfo;
+import com.koostack.operio.core.models.*;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentAuditLog;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.FieldCategory;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Regulation;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
+
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+
 import org.jooq.DSLContext;
+import org.jooq.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 
 /**
  * jOOQ-backed {@link ConsentAdminQueryService} implementation.
  *
- * <p>Handles all read operations for consent administration: listing
- * schema metadata, querying policies by subject, and retrieving
- * consent audit history.
+ * <p>Returns aggregate-shaped view models for all 5 consent aggregates:
+ * Field, Purpose, Regulation, SubjectConsent, and DSAR.
  */
 public class JooqConsentAdminQueryService
     implements ConsentAdminQueryService<JooqConsentAdminServiceConfig>
@@ -42,35 +39,30 @@ public class JooqConsentAdminQueryService
         JooqConsentAdminQueryService.class
     );
 
-    private DSLContext dslContext;
+    private DSLContext dsl;
     private EntityRepository entityRepository;
     private FieldRepository fieldRepository;
     private CategoryRepository categoryRepository;
-    private ConsentPolicyRepository consentPolicyRepository;
+    private FieldCategoryRepository fieldCategoryRepository;
     private PurposeRepository purposeRepository;
     private RegulationRepository regulationRepository;
-    private ConsentAuditLogRepository consentAuditLogRepository;
-
-    // -----------------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------------
+    private PolicyRepository policyRepository;
+    private ConsentLedgerRepository consentLedgerRepository;
 
     private DSLContext getDsl() {
-        if (dslContext == null) {
+        if (dsl == null) {
             throw new OperioConfigurationException(
-                "JooqConsentAdminQueryService not configured. Call configure() with a valid JooqConsentAdminServiceConfig first."
+                "JooqConsentAdminQueryService not configured. Call configure() first."
             );
         }
-        return dslContext;
+        return dsl;
     }
 
     @Override
     public boolean isReady() {
-        if (dslContext == null) {
-            return false;
-        }
+        if (dsl == null) return false;
         try {
-            dslContext.selectOne().fetch();
+            dsl.selectOne().fetch();
             return true;
         } catch (Exception e) {
             return false;
@@ -98,370 +90,316 @@ public class JooqConsentAdminQueryService
 
     @Override
     public void configure(JooqConsentAdminServiceConfig config) {
-        this.dslContext = JooqContextFactory.createTenantAwareContext(
+        this.dsl = JooqContextFactory.createTenantAwareContext(
             config,
             "operio-consent-admin-query-jooq",
             "classpath:db/migration/consent"
         );
-        this.entityRepository = new EntityRepository(dslContext);
-        this.fieldRepository = new FieldRepository(dslContext);
-        this.categoryRepository = new CategoryRepository(dslContext);
-        this.consentPolicyRepository = new ConsentPolicyRepository(dslContext);
-        this.purposeRepository = new PurposeRepository(dslContext);
-        this.regulationRepository = new RegulationRepository(dslContext);
-        this.consentAuditLogRepository = new ConsentAuditLogRepository(
-            dslContext
+        this.entityRepository = new EntityRepository(dsl);
+        this.fieldRepository = new FieldRepository(dsl);
+        this.categoryRepository = new CategoryRepository(dsl);
+        this.fieldCategoryRepository = new FieldCategoryRepository(dsl);
+        this.purposeRepository = new PurposeRepository(dsl);
+        this.regulationRepository = new RegulationRepository(dsl);
+        this.policyRepository = new PolicyRepository(dsl);
+        this.consentLedgerRepository = new ConsentLedgerRepository(dsl);
+    }
+
+    // -----------------------------------------------------------------------
+    // Field Aggregate Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<FieldView> listFields() {
+        getDsl();
+        List<Field> fields = fieldRepository.findAll();
+        return fields.stream().map(this::toFieldView).toList();
+    }
+
+    @Override
+    public FieldView getField(String fieldName, String entityName) {
+        getDsl();
+        Optional<Entity> entity = entityRepository.findByName(entityName);
+        if (entity.isEmpty()) return null;
+        Optional<Field> field = fieldRepository.findByNameAndEntity(
+            fieldName, entity.get().getEntityId());
+        return field.map(this::toFieldView).orElse(null);
+    }
+
+    private FieldView toFieldView(Field f) {
+        FieldView.EntityView entityView = null;
+        if (f.getEntityId() != null) {
+            entityView = entityRepository.dao()
+                .findOptionalById(f.getEntityId())
+                .map(e -> new FieldView.EntityView(e.getEntityId(), e.getEntityName()))
+                .orElse(null);
+        }
+
+        // Get categories for this field
+        var fieldCategories = getDsl().select(CATEGORY.CATEGORY_ID, CATEGORY.CATEGORY_NAME)
+            .from(FIELD_CATEGORY)
+            .join(CATEGORY).on(FIELD_CATEGORY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
+            .where(FIELD_CATEGORY.FIELD_ID.eq(f.getFieldId()))
+            .fetch();
+
+        List<FieldView.CategoryView> categories = fieldCategories.stream()
+            .map(r -> new FieldView.CategoryView(
+                r.get(CATEGORY.CATEGORY_ID),
+                r.get(CATEGORY.CATEGORY_NAME)
+            ))
+            .toList();
+
+        return new FieldView(
+            f.getFieldId(),
+            f.getFieldName(),
+            f.getDescription(),
+            entityView,
+            categories
         );
     }
 
     // -----------------------------------------------------------------------
-    // Query methods
+    // Purpose Aggregate Queries
     // -----------------------------------------------------------------------
 
     @Override
-    public List<FieldInfo> listFields() {
-        getDsl(); // guard
-        return fieldRepository
-            .findAll()
-            .stream()
-            .map(f -> {
-                String entityName = null;
-                if (f.getEntityId() != null) {
-                    entityName = entityRepository
-                        .dao()
-                        .findOptionalById(f.getEntityId())
-                        .map(Entity::getEntityName)
-                        .orElse(null);
+    public List<PurposeView> listPurposes() {
+        getDsl();
+        List<Purpose> purposes = purposeRepository.findAll();
+        return purposes.stream().map(this::toPurposeView).toList();
+    }
+
+    @Override
+    public PurposeView getPurpose(String purposeName) {
+        getDsl();
+        return purposeRepository.findByName(purposeName)
+            .map(this::toPurposeView)
+            .orElse(null);
+    }
+
+    private PurposeView toPurposeView(Purpose p) {
+        // Purpose ↔ Regulation links
+        var regulationLinks = getDsl()
+            .select(REGULATION.REGULATION_NAME,
+                    PURPOSE_REGULATION.LAWFUL_BASIS,
+                    PURPOSE_REGULATION.ON_GRANTED,
+                    PURPOSE_REGULATION.ON_DENIED)
+            .from(PURPOSE_REGULATION)
+            .join(REGULATION).on(PURPOSE_REGULATION.REGULATION_ID.eq(REGULATION.REGULATION_ID))
+            .where(PURPOSE_REGULATION.PURPOSE_ID.eq(p.getPurposeId()))
+            .fetch();
+
+        List<PurposeView.RegulationLinkView> regs = regulationLinks.stream()
+            .map(r -> new PurposeView.RegulationLinkView(
+                r.get(REGULATION.REGULATION_NAME),
+                r.get(PURPOSE_REGULATION.LAWFUL_BASIS),
+                r.get(PURPOSE_REGULATION.ON_GRANTED) != null ? r.get(PURPOSE_REGULATION.ON_GRANTED).toString() : null,
+                r.get(PURPOSE_REGULATION.ON_DENIED) != null ? r.get(PURPOSE_REGULATION.ON_DENIED).toString() : null
+            ))
+            .toList();
+
+        // Policies under this purpose
+        var policyRecords = policyRepository.findByPurpose(p.getPurposeId());
+        List<PurposeView.PolicyView> policies = policyRecords.stream()
+            .map(r -> {
+                long policyId = r.get(POLICY.POLICY_ID);
+                String policyType = r.get(POLICY.POLICY_TYPE) != null
+                    ? r.get(POLICY.POLICY_TYPE).toString() : null;
+
+                PurposeView.CategoryRef catRef = null;
+                PurposeView.FieldRef fieldRef = null;
+
+                if (r.get(CATEGORY.CATEGORY_NAME) != null) {
+                    catRef = new PurposeView.CategoryRef(
+                        r.get(POLICY.CATEGORY_ID),
+                        r.get(CATEGORY.CATEGORY_NAME)
+                    );
                 }
-                return new FieldInfo(
-                    f.getFieldName(),
-                    entityName,
-                    f.getDescription()
-                );
+                if (r.get(FIELD.FIELD_NAME) != null) {
+                    fieldRef = new PurposeView.FieldRef(
+                        r.get(POLICY.FIELD_ID),
+                        r.get(FIELD.FIELD_NAME),
+                        r.get(ENTITY.ENTITY_NAME)
+                    );
+                }
+
+                return new PurposeView.PolicyView(policyId, policyType, catRef, fieldRef);
             })
             .toList();
-    }
 
-    @Override
-    public List<CategoryInfo> listCategories() {
-        getDsl(); // guard
-        return categoryRepository
-            .findAll()
-            .stream()
-            .map(c -> new CategoryInfo(c.getCategoryName(), c.getDescription()))
-            .toList();
-    }
-
-    @Override
-    public List<EntityInfo> listEntities() {
-        getDsl(); // guard
-        return entityRepository
-            .findAll()
-            .stream()
-            .map(e -> new EntityInfo(e.getEntityName(), e.getDescription()))
-            .toList();
-    }
-
-    @Override
-    public List<PurposeInfo> listPurposes() {
-        getDsl(); // guard
-        return purposeRepository
-            .findAll()
-            .stream()
-            .map(p -> new PurposeInfo(p.getPurposeName(), p.getDescription()))
-            .toList();
-    }
-
-    @Override
-    public List<RegulationInfo> listRegulations() {
-        getDsl(); // guard
-        return regulationRepository
-            .findAll()
-            .stream()
-            .map(r ->
-                new RegulationInfo(
-                    r.getRegulationName(),
-                    r.getFullName(),
-                    r.getJurisdiction(),
-                    r.getDescription(),
-                    r.getUrl()
-                )
-            )
-            .toList();
-    }
-
-    @Override
-    public List<PolicySummaryEntry> findPoliciesBySubject(String subject) {
-        getDsl(); // guard
-        List<ConsentPolicy> policies = consentPolicyRepository.findBySubject(
-            subject
+        return new PurposeView(
+            p.getPurposeId(),
+            p.getPurposeName(),
+            p.getDescription(),
+            regs,
+            policies
         );
-        return policies.stream().map(this::toPolicySummary).toList();
-    }
-
-    @Override
-    public int countPoliciesBySubject(String subjectId) {
-        getDsl(); // guard
-        return consentPolicyRepository.countBySubject(subjectId);
     }
 
     // -----------------------------------------------------------------------
-    // Expiration queries
+    // Regulation Aggregate Queries
     // -----------------------------------------------------------------------
 
     @Override
-    public List<PolicySummaryEntry> findExpiredPolicies(Instant cutoff) {
-        getDsl(); // guard
-        var cutoffLocal = java.time.LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC);
-        List<ConsentPolicy> expired = consentPolicyRepository.findExpired(cutoffLocal);
-        return expired.stream().map(this::toPolicySummary).toList();
+    public List<RegulationView> listRegulations() {
+        getDsl();
+        List<Regulation> regulations = regulationRepository.findAll();
+        return regulations.stream().map(this::toRegulationView).toList();
     }
 
-    // -----------------------------------------------------------------------
-    // Consent audit history
-    // -----------------------------------------------------------------------
-
     @Override
-    public List<ConsentAuditEntry> getConsentHistory(String subject) {
-        getDsl(); // guard
-        List<ConsentAuditLog> logs = consentAuditLogRepository.findBySubject(
-            subject
+    public RegulationView getRegulation(String regulationName) {
+        getDsl();
+        return regulationRepository.findByName(regulationName)
+            .map(this::toRegulationView)
+            .orElse(null);
+    }
+
+    private RegulationView toRegulationView(Regulation r) {
+        var jurisdictions = getDsl()
+            .select(JURISDICTION.JURISDICTION_ID, JURISDICTION.JURISDICTION_NAME)
+            .from(REGULATION_JURISDICTION)
+            .join(JURISDICTION).on(REGULATION_JURISDICTION.JURISDICTION_ID.eq(JURISDICTION.JURISDICTION_ID))
+            .where(REGULATION_JURISDICTION.REGULATION_ID.eq(r.getRegulationId()))
+            .fetch();
+
+        List<RegulationView.JurisdictionView> juris = jurisdictions.stream()
+            .map(j -> new RegulationView.JurisdictionView(
+                j.get(JURISDICTION.JURISDICTION_ID),
+                j.get(JURISDICTION.JURISDICTION_NAME)
+            ))
+            .toList();
+
+        return new RegulationView(
+            r.getRegulationId(),
+            r.getRegulationName(),
+            r.getDescription(),
+            juris
         );
-        return logs.stream().map(this::toAuditEntry).toList();
+    }
+
+    // -----------------------------------------------------------------------
+    // SubjectConsent Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public SubjectConsentView getSubjectConsent(String subjectId) {
+        getDsl();
+        var records = consentLedgerRepository.findBySubject(subjectId);
+
+        List<SubjectConsentView.ConsentLedgerEntryView> entries = records.stream()
+            .map(r -> new SubjectConsentView.ConsentLedgerEntryView(
+                r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                subjectId,
+                r.get(CONSENT_LEDGER.POLICY_ID),
+                r.get(PURPOSE.PURPOSE_NAME),
+                r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).getLiteral() : null,
+                r.get(FIELD.FIELD_NAME),
+                r.get(ENTITY.ENTITY_NAME),
+                r.get(CATEGORY.CATEGORY_NAME),
+                r.get(CONSENT_LEDGER.ACTION) != null ? r.get(CONSENT_LEDGER.ACTION).getLiteral() : null,
+                r.get(CONSENT_LEDGER.ACTOR),
+                r.get(CONSENT_LEDGER.IP_ADDRESS),
+                r.get(CONSENT_LEDGER.USER_AGENT),
+                toInstant(r.get(CONSENT_LEDGER.CREATED_AT)),
+                toInstant(r.get(CONSENT_LEDGER.UPDATED_AT)),
+                toInstant(r.get(CONSENT_LEDGER.EXPIRES_AT))
+            ))
+            .toList();
+
+        return new SubjectConsentView(subjectId, entries);
     }
 
     @Override
-    public List<ConsentAuditEntry> getConsentHistory(
-        String subject,
-        ConsentScope scope
+    public int countSubjectConsentEntries(String subjectId) {
+        getDsl();
+        return getDsl().selectCount()
+            .from(CONSENT_LEDGER)
+            .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
+            .fetchOneInto(int.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Expiration Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<SubjectConsentView.ConsentLedgerEntryView> findExpiredGrants(Instant cutoff) {
+        getDsl();
+        var records = consentLedgerRepository.findExpiredGrants(
+            java.time.LocalDateTime.ofInstant(cutoff, java.time.ZoneOffset.UTC)
+        );
+        return records.stream()
+            .map(r -> new SubjectConsentView.ConsentLedgerEntryView(
+                r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                r.get(CONSENT_LEDGER.SUBJECT_ID),
+                r.get(CONSENT_LEDGER.POLICY_ID),
+                r.get(PURPOSE.PURPOSE_NAME),
+                r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).getLiteral() : null,
+                r.get(FIELD.FIELD_NAME),
+                r.get(ENTITY.ENTITY_NAME),
+                r.get(CATEGORY.CATEGORY_NAME),
+                r.get(CONSENT_LEDGER.ACTION) != null ? r.get(CONSENT_LEDGER.ACTION).getLiteral() : null,
+                r.get(CONSENT_LEDGER.ACTOR),
+                r.get(CONSENT_LEDGER.IP_ADDRESS),
+                r.get(CONSENT_LEDGER.USER_AGENT),
+                toInstant(r.get(CONSENT_LEDGER.CREATED_AT)),
+                toInstant(r.get(CONSENT_LEDGER.UPDATED_AT)),
+                toInstant(r.get(CONSENT_LEDGER.EXPIRES_AT))
+            ))
+            .toList();
+    }
+
+    // -----------------------------------------------------------------------
+    // Policy Lookup (for TenantService enrichment)
+    // -----------------------------------------------------------------------
+
+    @Override
+    public PurposeView.PolicyView findPolicy(
+        String purposeName, String policyType,
+        String fieldName, String entityName,
+        String categoryName
     ) {
-        getDsl(); // guard
+        getDsl();
 
-        Long fieldId = null;
-        Long categoryId = null;
-        Long purposeId = null;
+        if ("FIELD".equals(policyType)) {
+            var opt = policyRepository.findFieldPolicy(purposeName, fieldName, entityName);
+            return opt.map(r -> new PurposeView.PolicyView(
+                r.get(POLICY.POLICY_ID),
+                r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).toString() : "FIELD",
+                null,
+                new PurposeView.FieldRef(r.get(POLICY.FIELD_ID), fieldName, entityName)
+            )).orElse(null);
+        } else if ("CATEGORY".equals(policyType)) {
+            var opt = policyRepository.findCategoryPolicy(purposeName, categoryName);
+            return opt.map(r -> new PurposeView.PolicyView(
+                r.get(POLICY.POLICY_ID),
+                r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).toString() : "CATEGORY",
+                new PurposeView.CategoryRef(r.get(POLICY.CATEGORY_ID), categoryName),
+                null
+            )).orElse(null);
+        }
 
-        if (scope.fieldName() != null) {
-            fieldId = resolveFieldId(scope.fieldName(), scope.entityName());
-        }
-        if (scope.category() != null) {
-            categoryId = resolveCategoryId(scope.category());
-        }
-        if (scope.purposeName() != null && !scope.purposeName().isBlank()) {
-            purposeId = resolvePurposeId(scope.purposeName());
-        }
-
-        List<ConsentAuditLog> logs =
-            consentAuditLogRepository.findBySubjectAndScope(
-                subject,
-                fieldId,
-                categoryId,
-                purposeId
-            );
-        return logs.stream().map(this::toAuditEntry).toList();
+        return null;
     }
 
     // -----------------------------------------------------------------------
-    // Internal — name-to-ID resolution
+    // Repository Accessors
     // -----------------------------------------------------------------------
 
-    private Long resolvePurposeId(String purposeName) {
-        if (purposeName == null || purposeName.isBlank()) {
-            throw new IllegalArgumentException(
-                "purposeName must not be null or blank"
-            );
-        }
-        Purpose purpose = purposeRepository
-            .findByName(purposeName)
-            .orElseThrow(() ->
-                new IllegalArgumentException(
-                    "No purpose found with name: " + purposeName
-                )
-            );
-        return purpose.getPurposeId();
-    }
-
-    private Long resolveFieldId(String fieldName, String entityName) {
-        if (entityName != null && !entityName.isBlank()) {
-            Optional<Entity> entity = entityRepository.findByName(entityName);
-            if (entity.isEmpty()) {
-                throw new IllegalArgumentException(
-                    "No entity found with name: " + entityName
-                );
-            }
-            Optional<Field> field = fieldRepository.findByNameAndEntity(
-                fieldName,
-                entity.get().getEntityId()
-            );
-            if (field.isEmpty()) {
-                throw new IllegalArgumentException(
-                    "No field '" +
-                        fieldName +
-                        "' found under entity '" +
-                        entityName +
-                        "'"
-                );
-            }
-            return field.get().getFieldId();
-        }
-
-        List<Field> fields = fieldRepository.findByName(fieldName);
-        if (fields.isEmpty()) {
-            throw new IllegalArgumentException(
-                "No field found with name: " + fieldName
-            );
-        }
-        if (fields.size() > 1) {
-            throw new IllegalStateException(
-                "Ambiguous field name '" +
-                    fieldName +
-                    "' — " +
-                    fields.size() +
-                    " fields exist with that name across " +
-                    "different entities. Provide entityName on the " +
-                    "ConsentScope to disambiguate."
-            );
-        }
-        return fields.get(0).getFieldId();
-    }
-
-    private Long resolveCategoryId(String categoryName) {
-        Category category = categoryRepository
-            .findByName(categoryName)
-            .orElseThrow(() ->
-                new IllegalArgumentException(
-                    "No category found with name: " + categoryName
-                )
-            );
-        return category.getCategoryId();
-    }
+    public EntityRepository entityRepository() { return entityRepository; }
+    public FieldRepository fieldRepository() { return fieldRepository; }
+    public CategoryRepository categoryRepository() { return categoryRepository; }
+    public FieldCategoryRepository fieldCategoryRepository() { return fieldCategoryRepository; }
+    public PurposeRepository purposeRepository() { return purposeRepository; }
+    public PolicyRepository policyRepository() { return policyRepository; }
+    public ConsentLedgerRepository consentLedgerRepository() { return consentLedgerRepository; }
 
     // -----------------------------------------------------------------------
-    // Internal — DTO mapping
+    // Helpers
     // -----------------------------------------------------------------------
 
-    private ConsentAuditEntry toAuditEntry(ConsentAuditLog log) {
-        String fieldName = null;
-        String entityName = null;
-        String categoryName = null;
-        String purposeName = null;
-
-        if (log.getFieldId() != null) {
-            Optional<Field> field = fieldRepository
-                .dao()
-                .findOptionalById(log.getFieldId());
-            if (field.isPresent()) {
-                fieldName = field.get().getFieldName();
-                if (field.get().getEntityId() != null) {
-                    entityName = entityRepository
-                        .dao()
-                        .findOptionalById(field.get().getEntityId())
-                        .map(Entity::getEntityName)
-                        .orElse(null);
-                }
-            }
-        }
-
-        if (log.getCategoryId() != null) {
-            categoryName = categoryRepository
-                .dao()
-                .findOptionalById(log.getCategoryId())
-                .map(Category::getCategoryName)
-                .orElse(null);
-        }
-
-        if (log.getPurposeId() != null) {
-            purposeName = purposeRepository
-                .findById(log.getPurposeId())
-                .map(Purpose::getPurposeName)
-                .orElse(null);
-        }
-
-        Instant expiresAt =
-            log.getExpiresAt() != null
-                ? log.getExpiresAt().toInstant(ZoneOffset.UTC)
-                : null;
-        Instant timestamp =
-            log.getCreatedAt() != null
-                ? log.getCreatedAt().toInstant(ZoneOffset.UTC)
-                : null;
-
-        Map<String, String> metadata = Collections.emptyMap();
-
-        return new ConsentAuditEntry(
-            log.getSubjectId(),
-            fieldName,
-            entityName,
-            categoryName,
-            purposeName,
-            log.getAction(),
-            expiresAt,
-            log.getActor(),
-            log.getIpAddress(),
-            log.getUserAgent(),
-            metadata,
-            timestamp
-        );
-    }
-
-    private PolicySummaryEntry toPolicySummary(ConsentPolicy cp) {
-        String fieldName = null;
-        String entityName = null;
-        String categoryName = null;
-        String purposeName = null;
-
-        if (cp.getFieldId() != null) {
-            Optional<Field> field = fieldRepository
-                .dao()
-                .findOptionalById(cp.getFieldId());
-            if (field.isPresent()) {
-                fieldName = field.get().getFieldName();
-                if (field.get().getEntityId() != null) {
-                    entityName = entityRepository
-                        .dao()
-                        .findOptionalById(field.get().getEntityId())
-                        .map(Entity::getEntityName)
-                        .orElse(null);
-                }
-            }
-        }
-
-        if (cp.getCategoryId() != null) {
-            categoryName = categoryRepository
-                .dao()
-                .findOptionalById(cp.getCategoryId())
-                .map(Category::getCategoryName)
-                .orElse(null);
-        }
-
-        if (cp.getPurposeId() != null) {
-            purposeName = purposeRepository
-                .findById(cp.getPurposeId())
-                .map(Purpose::getPurposeName)
-                .orElse(null);
-        }
-
-        String status = Boolean.TRUE.equals(cp.getGranted())
-            ? "GRANTED"
-            : "REVOKED";
-        Instant expiresAt =
-            cp.getExpiresAt() != null
-                ? cp.getExpiresAt().toInstant(ZoneOffset.UTC)
-                : null;
-        Instant createdAt =
-            cp.getCreatedAt() != null
-                ? cp.getCreatedAt().toInstant(ZoneOffset.UTC)
-                : null;
-
-        return new PolicySummaryEntry(
-            cp.getSubjectId(),
-            fieldName,
-            entityName,
-            categoryName,
-            purposeName,
-            status,
-            expiresAt,
-            createdAt
-        );
+    private static Instant toInstant(LocalDateTime ldt) {
+        return ldt != null ? ldt.toInstant(ZoneOffset.UTC) : null;
     }
 }

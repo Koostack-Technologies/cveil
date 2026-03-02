@@ -2,13 +2,11 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.PolicySummaryEntry;
+import com.koostack.operio.core.models.SubjectConsentView.ConsentLedgerEntryView;
 import com.koostack.operio.core.models.TenantContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
@@ -41,143 +39,101 @@ class JooqExpirationSweeperServiceTest {
     class Sweep {
 
         @Test
-        void noExpiredPoliciesReturnsZero() throws Exception {
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+        void noExpiredGrantsReturnsZero() throws Exception {
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of());
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(0, result);
-            verify(commandService, never()).revokeConsentCommand(any(), any());
+            verify(commandService, never()).expireConsentCommand(
+                any(), anyLong(), any(), any(), any(), any(), any());
         }
 
         @Test
-        void revokesExpiredFieldScopedPolicy() throws Exception {
-            var expired = new PolicySummaryEntry(
-                "alice", "email", "User", null, "marketing",
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+        void expiresFieldScopedGrant() throws Exception {
+            var expired = new ConsentLedgerEntryView(
+                1L, "alice", 100L, "marketing", "FIELD_LEVEL",
+                "email", "User", null, "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
             );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired));
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(1, result);
-            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
-
-            ConsentScope revokedScope = scopeCaptor.getValue();
-            assertTrue(revokedScope.isFieldScoped());
-            assertEquals("email", revokedScope.fieldName());
-            assertEquals("User", revokedScope.entityName());
-            assertEquals("marketing", revokedScope.purposeName());
+            verify(commandService).expireConsentCommand(
+                "alice", 100L, "marketing", "FIELD_LEVEL", "email", "User", null);
         }
 
         @Test
-        void revokesExpiredCategoryScopedPolicy() throws Exception {
-            var expired = new PolicySummaryEntry(
-                "bob", null, null, "PII", "analytics",
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+        void expiresCategoryScopedGrant() throws Exception {
+            var expired = new ConsentLedgerEntryView(
+                2L, "bob", 200L, "analytics", "CATEGORY_LEVEL",
+                null, null, "PII", "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
             );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired));
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(1, result);
-            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsentCommand(eq("bob"), scopeCaptor.capture());
-
-            ConsentScope revokedScope = scopeCaptor.getValue();
-            assertTrue(revokedScope.isCategoryScoped());
-            assertEquals("PII", revokedScope.category());
-            assertEquals("analytics", revokedScope.purposeName());
+            verify(commandService).expireConsentCommand(
+                "bob", 200L, "analytics", "CATEGORY_LEVEL", null, null, "PII");
         }
 
         @Test
-        void revokesMultipleExpiredPolicies() throws Exception {
-            var expired1 = new PolicySummaryEntry(
-                "alice", "email", "User", null, "marketing",
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+        void expiresMultipleGrants() throws Exception {
+            var expired1 = new ConsentLedgerEntryView(
+                1L, "alice", 100L, "marketing", "FIELD_LEVEL",
+                "email", "User", null, "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
             );
-            var expired2 = new PolicySummaryEntry(
-                "bob", null, null, "PII", "analytics",
-                "GRANTED", Instant.now().minusSeconds(30), Instant.now().minusSeconds(7200)
+            var expired2 = new ConsentLedgerEntryView(
+                2L, "bob", 200L, "analytics", "CATEGORY_LEVEL",
+                null, null, "PII", "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(7200)
             );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired1, expired2));
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(2, result);
-            verify(commandService, times(2)).revokeConsentCommand(any(), any());
+            verify(commandService).expireConsentCommand(
+                "alice", 100L, "marketing", "FIELD_LEVEL", "email", "User", null);
+            verify(commandService).expireConsentCommand(
+                "bob", 200L, "analytics", "CATEGORY_LEVEL", null, null, "PII");
         }
 
         @Test
-        void continuesOnIndividualRevocationFailure() throws Exception {
-            var expired1 = new PolicySummaryEntry(
-                "alice", "email", "User", null, "marketing",
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
+        void continuesOnIndividualExpirationFailure() throws Exception {
+            var expired1 = new ConsentLedgerEntryView(
+                1L, "alice", 100L, "marketing", "FIELD_LEVEL",
+                "email", "User", null, "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
             );
-            var expired2 = new PolicySummaryEntry(
-                "bob", "phone", "User", null, "analytics",
-                "GRANTED", Instant.now().minusSeconds(30), Instant.now().minusSeconds(7200)
+            var expired2 = new ConsentLedgerEntryView(
+                2L, "bob", 200L, "analytics", "FIELD_LEVEL",
+                "phone", "User", null, "GRANTED", "system",
+                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(7200)
             );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired1, expired2));
 
-            // First revoke throws, second succeeds
+            // First expire throws, second succeeds
             doThrow(new RuntimeException("transient error"))
                 .doNothing()
-                .when(commandService).revokeConsentCommand(any(), any());
+                .when(commandService).expireConsentCommand(
+                    any(), anyLong(), any(), any(), any(), any(), any());
 
             int result = TenantContext.callWhere(TENANT, sweeper::sweep);
 
             assertEquals(1, result); // only second succeeded
-            verify(commandService, times(2)).revokeConsentCommand(any(), any());
-        }
-
-        @Test
-        void nullPurposeFallsBackToWildcard() throws Exception {
-            var expired = new PolicySummaryEntry(
-                "alice", "email", "User", null, null,
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
-            );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
-                .thenReturn(List.of(expired));
-
-            int result = TenantContext.callWhere(TENANT, sweeper::sweep);
-
-            assertEquals(1, result);
-            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
-
-            ConsentScope scope = scopeCaptor.getValue();
-            assertTrue(scope.isFieldScoped());
-            assertEquals("email", scope.fieldName());
-            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
-        }
-
-        @Test
-        void bothFieldAndCategoryPrefersField() throws Exception {
-            var expired = new PolicySummaryEntry(
-                "alice", "email", "User", "PII", "marketing",
-                "GRANTED", Instant.now().minusSeconds(60), Instant.now().minusSeconds(3600)
-            );
-            when(queryService.findExpiredPolicies(any(Instant.class)))
-                .thenReturn(List.of(expired));
-
-            int result = TenantContext.callWhere(TENANT, sweeper::sweep);
-
-            assertEquals(1, result);
-            var scopeCaptor = ArgumentCaptor.forClass(ConsentScope.class);
-            verify(commandService).revokeConsentCommand(eq("alice"), scopeCaptor.capture());
-
-            ConsentScope scope = scopeCaptor.getValue();
-            assertTrue(scope.isFieldScoped());
-            assertEquals("email", scope.fieldName());
-            assertEquals("User", scope.entityName());
-            assertEquals("marketing", scope.purposeName());
+            verify(commandService, times(2)).expireConsentCommand(
+                any(), anyLong(), any(), any(), any(), any(), any());
         }
     }
 
@@ -191,14 +147,14 @@ class JooqExpirationSweeperServiceTest {
                 () -> List.of("tenant-a", "tenant-b")
             );
 
-            when(queryService.findExpiredPolicies(any(Instant.class)))
+            when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of());
 
             int total = sweeper.sweepAll();
 
             assertEquals(0, total);
-            // findExpiredPolicies called once per tenant
-            verify(queryService, times(2)).findExpiredPolicies(any(Instant.class));
+            // findExpiredGrants called once per tenant
+            verify(queryService, times(2)).findExpiredGrants(any(Instant.class));
         }
     }
 }

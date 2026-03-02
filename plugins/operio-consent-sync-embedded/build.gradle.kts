@@ -4,11 +4,13 @@ plugins {
 }
 
 dependencies {
-    // Public API — exposes ConsentSyncService and core models
+    // Public API — exposes core models
     api(project(":operio-core"))
 
     // Internal delegates — not exposed to consumers
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
+    implementation(project(":tenant:operio-consent-admin-command"))
+    implementation(project(":tenant:operio-consent-admin-query-jooq"))
     implementation(project(":plugins:operio-consent-decision-caffeine"))
     implementation(project(":plugins:operio-jooq-common"))
 

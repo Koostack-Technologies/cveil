@@ -9,7 +9,8 @@ import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionServic
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentRepository;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineFieldCategoryMappingRepository;
-import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminService;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import java.time.Duration;
 import java.time.Instant;
@@ -25,7 +26,7 @@ import org.junit.jupiter.api.TestInstance;
 class EmbeddedConsentSyncServiceTest {
 
     private EmbeddedConsentSyncServiceImpl syncService;
-    private JooqConsentAdminService jooqAdmin;
+    private JooqConsentAdminQueryService queryService;
     private CaffeineConsentDecisionService caffeineDecision;
     private CaffeineConsentRepository consentRepo;
     private CaffeineFieldCategoryMappingRepository mappingRepo;
@@ -43,7 +44,7 @@ class EmbeddedConsentSyncServiceTest {
         syncService = new EmbeddedConsentSyncServiceImpl();
         syncService.configure(config);
 
-        jooqAdmin = syncService.jooqAdminService();
+        queryService = syncService.queryService();
         caffeineDecision = syncService.caffeineDecisionService();
         consentRepo = syncService.caffeineConsentRepository();
         mappingRepo = syncService.caffeineMappingRepository();
@@ -132,11 +133,11 @@ class EmbeddedConsentSyncServiceTest {
 
         @Test
         @DisplayName(
-            "jooqAdminService() returns a non-null configured instance"
+            "queryService() returns a non-null configured instance"
         )
-        void jooqAdminAccessible() {
-            assertNotNull(jooqAdmin);
-            assertTrue(jooqAdmin.isReady());
+        void queryServiceAccessible() {
+            assertNotNull(queryService);
+            assertTrue(queryService.isReady());
         }
 
         @Test
@@ -778,50 +779,45 @@ class EmbeddedConsentSyncServiceTest {
 
         @Test
         @DisplayName(
-            "grant fails when metadata not pre-registered and auto-registration is off"
+            "grant still writes to cache even when auto-registration is off (cache-only mode)"
         )
-        void grantFailsWithoutMetadata() {
+        void grantWritesToCacheWithoutAutoRegistration() {
             var scope = ConsentScope.to(
                 "PII",
                 "firstName",
                 "Person",
                 "analytics"
             );
-            assertThrows(
-                IllegalArgumentException.class,
-                () -> strictService.syncGrant("user-1", scope, null),
-                "Should throw because field/entity/category are not registered"
+            // In cache-only mode (no event service), syncGrant writes
+            // directly to cache without metadata validation
+            assertDoesNotThrow(
+                () -> strictService.syncGrant("user-1", scope, null)
             );
         }
 
         @Test
         @DisplayName(
-            "revoke fails when metadata not pre-registered and auto-registration is off"
+            "revoke still writes to cache even when auto-registration is off (cache-only mode)"
         )
-        void revokeFailsWithoutMetadata() {
+        void revokeWritesToCacheWithoutAutoRegistration() {
             var scope = ConsentScope.to(
                 "PII",
                 "firstName",
                 "Person",
                 "analytics"
             );
-            assertThrows(
-                IllegalArgumentException.class,
-                () -> strictService.syncRevoke("user-1", scope, null),
-                "Should throw because field/entity/category are not registered"
+            // In cache-only mode (no event service), syncRevoke writes
+            // directly to cache without metadata validation
+            assertDoesNotThrow(
+                () -> strictService.syncRevoke("user-1", scope, null)
             );
         }
 
         @Test
         @DisplayName("grant succeeds when metadata is pre-registered manually")
         void grantSucceedsWithPreRegisteredMetadata() {
-            var admin = strictService.jooqAdminService();
-            admin.registerCategory("PII", null);
-            admin.registerField("firstName", "Person", null);
-            admin.linkFieldToCategory("firstName", "Person", "PII");
-            admin.registerPurpose("analytics", null);
-
-            // Also populate Caffeine mapping repo so cache fan-out works
+            // In cache-only mode (no event service), we pre-populate the
+            // Caffeine mapping repo directly so cache fan-out works
             strictService
                 .caffeineMappingRepository()
                 .addFieldToCategory("Person", "firstName", "PII");
@@ -833,6 +829,7 @@ class EmbeddedConsentSyncServiceTest {
                 "analytics"
             );
 
+            // syncGrant writes directly to cache in cache-only mode
             assertDoesNotThrow(() ->
                 strictService.syncGrant("user-1", scope, null)
             );

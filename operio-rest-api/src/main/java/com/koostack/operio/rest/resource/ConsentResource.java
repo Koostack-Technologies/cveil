@@ -2,10 +2,9 @@ package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.ConsentAuditEntry;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.PolicySummaryEntry;
+import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.models.TenantContext;
@@ -17,14 +16,12 @@ import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchConsentResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchRevokeRequest;
-import com.koostack.operio.rest.dto.ConsentDtos.ConsentAuditEntryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.DsarDeletionReceipt;
+import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
-import com.koostack.operio.rest.dto.ConsentDtos.PolicySummaryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
-import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
@@ -224,17 +221,16 @@ public class ConsentResource {
 
         tenantService.revokeConsent(
             request.subject(),
-            request.scope().toModel(),
-            request.expiresAt()
+            request.scope().toModel()
         );
 
         return Response.ok(MessageResponse.of("Consent revoked")).build();
     }
 
     @POST
-    @Path("/grant-batch")
+    @Path("/grant-all")
     @Operation(
-        operationId = "grantConsentBatch",
+        operationId = "grantAllConsent",
         summary = "Grant consent for multiple scopes in a single request",
         description = "Grants consent for the given subject across multiple scopes. " +
             "Each grant is independently atomic -- partial success is possible. " +
@@ -278,14 +274,14 @@ public class ConsentResource {
             ),
         }
     )
-    public Response grantBatch(
+    public Response grantAll(
         @Context SecurityContext securityContext,
         @Valid BatchGrantRequest request
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/grant-batch - subject={}, count={}",
+            "POST /consent/grant-all - subject={}, count={}",
             request.subject(),
             request.grants() != null ? request.grants().size() : 0
         );
@@ -296,7 +292,7 @@ public class ConsentResource {
             .map(dto -> dto.toModel())
             .toList();
 
-        BatchConsentResult result = tenantService.grantConsentBatch(
+        BatchConsentResult result = tenantService.grantAllConsent(
             request.subject(),
             entries
         );
@@ -305,9 +301,9 @@ public class ConsentResource {
     }
 
     @POST
-    @Path("/revoke-batch")
+    @Path("/revoke-all")
     @Operation(
-        operationId = "revokeConsentBatch",
+        operationId = "revokeAllConsent",
         summary = "Revoke consent for multiple scopes in a single request",
         description = "Revokes consent for the given subject across multiple scopes. " +
             "Each revocation is independently atomic -- partial success is possible. " +
@@ -351,14 +347,14 @@ public class ConsentResource {
             ),
         }
     )
-    public Response revokeBatch(
+    public Response revokeAll(
         @Context SecurityContext securityContext,
         @Valid BatchRevokeRequest request
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /consent/revoke-batch - subject={}, count={}",
+            "POST /consent/revoke-all - subject={}, count={}",
             request.subject(),
             request.revokes() != null ? request.revokes().size() : 0
         );
@@ -369,7 +365,7 @@ public class ConsentResource {
             .map(dto -> dto.toModel())
             .toList();
 
-        BatchConsentResult result = tenantService.revokeConsentBatch(
+        BatchConsentResult result = tenantService.revokeAllConsent(
             request.subject(),
             entries
         );
@@ -467,7 +463,7 @@ public class ConsentResource {
                     mediaType = MediaType.APPLICATION_JSON,
                     schema = @Schema(
                         type = SchemaType.ARRAY,
-                        implementation = PolicySummaryDto.class
+                        implementation = SubjectConsentView.class
                     )
                 )
             ),
@@ -501,37 +497,28 @@ public class ConsentResource {
 
         LOG.debug("GET /consent/subjects/{}/summary", subjectId);
 
-        List<PolicySummaryEntry> entries = tenantService.findPoliciesBySubject(
-            subjectId
-        );
+        SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
 
-        List<PolicySummaryDto> dtos = entries
-            .stream()
-            .map(PolicySummaryDto::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+        return Response.ok(consent).build();
     }
 
     @GET
     @Path("/subjects/{id}/history")
     @Operation(
         operationId = "getSubjectHistory",
-        summary = "Get consent audit history for a subject",
-        description = "Returns the consent audit trail for the given data subject, " +
-            "ordered by timestamp descending (most recent first). Optionally " +
-            "filters by scope components. Requires the consent:read role."
+        summary = "Get current consent state for a subject",
+        description = "Returns the current consent ledger state for the given data subject. " +
+            "The event stream serves as the historical record. Requires the consent:read role."
     )
     @APIResponses(
         {
             @APIResponse(
                 responseCode = "200",
-                description = "List of consent audit entries",
+                description = "Subject consent state",
                 content = @Content(
                     mediaType = MediaType.APPLICATION_JSON,
                     schema = @Schema(
-                        type = SchemaType.ARRAY,
-                        implementation = ConsentAuditEntryDto.class
+                        implementation = SubjectConsentView.class
                     )
                 )
             ),
@@ -556,53 +543,19 @@ public class ConsentResource {
     public Response subjectHistory(
         @Context SecurityContext securityContext,
         @Parameter(
-            description = "The data subject identifier",
+            description = "The data subject identifier (e.g. user ID)",
             required = true,
             example = "user-12345"
-        ) @PathParam("id") String subjectId,
-        @Parameter(
-            description = "Filter by field name (optional)",
-            example = "email"
-        ) @QueryParam("fieldName") String fieldName,
-        @Parameter(
-            description = "Filter by entity name (optional)",
-            example = "User"
-        ) @QueryParam("entityName") String entityName,
-        @Parameter(
-            description = "Filter by purpose name (optional)",
-            example = "marketing"
-        ) @QueryParam("purposeName") String purposeName
+        ) @PathParam("id") String subjectId
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
-        LOG.debug(
-            "GET /consent/subjects/{}/history - field={}, entity={}, purpose={}",
-            subjectId,
-            fieldName,
-            entityName,
-            purposeName
-        );
+        LOG.debug("GET /consent/subjects/{}/history", subjectId);
 
-        List<ConsentAuditEntry> entries;
-
-        if (fieldName != null && !fieldName.isBlank()) {
-            ConsentScope filterScope = ConsentScope.to(
-                null, // category not used for history filtering
-                fieldName,
-                entityName,
-                purposeName
-            );
-            entries = tenantService.getConsentHistory(subjectId, filterScope);
-        } else {
-            entries = tenantService.getConsentHistory(subjectId);
-        }
-
-        List<ConsentAuditEntryDto> dtos = entries
-            .stream()
-            .map(ConsentAuditEntryDto::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+        // In the new schema, the event stream is the historical record.
+        // The consent ledger shows current state per subject.
+        SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
+        return Response.ok(consent).build();
     }
 
     // -------------------------------------------------------------------
@@ -684,22 +637,7 @@ public class ConsentResource {
         LOG.debug("GET /consent/subjects/{}/export", subjectId);
 
         try {
-
-            // Fetch all consent policies for the subject
-            List<PolicySummaryEntry> policies =
-                tenantService.findPoliciesBySubject(subjectId);
-            List<PolicySummaryDto> policyDtos = policies
-                .stream()
-                .map(PolicySummaryDto::fromModel)
-                .toList();
-
-            // Fetch audit trail entries for the subject
-            List<ConsentAuditEntry> auditEntries =
-                tenantService.getConsentHistory(subjectId);
-            List<ConsentAuditEntryDto> auditDtos = auditEntries
-                .stream()
-                .map(ConsentAuditEntryDto::fromModel)
-                .toList();
+            SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
 
             // Count cached Redis keys for the subject (if applicable)
             long cachedKeyCount = 0;
@@ -715,17 +653,15 @@ public class ConsentResource {
 
             SubjectDataExport export = new SubjectDataExport(
                 subjectId,
-                policyDtos,
-                auditDtos,
+                consent,
                 cachedKeyCount,
                 Instant.now()
             );
 
             LOG.info(
-                "Exported data for subject: {} ({} policies, {} audit entries)",
+                "Exported data for subject: {} ({} ledger entries)",
                 subjectId,
-                policies.size(),
-                auditEntries.size()
+                consent.entries().size()
             );
 
             return Response.ok(export).build();
@@ -836,28 +772,27 @@ public class ConsentResource {
         );
 
         String requestId = UUID.randomUUID().toString();
-        long policiesDeleted = 0;
+        long ledgerEntriesRevoked = 0;
         long cachedKeysDeleted = 0;
-        long auditEntriesDeleted = 0;
         String status = "SUCCESS";
         Instant completedAt = Instant.now();
 
         try {
 
-            // Step 1: Count policies BEFORE deletion, then bulk delete
+            // Step 1: Count consent entries BEFORE deletion, then bulk revoke
             try {
-                policiesDeleted = tenantService.countPoliciesBySubject(
+                ledgerEntriesRevoked = tenantService.countSubjectConsentEntries(
                     subjectId
                 );
                 tenantService.revokeAllConsent(subjectId);
                 LOG.info(
-                    "Deleted {} consent policies for subject: {}",
-                    policiesDeleted,
+                    "Revoked {} consent ledger entries for subject: {}",
+                    ledgerEntriesRevoked,
                     subjectId
                 );
             } catch (Exception e) {
                 LOG.error(
-                    "Failed to delete consent policies for subject: {}",
+                    "Failed to revoke consent for subject: {}",
                     subjectId,
                     e
                 );
@@ -891,19 +826,17 @@ public class ConsentResource {
                 status = "PARTIAL_FAILURE";
             }
 
-            // Step 3: Delete audit log entries (consent_audit_log)
+            // Step 3: Log the erasure via DSAR aggregate event
             try {
-                auditEntriesDeleted = tenantService.deleteAuditLogBySubject(
-                    subjectId
-                );
+                tenantService.deleteSubjectAudit(subjectId, requestId);
                 LOG.info(
-                    "Deleted {} audit log entries for subject: {}",
-                    auditEntriesDeleted,
-                    subjectId
+                    "DSAR audit logged for subject: {}, requestId: {}",
+                    subjectId,
+                    requestId
                 );
             } catch (Exception e) {
                 LOG.error(
-                    "Failed to delete audit log entries for subject: {}",
+                    "Failed to log DSAR audit for subject: {}",
                     subjectId,
                     e
                 );
@@ -912,21 +845,11 @@ public class ConsentResource {
 
             completedAt = Instant.now();
 
-            // Step 4: Log the erasure in DSAR audit table (durable forensic record)
-            // TODO: Wire DsarAuditLogRepository into TenantService or a dedicated DsarService
-            LOG.info(
-                "DSAR erasure request {} for subject {} completed with status {}",
-                requestId,
-                subjectId,
-                status
-            );
-
             DsarDeletionReceipt receipt = new DsarDeletionReceipt(
                 subjectId,
                 requestId,
-                policiesDeleted,
+                ledgerEntriesRevoked,
                 cachedKeysDeleted,
-                auditEntriesDeleted,
                 status,
                 completedAt
             );

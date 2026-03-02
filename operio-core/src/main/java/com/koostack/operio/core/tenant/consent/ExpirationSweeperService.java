@@ -1,33 +1,33 @@
 package com.koostack.operio.core.tenant.consent;
 
 /**
- * Periodic service that sweeps for expired consent policies and issues
- * {@code POLICY_REVOKED} commands for each expired policy.
+ * Periodic service that sweeps for expired consent grants and issues
+ * {@code CONSENT_EXPIRED} commands for each expired entry.
  *
  * <p>Implementation reads from {@link ConsentAdminQueryService} to find
- * policies past their {@code expiresAt}, then calls
- * {@link ConsentAdminCommandService#revokeConsent} for each expired policy.
- * This causes a {@code POLICY_REVOKED} event to flow to the decision
- * projection, which deletes the Redis entry.
+ * consent ledger entries past their {@code expiresAt}, then calls
+ * {@link ConsentAdminCommandService#expireConsentCommand} for each.
+ * This causes a {@code CONSENT_EXPIRED} event to flow to the admin
+ * and decision projections.
  */
 public interface ExpirationSweeperService {
 
     /**
-     * Sweep for expired policies in the current tenant and revoke them.
+     * Sweep for expired grants in the current tenant and expire them.
      *
      * <p>Requires {@code TenantContext} to be bound for the current scope.
      *
-     * @return the number of policies revoked
+     * @return the number of grants expired
      */
     int sweep();
 
     /**
-     * Sweep for expired policies across all tenants.
+     * Sweep for expired grants across all tenants.
      *
      * <p>Iterates all known tenants and invokes {@link #sweep()} within
      * each tenant context.
      *
-     * @return the total number of policies revoked across all tenants
+     * @return the total number of grants expired across all tenants
      */
     int sweepAll();
 }

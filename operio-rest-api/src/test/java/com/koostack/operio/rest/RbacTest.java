@@ -10,12 +10,12 @@ import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.auth.Roles;
-import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
+import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchConsentEntryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchRevokeRequest;
@@ -478,7 +478,7 @@ class RbacTest {
         }
 
         private RevokeRequest testRevokeRequest() {
-            return new RevokeRequest("subject-1", testScope(), null);
+            return new RevokeRequest("subject-1", testScope());
         }
 
         private BatchGrantRequest testBatchGrantRequest() {
@@ -599,16 +599,16 @@ class RbacTest {
             }
         }
 
-        // -- grantBatch() --
+        // -- grantAll() --
 
         @Nested
-        @DisplayName("POST /consent/grant-batch")
-        class GrantBatch {
+        @DisplayName("POST /consent/grant-all")
+        class GrantAll {
 
             @BeforeEach
             void stubBatch() {
                 when(
-                    tenantService.grantConsentBatch(anyString(), anyList())
+                    tenantService.grantAllConsent(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -618,7 +618,7 @@ class RbacTest {
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                Response response = resource.grantBatch(
+                Response response = resource.grantAll(
                     ctx,
                     testBatchGrantRequest()
                 );
@@ -629,7 +629,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.grantBatch(
+                Response response = resource.grantAll(
                     ctx,
                     testBatchGrantRequest()
                 );
@@ -641,7 +641,7 @@ class RbacTest {
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.grantBatch(ctx, testBatchGrantRequest())
+                    resource.grantAll(ctx, testBatchGrantRequest())
                 );
             }
 
@@ -649,7 +649,7 @@ class RbacTest {
             @DisplayName("no roles → 403")
             void noRolesDenied() {
                 assertThrows(OperioAuthException.class, () ->
-                    resource.grantBatch(
+                    resource.grantAll(
                         emptySecurityContext(),
                         testBatchGrantRequest()
                     )
@@ -657,16 +657,16 @@ class RbacTest {
             }
         }
 
-        // -- revokeBatch() --
+        // -- revokeAll() --
 
         @Nested
-        @DisplayName("POST /consent/revoke-batch")
-        class RevokeBatch {
+        @DisplayName("POST /consent/revoke-all")
+        class RevokeAll {
 
             @BeforeEach
             void stubBatch() {
                 when(
-                    tenantService.revokeConsentBatch(anyString(), anyList())
+                    tenantService.revokeAllConsent(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -676,7 +676,7 @@ class RbacTest {
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                Response response = resource.revokeBatch(
+                Response response = resource.revokeAll(
                     ctx,
                     testBatchRevokeRequest()
                 );
@@ -688,7 +688,7 @@ class RbacTest {
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.revokeBatch(ctx, testBatchRevokeRequest())
+                    resource.revokeAll(ctx, testBatchRevokeRequest())
                 );
             }
 
@@ -696,7 +696,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.revokeBatch(
+                Response response = resource.revokeAll(
                     ctx,
                     testBatchRevokeRequest()
                 );
@@ -794,8 +794,8 @@ class RbacTest {
             @BeforeEach
             void stubSummary() {
                 when(
-                    tenantService.findPoliciesBySubject(anyString())
-                ).thenReturn(Collections.emptyList());
+                    tenantService.getSubjectConsent(anyString())
+                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
@@ -841,8 +841,8 @@ class RbacTest {
             @BeforeEach
             void stubHistory() {
                 when(
-                    tenantService.getConsentHistory(anyString())
-                ).thenReturn(Collections.emptyList());
+                    tenantService.getSubjectConsent(anyString())
+                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
@@ -851,10 +851,7 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
                 Response response = resource.subjectHistory(
                     ctx,
-                    "subj-1",
-                    null,
-                    null,
-                    null
+                    "subj-1"
                 );
                 assertEquals(200, response.getStatus());
             }
@@ -865,10 +862,7 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 Response response = resource.subjectHistory(
                     ctx,
-                    "subj-1",
-                    null,
-                    null,
-                    null
+                    "subj-1"
                 );
                 assertEquals(200, response.getStatus());
             }
@@ -878,7 +872,7 @@ class RbacTest {
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.subjectHistory(ctx, "subj-1", null, null, null)
+                    resource.subjectHistory(ctx, "subj-1")
                 );
             }
 
@@ -888,10 +882,7 @@ class RbacTest {
                 assertThrows(OperioAuthException.class, () ->
                     resource.subjectHistory(
                         emptySecurityContext(),
-                        "subj-1",
-                        null,
-                        null,
-                        null
+                        "subj-1"
                     )
                 );
             }
@@ -907,12 +898,12 @@ class RbacTest {
             @SuppressWarnings("unchecked")
             void stubAll() {
                 when(
-                    tenantService.grantConsentBatch(anyString(), anyList())
+                    tenantService.grantAllConsent(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
                 when(
-                    tenantService.revokeConsentBatch(anyString(), anyList())
+                    tenantService.revokeAllConsent(anyString(), anyList())
                 ).thenReturn(
                     new BatchConsentResult(1, 0, Collections.emptyList())
                 );
@@ -927,11 +918,8 @@ class RbacTest {
                     .when(tenantService)
                     .evaluateConsent(anyString(), anySet());
                 when(
-                    tenantService.findPoliciesBySubject(anyString())
-                ).thenReturn(Collections.emptyList());
-                when(
-                    tenantService.getConsentHistory(anyString())
-                ).thenReturn(Collections.emptyList());
+                    tenantService.getSubjectConsent(anyString())
+                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
@@ -945,10 +933,10 @@ class RbacTest {
                     resource.revoke(ctx, testRevokeRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.grantBatch(ctx, testBatchGrantRequest())
+                    resource.grantAll(ctx, testBatchGrantRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.revokeBatch(ctx, testBatchRevokeRequest())
+                    resource.revokeAll(ctx, testBatchRevokeRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.evaluate(ctx, testEvaluateRequest())
@@ -957,7 +945,7 @@ class RbacTest {
                     resource.subjectSummary(ctx, "subj-1")
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.subjectHistory(ctx, "subj-1", null, null, null)
+                    resource.subjectHistory(ctx, "subj-1")
                 );
             }
 
@@ -987,10 +975,10 @@ class RbacTest {
                     resource.revoke(ctx, testRevokeRequest())
                 );
                 assertDoesNotThrow(() ->
-                    resource.grantBatch(ctx, testBatchGrantRequest())
+                    resource.grantAll(ctx, testBatchGrantRequest())
                 );
                 assertDoesNotThrow(() ->
-                    resource.revokeBatch(ctx, testBatchRevokeRequest())
+                    resource.revokeAll(ctx, testBatchRevokeRequest())
                 );
                 // Read endpoints
                 assertDoesNotThrow(() ->
@@ -1000,7 +988,7 @@ class RbacTest {
                     resource.subjectSummary(ctx, "subj-1")
                 );
                 assertDoesNotThrow(() ->
-                    resource.subjectHistory(ctx, "subj-1", null, null, null)
+                    resource.subjectHistory(ctx, "subj-1")
                 );
             }
         }
@@ -1025,12 +1013,6 @@ class RbacTest {
 
             // Stub listing methods to return empty lists
             when(tenantService.listFields()).thenReturn(
-                Collections.emptyList()
-            );
-            when(tenantService.listCategories()).thenReturn(
-                Collections.emptyList()
-            );
-            when(tenantService.listEntities()).thenReturn(
                 Collections.emptyList()
             );
             when(tenantService.listPurposes()).thenReturn(
@@ -1104,58 +1086,6 @@ class RbacTest {
         }
 
         @Nested
-        @DisplayName("GET /admin/categories (listCategories)")
-        class ListCategories {
-
-            @Test
-            @DisplayName("admin:read → 200")
-            void adminReadAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                Response response = resource.listCategories(ctx);
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:write → 403")
-            void adminWriteDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listCategories(ctx)
-                );
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listCategories(emptySecurityContext())
-                );
-            }
-        }
-
-        @Nested
-        @DisplayName("GET /admin/entities (listEntities)")
-        class ListEntities {
-
-            @Test
-            @DisplayName("admin:read → 200")
-            void adminReadAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                Response response = resource.listEntities(ctx);
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("consent:write → 403")
-            void consentWriteDenied() {
-                SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listEntities(ctx)
-                );
-            }
-        }
-
-        @Nested
         @DisplayName("GET /admin/purposes (listPurposes)")
         class ListPurposes {
 
@@ -1207,7 +1137,8 @@ class RbacTest {
                 return new RegisterFieldRequest(
                     "email",
                     "user",
-                    "User email address"
+                    "User email address",
+                    "User entity"
                 );
             }
 
@@ -1263,40 +1194,6 @@ class RbacTest {
         }
 
         @Nested
-        @DisplayName("POST /admin/categories (registerCategory)")
-        class RegisterCategory {
-
-            private RegisterCategoryRequest request() {
-                return new RegisterCategoryRequest("pii", "Personal info");
-            }
-
-            @Test
-            @DisplayName("admin:write → 201")
-            void adminWriteAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.registerCategory(ctx, request());
-                assertEquals(201, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:read → 403")
-            void adminReadDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerCategory(ctx, request())
-                );
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerCategory(emptySecurityContext(), request())
-                );
-            }
-        }
-
-        @Nested
         @DisplayName("POST /admin/purposes (registerPurpose)")
         class RegisterPurpose {
 
@@ -1332,10 +1229,7 @@ class RbacTest {
             private RegisterRegulationRequest request() {
                 return new RegisterRegulationRequest(
                     "gdpr",
-                    "General Data Protection Regulation",
-                    "EU",
-                    "EU data protection law",
-                    "https://gdpr.eu"
+                    "General Data Protection Regulation"
                 );
             }
 
@@ -1369,18 +1263,18 @@ class RbacTest {
         }
 
         @Nested
-        @DisplayName("POST /admin/fields/links (linkFieldToCategory)")
-        class LinkFieldCategory {
+        @DisplayName("POST /admin/fields/categories (assignFieldCategory)")
+        class AssignFieldCategory {
 
-            private LinkFieldCategoryRequest request() {
-                return new LinkFieldCategoryRequest("email", "user", "pii");
+            private AssignFieldCategoryRequest request() {
+                return new AssignFieldCategoryRequest("email", "user", "pii", "Personal info");
             }
 
             @Test
             @DisplayName("admin:write → 200")
             void adminWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.linkFieldToCategory(
+                Response response = resource.assignFieldCategory(
                     ctx,
                     request()
                 );
@@ -1391,7 +1285,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.linkFieldToCategory(
+                Response response = resource.assignFieldCategory(
                     ctx,
                     request()
                 );
@@ -1403,7 +1297,7 @@ class RbacTest {
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.linkFieldToCategory(ctx, request())
+                    resource.assignFieldCategory(ctx, request())
                 );
             }
 
@@ -1411,7 +1305,7 @@ class RbacTest {
             @DisplayName("no roles → 403")
             void noRolesDenied() {
                 assertThrows(OperioAuthException.class, () ->
-                    resource.linkFieldToCategory(
+                    resource.assignFieldCategory(
                         emptySecurityContext(),
                         request()
                     )
@@ -1427,7 +1321,9 @@ class RbacTest {
                 return new LinkPurposeRegulationRequest(
                     "marketing",
                     "gdpr",
-                    "consent"
+                    "consent",
+                    "Granted action",
+                    "Denied action"
                 );
             }
 
@@ -1477,12 +1373,6 @@ class RbacTest {
                     resource.listFields(ctx)
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.listCategories(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listEntities(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
                     resource.listPurposes(ctx)
                 );
                 assertThrows(OperioAuthException.class, () ->
@@ -1491,7 +1381,7 @@ class RbacTest {
                 assertThrows(OperioAuthException.class, () ->
                     resource.registerField(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d")
+                        new RegisterFieldRequest("f", "e", "d", "ed")
                     )
                 );
             }
@@ -1506,7 +1396,7 @@ class RbacTest {
                 assertThrows(OperioAuthException.class, () ->
                     resource.registerField(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d")
+                        new RegisterFieldRequest("f", "e", "d", "ed")
                     )
                 );
             }
@@ -1519,21 +1409,13 @@ class RbacTest {
                 );
                 // Read endpoints
                 assertDoesNotThrow(() -> resource.listFields(ctx));
-                assertDoesNotThrow(() -> resource.listCategories(ctx));
-                assertDoesNotThrow(() -> resource.listEntities(ctx));
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
                 // Write endpoints
                 assertDoesNotThrow(() ->
                     resource.registerField(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d")
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.registerCategory(
-                        ctx,
-                        new RegisterCategoryRequest("c", "desc")
+                        new RegisterFieldRequest("f", "e", "d", "ed")
                     )
                 );
                 assertDoesNotThrow(() ->
@@ -1547,23 +1429,20 @@ class RbacTest {
                         ctx,
                         new RegisterRegulationRequest(
                             "r",
-                            "full",
-                            "jur",
-                            "desc",
-                            "url"
+                            "desc"
                         )
                     )
                 );
                 assertDoesNotThrow(() ->
-                    resource.linkFieldToCategory(
+                    resource.assignFieldCategory(
                         ctx,
-                        new LinkFieldCategoryRequest("f", "e", "c")
+                        new AssignFieldCategoryRequest("f", "e", "c", "desc")
                     )
                 );
                 assertDoesNotThrow(() ->
                     resource.linkPurposeToRegulation(
                         ctx,
-                        new LinkPurposeRegulationRequest("p", "r", "consent")
+                        new LinkPurposeRegulationRequest("p", "r", "consent", "granted", "denied")
                     )
                 );
             }
@@ -1573,20 +1452,12 @@ class RbacTest {
             void superAdminFullAdminAccess() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 assertDoesNotThrow(() -> resource.listFields(ctx));
-                assertDoesNotThrow(() -> resource.listCategories(ctx));
-                assertDoesNotThrow(() -> resource.listEntities(ctx));
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
                 assertDoesNotThrow(() ->
                     resource.registerField(
                         ctx,
-                        new RegisterFieldRequest("f", "e", "d")
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.registerCategory(
-                        ctx,
-                        new RegisterCategoryRequest("c", "desc")
+                        new RegisterFieldRequest("f", "e", "d", "ed")
                     )
                 );
             }

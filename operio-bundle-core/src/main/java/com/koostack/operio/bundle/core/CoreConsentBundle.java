@@ -19,8 +19,8 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
  * <ul>
  *   <li>{@code ConsentDecisionService} ("redis") — Redis-backed consent
  *       evaluation (single-MGET read path)</li>
- *   <li>{@code ConsentAdminService} ("jooq") — standalone admin provider
- *       exposed for schema registration (discovery pipeline)</li>
+ *   <li>{@code ConsentAdminCommandService} / {@code ConsentAdminQueryService} ("jooq")
+ *       — standalone admin providers for schema registration (discovery pipeline)</li>
  *   <li>{@code SensitiveDiscovery} ("sensitive-annotation-discovery") —
  *       annotation-based field/category discovery (optional — only wired
  *       when an {@link AnnotationDiscoveryConfig} is provided)</li>
@@ -31,11 +31,11 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
  * namespaced under that application name, preventing collisions when
  * multiple Operio instances share the same Redis server.
  *
- * <p>The sync service internally creates its own {@code ConsentAdminService}
- * (jOOQ) from the provided config for dual-write operations. A separate
+ * <p>The sync service internally creates its own {@code ConsentAdminCommandService}
+ * (jOOQ) from the provided config for write operations. A separate
  * standalone admin provider is also registered so that
  * {@link com.koostack.operio.core.Operio#syncDiscoveredFields()} can use
- * it for schema registration (registering fields, categories, and
+ * it for schema registration (registering fields and
  * field-category links discovered by the {@code SensitiveDiscovery} plugin).
  *
  * <h2>Per-Tenant Redis ACL Isolation</h2>

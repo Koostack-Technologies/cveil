@@ -1,17 +1,6 @@
 package com.koostack.operio.core;
 
-import com.koostack.operio.core.models.BatchConsentEntry;
-import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.CategoryInfo;
-import com.koostack.operio.core.models.ConsentAuditEntry;
-import com.koostack.operio.core.models.ConsentResponse;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.DiscoveryResult;
-import com.koostack.operio.core.models.EntityInfo;
-import com.koostack.operio.core.models.FieldInfo;
-import com.koostack.operio.core.models.PolicySummaryEntry;
-import com.koostack.operio.core.models.PurposeInfo;
-import com.koostack.operio.core.models.RegulationInfo;
+import com.koostack.operio.core.models.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -21,12 +10,11 @@ import java.util.Set;
  * into cohesive business operations.
  *
  * <p>This is the primary interface consumed by REST resources and other
- * entry points. It owns all orchestration logic — enrichment, auto-creation
- * of referenced entities, and routing to the appropriate command or query
- * service. Command services beneath this layer are pure event publishers
- * with light validation only.
+ * entry points. It owns all orchestration logic — validation, enrichment
+ * (resolving ConsentScope to policy_id), and routing to the appropriate
+ * command or query service.
  *
- * <p>All methods require an active {@link com.koostack.operio.core.models.TenantContext}.
+ * <p>All methods require an active {@link TenantContext}.
  */
 public interface TenantService extends OperioService {
 
@@ -34,66 +22,95 @@ public interface TenantService extends OperioService {
     // Consent write operations
     // -----------------------------------------------------------------------
 
-    void grantConsent(String subject, ConsentScope scope);
-
     void grantConsent(String subject, ConsentScope scope, Instant expiresAt);
 
     void revokeConsent(String subject, ConsentScope scope);
 
-    void revokeConsent(String subject, ConsentScope scope, Instant expiresAt);
-
     void revokeAllConsent(String subject);
 
-    BatchConsentResult grantConsentBatch(
+    BatchConsentResult grantAllConsent(
         String subject, List<BatchConsentEntry> entries);
 
-    BatchConsentResult revokeConsentBatch(
+    BatchConsentResult revokeAllConsent(
         String subject, List<BatchConsentEntry> entries);
 
     // -----------------------------------------------------------------------
-    // Schema registration
+    // Field Aggregate operations
     // -----------------------------------------------------------------------
 
-    void registerField(String fieldName, String entityName, String description);
+    void registerField(String fieldName, String entityName,
+                       String description, String entityDescription);
 
-    void registerCategory(String categoryName, String description);
+    void updateField(String fieldName, String entityName, String description);
 
-    void linkFieldToCategory(String fieldName, String entityName, String categoryName);
+    void removeField(String fieldName, String entityName);
+
+    void assignFieldCategory(String fieldName, String entityName,
+                             String categoryName, String categoryDescription);
+
+    void unassignFieldCategory(String fieldName, String entityName,
+                               String categoryName);
+
+    // -----------------------------------------------------------------------
+    // Purpose Aggregate operations
+    // -----------------------------------------------------------------------
 
     void registerPurpose(String purposeName, String description);
 
-    void registerRegulation(
-        String regulationName, String fullName, String jurisdiction,
-        String description, String url);
+    void updatePurpose(String purposeName, String description);
 
-    void linkPurposeToRegulation(
-        String purposeName, String regulationName, String legalBasis);
+    void removePurpose(String purposeName);
 
-    // -----------------------------------------------------------------------
-    // Schema queries
-    // -----------------------------------------------------------------------
+    void linkPurposeToRegulation(String purposeName, String regulationName,
+                                 String lawfulBasis, String onGranted,
+                                 String onDenied);
 
-    List<FieldInfo> listFields();
+    void unlinkPurposeFromRegulation(String purposeName, String regulationName);
 
-    List<CategoryInfo> listCategories();
+    void addPurposePolicy(String purposeName, String policyType,
+                          String fieldName, String entityName,
+                          String categoryName);
 
-    List<EntityInfo> listEntities();
-
-    List<PurposeInfo> listPurposes();
-
-    List<RegulationInfo> listRegulations();
+    void removePurposePolicy(String purposeName, String policyType,
+                             String fieldName, String entityName,
+                             String categoryName);
 
     // -----------------------------------------------------------------------
-    // Consent queries
+    // Regulation Aggregate operations
     // -----------------------------------------------------------------------
 
-    List<PolicySummaryEntry> findPoliciesBySubject(String subjectId);
+    void registerRegulation(String regulationName, String description);
 
-    int countPoliciesBySubject(String subjectId);
+    void updateRegulation(String regulationName, String description);
 
-    List<ConsentAuditEntry> getConsentHistory(String subjectId);
+    void removeRegulation(String regulationName);
 
-    List<ConsentAuditEntry> getConsentHistory(String subjectId, ConsentScope scope);
+    void addRegulationJurisdiction(String regulationName,
+                                   String jurisdictionName,
+                                   String description);
+
+    void removeRegulationJurisdiction(String regulationName,
+                                      String jurisdictionName);
+
+    // -----------------------------------------------------------------------
+    // Aggregate queries
+    // -----------------------------------------------------------------------
+
+    List<FieldView> listFields();
+
+    FieldView getField(String fieldName, String entityName);
+
+    List<PurposeView> listPurposes();
+
+    PurposeView getPurpose(String purposeName);
+
+    List<RegulationView> listRegulations();
+
+    RegulationView getRegulation(String regulationName);
+
+    SubjectConsentView getSubjectConsent(String subjectId);
+
+    int countSubjectConsentEntries(String subjectId);
 
     // -----------------------------------------------------------------------
     // Consent evaluation
@@ -117,38 +134,20 @@ public interface TenantService extends OperioService {
     // DSAR
     // -----------------------------------------------------------------------
 
-    int deleteAuditLogBySubject(String subject);
+    void deleteSubjectAudit(String subject, String deletionRequestId);
 
     // -----------------------------------------------------------------------
-    // IAM — Role Management (delegated to the tenant's IdP)
+    // IAM — Role Management
     // -----------------------------------------------------------------------
 
-    /**
-     * Assign a role to a user in the current tenant's identity provider.
-     *
-     * @param userId the user's IdP identifier
-     * @param role   the role name to assign
-     */
     default void assignUserRole(String userId, String role) {
         throw new UnsupportedOperationException("IAM role management not available");
     }
 
-    /**
-     * Remove a role from a user in the current tenant's identity provider.
-     *
-     * @param userId the user's IdP identifier
-     * @param role   the role name to remove
-     */
     default void removeUserRole(String userId, String role) {
         throw new UnsupportedOperationException("IAM role management not available");
     }
 
-    /**
-     * List all roles assigned to a user in the current tenant's identity provider.
-     *
-     * @param userId the user's IdP identifier
-     * @return the user's roles, possibly empty
-     */
     default Set<String> listUserRoles(String userId) {
         throw new UnsupportedOperationException("IAM role management not available");
     }

@@ -3,9 +3,7 @@ package com.koostack.operio.core.tenant.consent.aggregates;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
-import com.koostack.operio.core.tenant.consent.events.PurposeRegisteredEvent;
-import com.koostack.operio.core.tenant.consent.events.PurposeRegulationLinkedEvent;
-import com.koostack.operio.core.tenant.consent.events.PurposeRegulationUnlinkedEvent;
+import com.koostack.operio.core.tenant.consent.events.*;
 import com.koostack.operio.core.models.AggregateRoot;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -13,10 +11,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Aggregate representing a consent purpose (e.g. {@code "marketing"},
- * {@code "analytics"}) with its regulation links.
- *
- * <p>Keyed by purpose name — one aggregate per purpose.
+ * Aggregate representing a consent purpose with its regulation links and policies.
+ * Keyed by purpose name.
  */
 public record PurposeAggregate(
     String tenantId,
@@ -24,15 +20,14 @@ public record PurposeAggregate(
     String purposeName,
     String description,
     List<RegulationLink> regulationLinks,
+    List<PolicyEntry> policies,
     Long version
 ) implements AggregateRoot {
 
     public static final String AGGREGATE_TYPE = "consent-purpose";
 
     @Override
-    public String aggregateType() {
-        return AGGREGATE_TYPE;
-    }
+    public String aggregateType() { return AGGREGATE_TYPE; }
 
     public static UUID deriveId(String purposeName) {
         return UUID.nameUUIDFromBytes(
@@ -40,78 +35,120 @@ public record PurposeAggregate(
         );
     }
 
-    public static PurposeAggregate create(
-        String tenantId, String purposeName, String description
-    ) {
+    public static PurposeAggregate create(String tenantId, String purposeName, String description) {
         return new PurposeAggregate(
             tenantId, deriveId(purposeName), purposeName, description,
-            List.of(), 0L
+            List.of(), List.of(), 0L
         );
     }
 
-    /**
-     * Applies a semantic domain event to rebuild aggregate state.
-     */
     public static PurposeAggregate apply(
-        PurposeAggregate current,
-        String eventType,
-        JsonNode payloadNode,
-        ObjectMapper mapper
+        PurposeAggregate current, String eventType,
+        JsonNode payloadNode, ObjectMapper mapper
     ) {
         return switch (eventType) {
             case ConsentEventTypes.PURPOSE_REGISTERED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegisteredEvent.class);
                 yield current.withDescription(e.description());
             }
+            case ConsentEventTypes.PURPOSE_UPDATED -> {
+                var e = mapper.convertValue(payloadNode, PurposeUpdatedEvent.class);
+                yield current.withDescription(e.description());
+            }
             case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegulationLinkedEvent.class);
-                yield current.withRegulationLink(e.regulationName(), e.legalBasis());
+                yield current.withRegulationLink(
+                    e.regulationName(), e.lawfulBasis(), e.onGranted(), e.onDenied()
+                );
             }
             case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegulationUnlinkedEvent.class);
                 yield current.withoutRegulationLink(e.regulationName());
             }
-            case ConsentEventTypes.PURPOSE_DELETED -> current;
+            case ConsentEventTypes.PURPOSE_POLICY_ADDED -> {
+                var e = mapper.convertValue(payloadNode, PurposePolicyAddedEvent.class);
+                yield current.withPolicy(
+                    e.policyType(), e.fieldName(), e.entityName(), e.categoryName()
+                );
+            }
+            case ConsentEventTypes.PURPOSE_POLICY_REMOVED -> {
+                var e = mapper.convertValue(payloadNode, PurposePolicyRemovedEvent.class);
+                yield current.withoutPolicy(
+                    e.policyType(), e.fieldName(), e.entityName(), e.categoryName()
+                );
+            }
+            case ConsentEventTypes.PURPOSE_REMOVED -> current;
             default -> throw new IllegalArgumentException(
                 "Unknown event type for PurposeAggregate: " + eventType
             );
         };
     }
 
-    /** Returns a new aggregate with an updated description. */
     public PurposeAggregate withDescription(String newDescription) {
         return new PurposeAggregate(
             tenantId, aggregateId, purposeName, newDescription,
-            regulationLinks, version
+            regulationLinks, policies, version
         );
     }
 
-    /** Returns a new aggregate with a regulation link added (idempotent). */
     public PurposeAggregate withRegulationLink(
-        String regulationName, String legalBasis
+        String regulationName, String lawfulBasis, String onGranted, String onDenied
     ) {
         var updated = new ArrayList<>(regulationLinks);
-        updated.removeIf(
-            l -> l.regulationName().equals(regulationName)
-        );
-        updated.add(new RegulationLink(regulationName, legalBasis));
+        updated.removeIf(l -> l.regulationName().equals(regulationName));
+        updated.add(new RegulationLink(regulationName, lawfulBasis, onGranted, onDenied));
         return new PurposeAggregate(
             tenantId, aggregateId, purposeName, description,
-            List.copyOf(updated), version
+            List.copyOf(updated), policies, version
         );
     }
 
-    /** Returns a new aggregate with the named regulation link removed. */
     public PurposeAggregate withoutRegulationLink(String regulationName) {
         var updated = new ArrayList<>(regulationLinks);
-        updated.removeIf(
-            l -> l.regulationName().equals(regulationName)
-        );
+        updated.removeIf(l -> l.regulationName().equals(regulationName));
         return new PurposeAggregate(
             tenantId, aggregateId, purposeName, description,
-            List.copyOf(updated), version
+            List.copyOf(updated), policies, version
         );
     }
 
-    public record RegulationLink(String regulationName, String legalBasis) {}
+    public PurposeAggregate withPolicy(
+        String policyType, String fieldName, String entityName, String categoryName
+    ) {
+        var updated = new ArrayList<>(policies);
+        updated.removeIf(p -> p.matchesTarget(policyType, fieldName, entityName, categoryName));
+        updated.add(new PolicyEntry(policyType, fieldName, entityName, categoryName));
+        return new PurposeAggregate(
+            tenantId, aggregateId, purposeName, description,
+            regulationLinks, List.copyOf(updated), version
+        );
+    }
+
+    public PurposeAggregate withoutPolicy(
+        String policyType, String fieldName, String entityName, String categoryName
+    ) {
+        var updated = new ArrayList<>(policies);
+        updated.removeIf(p -> p.matchesTarget(policyType, fieldName, entityName, categoryName));
+        return new PurposeAggregate(
+            tenantId, aggregateId, purposeName, description,
+            regulationLinks, List.copyOf(updated), version
+        );
+    }
+
+    public record RegulationLink(
+        String regulationName, String lawfulBasis, String onGranted, String onDenied
+    ) {}
+
+    public record PolicyEntry(
+        String policyType, String fieldName, String entityName, String categoryName
+    ) {
+        public boolean matchesTarget(
+            String policyType, String fieldName, String entityName, String categoryName
+        ) {
+            return java.util.Objects.equals(this.policyType, policyType)
+                && java.util.Objects.equals(this.fieldName, fieldName)
+                && java.util.Objects.equals(this.entityName, entityName)
+                && java.util.Objects.equals(this.categoryName, categoryName);
+        }
+    }
 }

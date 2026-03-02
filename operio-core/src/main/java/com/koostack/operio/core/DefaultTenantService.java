@@ -1,21 +1,7 @@
 package com.koostack.operio.core;
 
 import com.koostack.operio.core.exception.OperioConfigurationException;
-import com.koostack.operio.core.models.BatchConsentEntry;
-import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.BatchConsentResult.BatchItemError;
-import com.koostack.operio.core.models.CategoryInfo;
-import com.koostack.operio.core.models.ConsentAuditEntry;
-import com.koostack.operio.core.models.ConsentResponse;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.DiscoveredField;
-import com.koostack.operio.core.models.DiscoveryResult;
-import com.koostack.operio.core.models.EntityInfo;
-import com.koostack.operio.core.models.FieldInfo;
-import com.koostack.operio.core.models.PolicySummaryEntry;
-import com.koostack.operio.core.models.PurposeInfo;
-import com.koostack.operio.core.models.RegulationInfo;
-import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.models.*;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
@@ -30,12 +16,12 @@ import java.util.logging.Logger;
  * query services into cohesive business operations.
  *
  * <p>Extends {@link Operio} to inherit the builder and plugin-wiring
- * infrastructure. All orchestration logic lives here — enrichment
- * (auto-creating referenced entities via the query service), routing to
- * the appropriate command, and delegating queries.
+ * infrastructure. All orchestration logic lives here — validation
+ * (ensuring referenced policies exist), enrichment (resolving
+ * ConsentScope to denormalized event payloads), and routing to the
+ * appropriate command or query service.
  *
- * <p>Command services beneath this layer are pure event publishers with
- * light validation only.
+ * <p>Command services beneath this layer are pure event publishers.
  */
 public class DefaultTenantService extends Operio implements TenantService {
 
@@ -67,102 +53,126 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     // -----------------------------------------------------------------------
-    // Consent write operations — enrichment + delegation
+    // Consent write operations — validation, enrichment + delegation
     // -----------------------------------------------------------------------
 
     @Override
-    public void grantConsent(String subject, ConsentScope scope) {
-        grantConsent(subject, scope, null);
-    }
-
-    @Override
     public void grantConsent(String subject, ConsentScope scope, Instant expiresAt) {
-        ensureReferencedEntitiesExist(scope);
-        commandService().grantConsentCommand(subject, scope, expiresAt);
+        var policy = resolvePolicy(scope);
+        commandService().grantConsentCommand(
+            subject, policy.policyId(),
+            scope.purposeName(), policyTypeStr(policy),
+            fieldNameOrNull(policy), entityNameOrNull(policy),
+            categoryNameOrNull(policy),
+            RequestContext.actor(), RequestContext.ipAddress(),
+            RequestContext.userAgent(), expiresAt
+        );
     }
 
     @Override
     public void revokeConsent(String subject, ConsentScope scope) {
-        revokeConsent(subject, scope, null);
-    }
-
-    @Override
-    public void revokeConsent(String subject, ConsentScope scope, Instant expiresAt) {
-        ensureReferencedEntitiesExist(scope);
-        commandService().revokeConsentCommand(subject, scope, expiresAt);
+        var policy = resolvePolicy(scope);
+        commandService().revokeConsentCommand(
+            subject, policy.policyId(),
+            scope.purposeName(), policyTypeStr(policy),
+            fieldNameOrNull(policy), entityNameOrNull(policy),
+            categoryNameOrNull(policy),
+            RequestContext.actor(), RequestContext.ipAddress(),
+            RequestContext.userAgent()
+        );
     }
 
     @Override
     public void revokeAllConsent(String subject) {
-        commandService().revokeAllConsentCommand(subject);
+        commandService().revokeAllConsentCommand(
+            subject, RequestContext.actor(),
+            RequestContext.ipAddress(), RequestContext.userAgent()
+        );
     }
 
     @Override
-    public BatchConsentResult grantConsentBatch(
+    public BatchConsentResult grantAllConsent(
         String subject, List<BatchConsentEntry> entries
     ) {
         int succeeded = 0;
-        List<BatchItemError> errors = new ArrayList<>();
+        List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
 
         for (int i = 0; i < entries.size(); i++) {
             BatchConsentEntry entry = entries.get(i);
             if (entry == null) {
-                errors.add(new BatchItemError(i, null, "Null entry in batch"));
+                errors.add(new BatchConsentResult.BatchItemError(i, null, "Null entry in batch"));
                 continue;
             }
             try {
                 grantConsent(subject, entry.scope(), entry.expiresAt());
                 succeeded++;
             } catch (Exception e) {
-                errors.add(new BatchItemError(i, entry.scope(), e.getMessage()));
+                errors.add(new BatchConsentResult.BatchItemError(i, entry.scope(), e.getMessage()));
             }
         }
         return new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
     }
 
     @Override
-    public BatchConsentResult revokeConsentBatch(
+    public BatchConsentResult revokeAllConsent(
         String subject, List<BatchConsentEntry> entries
     ) {
         int succeeded = 0;
-        List<BatchItemError> errors = new ArrayList<>();
+        List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
 
         for (int i = 0; i < entries.size(); i++) {
             BatchConsentEntry entry = entries.get(i);
             if (entry == null) {
-                errors.add(new BatchItemError(i, null, "Null entry in batch"));
+                errors.add(new BatchConsentResult.BatchItemError(i, null, "Null entry in batch"));
                 continue;
             }
             try {
-                revokeConsent(subject, entry.scope(), entry.expiresAt());
+                revokeConsent(subject, entry.scope());
                 succeeded++;
             } catch (Exception e) {
-                errors.add(new BatchItemError(i, entry.scope(), e.getMessage()));
+                errors.add(new BatchConsentResult.BatchItemError(i, entry.scope(), e.getMessage()));
             }
         }
         return new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
     }
 
     // -----------------------------------------------------------------------
-    // Schema registration — delegation to command service
+    // Field Aggregate operations
     // -----------------------------------------------------------------------
 
     @Override
-    public void registerField(String fieldName, String entityName, String description) {
-        commandService().registerFieldCommand(fieldName, entityName, description);
+    public void registerField(String fieldName, String entityName,
+                              String description, String entityDescription) {
+        commandService().registerFieldCommand(fieldName, entityName, description, entityDescription);
     }
 
     @Override
-    public void registerCategory(String categoryName, String description) {
-        commandService().registerCategoryCommand(categoryName, description);
+    public void updateField(String fieldName, String entityName, String description) {
+        commandService().updateFieldCommand(fieldName, entityName, description);
     }
 
     @Override
-    public void linkFieldToCategory(
-        String fieldName, String entityName, String categoryName
-    ) {
-        commandService().linkFieldToCategoryCommand(fieldName, entityName, categoryName);
+    public void removeField(String fieldName, String entityName) {
+        commandService().removeFieldCommand(fieldName, entityName);
     }
+
+    @Override
+    public void assignFieldCategory(String fieldName, String entityName,
+                                    String categoryName, String categoryDescription) {
+        commandService().assignFieldCategoryCommand(
+            fieldName, entityName, categoryName, categoryDescription
+        );
+    }
+
+    @Override
+    public void unassignFieldCategory(String fieldName, String entityName,
+                                      String categoryName) {
+        commandService().unassignFieldCategoryCommand(fieldName, entityName, categoryName);
+    }
+
+    // -----------------------------------------------------------------------
+    // Purpose Aggregate operations
+    // -----------------------------------------------------------------------
 
     @Override
     public void registerPurpose(String purposeName, String description) {
@@ -170,77 +180,123 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public void registerRegulation(
-        String regulationName, String fullName, String jurisdiction,
-        String description, String url
-    ) {
-        commandService().registerRegulationCommand(
-            regulationName, fullName, jurisdiction, description, url
-        );
+    public void updatePurpose(String purposeName, String description) {
+        commandService().updatePurposeCommand(purposeName, description);
     }
 
     @Override
-    public void linkPurposeToRegulation(
-        String purposeName, String regulationName, String legalBasis
-    ) {
+    public void removePurpose(String purposeName) {
+        commandService().removePurposeCommand(purposeName);
+    }
+
+    @Override
+    public void linkPurposeToRegulation(String purposeName, String regulationName,
+                                        String lawfulBasis, String onGranted,
+                                        String onDenied) {
         commandService().linkPurposeToRegulationCommand(
-            purposeName, regulationName, legalBasis
+            purposeName, regulationName, lawfulBasis, onGranted, onDenied
+        );
+    }
+
+    @Override
+    public void unlinkPurposeFromRegulation(String purposeName, String regulationName) {
+        commandService().unlinkPurposeFromRegulationCommand(purposeName, regulationName);
+    }
+
+    @Override
+    public void addPurposePolicy(String purposeName, String policyType,
+                                 String fieldName, String entityName,
+                                 String categoryName) {
+        commandService().addPurposePolicyCommand(
+            purposeName, policyType, fieldName, entityName, categoryName
+        );
+    }
+
+    @Override
+    public void removePurposePolicy(String purposeName, String policyType,
+                                    String fieldName, String entityName,
+                                    String categoryName) {
+        commandService().removePurposePolicyCommand(
+            purposeName, policyType, fieldName, entityName, categoryName
         );
     }
 
     // -----------------------------------------------------------------------
-    // Schema queries — delegation to query service
+    // Regulation Aggregate operations
     // -----------------------------------------------------------------------
 
     @Override
-    public List<FieldInfo> listFields() {
+    public void registerRegulation(String regulationName, String description) {
+        commandService().registerRegulationCommand(regulationName, description);
+    }
+
+    @Override
+    public void updateRegulation(String regulationName, String description) {
+        commandService().updateRegulationCommand(regulationName, description);
+    }
+
+    @Override
+    public void removeRegulation(String regulationName) {
+        commandService().removeRegulationCommand(regulationName);
+    }
+
+    @Override
+    public void addRegulationJurisdiction(String regulationName,
+                                          String jurisdictionName,
+                                          String description) {
+        commandService().addRegulationJurisdictionCommand(
+            regulationName, jurisdictionName, description
+        );
+    }
+
+    @Override
+    public void removeRegulationJurisdiction(String regulationName,
+                                             String jurisdictionName) {
+        commandService().removeRegulationJurisdictionCommand(regulationName, jurisdictionName);
+    }
+
+    // -----------------------------------------------------------------------
+    // Aggregate queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<FieldView> listFields() {
         return queryService().listFields();
     }
 
     @Override
-    public List<CategoryInfo> listCategories() {
-        return queryService().listCategories();
+    public FieldView getField(String fieldName, String entityName) {
+        return queryService().getField(fieldName, entityName);
     }
 
     @Override
-    public List<EntityInfo> listEntities() {
-        return queryService().listEntities();
-    }
-
-    @Override
-    public List<PurposeInfo> listPurposes() {
+    public List<PurposeView> listPurposes() {
         return queryService().listPurposes();
     }
 
     @Override
-    public List<RegulationInfo> listRegulations() {
+    public PurposeView getPurpose(String purposeName) {
+        return queryService().getPurpose(purposeName);
+    }
+
+    @Override
+    public List<RegulationView> listRegulations() {
         return queryService().listRegulations();
     }
 
-    // -----------------------------------------------------------------------
-    // Consent queries — delegation to query service
-    // -----------------------------------------------------------------------
-
     @Override
-    public List<PolicySummaryEntry> findPoliciesBySubject(String subjectId) {
-        return queryService().findPoliciesBySubject(subjectId);
+    public RegulationView getRegulation(String regulationName) {
+        return queryService().getRegulation(regulationName);
     }
 
     @Override
-    public int countPoliciesBySubject(String subjectId) {
-        return queryService().countPoliciesBySubject(subjectId);
+    public SubjectConsentView getSubjectConsent(String subjectId) {
+        return queryService().getSubjectConsent(subjectId);
     }
 
     @Override
-    public List<ConsentAuditEntry> getConsentHistory(String subjectId) {
-        return queryService().getConsentHistory(subjectId);
-    }
-
-    @Override
-    public List<ConsentAuditEntry> getConsentHistory(
-        String subjectId, ConsentScope scope
-    ) {
-        return queryService().getConsentHistory(subjectId, scope);
+    public int countSubjectConsentEntries(String subjectId) {
+        return queryService().countSubjectConsentEntries(subjectId);
     }
 
     // -----------------------------------------------------------------------
@@ -292,16 +348,13 @@ public class DefaultTenantService extends Operio implements TenantService {
         LOG.info(() -> "SensitiveDiscovery found " + result.fields().size()
             + " field(s) and " + result.categories().size() + " category/ies");
 
-        for (String category : result.categories()) {
-            registerCategory(category, null);
-        }
         for (DiscoveredField field : result.fields()) {
-            registerField(field.fieldName(), field.entityName(), field.description());
+            registerField(field.fieldName(), field.entityName(), field.description(), null);
         }
         for (DiscoveredField field : result.fields()) {
             if (field.category() != null && !field.category().isBlank()) {
-                linkFieldToCategory(
-                    field.fieldName(), field.entityName(), field.category()
+                assignFieldCategory(
+                    field.fieldName(), field.entityName(), field.category(), null
                 );
             }
         }
@@ -313,19 +366,24 @@ public class DefaultTenantService extends Operio implements TenantService {
     // -----------------------------------------------------------------------
 
     @Override
-    public int deleteAuditLogBySubject(String subject) {
-        return commandService().deleteAuditLogBySubjectCommand(subject);
+    public void deleteSubjectAudit(String subject, String deletionRequestId) {
+        commandService().deleteSubjectAuditCommand(
+            subject, deletionRequestId,
+            RequestContext.actor(), RequestContext.ipAddress(),
+            RequestContext.userAgent()
+        );
     }
 
     // -----------------------------------------------------------------------
-    // IAM — Role Management (delegated to AuthzProvider via TenantContext)
+    // IAM — Role Management
     // -----------------------------------------------------------------------
 
     @Override
     public void assignUserRole(String userId, String role) {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
-            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+            throw new UnsupportedOperationException(
+                "IAM role management not available — no AuthzProvider configured");
         }
         authz.assignRole(TenantContext.require(), userId, role);
     }
@@ -334,7 +392,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     public void removeUserRole(String userId, String role) {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
-            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+            throw new UnsupportedOperationException(
+                "IAM role management not available — no AuthzProvider configured");
         }
         authz.removeRole(TenantContext.require(), userId, role);
     }
@@ -343,7 +402,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     public Set<String> listUserRoles(String userId) {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
-            throw new UnsupportedOperationException("IAM role management not available — no AuthzProvider configured");
+            throw new UnsupportedOperationException(
+                "IAM role management not available — no AuthzProvider configured");
         }
         return authz.getUserRoles(TenantContext.require(), userId);
     }
@@ -371,55 +431,43 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     // -----------------------------------------------------------------------
-    // Enrichment — auto-create referenced entities via query service
+    // Policy resolution — ConsentScope → policy_id + denormalized names
     // -----------------------------------------------------------------------
 
-    private void ensureReferencedEntitiesExist(ConsentScope scope) {
-        ensurePurposeExists(scope.purposeName());
-        if (!isWildcardOrBlank(scope.category())) {
-            ensureCategoryExists(scope.category());
+    private PurposeView.PolicyView resolvePolicy(ConsentScope scope) {
+        String policyType = !isWildcardOrBlank(scope.fieldName()) ? "FIELD" : "CATEGORY";
+        PurposeView.PolicyView policy = queryService().findPolicy(
+            scope.purposeName(), policyType,
+            isWildcardOrBlank(scope.fieldName()) ? null : scope.fieldName(),
+            isWildcardOrBlank(scope.entityName()) ? null : scope.entityName(),
+            isWildcardOrBlank(scope.category()) ? null : scope.category()
+        );
+        if (policy == null) {
+            throw new IllegalArgumentException(
+                "No matching policy found for scope: " + scope
+                + " — policies must be created before consent can be granted or revoked"
+            );
         }
-        if (!isWildcardOrBlank(scope.fieldName())) {
-            ensureEntityAndFieldExist(scope.entityName(), scope.fieldName());
-        }
+        return policy;
+    }
+
+    private static String policyTypeStr(PurposeView.PolicyView policy) {
+        return policy.policyType();
+    }
+
+    private static String fieldNameOrNull(PurposeView.PolicyView policy) {
+        return policy.field() != null ? policy.field().fieldName() : null;
+    }
+
+    private static String entityNameOrNull(PurposeView.PolicyView policy) {
+        return policy.field() != null ? policy.field().entityName() : null;
+    }
+
+    private static String categoryNameOrNull(PurposeView.PolicyView policy) {
+        return policy.category() != null ? policy.category().categoryName() : null;
     }
 
     private static boolean isWildcardOrBlank(String value) {
         return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
-    }
-
-    private void ensurePurposeExists(String purposeName) {
-        if (isWildcardOrBlank(purposeName)) return;
-        boolean exists = queryService().listPurposes().stream()
-            .anyMatch(p -> purposeName.equals(p.purposeName()));
-        if (!exists) {
-            LOG.info(() -> "Auto-creating purpose '" + purposeName
-                + "' referenced by consent grant/revoke");
-            registerPurpose(purposeName, null);
-        }
-    }
-
-    private void ensureCategoryExists(String categoryName) {
-        if (isWildcardOrBlank(categoryName)) return;
-        boolean exists = queryService().listCategories().stream()
-            .anyMatch(c -> categoryName.equals(c.categoryName()));
-        if (!exists) {
-            LOG.info(() -> "Auto-creating category '" + categoryName
-                + "' referenced by consent grant/revoke");
-            registerCategory(categoryName, null);
-        }
-    }
-
-    private void ensureEntityAndFieldExist(String entityName, String fieldName) {
-        if (isWildcardOrBlank(fieldName)) return;
-        if (isWildcardOrBlank(entityName)) return;
-        boolean fieldExists = queryService().listFields().stream()
-            .anyMatch(f -> fieldName.equals(f.fieldName())
-                && entityName.equals(f.entityName()));
-        if (!fieldExists) {
-            LOG.info(() -> "Auto-creating field '" + fieldName + "' on entity '"
-                + entityName + "' referenced by consent grant/revoke");
-            registerField(fieldName, entityName, null);
-        }
     }
 }

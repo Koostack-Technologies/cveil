@@ -1,34 +1,26 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.models.CategoryInfo;
-import com.koostack.operio.core.models.EntityInfo;
-import com.koostack.operio.core.models.FieldInfo;
-import com.koostack.operio.core.models.PurposeInfo;
-import com.koostack.operio.core.models.RegulationInfo;
+import com.koostack.operio.core.models.FieldView;
+import com.koostack.operio.core.models.PurposeView;
+import com.koostack.operio.core.models.RegulationView;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
-import com.koostack.operio.rest.dto.AdminDtos.CategoryResponse;
-import com.koostack.operio.rest.dto.AdminDtos.EntityResponse;
-import com.koostack.operio.rest.dto.AdminDtos.FieldResponse;
-import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AddJurisdictionRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AddPurposePolicyRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.PurposeResponse;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegulationResponse;
+import com.koostack.operio.rest.dto.AdminDtos.RemoveJurisdictionRequest;
+import com.koostack.operio.rest.dto.AdminDtos.RemovePurposePolicyRequest;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -47,18 +39,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * JAX-RS resource for consent schema administration: managing fields,
- * categories, entities, purposes, regulations, and their relationships.
+ * purposes, regulations, and their relationships.
  *
- * <p>All endpoints require authentication and operate within a tenant scope.
- *
- * <h2>RBAC Enforcement</h2>
- * <ul>
- *   <li>Read-only endpoints require the admin:read role.</li>
- *   <li>Mutating endpoints require the admin:write role.</li>
- *   <li>The super-admin role bypasses all checks.</li>
- * </ul>
- *
- * @see Roles
+ * <p>Returns aggregate-shaped responses (FieldView, PurposeView,
+ * RegulationView) directly as JSON.
  */
 @Path("/api/v1/admin")
 @TenantScoped
@@ -68,9 +52,7 @@ import org.slf4j.LoggerFactory;
 @SecurityRequirement(name = OperioOpenApiConfig.SECURITY_SCHEME)
 public class AdminResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        AdminResource.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(AdminResource.class);
 
     @Inject
     TenantService tenantService;
@@ -81,259 +63,89 @@ public class AdminResource {
 
     @GET
     @Path("/fields")
-    @Operation(
-        operationId = "listFields",
-        summary = "List all registered sensitive fields",
-        description = "Returns every field registered in the consent schema. "
-            + "Requires the admin:read role."
-    )
+    @Operation(operationId = "listFields", summary = "List all registered fields with entity and category info")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "List of registered fields",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(
-                    type = SchemaType.ARRAY,
-                    implementation = FieldResponse.class
-                )
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:read)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "List of fields",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = FieldView.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response listFields(@Context SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.ADMIN_READ);
-
-        LOG.debug("GET /admin/fields");
-
-        List<FieldInfo> fields = tenantService.listFields();
-
-        List<FieldResponse> dtos = fields
-            .stream()
-            .map(FieldResponse::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+    public Response listFields(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<FieldView> fields = tenantService.listFields();
+        return Response.ok(fields).build();
     }
 
     @POST
     @Path("/fields")
-    @Operation(
-        operationId = "registerField",
-        summary = "Register a sensitive field",
-        description = "Registers a sensitive field in the consent schema using upsert "
-            + "semantics. If a field with the same name and entity already exists, "
-            + "its description is updated. Requires the admin:write role."
-    )
+    @Operation(operationId = "registerField", summary = "Register a sensitive field (upsert)")
     @APIResponses({
-        @APIResponse(
-            responseCode = "201",
-            description = "Field registered successfully",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "201", description = "Field registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response registerField(
-        @Context SecurityContext securityContext,
-        @Valid RegisterFieldRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
-
-        LOG.debug(
-            "POST /admin/fields - field={}, entity={}",
-            request.fieldName(),
-            request.entityName()
-        );
-
-        tenantService.registerField(
-            request.fieldName(),
-            request.entityName(),
-            request.description()
-        );
-
+    public Response registerField(@Context SecurityContext sc, @Valid RegisterFieldRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerField(req.fieldName(), req.entityName(),
+            req.description(), req.entityDescription());
         return Response.status(Response.Status.CREATED)
-            .entity(
-                MessageResponse.of("Field registered: " + request.fieldName())
-            )
+            .entity(MessageResponse.of("Field registered: " + req.fieldName()))
             .build();
     }
 
-    // -------------------------------------------------------------------
-    // Categories
-    // -------------------------------------------------------------------
-
-    @GET
-    @Path("/categories")
-    @Operation(
-        operationId = "listCategories",
-        summary = "List all registered consent categories",
-        description = "Returns every category registered in the consent schema. "
-            + "Requires the admin:read role."
-    )
+    @DELETE
+    @Path("/fields/{entityName}/{fieldName}")
+    @Operation(operationId = "removeField", summary = "Remove a field")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "List of registered categories",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(
-                    type = SchemaType.ARRAY,
-                    implementation = CategoryResponse.class
-                )
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:read)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "Field removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response listCategories(@Context SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.ADMIN_READ);
-
-        LOG.debug("GET /admin/categories");
-
-        List<CategoryInfo> categories = tenantService.listCategories();
-
-        List<CategoryResponse> dtos = categories
-            .stream()
-            .map(CategoryResponse::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+    public Response removeField(@Context SecurityContext sc,
+                                @PathParam("entityName") String entityName,
+                                @PathParam("fieldName") String fieldName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeField(fieldName, entityName);
+        return Response.ok(MessageResponse.of("Field removed")).build();
     }
 
     @POST
-    @Path("/categories")
-    @Operation(
-        operationId = "registerCategory",
-        summary = "Register a consent category",
-        description = "Registers a consent category using upsert semantics. "
-            + "Requires the admin:write role."
-    )
+    @Path("/fields/categories")
+    @Operation(operationId = "assignFieldCategory", summary = "Assign a category to a field")
     @APIResponses({
-        @APIResponse(
-            responseCode = "201",
-            description = "Category registered successfully",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "Category assigned",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response registerCategory(
-        @Context SecurityContext securityContext,
-        @Valid RegisterCategoryRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
-
-        LOG.debug(
-            "POST /admin/categories - category={}",
-            request.categoryName()
-        );
-
-        tenantService.registerCategory(request.categoryName(), request.description());
-
-        return Response.status(Response.Status.CREATED)
-            .entity(
-                MessageResponse.of(
-                    "Category registered: " + request.categoryName()
-                )
-            )
-            .build();
+    public Response assignFieldCategory(@Context SecurityContext sc,
+                                        @Valid AssignFieldCategoryRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.assignFieldCategory(req.fieldName(), req.entityName(),
+            req.categoryName(), req.categoryDescription());
+        return Response.ok(MessageResponse.of(
+            "Category '" + req.categoryName() + "' assigned to field '" + req.fieldName() + "'"
+        )).build();
     }
 
-    // -------------------------------------------------------------------
-    // Entities
-    // -------------------------------------------------------------------
-
-    @GET
-    @Path("/entities")
-    @Operation(
-        operationId = "listEntities",
-        summary = "List all distinct entities",
-        description = "Returns all entities that have registered fields. Entities are "
-            + "implicitly created when fields with entity names are registered. "
-            + "Requires the admin:read role."
-    )
+    @DELETE
+    @Path("/fields/{entityName}/{fieldName}/categories/{categoryName}")
+    @Operation(operationId = "unassignFieldCategory", summary = "Remove a category from a field")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "List of entities",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(
-                    type = SchemaType.ARRAY,
-                    implementation = EntityResponse.class
-                )
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:read)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "Category unassigned",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response listEntities(@Context SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.ADMIN_READ);
-
-        LOG.debug("GET /admin/entities");
-
-        List<EntityInfo> entities = tenantService.listEntities();
-
-        List<EntityResponse> dtos = entities
-            .stream()
-            .map(EntityResponse::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+    public Response unassignFieldCategory(@Context SecurityContext sc,
+                                          @PathParam("entityName") String entityName,
+                                          @PathParam("fieldName") String fieldName,
+                                          @PathParam("categoryName") String categoryName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.unassignFieldCategory(fieldName, entityName, categoryName);
+        return Response.ok(MessageResponse.of("Category unassigned")).build();
     }
 
     // -------------------------------------------------------------------
@@ -342,99 +154,141 @@ public class AdminResource {
 
     @GET
     @Path("/purposes")
-    @Operation(
-        operationId = "listPurposes",
-        summary = "List all registered consent purposes",
-        description = "Returns every purpose registered in the consent schema. "
-            + "Requires the admin:read role."
-    )
+    @Operation(operationId = "listPurposes", summary = "List all purposes with policies and regulation links")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "List of registered purposes",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(
-                    type = SchemaType.ARRAY,
-                    implementation = PurposeResponse.class
-                )
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:read)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "List of purposes",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = PurposeView.class))),
     })
-    public Response listPurposes(@Context SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.ADMIN_READ);
+    public Response listPurposes(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<PurposeView> purposes = tenantService.listPurposes();
+        return Response.ok(purposes).build();
+    }
 
-        LOG.debug("GET /admin/purposes");
-
-        List<PurposeInfo> purposes = tenantService.listPurposes();
-
-        List<PurposeResponse> dtos = purposes
-            .stream()
-            .map(PurposeResponse::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+    @GET
+    @Path("/purposes/{purposeName}")
+    @Operation(operationId = "getPurpose", summary = "Get a single purpose aggregate")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Purpose found",
+            content = @Content(schema = @Schema(implementation = PurposeView.class))),
+        @APIResponse(responseCode = "404", description = "Purpose not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getPurpose(@Context SecurityContext sc,
+                               @PathParam("purposeName") String purposeName) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        PurposeView purpose = tenantService.getPurpose(purposeName);
+        if (purpose == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Purpose not found: " + purposeName))
+                .build();
+        }
+        return Response.ok(purpose).build();
     }
 
     @POST
     @Path("/purposes")
-    @Operation(
-        operationId = "registerPurpose",
-        summary = "Register a consent purpose",
-        description = "Registers a consent purpose using upsert semantics. "
-            + "Requires the admin:write role."
-    )
+    @Operation(operationId = "registerPurpose", summary = "Register a consent purpose (upsert)")
     @APIResponses({
-        @APIResponse(
-            responseCode = "201",
-            description = "Purpose registered successfully",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "201", description = "Purpose registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response registerPurpose(
-        @Context SecurityContext securityContext,
-        @Valid RegisterPurposeRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
-
-        LOG.debug("POST /admin/purposes - purpose={}", request.purposeName());
-
-        tenantService.registerPurpose(request.purposeName(), request.description());
-
+    public Response registerPurpose(@Context SecurityContext sc, @Valid RegisterPurposeRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerPurpose(req.purposeName(), req.description());
         return Response.status(Response.Status.CREATED)
-            .entity(
-                MessageResponse.of(
-                    "Purpose registered: " + request.purposeName()
-                )
-            )
+            .entity(MessageResponse.of("Purpose registered: " + req.purposeName()))
             .build();
+    }
+
+    @DELETE
+    @Path("/purposes/{purposeName}")
+    @Operation(operationId = "removePurpose", summary = "Remove a purpose")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Purpose removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removePurpose(@Context SecurityContext sc,
+                                  @PathParam("purposeName") String purposeName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removePurpose(purposeName);
+        return Response.ok(MessageResponse.of("Purpose removed")).build();
+    }
+
+    @POST
+    @Path("/purposes/policies")
+    @Operation(operationId = "addPurposePolicy", summary = "Add a policy to a purpose")
+    @APIResponses({
+        @APIResponse(responseCode = "201", description = "Policy added",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response addPurposePolicy(@Context SecurityContext sc,
+                                     @Valid AddPurposePolicyRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.addPurposePolicy(req.purposeName(), req.policyType(),
+            req.fieldName(), req.entityName(), req.categoryName());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Policy added to purpose: " + req.purposeName()))
+            .build();
+    }
+
+    @DELETE
+    @Path("/purposes/policies")
+    @Operation(operationId = "removePurposePolicy", summary = "Remove a policy from a purpose")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Policy removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removePurposePolicy(@Context SecurityContext sc,
+                                        @Valid RemovePurposePolicyRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removePurposePolicy(req.purposeName(), req.policyType(),
+            req.fieldName(), req.entityName(), req.categoryName());
+        return Response.ok(MessageResponse.of("Policy removed")).build();
+    }
+
+    @POST
+    @Path("/purposes/regulations")
+    @Operation(operationId = "linkPurposeToRegulation", summary = "Link a purpose to a regulation")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Purpose linked to regulation",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response linkPurposeToRegulation(@Context SecurityContext sc,
+                                            @Valid LinkPurposeRegulationRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.linkPurposeToRegulation(req.purposeName(), req.regulationName(),
+            req.lawfulBasis(), req.onGranted(), req.onDenied());
+        return Response.ok(MessageResponse.of(
+            "Purpose '" + req.purposeName() + "' linked to regulation '" + req.regulationName() + "'"
+        )).build();
+    }
+
+    @DELETE
+    @Path("/purposes/{purposeName}/regulations/{regulationName}")
+    @Operation(operationId = "unlinkPurposeFromRegulation", summary = "Unlink a purpose from a regulation")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Purpose unlinked from regulation",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response unlinkPurposeFromRegulation(@Context SecurityContext sc,
+                                                @PathParam("purposeName") String purposeName,
+                                                @PathParam("regulationName") String regulationName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.unlinkPurposeFromRegulation(purposeName, regulationName);
+        return Response.ok(MessageResponse.of("Purpose unlinked from regulation")).build();
     }
 
     // -------------------------------------------------------------------
@@ -443,244 +297,105 @@ public class AdminResource {
 
     @GET
     @Path("/regulations")
-    @Operation(
-        operationId = "listRegulations",
-        summary = "List all registered regulations",
-        description = "Returns every regulation registered in the consent schema. "
-            + "Requires the admin:read role."
-    )
+    @Operation(operationId = "listRegulations", summary = "List all regulations with jurisdictions")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "List of registered regulations",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(
-                    type = SchemaType.ARRAY,
-                    implementation = RegulationResponse.class
-                )
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:read)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "List of regulations",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = RegulationView.class))),
     })
-    public Response listRegulations(@Context SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.ADMIN_READ);
+    public Response listRegulations(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<RegulationView> regulations = tenantService.listRegulations();
+        return Response.ok(regulations).build();
+    }
 
-        LOG.debug("GET /admin/regulations");
-
-        List<RegulationInfo> regulations = tenantService.listRegulations();
-
-        List<RegulationResponse> dtos = regulations
-            .stream()
-            .map(RegulationResponse::fromModel)
-            .toList();
-
-        return Response.ok(dtos).build();
+    @GET
+    @Path("/regulations/{regulationName}")
+    @Operation(operationId = "getRegulation", summary = "Get a single regulation aggregate")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Regulation found",
+            content = @Content(schema = @Schema(implementation = RegulationView.class))),
+        @APIResponse(responseCode = "404", description = "Regulation not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getRegulation(@Context SecurityContext sc,
+                                  @PathParam("regulationName") String regulationName) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        RegulationView reg = tenantService.getRegulation(regulationName);
+        if (reg == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Regulation not found: " + regulationName))
+                .build();
+        }
+        return Response.ok(reg).build();
     }
 
     @POST
     @Path("/regulations")
-    @Operation(
-        operationId = "registerRegulation",
-        summary = "Register a regulation",
-        description = "Registers a regulation using upsert semantics. Requires the "
-            + "admin:write role."
-    )
+    @Operation(operationId = "registerRegulation", summary = "Register a regulation (upsert)")
     @APIResponses({
-        @APIResponse(
-            responseCode = "201",
-            description = "Regulation registered successfully",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "201", description = "Regulation registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response registerRegulation(
-        @Context SecurityContext securityContext,
-        @Valid RegisterRegulationRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
-
-        LOG.debug(
-            "POST /admin/regulations - regulation={}",
-            request.regulationName()
-        );
-
-        tenantService.registerRegulation(
-            request.regulationName(),
-            request.fullName(),
-            request.jurisdiction(),
-            request.description(),
-            request.url()
-        );
-
+    public Response registerRegulation(@Context SecurityContext sc,
+                                       @Valid RegisterRegulationRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerRegulation(req.regulationName(), req.description());
         return Response.status(Response.Status.CREATED)
-            .entity(
-                MessageResponse.of(
-                    "Regulation registered: " + request.regulationName()
-                )
-            )
+            .entity(MessageResponse.of("Regulation registered: " + req.regulationName()))
             .build();
     }
 
-    // -------------------------------------------------------------------
-    // Links -- Field to Category
-    // -------------------------------------------------------------------
-
-    @POST
-    @Path("/fields/links")
-    @Operation(
-        operationId = "linkFieldToCategory",
-        summary = "Link a field to a category",
-        description = "Associates a registered field with a registered category. "
-            + "Idempotent: existing links are a no-op. Requires the admin:write role."
-    )
+    @DELETE
+    @Path("/regulations/{regulationName}")
+    @Operation(operationId = "removeRegulation", summary = "Remove a regulation")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "Link created (or already existed)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "200", description = "Regulation removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response linkFieldToCategory(
-        @Context SecurityContext securityContext,
-        @Valid LinkFieldCategoryRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
-
-        LOG.debug(
-            "POST /admin/fields/links - field={}, entity={}, category={}",
-            request.fieldName(),
-            request.entityName(),
-            request.categoryName()
-        );
-
-        tenantService.linkFieldToCategory(
-            request.fieldName(),
-            request.entityName(),
-            request.categoryName()
-        );
-
-        return Response.ok(
-            MessageResponse.of(
-                "Field '" +
-                    request.fieldName() +
-                    "' linked to category '" +
-                    request.categoryName() +
-                    "'"
-            )
-        ).build();
+    public Response removeRegulation(@Context SecurityContext sc,
+                                     @PathParam("regulationName") String regulationName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeRegulation(regulationName);
+        return Response.ok(MessageResponse.of("Regulation removed")).build();
     }
 
-    // -------------------------------------------------------------------
-    // Links -- Purpose to Regulation
-    // -------------------------------------------------------------------
-
     @POST
-    @Path("/purposes/links")
-    @Operation(
-        operationId = "linkPurposeToRegulation",
-        summary = "Link a purpose to a regulation",
-        description = "Associates a registered purpose with a registered regulation "
-            + "and its legal basis. Idempotent: existing links are a no-op. "
-            + "Requires the admin:write role."
-    )
+    @Path("/regulations/jurisdictions")
+    @Operation(operationId = "addJurisdiction", summary = "Add a jurisdiction to a regulation")
     @APIResponses({
-        @APIResponse(
-            responseCode = "200",
-            description = "Link created (or already existed)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "400",
-            description = "Validation error",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
-        @APIResponse(
-            responseCode = "403",
-            description = "Missing required role (admin:write)",
-            content = @Content(
-                mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class)
-            )
-        ),
+        @APIResponse(responseCode = "201", description = "Jurisdiction added",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response linkPurposeToRegulation(
-        @Context SecurityContext securityContext,
-        @Valid LinkPurposeRegulationRequest request
-    ) {
-        Roles.requireRole(securityContext, Roles.ADMIN_WRITE);
+    public Response addJurisdiction(@Context SecurityContext sc,
+                                    @Valid AddJurisdictionRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.addRegulationJurisdiction(req.regulationName(),
+            req.jurisdictionName(), req.description());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Jurisdiction added to regulation: " + req.regulationName()))
+            .build();
+    }
 
-        LOG.debug(
-            "POST /admin/purposes/links - purpose={}, regulation={}, basis={}",
-            request.purposeName(),
-            request.regulationName(),
-            request.legalBasis()
-        );
-
-        tenantService.linkPurposeToRegulation(
-            request.purposeName(),
-            request.regulationName(),
-            request.legalBasis()
-        );
-
-        return Response.ok(
-            MessageResponse.of(
-                "Purpose '" +
-                    request.purposeName() +
-                    "' linked to regulation '" +
-                    request.regulationName() +
-                    "'"
-            )
-        ).build();
+    @DELETE
+    @Path("/regulations/{regulationName}/jurisdictions/{jurisdictionName}")
+    @Operation(operationId = "removeJurisdiction", summary = "Remove a jurisdiction from a regulation")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Jurisdiction removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "403", description = "Missing role",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removeJurisdiction(@Context SecurityContext sc,
+                                       @PathParam("regulationName") String regulationName,
+                                       @PathParam("jurisdictionName") String jurisdictionName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeRegulationJurisdiction(regulationName, jurisdictionName);
+        return Response.ok(MessageResponse.of("Jurisdiction removed")).build();
     }
 }

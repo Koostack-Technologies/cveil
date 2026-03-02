@@ -3,14 +3,13 @@ package com.koostack.operio.plugin.consent.sync.embedded;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentRepository;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineFieldCategoryMappingRepository;
 import com.koostack.operio.plugin.consent.jooq.CategoryRepository;
-import com.koostack.operio.plugin.consent.jooq.ConsentPolicyRepository;
+import com.koostack.operio.plugin.consent.jooq.ConsentLedgerRepository;
 import com.koostack.operio.plugin.consent.jooq.EntityRepository;
 import com.koostack.operio.plugin.consent.jooq.FieldCategoryRepository;
 import com.koostack.operio.plugin.consent.jooq.FieldRepository;
-import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminService;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.PurposeRepository;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.ConsentPolicy;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.FieldCategory;
@@ -25,6 +24,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.jooq.Record;
+import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 
 /**
  * Rehydrates/reconciles the in-process Caffeine consent cache from the
@@ -97,7 +98,7 @@ public class CaffeineReconciliationHelper {
 
     // -- Dependencies (all injected via constructor) -------------------------
 
-    private final ConsentPolicyRepository consentPolicyRepo;
+    private final ConsentLedgerRepository consentLedgerRepo;
     private final FieldRepository fieldRepo;
     private final EntityRepository entityRepo;
     private final CategoryRepository categoryRepo;
@@ -111,25 +112,25 @@ public class CaffeineReconciliationHelper {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a reconciliation helper wired to the given jOOQ admin service
+     * Creates a reconciliation helper wired to the given jOOQ query service
      * and Caffeine repositories.
      *
-     * <p>The admin service is used to access the relational repositories
-     * (field, entity, category, field_category, consent_policy). The
+     * <p>The query service is used to access the relational repositories
+     * (field, entity, category, field_category, consent_ledger). The
      * Caffeine repositories are the write targets.
      *
-     * @param jooqAdmin         the jOOQ admin service (source of truth)
+     * @param queryService        the jOOQ query service (source of truth)
      * @param caffeineConsentRepo the Caffeine consent cache to populate
      * @param caffeineMappingRepo the Caffeine field-category mapping cache
      *                            to populate
      * @throws NullPointerException if any argument is {@code null}
      */
     public CaffeineReconciliationHelper(
-        JooqConsentAdminService jooqAdmin,
+        JooqConsentAdminQueryService queryService,
         CaffeineConsentRepository caffeineConsentRepo,
         CaffeineFieldCategoryMappingRepository caffeineMappingRepo
     ) {
-        Objects.requireNonNull(jooqAdmin, "jooqAdmin must not be null");
+        Objects.requireNonNull(queryService, "queryService must not be null");
         Objects.requireNonNull(
             caffeineConsentRepo,
             "caffeineConsentRepo must not be null"
@@ -139,12 +140,12 @@ public class CaffeineReconciliationHelper {
             "caffeineMappingRepo must not be null"
         );
 
-        this.consentPolicyRepo = jooqAdmin.consentPolicyRepository();
-        this.fieldRepo = jooqAdmin.fieldRepository();
-        this.entityRepo = jooqAdmin.entityRepository();
-        this.categoryRepo = jooqAdmin.categoryRepository();
-        this.fieldCategoryRepo = jooqAdmin.fieldCategoryRepository();
-        this.purposeRepo = jooqAdmin.purposeRepository();
+        this.consentLedgerRepo = queryService.consentLedgerRepository();
+        this.fieldRepo = queryService.fieldRepository();
+        this.entityRepo = queryService.entityRepository();
+        this.categoryRepo = queryService.categoryRepository();
+        this.fieldCategoryRepo = queryService.fieldCategoryRepository();
+        this.purposeRepo = queryService.purposeRepository();
         this.caffeineConsentRepo = caffeineConsentRepo;
         this.caffeineMappingRepo = caffeineMappingRepo;
     }
@@ -215,23 +216,16 @@ public class CaffeineReconciliationHelper {
         );
         result.addMappingsLoaded(mappingsLoaded);
 
-        // Step 3: load consent policies
-        List<ConsentPolicy> policies = consentPolicyRepo.findAll();
+        // Step 3: load consent ledger entries (joined with policy metadata)
+        List<Record> entries = consentLedgerRepo.findAll();
         log.log(
             Level.FINE,
-            "Loaded {0} consent policy rows from DB",
-            policies.size()
+            "Loaded {0} consent ledger rows from DB",
+            entries.size()
         );
 
-        for (ConsentPolicy policy : policies) {
-            processPolicy(
-                policy,
-                fieldMap,
-                entityNames,
-                categoryNames,
-                purposeNames,
-                result
-            );
+        for (Record entry : entries) {
+            processLedgerEntry(entry, result);
         }
 
         ReconciliationResult finalResult = result.build();
@@ -326,25 +320,18 @@ public class CaffeineReconciliationHelper {
         );
         result.addMappingsLoaded(mappingsLoaded);
 
-        // Step 3: load and process the subject's policies
-        List<ConsentPolicy> policies = consentPolicyRepo.findAllBySubject(
+        // Step 3: load and process the subject's consent ledger entries
+        List<Record> entries = consentLedgerRepo.findBySubject(
             subjectId
         );
         log.log(
             Level.FINE,
-            "Loaded {0} consent policy rows for subject={1}",
-            new Object[] { policies.size(), subjectId }
+            "Loaded {0} consent ledger rows for subject={1}",
+            new Object[] { entries.size(), subjectId }
         );
 
-        for (ConsentPolicy policy : policies) {
-            processPolicy(
-                policy,
-                fieldMap,
-                entityNames,
-                categoryNames,
-                purposeNames,
-                result
-            );
+        for (Record entry : entries) {
+            processLedgerEntry(entry, result);
         }
 
         ReconciliationResult finalResult = result.build();
@@ -481,184 +468,96 @@ public class CaffeineReconciliationHelper {
     }
 
     // -----------------------------------------------------------------------
-    // Internal — policy processing
+    // Internal — ledger entry processing
     // -----------------------------------------------------------------------
 
     /**
-     * Processes a single consent policy row, writing the appropriate
+     * Processes a single consent ledger record (pre-joined with policy,
+     * purpose, field, entity, and category), writing the appropriate
      * entry/entries into the Caffeine consent cache.
      *
-     * <p>Field-level policies ({@code field_id != null}) produce a single
-     * cache entry with source {@link CaffeineConsentRepository#SOURCE_FIELD}.
+     * <p>Field-level entries ({@code FIELD.FIELD_NAME != null}) produce a
+     * single cache entry with source
+     * {@link CaffeineConsentRepository#SOURCE_FIELD}.
      *
-     * <p>Category-level policies ({@code category_id != null}) fan out
-     * to all fields in the category using
-     * {@link CaffeineConsentRepository#setCategoryConsentForFields},
-     * producing one cache entry per mapped field.
+     * <p>Category-level entries ({@code CATEGORY.CATEGORY_NAME != null})
+     * fan out to all fields in the category using
+     * {@link CaffeineConsentRepository#setCategoryConsentForFields}.
      *
-     * @param policy        the consent policy row
-     * @param fieldMap      field_id → Field POJO lookup
-     * @param entityNames   entity_id → entity_name lookup
-     * @param categoryNames category_id → category_name lookup
-     * @param result        the mutable result builder to update
+     * @param entry  the joined consent ledger record
+     * @param result the mutable result builder to update
      */
-    private void processPolicy(
-        ConsentPolicy policy,
-        Map<Long, Field> fieldMap,
-        Map<Long, String> entityNames,
-        Map<Long, String> categoryNames,
-        Map<Long, String> purposeNames,
+    private void processLedgerEntry(
+        Record entry,
         ReconciliationResult.Builder result
     ) {
         try {
-            Instant expiresAt = toInstant(policy.getExpiresAt());
-            boolean granted = Boolean.TRUE.equals(policy.getGranted());
-            String subjectId = policy.getSubjectId();
-            String purposeName = purposeNames.get(policy.getPurposeId());
+            Instant expiresAt = toInstant(entry.get(CONSENT_LEDGER.EXPIRES_AT));
+            boolean granted = com.koostack.operio.plugin.consent.jooq.generated.enums.ConsentAction.GRANT.equals(entry.get(CONSENT_LEDGER.ACTION));
+            String subjectId = entry.get(CONSENT_LEDGER.SUBJECT_ID);
+            String purposeName = entry.get(PURPOSE.PURPOSE_NAME);
+            String fieldName = entry.get(FIELD.FIELD_NAME);
+            String entityName = entry.get(ENTITY.ENTITY_NAME);
+            String categoryName = entry.get(CATEGORY.CATEGORY_NAME);
 
-            if (policy.getFieldId() != null) {
-                // -- Field-level policy --
-                processFieldPolicy(
-                    policy,
-                    fieldMap,
-                    entityNames,
+            if (fieldName != null) {
+                // -- Field-level entry --
+                caffeineConsentRepo.setConsent(
                     subjectId,
+                    entityName,
+                    fieldName,
                     purposeName,
                     granted,
-                    expiresAt,
-                    result
+                    CaffeineConsentRepository.SOURCE_FIELD,
+                    expiresAt
                 );
-            } else if (policy.getCategoryId() != null) {
-                // -- Category-level policy --
-                processCategoryPolicy(
-                    policy,
-                    categoryNames,
-                    subjectId,
-                    purposeName,
-                    granted,
-                    expiresAt,
-                    result
-                );
+                result.addFieldPolicy();
+            } else if (categoryName != null) {
+                // -- Category-level entry --
+                Set<String> qualifiedFields =
+                    caffeineMappingRepo.getFieldsForCategory(categoryName);
+
+                if (qualifiedFields.isEmpty()) {
+                    log.log(
+                        Level.FINE,
+                        "Category-level entry id={0} for category ''{1}'' " +
+                            "has no mapped fields — writing 0 fan-out entries",
+                        new Object[] {
+                            entry.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                            categoryName
+                        }
+                    );
+                    result.addCategoryPolicy(0);
+                } else {
+                    caffeineConsentRepo.setCategoryConsentForFields(
+                        subjectId,
+                        purposeName,
+                        granted,
+                        expiresAt,
+                        qualifiedFields
+                    );
+                    result.addCategoryPolicy(qualifiedFields.size());
+                }
             } else {
-                // Neither field nor category — should not happen given the
-                // CHECK constraint, but handle defensively
                 log.log(
                     Level.WARNING,
-                    "Skipping consent policy {0}: both field_id and " +
-                        "category_id are null",
-                    policy.getConsentPolicyId()
+                    "Skipping consent ledger entry {0}: both field and " +
+                        "category are null",
+                    entry.get(CONSENT_LEDGER.CONSENT_LEDGER_ID)
                 );
                 result.addSkipped();
             }
         } catch (Exception e) {
             log.log(
                 Level.WARNING,
-                "Error processing consent policy id={0}: {1}",
-                new Object[] { policy.getConsentPolicyId(), e.getMessage() }
+                "Error processing consent ledger entry id={0}: {1}",
+                new Object[] {
+                    entry.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                    e.getMessage()
+                }
             );
             result.addError();
         }
-    }
-
-    /**
-     * Writes a field-level consent policy into the Caffeine cache.
-     */
-    private void processFieldPolicy(
-        ConsentPolicy policy,
-        Map<Long, Field> fieldMap,
-        Map<Long, String> entityNames,
-        String subjectId,
-        String purposeName,
-        boolean granted,
-        Instant expiresAt,
-        ReconciliationResult.Builder result
-    ) {
-        Field field = fieldMap.get(policy.getFieldId());
-        if (field == null) {
-            log.log(
-                Level.WARNING,
-                "Skipping field-level policy id={0}: field_id={1} not " +
-                    "found in field table",
-                new Object[] {
-                    policy.getConsentPolicyId(),
-                    policy.getFieldId(),
-                }
-            );
-            result.addSkipped();
-            return;
-        }
-
-        String entityName =
-            field.getEntityId() != null
-                ? entityNames.get(field.getEntityId())
-                : null;
-
-        caffeineConsentRepo.setConsent(
-            subjectId,
-            entityName,
-            field.getFieldName(),
-            purposeName,
-            granted,
-            CaffeineConsentRepository.SOURCE_FIELD,
-            expiresAt
-        );
-
-        result.addFieldPolicy();
-    }
-
-    /**
-     * Processes a category-level consent policy by fanning out to all
-     * fields in the category.
-     */
-    private void processCategoryPolicy(
-        ConsentPolicy policy,
-        Map<Long, String> categoryNames,
-        String subjectId,
-        String purposeName,
-        boolean granted,
-        Instant expiresAt,
-        ReconciliationResult.Builder result
-    ) {
-        String categoryName = categoryNames.get(policy.getCategoryId());
-        if (categoryName == null) {
-            log.log(
-                Level.WARNING,
-                "Skipping category-level policy id={0}: category_id={1} " +
-                    "not found in category table",
-                new Object[] {
-                    policy.getConsentPolicyId(),
-                    policy.getCategoryId(),
-                }
-            );
-            result.addSkipped();
-            return;
-        }
-
-        Set<String> qualifiedFields = caffeineMappingRepo.getFieldsForCategory(
-            categoryName
-        );
-
-        if (qualifiedFields.isEmpty()) {
-            log.log(
-                Level.FINE,
-                "Category-level policy id={0} for category ''{1}'' has " +
-                    "no mapped fields — writing 0 fan-out entries",
-                new Object[] { policy.getConsentPolicyId(), categoryName }
-            );
-            // Still count it as a processed category policy with 0 fan-out
-            result.addCategoryPolicy(0);
-            return;
-        }
-
-        caffeineConsentRepo.setCategoryConsentForFields(
-            subjectId,
-            purposeName,
-            granted,
-            expiresAt,
-            qualifiedFields
-        );
-
-        result.addCategoryPolicy(qualifiedFields.size());
     }
 
     // -----------------------------------------------------------------------

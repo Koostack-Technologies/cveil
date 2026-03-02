@@ -2,9 +2,8 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
@@ -240,29 +239,29 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RevokeRequest("user-1", validScope(), null);
+            var req = new RevokeRequest("user-1", validScope());
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullSubject_violation() {
-            assertFalse(validator.validate(new RevokeRequest(null, validScope(), null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest(null, validScope())).isEmpty());
         }
 
         @Test
         void blankSubject_violation() {
-            assertFalse(validator.validate(new RevokeRequest("", validScope(), null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest("", validScope())).isEmpty());
         }
 
         @Test
         void nullScope_violation() {
-            assertFalse(validator.validate(new RevokeRequest("user-1", null, null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest("user-1", null)).isEmpty());
         }
 
         @Test
         void invalidNestedScope_cascades() {
             var badScope = new ConsentScopeDto(null, null, null, null);
-            var req = new RevokeRequest("user-1", badScope, null);
+            var req = new RevokeRequest("user-1", badScope);
             var violations = validator.validate(req);
             // Should have at least 2 violations: category + fieldName from nested scope
             assertTrue(violations.size() >= 2);
@@ -445,90 +444,52 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RegisterFieldRequest("email", "User", "User email address");
+            var req = new RegisterFieldRequest("email", "User", "User email address", null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void minimalValid_noViolations() {
             // entityName and description are optional
-            var req = new RegisterFieldRequest("email", null, null);
+            var req = new RegisterFieldRequest("email", null, null, null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullFieldName_violation() {
-            assertFalse(validator.validate(new RegisterFieldRequest(null, null, null)).isEmpty());
+            assertFalse(validator.validate(new RegisterFieldRequest(null, null, null, null)).isEmpty());
         }
 
         @Test
         void blankFieldName_violation() {
-            assertFalse(validator.validate(new RegisterFieldRequest("  ", null, null)).isEmpty());
+            assertFalse(validator.validate(new RegisterFieldRequest("  ", null, null, null)).isEmpty());
         }
 
         @Test
         void fieldNameTooLong_violation() {
             assertFalse(validator.validate(
-                new RegisterFieldRequest(stringOfLength(256), null, null)
+                new RegisterFieldRequest(stringOfLength(256), null, null, null)
             ).isEmpty());
         }
 
         @Test
         void entityNameTooLong_violation() {
             assertFalse(validator.validate(
-                new RegisterFieldRequest("email", stringOfLength(256), null)
+                new RegisterFieldRequest("email", stringOfLength(256), null, null)
             ).isEmpty());
         }
 
         @Test
         void descriptionTooLong_violation() {
             assertFalse(validator.validate(
-                new RegisterFieldRequest("email", null, stringOfLength(1001))
+                new RegisterFieldRequest("email", null, stringOfLength(1001), null)
             ).isEmpty());
         }
 
         @Test
         void maxLengthDescription_noViolations() {
             assertTrue(validator.validate(
-                new RegisterFieldRequest("email", null, stringOfLength(1000))
-            ).isEmpty());
-        }
-    }
-
-    // =======================================================================
-    // RegisterCategoryRequest
-    // =======================================================================
-
-    @Nested
-    @DisplayName("RegisterCategoryRequest")
-    class RegisterCategoryRequestValidation {
-
-        @Test
-        void valid_noViolations() {
-            assertTrue(validator.validate(new RegisterCategoryRequest("PII", "Personally identifiable")).isEmpty());
-        }
-
-        @Test
-        void nullCategoryName_violation() {
-            assertFalse(validator.validate(new RegisterCategoryRequest(null, null)).isEmpty());
-        }
-
-        @Test
-        void blankCategoryName_violation() {
-            assertFalse(validator.validate(new RegisterCategoryRequest("", null)).isEmpty());
-        }
-
-        @Test
-        void categoryNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterCategoryRequest(stringOfLength(256), null)
-            ).isEmpty());
-        }
-
-        @Test
-        void descriptionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterCategoryRequest("PII", stringOfLength(1001))
+                new RegisterFieldRequest("email", null, stringOfLength(1000), null)
             ).isEmpty());
         }
     }
@@ -574,154 +535,98 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RegisterRegulationRequest(
-                "GDPR", "General Data Protection Regulation",
-                "EU", "EU data protection regulation", "https://gdpr.eu"
-            );
+            var req = new RegisterRegulationRequest("GDPR", "EU General Data Protection Regulation");
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void minimalValid_noViolations() {
-            // description and url are optional
-            var req = new RegisterRegulationRequest("GDPR", "GDPR Full", "EU", null, null);
+            // description is optional
+            var req = new RegisterRegulationRequest("GDPR", null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullRegulationName_violation() {
-            var req = new RegisterRegulationRequest(null, "Full Name", "EU", null, null);
+            var req = new RegisterRegulationRequest(null, null);
             assertFalse(validator.validate(req).isEmpty());
         }
 
         @Test
         void blankRegulationName_violation() {
-            var req = new RegisterRegulationRequest("", "Full Name", "EU", null, null);
+            var req = new RegisterRegulationRequest("", null);
             assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void nullFullName_violation() {
-            var req = new RegisterRegulationRequest("GDPR", null, "EU", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void blankFullName_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "  ", "EU", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void nullJurisdiction_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "Full Name", null, null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void blankJurisdiction_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "Full Name", "", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void allRequiredFieldsNull_multipleViolations() {
-            var req = new RegisterRegulationRequest(null, null, null, null, null);
-            var violations = validator.validate(req);
-            assertTrue(violations.size() >= 3,
-                "Expected at least 3 violations (regulationName, fullName, jurisdiction)");
         }
 
         @Test
         void regulationNameTooLong_violation() {
             assertFalse(validator.validate(
-                new RegisterRegulationRequest(stringOfLength(256), "Full", "EU", null, null)
-            ).isEmpty());
-        }
-
-        @Test
-        void fullNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", stringOfLength(501), "EU", null, null)
-            ).isEmpty());
-        }
-
-        @Test
-        void jurisdictionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", stringOfLength(101), null, null)
+                new RegisterRegulationRequest(stringOfLength(256), null)
             ).isEmpty());
         }
 
         @Test
         void descriptionTooLong_violation() {
             assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", "EU", stringOfLength(1001), null)
-            ).isEmpty());
-        }
-
-        @Test
-        void urlTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", "EU", null, stringOfLength(2001))
+                new RegisterRegulationRequest("GDPR", stringOfLength(1001))
             ).isEmpty());
         }
     }
 
     // =======================================================================
-    // LinkFieldCategoryRequest
+    // AssignFieldCategoryRequest
     // =======================================================================
 
     @Nested
-    @DisplayName("LinkFieldCategoryRequest")
-    class LinkFieldCategoryRequestValidation {
+    @DisplayName("AssignFieldCategoryRequest")
+    class AssignFieldCategoryRequestValidation {
 
         @Test
         void valid_noViolations() {
             assertTrue(validator.validate(
-                new LinkFieldCategoryRequest("email", "User", "PII")
+                new AssignFieldCategoryRequest("email", "User", "PII", null)
             ).isEmpty());
         }
 
         @Test
         void validWithoutEntity_noViolations() {
             assertTrue(validator.validate(
-                new LinkFieldCategoryRequest("email", null, "PII")
+                new AssignFieldCategoryRequest("email", null, "PII", null)
             ).isEmpty());
         }
 
         @Test
         void nullFieldName_violation() {
             assertFalse(validator.validate(
-                new LinkFieldCategoryRequest(null, null, "PII")
+                new AssignFieldCategoryRequest(null, null, "PII", null)
             ).isEmpty());
         }
 
         @Test
         void blankFieldName_violation() {
             assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("", null, "PII")
+                new AssignFieldCategoryRequest("", null, "PII", null)
             ).isEmpty());
         }
 
         @Test
         void nullCategoryName_violation() {
             assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("email", null, null)
+                new AssignFieldCategoryRequest("email", null, null, null)
             ).isEmpty());
         }
 
         @Test
         void blankCategoryName_violation() {
             assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("email", null, "  ")
+                new AssignFieldCategoryRequest("email", null, "  ", null)
             ).isEmpty());
         }
 
         @Test
         void bothRequired_nullBoth_multipleViolations() {
             var violations = validator.validate(
-                new LinkFieldCategoryRequest(null, null, null)
+                new AssignFieldCategoryRequest(null, null, null, null)
             );
             assertTrue(violations.size() >= 2);
         }
@@ -738,44 +643,45 @@ class DtoValidationTest {
         @Test
         void valid_noViolations() {
             assertTrue(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", "consent")
+                new LinkPurposeRegulationRequest("marketing", "GDPR", "consent", null, null)
             ).isEmpty());
         }
 
         @Test
         void nullPurposeName_violation() {
             assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest(null, "GDPR", "consent")
+                new LinkPurposeRegulationRequest(null, "GDPR", "consent", null, null)
             ).isEmpty());
         }
 
         @Test
         void nullRegulationName_violation() {
             assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", null, "consent")
+                new LinkPurposeRegulationRequest("marketing", null, "consent", null, null)
             ).isEmpty());
         }
 
         @Test
-        void nullLegalBasis_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", null)
+        void nullLawfulBasis_noViolation() {
+            assertTrue(validator.validate(
+                new LinkPurposeRegulationRequest("marketing", "GDPR", null, null, null)
             ).isEmpty());
         }
 
         @Test
-        void blankLegalBasis_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", "")
+        void blankLawfulBasis_noViolation() {
+            assertTrue(validator.validate(
+                new LinkPurposeRegulationRequest("marketing", "GDPR", "", null, null)
             ).isEmpty());
         }
 
         @Test
         void allNull_multipleViolations() {
             var violations = validator.validate(
-                new LinkPurposeRegulationRequest(null, null, null)
+                new LinkPurposeRegulationRequest(null, null, null, null, null)
             );
-            assertTrue(violations.size() >= 3);
+            assertTrue(violations.size() >= 2,
+                "Expected at least 2 violations (purposeName, regulationName)");
         }
     }
 

@@ -291,19 +291,16 @@ class OpenApiAnnotationTest {
             Method m = ConsentResource.class.getMethod(
                 "subjectHistory",
                 jakarta.ws.rs.core.SecurityContext.class,
-                String.class,
-                String.class,
-                String.class,
                 String.class
             );
             long paramCount = Arrays.stream(m.getParameters())
                 .filter(p -> p.isAnnotationPresent(Parameter.class))
                 .count();
-            // 4 params: subjectId (path), fieldName, entityName, purposeName (query)
+            // 1 param: subjectId (path)
             assertEquals(
-                4,
+                1,
                 paramCount,
-                "subjectHistory should have 4 @Parameter annotations"
+                "subjectHistory should have 1 @Parameter annotation"
             );
         }
 
@@ -378,13 +375,13 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("admin endpoints have 11 distinct operation IDs")
+        @DisplayName("admin endpoints have 19 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(AdminResource.class);
             assertEquals(
-                11,
+                19,
                 opCount,
-                "AdminResource should have 11 @Operation methods"
+                "AdminResource should have 19 @Operation methods"
             );
         }
 
@@ -612,11 +609,11 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 9 consent + 11 admin + 8 platform + 1 health = 29
+            // 9 consent + 19 admin + 8 platform + 1 health = 37
             assertEquals(
-                29,
+                37,
                 allIds.size(),
-                "Expected 29 globally unique operationIds"
+                "Expected 37 globally unique operationIds"
             );
         }
 

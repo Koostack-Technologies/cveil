@@ -93,33 +93,47 @@ public class PurposeRegulationRepository {
 
     /**
      * Creates the link between a purpose and a regulation if it does not
-     * already exist. If the link already exists, the {@code legal_basis},
-     * {@code description}, and audit columns are updated.
+     * already exist. If the link already exists, the columns are updated.
      *
      * <p>Uses an {@code INSERT ... ON CONFLICT DO UPDATE} so the call is
-     * safely idempotent and allows updating the legal basis on re-link.
+     * safely idempotent.
      *
      * @param purposeId    the purpose to link
      * @param regulationId the regulation to link
-     * @param legalBasis   the legal basis for this purpose under this
+     * @param lawfulBasis  the lawful basis for this purpose under this
      *                     regulation (e.g. "consent", "legitimate interest"),
      *                     or {@code null}
+     * @param onGranted    the masking type applied when consent is granted,
+     *                     or {@code null} for the database default (PLAINTEXT)
+     * @param onDenied     the masking type applied when consent is denied,
+     *                     or {@code null} for the database default (REDACT_ALL)
      * @param actor        the identity performing the operation (may be {@code null})
      */
-    public void link(Long purposeId, Long regulationId, String legalBasis, String actor) {
+    public void link(Long purposeId, Long regulationId, String lawfulBasis,
+                     String onGranted, String onDenied, String actor) {
         LocalDateTime now = LocalDateTime.now();
 
-        dsl.insertInto(PURPOSE_REGULATION)
+        var insert = dsl.insertInto(PURPOSE_REGULATION)
            .set(PURPOSE_REGULATION.PURPOSE_ID, purposeId)
            .set(PURPOSE_REGULATION.REGULATION_ID, regulationId)
-           .set(PURPOSE_REGULATION.LEGAL_BASIS, legalBasis)
+           .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
            .set(PURPOSE_REGULATION.CREATED_AT, now)
            .set(PURPOSE_REGULATION.CREATED_BY, actor)
            .set(PURPOSE_REGULATION.UPDATED_AT, now)
-           .set(PURPOSE_REGULATION.UPDATED_BY, actor)
-           .onConflict(PURPOSE_REGULATION.PURPOSE_ID, PURPOSE_REGULATION.REGULATION_ID)
+           .set(PURPOSE_REGULATION.UPDATED_BY, actor);
+
+        if (onGranted != null) {
+            insert.set(PURPOSE_REGULATION.ON_GRANTED,
+                com.koostack.operio.plugin.consent.jooq.generated.enums.MaskingType.lookupLiteral(onGranted));
+        }
+        if (onDenied != null) {
+            insert.set(PURPOSE_REGULATION.ON_DENIED,
+                com.koostack.operio.plugin.consent.jooq.generated.enums.MaskingType.lookupLiteral(onDenied));
+        }
+
+        insert.onConflict(PURPOSE_REGULATION.PURPOSE_ID, PURPOSE_REGULATION.REGULATION_ID)
            .doUpdate()
-           .set(PURPOSE_REGULATION.LEGAL_BASIS, legalBasis)
+           .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
            .set(PURPOSE_REGULATION.UPDATED_AT, now)
            .set(PURPOSE_REGULATION.UPDATED_BY, actor)
            .execute();

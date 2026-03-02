@@ -1,8 +1,8 @@
 package com.koostack.operio.tenant.event.jooq;
 
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
-import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.tenant.consent.events.CategoryRegisteredEvent;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
@@ -34,7 +34,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @BeforeAll
     static void registerTestEventType() {
         service.registerEventType(new RegisterEventTypeInput<>(
-            ConsentEventTypes.CATEGORY_REGISTERED, "Category Registered", CategoryRegisteredEvent.class
+            ConsentEventTypes.REGULATION_REGISTERED, "Regulation Registered", RegulationRegisteredEvent.class
         ));
     }
 
@@ -45,13 +45,13 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(1)
     void publishEventInsertsEventAndHydratesAggregate() {
-        String categoryName = "test-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        String regulationName = "test-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
 
-        var payload = new CategoryRegisteredEvent(categoryName, "Test category description");
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        var payload = new RegulationRegisteredEvent(regulationName, "Test regulation description");
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
         service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
         ));
 
         var record = dsl.selectFrom(EVENT)
@@ -59,15 +59,15 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             .fetchOne();
 
         assertNotNull(record);
-        assertEquals(CategoryAggregate.AGGREGATE_TYPE, record.getAggregateType());
-        assertEquals(ConsentEventTypes.CATEGORY_REGISTERED, record.getEventType());
+        assertEquals(RegulationAggregate.AGGREGATE_TYPE, record.getAggregateType());
+        assertEquals(ConsentEventTypes.REGULATION_REGISTERED, record.getEventType());
         assertEquals(1L, record.getVersion());
         assertEquals(TEST_TENANT, record.getTenantId());
 
-        CategoryAggregate hydrated = service.getAggregate(key, CategoryAggregate.class);
+        RegulationAggregate hydrated = service.getAggregate(key, RegulationAggregate.class);
 
-        assertEquals(categoryName, hydrated.categoryName());
-        assertEquals("Test category description", hydrated.description());
+        assertEquals(regulationName, hydrated.regulationName());
+        assertEquals("Test regulation description", hydrated.description());
     }
 
     // -----------------------------------------------------------------------
@@ -77,17 +77,17 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(2)
     void getAggregateVersionReturnsCorrectVersion() {
-        String categoryName = "ver-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        String regulationName = "ver-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         Long v0 = service.getAggregateVersion(key);
         assertEquals(0L, v0, "Non-existent aggregate should have version 0");
 
         for (int i = 1; i <= 3; i++) {
-            var payload = new CategoryRegisteredEvent(categoryName, "description-v" + i);
+            var payload = new RegulationRegisteredEvent(regulationName, "description-v" + i);
             service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
             ));
         }
 
@@ -102,24 +102,24 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(3)
     void snapshotCreatedAfterTwentyEvents() throws Exception {
-        String categoryName = "snap-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        String regulationName = "snap-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
-            var payload = new CategoryRegisteredEvent(categoryName, "snap-desc-v" + i);
+            var payload = new RegulationRegisteredEvent(regulationName, "snap-desc-v" + i);
             service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
             ));
         }
 
         // Trigger hydration to enqueue snapshot
-        service.getAggregate(key, CategoryAggregate.class);
+        service.getAggregate(key, RegulationAggregate.class);
         TimeUnit.SECONDS.sleep(2);
 
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(CategoryAggregate.AGGREGATE_TYPE))
+            .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(RegulationAggregate.AGGREGATE_TYPE))
             .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
             .limit(1)
             .fetchOne();
@@ -136,31 +136,31 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Test
     @Order(4)
     void rehydrateFromSnapshotReturnsCorrectState() throws Exception {
-        String categoryName = "rehydrate-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        String regulationName = "rehydrate-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
-            var payload = new CategoryRegisteredEvent(categoryName, "pre-snap-" + i);
+            var payload = new RegulationRegisteredEvent(regulationName, "pre-snap-" + i);
             service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
             ));
         }
 
-        service.getAggregate(key, CategoryAggregate.class);
+        service.getAggregate(key, RegulationAggregate.class);
         TimeUnit.SECONDS.sleep(2);
 
         // Post-snapshot events
         for (int i = 22; i <= 25; i++) {
-            var payload = new CategoryRegisteredEvent(categoryName, "post-snap-" + i);
+            var payload = new RegulationRegisteredEvent(regulationName, "post-snap-" + i);
             service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
             ));
         }
 
-        CategoryAggregate hydrated = service.getAggregate(key, CategoryAggregate.class);
+        RegulationAggregate hydrated = service.getAggregate(key, RegulationAggregate.class);
 
-        assertEquals(categoryName, hydrated.categoryName());
+        assertEquals(regulationName, hydrated.regulationName());
         assertEquals("post-snap-25", hydrated.description());
     }
 
@@ -173,12 +173,12 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void outboxPublishesToRedisWithAllFields() throws Exception {
         int beforeCount = consumedEvents.size();
 
-        String categoryName = "redis-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
-        var payload = new CategoryRegisteredEvent(categoryName, "Redis test");
+        String regulationName = "redis-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        var payload = new RegulationRegisteredEvent(regulationName, "Redis test");
         service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
         ));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
@@ -208,25 +208,25 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     @Order(20)
     void multiTenantAggregateIsolation() {
         String tenantA = TEST_TENANT;
-        String categoryName = "mt-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        String regulationName = "mt-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
 
-        var payload1 = new CategoryRegisteredEvent(categoryName, "TenantA-v1");
-        AggregateKey keyA = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, tenantA);
+        var payload1 = new RegulationRegisteredEvent(regulationName, "TenantA-v1");
+        AggregateKey keyA = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantA);
         service.publishEvent(PublishDomainEventInput.of(
-            tenantA, ConsentEventTypes.CATEGORY_REGISTERED, keyA, payload1
+            tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload1
         ));
 
-        CategoryAggregate hydratedA = service.getAggregate(keyA, CategoryAggregate.class);
+        RegulationAggregate hydratedA = service.getAggregate(keyA, RegulationAggregate.class);
         assertEquals("TenantA-v1", hydratedA.description());
 
         // Publish a second version under the same tenant and verify version increments
-        var payload2 = new CategoryRegisteredEvent(categoryName, "TenantA-Updated");
+        var payload2 = new RegulationRegisteredEvent(regulationName, "TenantA-Updated");
         service.publishEvent(PublishDomainEventInput.of(
-            tenantA, ConsentEventTypes.CATEGORY_REGISTERED, keyA, payload2
+            tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload2
         ));
 
-        CategoryAggregate hydratedA2 = service.getAggregate(keyA, CategoryAggregate.class);
+        RegulationAggregate hydratedA2 = service.getAggregate(keyA, RegulationAggregate.class);
         assertEquals("TenantA-Updated", hydratedA2.description());
     }
 
@@ -235,12 +235,12 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void multiTenantRedisEventsCarryCorrectTenantId() throws Exception {
         int beforeCount = consumedEvents.size();
 
-        String categoryName = "mt-redis-category-" + UUID.randomUUID();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        AggregateKey key = new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, TEST_TENANT);
-        var payload = new CategoryRegisteredEvent(categoryName, "MT-Redis test");
+        String regulationName = "mt-redis-regulation-" + UUID.randomUUID();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        var payload = new RegulationRegisteredEvent(regulationName, "MT-Redis test");
         service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.CATEGORY_REGISTERED, key, payload
+            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
         ));
 
         awaitConsumedEvents(beforeCount + 1, 6000);

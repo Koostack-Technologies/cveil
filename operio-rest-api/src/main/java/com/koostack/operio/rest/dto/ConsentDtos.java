@@ -2,11 +2,10 @@ package com.koostack.operio.rest.dto;
 
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.ConsentAuditEntry;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.DecisionDetail;
-import com.koostack.operio.core.models.PolicySummaryEntry;
+import com.koostack.operio.core.models.SubjectConsentView;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -68,10 +67,8 @@ public final class ConsentDtos {
     /**
      * Request body for {@code POST /api/v1/consent/revoke}.
      *
-     * @param subject   the data subject identifier
-     * @param scope     the consent scope to revoke
-     * @param expiresAt optional expiration timestamp for the revocation,
-     *                  or {@code null} for permanent revocation
+     * @param subject the data subject identifier
+     * @param scope   the consent scope to revoke
      */
     public record RevokeRequest(
         @NotBlank(message = "subject must not be blank") @Size(
@@ -80,8 +77,7 @@ public final class ConsentDtos {
         ) String subject,
         @NotNull(
             message = "scope must not be null"
-        ) @Valid ConsentScopeDto scope,
-        Instant expiresAt
+        ) @Valid ConsentScopeDto scope
     ) {}
 
     // ===================================================================
@@ -89,7 +85,7 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Request body for {@code POST /api/v1/consent/grant-batch}.
+     * Request body for {@code POST /api/v1/consent/grant-all}.
      *
      * @param subject the data subject identifier
      * @param grants  the list of scopes (with optional expiration) to grant
@@ -108,7 +104,7 @@ public final class ConsentDtos {
     ) {}
 
     /**
-     * Request body for {@code POST /api/v1/consent/revoke-batch}.
+     * Request body for {@code POST /api/v1/consent/revoke-all}.
      *
      * @param subject the data subject identifier
      * @param revokes the list of scopes (with optional expiration) to revoke
@@ -342,107 +338,6 @@ public final class ConsentDtos {
     }
 
     // ===================================================================
-    // Subject summary / history
-    // ===================================================================
-
-    /**
-     * DTO for a single consent policy summary row returned by
-     * {@code GET /api/v1/consent/subjects/{id}/summary}.
-     *
-     * @param subject      the data subject identifier
-     * @param fieldName    the field name this policy applies to
-     * @param entityName   the entity name, or {@code null}
-     * @param categoryName the category name, or {@code null}
-     * @param purposeName  the purpose name, or {@code null}
-     * @param status       the consent status ({@code "GRANTED"} or
-     *                     {@code "REVOKED"})
-     * @param expiresAt    when the consent expires, or {@code null}
-     * @param createdAt    when the policy row was created
-     */
-    public record PolicySummaryDto(
-        String subject,
-        String fieldName,
-        String entityName,
-        String categoryName,
-        String purposeName,
-        String status,
-        Instant expiresAt,
-        Instant createdAt
-    ) {
-        /**
-         * Creates a DTO from the core {@link PolicySummaryEntry}.
-         *
-         * @param entry the core policy summary entry
-         * @return the DTO representation
-         */
-        public static PolicySummaryDto fromModel(PolicySummaryEntry entry) {
-            return new PolicySummaryDto(
-                entry.subject(),
-                entry.fieldName(),
-                entry.entityName(),
-                entry.categoryName(),
-                entry.purposeName(),
-                entry.status(),
-                entry.expiresAt(),
-                entry.createdAt()
-            );
-        }
-    }
-
-    /**
-     * DTO for a single consent audit log entry returned by
-     * {@code GET /api/v1/consent/subjects/{id}/history}.
-     *
-     * <p>Each entry represents one grant or revoke event with full
-     * provenance information for regulatory compliance.
-     *
-     * @param subject      the data subject identifier
-     * @param fieldName    the field this event applies to
-     * @param entityName   the entity name, or {@code null}
-     * @param categoryName the category name, or {@code null}
-     * @param purposeName  the purpose name, or {@code null}
-     * @param action       the action performed ({@code "GRANTED"} or
-     *                     {@code "REVOKED"})
-     * @param expiresAt    when the consent expires, or {@code null}
-     * @param actor        the identity that performed the action
-     * @param ipAddress    the originating IP address, or {@code null}
-     * @param timestamp    when the event occurred
-     */
-    public record ConsentAuditEntryDto(
-        String subject,
-        String fieldName,
-        String entityName,
-        String categoryName,
-        String purposeName,
-        String action,
-        Instant expiresAt,
-        String actor,
-        String ipAddress,
-        Instant timestamp
-    ) {
-        /**
-         * Creates a DTO from the core {@link ConsentAuditEntry}.
-         *
-         * @param entry the core audit entry
-         * @return the DTO representation
-         */
-        public static ConsentAuditEntryDto fromModel(ConsentAuditEntry entry) {
-            return new ConsentAuditEntryDto(
-                entry.subject(),
-                entry.fieldName(),
-                entry.entityName(),
-                entry.categoryName(),
-                entry.purposeName(),
-                entry.action(),
-                entry.expiresAt(),
-                entry.actor(),
-                entry.ipAddress(),
-                entry.timestamp()
-            );
-        }
-    }
-
-    // ===================================================================
     // DSAR (Data Subject Access Request)
     // ===================================================================
 
@@ -450,14 +345,12 @@ public final class ConsentDtos {
      * Response body for {@code GET /api/v1/consent/subjects/{id}/export}.
      *
      * <p>Contains a complete export of all consent-related data held for
-     * a subject, including active policies, audit trail entries, and
-     * cached consent keys (GDPR Article 20 — data portability).
+     * a subject (GDPR Article 20 — data portability).
      *
-     * @param subject             the data subject identifier
-     * @param consentPolicies     all active consent policy summaries for the subject
-     * @param auditLogEntries     the complete audit trail of consent changes
-     * @param cachedKeyCount      the number of cached consent keys in Redis (informational)
-     * @param exportedAt          when the export was generated
+     * @param subject         the data subject identifier
+     * @param consent         the subject's current consent ledger state
+     * @param cachedKeyCount  the number of cached consent keys in Redis (informational)
+     * @param exportedAt      when the export was generated
      */
     @Schema(
         description = "Complete export of all consent data for a subject (GDPR Article 20)"
@@ -468,13 +361,8 @@ public final class ConsentDtos {
             example = "user_123"
         ) String subject,
         @Schema(
-            description = "All active consent policy summaries for the subject",
-            example = "[]"
-        ) List<PolicySummaryDto> consentPolicies,
-        @Schema(
-            description = "Complete audit trail of consent changes, most recent first",
-            example = "[]"
-        ) List<ConsentAuditEntryDto> auditLogEntries,
+            description = "The subject's current consent ledger state"
+        ) SubjectConsentView consent,
         @Schema(
             description = "Number of cached consent keys in Redis (informational)",
             example = "5"
@@ -492,13 +380,12 @@ public final class ConsentDtos {
      * deletion operation. Contains counts of deleted records and a unique
      * request ID for forensic traceability.
      *
-     * @param subject            the data subject identifier
-     * @param deletionRequestId  unique request ID for this erasure operation
-     * @param policiesDeleted    number of consent policies deleted
-     * @param cachedKeysDeleted  number of cached keys deleted from Redis
-     * @param auditEntriesDeleted number of audit log entries deleted
-     * @param status             {@code "SUCCESS"} or {@code "PARTIAL_FAILURE"}
-     * @param completedAt        when the deletion was completed
+     * @param subject                the data subject identifier
+     * @param deletionRequestId      unique request ID for this erasure operation
+     * @param ledgerEntriesRevoked   number of consent ledger entries revoked
+     * @param cachedKeysDeleted      number of cached keys deleted from Redis
+     * @param status                 {@code "SUCCESS"} or {@code "PARTIAL_FAILURE"}
+     * @param completedAt            when the deletion was completed
      */
     @Schema(
         description = "Confirmation receipt for a data subject erasure request"
@@ -513,17 +400,13 @@ public final class ConsentDtos {
             example = "550e8400-e29b-41d4-a716-446655440000"
         ) String deletionRequestId,
         @Schema(
-            description = "Number of consent policies deleted",
+            description = "Number of consent ledger entries revoked",
             example = "12"
-        ) long policiesDeleted,
+        ) long ledgerEntriesRevoked,
         @Schema(
             description = "Number of cached keys deleted from Redis",
             example = "8"
         ) long cachedKeysDeleted,
-        @Schema(
-            description = "Number of audit log entries deleted",
-            example = "45"
-        ) long auditEntriesDeleted,
         @Schema(
             description = "Status of the deletion operation",
             enumeration = { "SUCCESS", "PARTIAL_FAILURE" },

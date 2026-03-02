@@ -9,6 +9,7 @@ import com.koostack.operio.plugin.consent.sync.embedded.EmbeddedConsentSyncServi
 import com.koostack.operio.plugin.consent.sync.embedded.ReconciliationResult;
 import com.koostack.operio.plugin.consent.sync.embedded.ReconciliationStrategy;
 import com.koostack.operio.plugin.discovery.sensitive.annotation.AnnotationDiscoveryConfig;
+import com.koostack.operio.core.event.EventService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -23,13 +24,13 @@ import java.util.logging.Logger;
  *
  * <p>Wires:
  * <ul>
- *   <li>{@code ConsentSyncService} ("embedded-sync") — dual-write
- *       coordinator that writes to the relational DB and syncs to the
+ *   <li>{@code EmbeddedConsentSyncServiceImpl} ("embedded-sync") — dual-write
+ *       coordinator that writes via the command service and syncs to the
  *       Caffeine cache</li>
  *   <li>{@code ConsentDecisionService} ("caffeine") — Caffeine-backed
  *       consent evaluation (O(1) in-memory lookup per scope)</li>
- *   <li>{@code ConsentAdminService} ("jooq") — standalone admin provider
- *       exposed for schema registration (discovery pipeline)</li>
+ *   <li>{@code ConsentAdminCommandService} / {@code ConsentAdminQueryService} ("jooq")
+ *       — standalone admin providers for schema registration (discovery pipeline)</li>
  *   <li>{@code SensitiveDiscovery} ("sensitive-annotation-discovery") —
  *       annotation-based field/category discovery (optional — only wired
  *       when an {@link AnnotationDiscoveryConfig} is provided)</li>
@@ -39,7 +40,7 @@ import java.util.logging.Logger;
  * <p>Because the Caffeine cache is in-process (unlike Redis, which is an
  * external shared store), the bundle must ensure that the sync service's
  * internal {@code CaffeineConsentDecisionService} and
- * {@code JooqConsentAdminService} instances are the <strong>same
+ * {@code JooqConsentAdminCommandService} instances are the <strong>same
  * objects</strong> wired into the builder as the consent decision and admin
  * providers respectively. The bundle achieves this by:
  * <ol>
@@ -48,21 +49,20 @@ import java.util.logging.Logger;
  *       {@link EmbeddedConsentSyncServiceConfig}.</li>
  *   <li>Extracting the sync service's internal
  *       {@code CaffeineConsentDecisionService} and
- *       {@code JooqConsentAdminService} via the accessor methods
+ *       {@code JooqConsentAdminCommandService} via the accessor methods
  *       {@link EmbeddedConsentSyncServiceImpl#caffeineDecisionService()}
- *       and {@link EmbeddedConsentSyncServiceImpl#jooqAdminService()}.</li>
+ *       and {@link EmbeddedConsentSyncServiceImpl#commandService()}.</li>
  *   <li>Wiring those <em>same instances</em> into the builder via the
  *       instance-accepting overloads
  *       {@link Operio.Builder#withConsentProvider(
  *       com.koostack.operio.core.service.ConsentDecisionService)} and
- *       {@link Operio.Builder#withConsentAdminProvider(
- *       com.koostack.operio.core.service.ConsentAdminService)}.</li>
+ *       the consent admin command/query provider setters.</li>
  * </ol>
  *
  * <p>This guarantees that consent writes (via the sync service) populate
  * the exact Caffeine cache that consent reads (via the decision service)
- * query, and that schema registration (via the admin service) targets the
- * exact H2 database that the sync service writes consent policies to.
+ * query, and that schema registration (via the command service) targets the
+ * exact H2 database that the sync service writes consent data to.
  *
  * <p>When an {@code appName} is supplied it is set on the builder via
  * {@link Operio.Builder#withAppName(String)} so that diagnostic logging
@@ -111,7 +111,7 @@ import java.util.logging.Logger;
  *
  * @see EmbeddedConsentSyncServiceImpl
  * @see com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionService
- * @see com.koostack.operio.plugin.consent.jooq.JooqConsentAdminService
+ * @see com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService
  */
 public class EmbeddedConsentBundle implements PluginBundle {
 
@@ -130,6 +130,7 @@ public class EmbeddedConsentBundle implements PluginBundle {
     private final JooqConsentAdminServiceConfig jooqConfig;
     private final CaffeineConsentDecisionServiceConfig caffeineConfig;
     private final AnnotationDiscoveryConfig discoveryConfig;
+    private final EventService<?> eventService;
     private boolean autoRegisterMetadata = true;
     private ReconciliationStrategy reconcileOnStartup;
 
@@ -255,10 +256,35 @@ public class EmbeddedConsentBundle implements PluginBundle {
         CaffeineConsentDecisionServiceConfig caffeineConfig,
         AnnotationDiscoveryConfig discoveryConfig
     ) {
+        this(appName, jooqConfig, caffeineConfig, discoveryConfig, null);
+    }
+
+    /**
+     * Creates a fully embedded bundle with all options including an event
+     * service for the CQRS command pipeline.
+     *
+     * @param appName         the application name, or {@code null}
+     * @param jooqConfig      configuration for the jOOQ-backed admin
+     *                        service, or {@code null} for default H2
+     * @param caffeineConfig  configuration for the Caffeine-backed decision
+     *                        service, or {@code null} for defaults
+     * @param discoveryConfig configuration for annotation discovery, or
+     *                        {@code null} to skip discovery wiring
+     * @param eventService    the event service for the command pipeline,
+     *                        or {@code null} for cache-only mode
+     */
+    public EmbeddedConsentBundle(
+        String appName,
+        JooqConsentAdminServiceConfig jooqConfig,
+        CaffeineConsentDecisionServiceConfig caffeineConfig,
+        AnnotationDiscoveryConfig discoveryConfig,
+        EventService<?> eventService
+    ) {
         this.appName = appName;
         this.jooqConfig = jooqConfig;
         this.caffeineConfig = caffeineConfig;
         this.discoveryConfig = discoveryConfig;
+        this.eventService = eventService;
     }
 
     // -----------------------------------------------------------------------
@@ -367,17 +393,11 @@ public class EmbeddedConsentBundle implements PluginBundle {
      *   <li>Set the application name (if provided).</li>
      *   <li>Create and configure the
      *       {@link EmbeddedConsentSyncServiceImpl} with the composite
-     *       config — this internally creates the
-     *       {@code JooqConsentAdminService} and
-     *       {@code CaffeineConsentDecisionService}.</li>
-     *   <li>Wire the sync service into the builder (handles dual-write
-     *       grant/revoke operations).</li>
+     *       config — this internally creates the query service, command
+     *       service, and {@code CaffeineConsentDecisionService}.</li>
      *   <li>Extract the sync service's internal decision service and wire
      *       it as the consent provider (handles reads — same Caffeine
      *       cache the sync writes to).</li>
-     *   <li>Extract the sync service's internal admin service and wire it
-     *       as the admin provider (handles schema registration — same H2
-     *       database the sync writes to).</li>
      *   <li>Optionally wire annotation-based discovery.</li>
      * </ol>
      *
@@ -404,22 +424,18 @@ public class EmbeddedConsentBundle implements PluginBundle {
                 ? caffeineConfig
                 : new CaffeineConsentDecisionServiceConfig();
 
-        // Create the sync service — this internally creates the jOOQ admin
-        // and Caffeine decision service instances.
+        // Create the sync service — this internally creates the query,
+        // command, and Caffeine decision service instances.
         EmbeddedConsentSyncServiceImpl syncService =
             new EmbeddedConsentSyncServiceImpl();
         syncService.configure(
             new EmbeddedConsentSyncServiceConfig(
                 effectiveJooq,
                 effectiveCaffeine,
-                autoRegisterMetadata
+                autoRegisterMetadata,
+                eventService
             )
         );
-
-        // Dual-write: DB + Caffeine sync (handles both write-path admin
-        // and cache sync in one plugin — no separate admin provider needed
-        // for consent grant/revoke operations)
-        builder.withConsentSyncProvider(syncService);
 
         // Read-path: Caffeine evaluation (O(1) in-memory lookups).
         // Uses the SAME CaffeineConsentDecisionService instance that the
@@ -427,12 +443,6 @@ public class EmbeddedConsentBundle implements PluginBundle {
         // cache is in-process and cannot be shared between separate
         // instances (unlike Redis).
         builder.withConsentProvider(syncService.caffeineDecisionService());
-
-        // Standalone admin provider for schema registration (discovery
-        // pipeline). Uses the SAME JooqConsentAdminService instance that
-        // the sync service writes to — both point at the same H2 in-memory
-        // database.
-        builder.withConsentAdminProvider(syncService.jooqAdminService());
 
         // Optional: annotation-based discovery
         if (discoveryConfig != null) {

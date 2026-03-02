@@ -3,8 +3,9 @@ package com.koostack.operio.core.spi;
 /**
  * Plugin<T> extends Configurable<T>, NamedPlugin, Prioritized.
  *
- * <p>All service interfaces (ConsentAdminService, ConsentDecisionService,
- * ConsentSyncService, IdentityResolver, AuditLogger, MaskingStrategy,
+ * <p>All service interfaces (ConsentAdminCommandService, ConsentAdminQueryService,
+ * ConsentDecisionService,
+ * IdentityResolver, AuditLogger, MaskingStrategy,
  * SensitiveFieldResolver) extend this interface, making every plugin
  * configurable, named, prioritized, and health-checkable.
  */

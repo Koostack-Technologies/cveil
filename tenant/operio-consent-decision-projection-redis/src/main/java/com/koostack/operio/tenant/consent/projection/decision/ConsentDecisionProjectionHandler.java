@@ -39,8 +39,6 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ConsentDecisionProjectionHandler.class);
 
-    private static final String WILDCARD = "*";
-
     private final ObjectMapper objectMapper;
     private final ConsentPolicyRedisRepository consentRepo;
     private final InvalidationPublisher invalidationPublisher;
@@ -96,20 +94,19 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
 
     private void dispatch(String tenantId, String eventType, JsonNode node) {
         switch (eventType) {
-            // -- Consent Policy --
-            case ConsentEventTypes.POLICY_GRANTED -> handlePolicyGrantedOrRevoked(tenantId, node);
-            case ConsentEventTypes.POLICY_REVOKED -> handlePolicyGrantedOrRevoked(tenantId, node);
-            case ConsentEventTypes.POLICY_ALL_REVOKED -> handlePolicyAllRevoked(tenantId, node);
+            // -- SubjectConsent Aggregate (consent ledger events) --
+            case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGrantedOrRevoked(tenantId, node, true);
+            case ConsentEventTypes.CONSENT_REVOKED -> handleConsentGrantedOrRevoked(tenantId, node, false);
+            case ConsentEventTypes.CONSENT_EXPIRED -> handleConsentGrantedOrRevoked(tenantId, node, false);
+            case ConsentEventTypes.CONSENT_ALL_REVOKED -> handleConsentAllRevoked(tenantId, node);
 
             // -- Field ↔ Category metadata (publish-only) --
-            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED -> handleFieldCategoryLinked(tenantId, node);
-            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED -> handleFieldCategoryUnlinked(tenantId, node);
+            case ConsentEventTypes.FIELD_CATEGORY_ASSIGNED -> handleFieldCategoryChanged(tenantId, node);
+            case ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED -> handleFieldCategoryChanged(tenantId, node);
 
             // -- Structural deletion (reverse-index cleanup + publish) --
-            case ConsentEventTypes.CATEGORY_DELETED -> handleCategoryDeleted(tenantId, node);
-            case ConsentEventTypes.ENTITY_FIELD_REMOVED -> handleEntityFieldRemoved(tenantId, node);
-            case ConsentEventTypes.ENTITY_DELETED -> handleEntityDeleted(tenantId, node);
-            case ConsentEventTypes.PURPOSE_DELETED -> handlePurposeDeleted(tenantId, node);
+            case ConsentEventTypes.FIELD_REMOVED -> handleFieldRemoved(tenantId, node);
+            case ConsentEventTypes.PURPOSE_REMOVED -> handlePurposeRemoved(tenantId, node);
 
             // Events not relevant to the decision cache are silently ignored
             default -> {}
@@ -117,40 +114,38 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
     }
 
     // -----------------------------------------------------------------------
-    // Consent Policy
+    // SubjectConsent Aggregate (consent ledger events)
     // -----------------------------------------------------------------------
 
-    private void handlePolicyGrantedOrRevoked(String tenantId, JsonNode node) {
+    private void handleConsentGrantedOrRevoked(String tenantId, JsonNode node, boolean granted) {
         String subjectId = requiredText(node, "subjectId");
         String purposeName = requiredText(node, "purposeName");
-        boolean granted = requiredBoolean(node, "granted");
+        String policyType = requiredText(node, "policyType");
 
-        String category = textOrNull(node, "category");
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
+        String categoryName = textOrNull(node, "categoryName");
 
-        if (!isWildcard(fieldName)) {
-            // Field-level: entity may be null/wildcard — qualifyField defaults to _default_
+        if ("FIELD".equals(policyType)) {
             consentRepo.setFieldConsent(subjectId, entityName, fieldName, purposeName, granted);
             publishInvalidation(new CacheInvalidationMessage(
                 UUID.randomUUID().toString(), tenantId, subjectId,
                 entityName, fieldName, null, purposeName,
                 granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
             ));
-        } else if (!isWildcard(category)) {
-            // Category-level: (category, *, *, purpose)
-            consentRepo.setCategoryConsent(subjectId, category, purposeName, granted);
+        } else if ("CATEGORY".equals(policyType)) {
+            consentRepo.setCategoryConsent(subjectId, categoryName, purposeName, granted);
             publishInvalidation(new CacheInvalidationMessage(
                 UUID.randomUUID().toString(), tenantId, subjectId,
-                null, null, category, purposeName,
+                null, null, categoryName, purposeName,
                 granted ? InvalidationAction.GRANTED : InvalidationAction.REVOKED
             ));
         } else {
-            log.warn("Policy event has wildcards in all dimensions — skipping");
+            log.warn("Unknown policyType '{}' in consent event — skipping", policyType);
         }
     }
 
-    private void handlePolicyAllRevoked(String tenantId, JsonNode node) {
+    private void handleConsentAllRevoked(String tenantId, JsonNode node) {
         String subjectId = requiredText(node, "subjectId");
         consentRepo.removeAllConsent(subjectId);
         publishInvalidation(new CacheInvalidationMessage(
@@ -163,17 +158,7 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
     // Field ↔ Category metadata (publish-only)
     // -----------------------------------------------------------------------
 
-    private void handleFieldCategoryLinked(String tenantId, JsonNode node) {
-        String entityName = requiredText(node, "entityName");
-        String fieldName = requiredText(node, "fieldName");
-        String categoryName = requiredText(node, "categoryName");
-        publishInvalidation(new CacheInvalidationMessage(
-            UUID.randomUUID().toString(), tenantId, null,
-            entityName, fieldName, categoryName, null, InvalidationAction.CATEGORY_CHANGED
-        ));
-    }
-
-    private void handleFieldCategoryUnlinked(String tenantId, JsonNode node) {
+    private void handleFieldCategoryChanged(String tenantId, JsonNode node) {
         String entityName = requiredText(node, "entityName");
         String fieldName = requiredText(node, "fieldName");
         String categoryName = requiredText(node, "categoryName");
@@ -187,26 +172,7 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
     // Structural deletion — reverse-index cleanup + publish
     // -----------------------------------------------------------------------
 
-    private void handleCategoryDeleted(String tenantId, JsonNode node) {
-        String categoryName = requiredText(node, "categoryName");
-
-        List<AffectedEntry> affected = consentRepo.deleteByCategory(categoryName);
-
-        for (AffectedEntry entry : affected) {
-            publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, entry.subject(),
-                null, null, categoryName, entry.purpose(),
-                InvalidationAction.REVOKED
-            ));
-        }
-
-        publishInvalidation(new CacheInvalidationMessage(
-            UUID.randomUUID().toString(), tenantId, null,
-            null, null, categoryName, null, InvalidationAction.CATEGORY_CHANGED
-        ));
-    }
-
-    private void handleEntityFieldRemoved(String tenantId, JsonNode node) {
+    private void handleFieldRemoved(String tenantId, JsonNode node) {
         String entityName = requiredText(node, "entityName");
         String fieldName = requiredText(node, "fieldName");
         String qualifiedField = ConsentPolicyRedisRepository.qualifyField(entityName, fieldName);
@@ -227,29 +193,7 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
         ));
     }
 
-    private void handleEntityDeleted(String tenantId, JsonNode node) {
-        String entityName = requiredText(node, "entityName");
-
-        // Clean up all consent entries for every field belonging to this entity.
-        // The admin projection cascade-deletes fields via SQL, but no per-field
-        // ENTITY_FIELD_REMOVED events are emitted — so we clean Redis directly.
-        List<AffectedEntry> affected = consentRepo.deleteByEntity(entityName);
-
-        for (AffectedEntry entry : affected) {
-            publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, entry.subject(),
-                entityName, null, null, entry.purpose(),
-                InvalidationAction.REVOKED
-            ));
-        }
-
-        publishInvalidation(new CacheInvalidationMessage(
-            UUID.randomUUID().toString(), tenantId, null,
-            entityName, null, null, null, InvalidationAction.ENTITY_REMOVED
-        ));
-    }
-
-    private void handlePurposeDeleted(String tenantId, JsonNode node) {
+    private void handlePurposeRemoved(String tenantId, JsonNode node) {
         String purposeName = requiredText(node, "purposeName");
 
         List<AffectedEntry> affected = consentRepo.deleteByPurpose(purposeName);
@@ -267,11 +211,6 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
     // Helpers
     // -----------------------------------------------------------------------
 
-    /** Treats both null and {@code "*"} as wildcard for backwards compatibility. */
-    private static boolean isWildcard(String value) {
-        return value == null || WILDCARD.equals(value);
-    }
-
     private static String textOrNull(JsonNode node, String field) {
         JsonNode child = node.get(field);
         return (child != null && !child.isNull()) ? child.asText() : null;
@@ -283,14 +222,6 @@ public class ConsentDecisionProjectionHandler implements StreamEventHandler {
             throw new IllegalArgumentException("Missing required payload field: " + field);
         }
         return child.asText();
-    }
-
-    private static boolean requiredBoolean(JsonNode node, String field) {
-        JsonNode child = node.get(field);
-        if (child == null || child.isNull()) {
-            throw new IllegalArgumentException("Missing required payload field: " + field);
-        }
-        return child.asBoolean();
     }
 
     // -----------------------------------------------------------------------

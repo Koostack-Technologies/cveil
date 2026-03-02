@@ -3,11 +3,11 @@ package com.koostack.operio.tenant.event.jooq;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.DsarAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.FieldAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
 import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.SubjectConsentAggregate;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateRoot;
 
@@ -83,17 +83,13 @@ public final class AggregateEventApplier {
         JsonNode payloadNode
     ) {
         return switch (aggregateType) {
-            case ConsentPolicyAggregate.AGGREGATE_TYPE ->
-                ConsentPolicyAggregate.apply(
-                    (ConsentPolicyAggregate) current, eventType, payloadNode, objectMapper
+            case SubjectConsentAggregate.AGGREGATE_TYPE ->
+                SubjectConsentAggregate.apply(
+                    (SubjectConsentAggregate) current, eventType, payloadNode, objectMapper
                 );
-            case EntityAggregate.AGGREGATE_TYPE ->
-                EntityAggregate.apply(
-                    (EntityAggregate) current, eventType, payloadNode, objectMapper
-                );
-            case CategoryAggregate.AGGREGATE_TYPE ->
-                CategoryAggregate.apply(
-                    (CategoryAggregate) current, eventType, payloadNode, objectMapper
+            case FieldAggregate.AGGREGATE_TYPE ->
+                FieldAggregate.apply(
+                    (FieldAggregate) current, eventType, payloadNode, objectMapper
                 );
             case PurposeAggregate.AGGREGATE_TYPE ->
                 PurposeAggregate.apply(
@@ -102,6 +98,10 @@ public final class AggregateEventApplier {
             case RegulationAggregate.AGGREGATE_TYPE ->
                 RegulationAggregate.apply(
                     (RegulationAggregate) current, eventType, payloadNode, objectMapper
+                );
+            case DsarAggregate.AGGREGATE_TYPE ->
+                DsarAggregate.apply(
+                    (DsarAggregate) current, eventType, payloadNode, objectMapper
                 );
             default -> throw new IllegalArgumentException(
                 "Unknown aggregate type: " + aggregateType
@@ -116,27 +116,25 @@ public final class AggregateEventApplier {
         String aggregateType = firstEvent.aggregateType();
         String tenantId = firstEvent.tenantId();
         return switch (aggregateType) {
-            case ConsentPolicyAggregate.AGGREGATE_TYPE -> {
+            case SubjectConsentAggregate.AGGREGATE_TYPE -> {
                 JsonNode payload = parsePayload(firstEvent.payload());
                 String subjectId = payload.has("subjectId")
                     ? payload.get("subjectId").asText()
                     : firstEvent.aggregateId().toString();
-                yield (T) ConsentPolicyAggregate.create(tenantId, subjectId);
+                yield (T) SubjectConsentAggregate.create(tenantId, subjectId);
             }
-            case EntityAggregate.AGGREGATE_TYPE -> {
+            case FieldAggregate.AGGREGATE_TYPE -> {
                 JsonNode payload = parsePayload(firstEvent.payload());
                 String entityName = payload.has("entityName")
                     ? payload.get("entityName").asText()
-                    : EntityAggregate.DEFAULT_ENTITY;
-                yield (T) EntityAggregate.create(tenantId, entityName);
-            }
-            case CategoryAggregate.AGGREGATE_TYPE -> {
-                JsonNode payload = parsePayload(firstEvent.payload());
-                String categoryName = payload.has("categoryName")
-                    ? payload.get("categoryName").asText() : "";
+                    : FieldAggregate.DEFAULT_ENTITY;
+                String fieldName = payload.has("fieldName")
+                    ? payload.get("fieldName").asText() : "";
                 String description = payload.has("description")
                     ? payload.get("description").asText() : null;
-                yield (T) CategoryAggregate.create(tenantId, categoryName, description);
+                String entityDescription = payload.has("entityDescription")
+                    ? payload.get("entityDescription").asText() : null;
+                yield (T) FieldAggregate.create(tenantId, entityName, fieldName, description, entityDescription);
             }
             case PurposeAggregate.AGGREGATE_TYPE -> {
                 JsonNode payload = parsePayload(firstEvent.payload());
@@ -151,11 +149,15 @@ public final class AggregateEventApplier {
                 yield (T) RegulationAggregate.create(
                     tenantId,
                     payload.has("regulationName") ? payload.get("regulationName").asText() : "",
-                    payload.has("fullName") ? payload.get("fullName").asText() : null,
-                    payload.has("jurisdiction") ? payload.get("jurisdiction").asText() : null,
-                    payload.has("description") ? payload.get("description").asText() : null,
-                    payload.has("url") ? payload.get("url").asText() : null
+                    payload.has("description") ? payload.get("description").asText() : null
                 );
+            }
+            case DsarAggregate.AGGREGATE_TYPE -> {
+                JsonNode payload = parsePayload(firstEvent.payload());
+                String subjectId = payload.has("subjectId")
+                    ? payload.get("subjectId").asText()
+                    : firstEvent.aggregateId().toString();
+                yield (T) DsarAggregate.create(tenantId, subjectId);
             }
             default -> throw new IllegalArgumentException(
                 "Unknown aggregate type: " + aggregateType
@@ -165,11 +167,11 @@ public final class AggregateEventApplier {
 
     private static Class<? extends AggregateRoot> aggregateClassFor(String aggregateType) {
         return switch (aggregateType) {
-            case ConsentPolicyAggregate.AGGREGATE_TYPE -> ConsentPolicyAggregate.class;
-            case EntityAggregate.AGGREGATE_TYPE -> EntityAggregate.class;
-            case CategoryAggregate.AGGREGATE_TYPE -> CategoryAggregate.class;
+            case SubjectConsentAggregate.AGGREGATE_TYPE -> SubjectConsentAggregate.class;
+            case FieldAggregate.AGGREGATE_TYPE -> FieldAggregate.class;
             case PurposeAggregate.AGGREGATE_TYPE -> PurposeAggregate.class;
             case RegulationAggregate.AGGREGATE_TYPE -> RegulationAggregate.class;
+            case DsarAggregate.AGGREGATE_TYPE -> DsarAggregate.class;
             default -> throw new IllegalArgumentException(
                 "Unknown aggregate type: " + aggregateType
             );

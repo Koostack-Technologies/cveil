@@ -3,8 +3,7 @@ package com.koostack.operio.plugin.consent.jooq;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
 import com.koostack.operio.core.tenant.consent.ExpirationSweeperService;
-import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.PolicySummaryEntry;
+import com.koostack.operio.core.models.SubjectConsentView.ConsentLedgerEntryView;
 import com.koostack.operio.core.models.TenantContext;
 import java.time.Instant;
 import java.util.List;
@@ -14,10 +13,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * {@link ExpirationSweeperService} implementation that finds expired consent
- * policies via the query service and revokes them via the command service.
+ * grants via the query service and publishes {@code ConsentExpired} events
+ * via the command service.
  *
- * <p>Each revocation produces a {@code POLICY_REVOKED} event that flows
- * to the decision projection, deleting the Redis entry.
+ * <p>Each expiration produces a {@code CONSENT_EXPIRED} event that flows
+ * to the admin and decision projections.
  */
 public class JooqExpirationSweeperService implements ExpirationSweeperService {
 
@@ -30,8 +30,8 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
     private final Supplier<List<String>> tenantIdSupplier;
 
     /**
-     * @param queryService     the query service to find expired policies
-     * @param commandService   the command service to revoke expired policies
+     * @param queryService     the query service to find expired grants
+     * @param commandService   the command service to expire grants
      * @param tenantIdSupplier supplies all tenant IDs for {@link #sweepAll()}
      */
     public JooqExpirationSweeperService(
@@ -47,25 +47,32 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
     @Override
     public int sweep() {
         Instant now = Instant.now();
-        List<PolicySummaryEntry> expired = queryService.findExpiredPolicies(now);
+        List<ConsentLedgerEntryView> expired = queryService.findExpiredGrants(now);
         if (expired.isEmpty()) {
             return 0;
         }
 
-        LOG.info("Found {} expired consent policies to revoke", expired.size());
-        int revoked = 0;
-        for (PolicySummaryEntry policy : expired) {
+        LOG.info("Found {} expired consent grants to expire", expired.size());
+        int expiredCount = 0;
+        for (ConsentLedgerEntryView entry : expired) {
             try {
-                ConsentScope scope = buildScope(policy);
-                commandService.revokeConsentCommand(policy.subject(), scope);
-                revoked++;
+                commandService.expireConsentCommand(
+                    entry.subjectId(),
+                    entry.policyId(),
+                    entry.purposeName(),
+                    entry.policyType(),
+                    entry.fieldName(),
+                    entry.entityName(),
+                    entry.categoryName()
+                );
+                expiredCount++;
             } catch (Exception e) {
-                LOG.warn("Failed to revoke expired policy for subject={}, purpose={}",
-                    policy.subject(), policy.purposeName(), e);
+                LOG.warn("Failed to expire grant for subject={}, policyId={}, purpose={}",
+                    entry.subjectId(), entry.policyId(), entry.purposeName(), e);
             }
         }
-        LOG.info("Revoked {} of {} expired consent policies", revoked, expired.size());
-        return revoked;
+        LOG.info("Expired {} of {} consent grants", expiredCount, expired.size());
+        return expiredCount;
     }
 
     @Override
@@ -81,34 +88,5 @@ public class JooqExpirationSweeperService implements ExpirationSweeperService {
             }
         }
         return total;
-    }
-
-    static ConsentScope buildScope(PolicySummaryEntry policy) {
-        if (policy.purposeName() == null) {
-            LOG.warn("Expired policy for subject={} has null purpose; "
-                + "falling back to wildcard purpose", policy.subject());
-        }
-        String purpose = policy.purposeName() != null
-            ? policy.purposeName() : ConsentScope.WILDCARD;
-
-        boolean hasCategory = policy.categoryName() != null
-            && !ConsentScope.WILDCARD.equals(policy.categoryName());
-        boolean hasField = policy.fieldName() != null
-            && !ConsentScope.WILDCARD.equals(policy.fieldName());
-
-        // Field scope takes precedence when both dimensions are present
-        if (hasField) {
-            String entity = policy.entityName() != null
-                ? policy.entityName() : ConsentScope.WILDCARD;
-            return ConsentScope.forField(policy.fieldName(), entity, purpose);
-        }
-        if (hasCategory) {
-            return ConsentScope.forCategory(policy.categoryName(), purpose);
-        }
-        // Fallback: neither field nor category — use category-scoped with wildcard
-        // to revoke at the broadest scope. This shouldn't happen with well-formed data.
-        LOG.warn("Expired policy for subject={} has neither field nor category; "
-            + "falling back to wildcard scope", policy.subject());
-        return ConsentScope.forCategory(ConsentScope.WILDCARD, purpose);
     }
 }

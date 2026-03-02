@@ -18,16 +18,14 @@ import com.koostack.operio.core.spi.Plugin;
  *       {@link com.koostack.operio.core.registry.PluginRegistry} mechanism.</li>
  *   <li>The caller invokes {@link #discover()} to perform the scan.</li>
  *   <li>The returned {@link DiscoveryResult} is fed into
- *       {@link com.koostack.operio.core.service.ConsentAdminService} registration methods (e.g.
- *       {@link com.koostack.operio.core.service.ConsentAdminService#registerCategory},
- *       {@link com.koostack.operio.core.service.ConsentAdminService#registerField},
- *       {@link com.koostack.operio.core.service.ConsentAdminService#linkFieldToCategory}) to populate the
+ *       {@link com.koostack.operio.core.TenantService} registration methods (e.g.
+ *       {@code registerField}, {@code assignFieldCategory}) to populate the
  *       consent admin schema.</li>
  * </ol>
  *
  * <p>{@link com.koostack.operio.core.Operio#syncDiscoveredFields()} orchestrates
  * steps 2 and 3 automatically when both a {@code SensitiveDiscovery} and a
- * {@code ConsentAdminService} are wired into the Operio instance.
+ * {@code TenantService} are wired into the Operio instance.
  *
  * <h2>Idempotency</h2>
  * <p>{@link #discover()} is expected to be safe to call multiple times — it

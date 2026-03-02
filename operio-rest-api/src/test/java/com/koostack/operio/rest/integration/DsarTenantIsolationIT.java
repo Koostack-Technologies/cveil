@@ -248,12 +248,12 @@ class DsarTenantIsolationIT {
         // Export under tenant A — should see the policy
         SubjectDataExport exportA = exportSubject(KEY_TENANT_A, subject);
         assertThat(exportA.subject()).isEqualTo(subject);
-        assertThat(exportA.consentPolicies()).isNotEmpty();
+        assertThat(exportA.consent().entries()).isNotEmpty();
 
         // Export under tenant B — should see nothing (tenant isolation)
         SubjectDataExport exportB = exportSubject(KEY_TENANT_B, subject);
         assertThat(exportB.subject()).isEqualTo(subject);
-        assertThat(exportB.consentPolicies()).isEmpty();
+        assertThat(exportB.consent().entries()).isEmpty();
     }
 
     // ===================================================================
@@ -287,11 +287,11 @@ class DsarTenantIsolationIT {
 
         // Tenant A export should be empty
         SubjectDataExport exportA = exportSubject(KEY_TENANT_A, subject);
-        assertThat(exportA.consentPolicies()).isEmpty();
+        assertThat(exportA.consent().entries()).isEmpty();
 
         // Tenant B export should still have data
         SubjectDataExport exportB = exportSubject(KEY_TENANT_B, subject);
-        assertThat(exportB.consentPolicies()).isNotEmpty();
+        assertThat(exportB.consent().entries()).isNotEmpty();
     }
 
     // ===================================================================

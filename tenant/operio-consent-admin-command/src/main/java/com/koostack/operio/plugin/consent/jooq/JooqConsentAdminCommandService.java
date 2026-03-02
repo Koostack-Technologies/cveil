@@ -2,20 +2,16 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
-import com.koostack.operio.core.tenant.consent.aggregates.CategoryAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.ConsentPolicyAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.EntityAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
-import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.*;
 import com.koostack.operio.core.tenant.consent.events.*;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.TenantContext;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +21,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>All write operations publish semantic domain events via
  * {@link EventService} instead of writing directly to the database.
- * A separate projection is responsible for materializing the event stream
- * into the consent read model.
+ * Separate projections materialize the event stream into the consent
+ * read model (admin DB) and Redis decision cache.
  */
 public class JooqConsentAdminCommandService
     implements ConsentAdminCommandService<ConsentAdminCommandConfig>
@@ -70,134 +66,77 @@ public class JooqConsentAdminCommandService
     }
 
     // -----------------------------------------------------------------------
-    // ConsentAdminCommandService — core consent methods
+    // Field Aggregate
     // -----------------------------------------------------------------------
 
     @Override
-    public void grantConsentCommand(String subject, ConsentScope accessRequest) {
-        grantConsentCommand(subject, accessRequest, null);
-    }
-
-    @Override
-    public void revokeConsentCommand(String subject, ConsentScope accessRequest) {
-        revokeConsentCommand(subject, accessRequest, null);
-    }
-
-    @Override
-    public void grantConsentCommand(
-        String subject,
-        ConsentScope accessRequest,
-        Instant expiresAt
-    ) {
+    public void registerFieldCommand(String fieldName, String entityName,
+                                     String description, String entityDescription) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
         String tenantId = TenantContext.require();
-
-        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
-        var payload = new PolicyGrantedEvent(
-            subject,
-            accessRequest.purposeName(),
-            wildcardIfNull(accessRequest.fieldName()),
-            wildcardIfNull(accessRequest.entityName()),
-            wildcardIfNull(accessRequest.category()),
-            true,
-            expiresAt
-        );
-        publishEvent(tenantId, ConsentEventTypes.POLICY_GRANTED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldRegisteredEvent(normalized, fieldName, description, entityDescription);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_REGISTERED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
-    public void revokeConsentCommand(
-        String subject,
-        ConsentScope accessRequest,
-        Instant expiresAt
-    ) {
+    public void updateFieldCommand(String fieldName, String entityName, String description) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
         String tenantId = TenantContext.require();
-
-        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
-        var payload = new PolicyRevokedEvent(
-            subject,
-            accessRequest.purposeName(),
-            wildcardIfNull(accessRequest.fieldName()),
-            wildcardIfNull(accessRequest.entityName()),
-            wildcardIfNull(accessRequest.category()),
-            false,
-            expiresAt
-        );
-        publishEvent(tenantId, ConsentEventTypes.POLICY_REVOKED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldUpdatedEvent(normalized, fieldName, description);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_UPDATED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
-    public void revokeAllConsentCommand(String subject) {
+    public void removeFieldCommand(String fieldName, String entityName) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
-        var payload = new PolicyAllRevokedEvent(subject);
-        publishEvent(tenantId, ConsentEventTypes.POLICY_ALL_REVOKED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
-        LOG.info("Published bulk revoke event for subject: {}", subject);
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldRemovedEvent(normalized, fieldName);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_REMOVED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
-    public int deleteAuditLogBySubjectCommand(String subject) {
+    public void assignFieldCategoryCommand(String fieldName, String entityName,
+                                           String categoryName, String categoryDescription) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
+        Objects.requireNonNull(categoryName, "categoryName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = ConsentPolicyAggregate.deriveId(subject);
-        var payload = new PolicyAuditDeletedEvent(subject);
-        publishEvent(tenantId, ConsentEventTypes.POLICY_AUDIT_DELETED,
-            ConsentPolicyAggregate.AGGREGATE_TYPE, aggregateId, payload);
-        LOG.info(
-            "Published audit-log deletion event for subject: {} (actual deletion is eventual)",
-            subject
-        );
-        return -1;
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldCategoryAssignedEvent(
+            normalized, fieldName, categoryName, categoryDescription);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void unassignFieldCategoryCommand(String fieldName, String entityName,
+                                             String categoryName) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
+        Objects.requireNonNull(categoryName, "categoryName must not be null");
+        String tenantId = TenantContext.require();
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldCategoryUnassignedEvent(normalized, fieldName, categoryName);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     // -----------------------------------------------------------------------
-    // Schema registration — SensitiveDiscovery pipeline
-    // -----------------------------------------------------------------------
-
-    @Override
-    public void registerFieldCommand(
-        String fieldName,
-        String entityName,
-        String description
-    ) {
-        String tenantId = TenantContext.require();
-        String normalizedEntity = EntityAggregate.normalizeEntityName(entityName);
-        UUID aggregateId = EntityAggregate.deriveId(normalizedEntity);
-        var payload = new EntityFieldRegisteredEvent(normalizedEntity, fieldName, description);
-        publishEvent(tenantId, ConsentEventTypes.ENTITY_FIELD_REGISTERED,
-            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    @Override
-    public void registerCategoryCommand(String categoryName, String description) {
-        String tenantId = TenantContext.require();
-        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
-        var payload = new CategoryRegisteredEvent(categoryName, description);
-        publishEvent(tenantId, ConsentEventTypes.CATEGORY_REGISTERED,
-            CategoryAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    @Override
-    public void linkFieldToCategoryCommand(
-        String fieldName,
-        String entityName,
-        String categoryName
-    ) {
-        String tenantId = TenantContext.require();
-        String normalizedEntity = EntityAggregate.normalizeEntityName(entityName);
-        UUID aggregateId = EntityAggregate.deriveId(normalizedEntity);
-        var payload = new FieldCategoryLinkedEvent(normalizedEntity, fieldName, categoryName);
-        publishEvent(tenantId, ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
-            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    // -----------------------------------------------------------------------
-    // Schema registration — Purpose & Regulation
+    // Purpose Aggregate
     // -----------------------------------------------------------------------
 
     @Override
     public void registerPurposeCommand(String purposeName, String description) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
         var payload = new PurposeRegisteredEvent(purposeName, description);
@@ -206,33 +145,221 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void registerRegulationCommand(
-        String regulationName,
-        String fullName,
-        String jurisdiction,
-        String description,
-        String url
-    ) {
+    public void updatePurposeCommand(String purposeName, String description) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposeUpdatedEvent(purposeName, description);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_UPDATED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removePurposeCommand(String purposeName) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposeRemovedEvent(purposeName);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REMOVED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void linkPurposeToRegulationCommand(String purposeName, String regulationName,
+                                               String lawfulBasis, String onGranted,
+                                               String onDenied) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposeRegulationLinkedEvent(
+            purposeName, regulationName, lawfulBasis, onGranted, onDenied);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void unlinkPurposeFromRegulationCommand(String purposeName, String regulationName) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposeRegulationUnlinkedEvent(purposeName, regulationName);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void addPurposePolicyCommand(String purposeName, String policyType,
+                                        String fieldName, String entityName,
+                                        String categoryName) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        Objects.requireNonNull(policyType, "policyType must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposePolicyAddedEvent(
+            purposeName, policyType, fieldName, entityName, categoryName);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_POLICY_ADDED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removePurposePolicyCommand(String purposeName, String policyType,
+                                           String fieldName, String entityName,
+                                           String categoryName) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        Objects.requireNonNull(policyType, "policyType must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposePolicyRemovedEvent(
+            purposeName, policyType, fieldName, entityName, categoryName);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_POLICY_REMOVED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
+    // Regulation Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerRegulationCommand(String regulationName, String description) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        var payload = new RegulationRegisteredEvent(
-            regulationName, fullName, jurisdiction, description, url
-        );
+        var payload = new RegulationRegisteredEvent(regulationName, description);
         publishEvent(tenantId, ConsentEventTypes.REGULATION_REGISTERED,
             RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
-    public void linkPurposeToRegulationCommand(
-        String purposeName,
-        String regulationName,
-        String legalBasis
-    ) {
+    public void updateRegulationCommand(String regulationName, String description) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
-        var payload = new PurposeRegulationLinkedEvent(purposeName, regulationName, legalBasis);
-        publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
-            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        var payload = new RegulationUpdatedEvent(regulationName, description);
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_UPDATED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeRegulationCommand(String regulationName) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        var payload = new RegulationRemovedEvent(regulationName);
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_REMOVED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void addRegulationJurisdictionCommand(String regulationName,
+                                                 String jurisdictionName,
+                                                 String description) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        var payload = new RegulationJurisdictionAddedEvent(
+            regulationName, jurisdictionName, description);
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeRegulationJurisdictionCommand(String regulationName,
+                                                    String jurisdictionName) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        var payload = new RegulationJurisdictionRemovedEvent(regulationName, jurisdictionName);
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
+    // SubjectConsent Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void grantConsentCommand(String subjectId, long policyId,
+                                    String purposeName, String policyType,
+                                    String fieldName, String entityName,
+                                    String categoryName, String actor,
+                                    String ipAddress, String userAgent,
+                                    Instant expiresAt) {
+        Objects.requireNonNull(subjectId, "subjectId must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectConsentAggregate.deriveId(subjectId);
+        var payload = new ConsentGrantedEvent(
+            subjectId, policyId, purposeName, policyType,
+            fieldName, entityName, categoryName,
+            actor, ipAddress, userAgent, expiresAt);
+        publishEvent(tenantId, ConsentEventTypes.CONSENT_GRANTED,
+            SubjectConsentAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void revokeConsentCommand(String subjectId, long policyId,
+                                     String purposeName, String policyType,
+                                     String fieldName, String entityName,
+                                     String categoryName, String actor,
+                                     String ipAddress, String userAgent) {
+        Objects.requireNonNull(subjectId, "subjectId must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectConsentAggregate.deriveId(subjectId);
+        var payload = new ConsentRevokedEvent(
+            subjectId, policyId, purposeName, policyType,
+            fieldName, entityName, categoryName,
+            actor, ipAddress, userAgent);
+        publishEvent(tenantId, ConsentEventTypes.CONSENT_REVOKED,
+            SubjectConsentAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void expireConsentCommand(String subjectId, long policyId,
+                                     String purposeName, String policyType,
+                                     String fieldName, String entityName,
+                                     String categoryName) {
+        Objects.requireNonNull(subjectId, "subjectId must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectConsentAggregate.deriveId(subjectId);
+        var payload = new ConsentExpiredEvent(
+            subjectId, policyId, purposeName, policyType,
+            fieldName, entityName, categoryName);
+        publishEvent(tenantId, ConsentEventTypes.CONSENT_EXPIRED,
+            SubjectConsentAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void revokeAllConsentCommand(String subjectId, String actor,
+                                        String ipAddress, String userAgent) {
+        Objects.requireNonNull(subjectId, "subjectId must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectConsentAggregate.deriveId(subjectId);
+        var payload = new ConsentAllRevokedEvent(subjectId, actor, ipAddress, userAgent);
+        publishEvent(tenantId, ConsentEventTypes.CONSENT_ALL_REVOKED,
+            SubjectConsentAggregate.AGGREGATE_TYPE, aggregateId, payload);
+        LOG.info("Published bulk revoke event for subject: {}", subjectId);
+    }
+
+    // -----------------------------------------------------------------------
+    // DSAR Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void deleteSubjectAuditCommand(String subjectId, String deletionRequestId,
+                                          String actor, String ipAddress,
+                                          String userAgent) {
+        Objects.requireNonNull(subjectId, "subjectId must not be null");
+        Objects.requireNonNull(deletionRequestId, "deletionRequestId must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = DsarAggregate.deriveId(subjectId);
+        var payload = new SubjectAuditDeletedEvent(
+            subjectId, deletionRequestId, actor, ipAddress, userAgent);
+        publishEvent(tenantId, ConsentEventTypes.SUBJECT_AUDIT_DELETED,
+            DsarAggregate.AGGREGATE_TYPE, aggregateId, payload);
+        LOG.info("Published DSAR audit deletion event for subject: {}", subjectId);
     }
 
     // -----------------------------------------------------------------------
@@ -252,51 +379,64 @@ public class JooqConsentAdminCommandService
         );
     }
 
-    private static String wildcardIfNull(String value) {
-        return value != null ? value : ConsentScope.WILDCARD;
-    }
-
     // -----------------------------------------------------------------------
     // Internal — event type registration
     // -----------------------------------------------------------------------
 
     private void registerEventTypes() {
-        register(ConsentEventTypes.POLICY_GRANTED,
-            "Consent Policy Granted", PolicyGrantedEvent.class);
-        register(ConsentEventTypes.POLICY_REVOKED,
-            "Consent Policy Revoked", PolicyRevokedEvent.class);
-        register(ConsentEventTypes.POLICY_ALL_REVOKED,
-            "All Consent Policies Revoked", PolicyAllRevokedEvent.class);
-        register(ConsentEventTypes.POLICY_AUDIT_DELETED,
-            "Consent Audit Log Deletion Requested", PolicyAuditDeletedEvent.class);
-        register(ConsentEventTypes.ENTITY_FIELD_REGISTERED,
-            "Consent Field Registered", EntityFieldRegisteredEvent.class);
-        register(ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED,
-            "Field-Category Link Created", FieldCategoryLinkedEvent.class);
-        register(ConsentEventTypes.CATEGORY_REGISTERED,
-            "Consent Category Registered", CategoryRegisteredEvent.class);
-        register(ConsentEventTypes.PURPOSE_REGISTERED,
-            "Consent Purpose Registered", PurposeRegisteredEvent.class);
-        register(ConsentEventTypes.PURPOSE_REGULATION_LINKED,
-            "Purpose-Regulation Link Created", PurposeRegulationLinkedEvent.class);
-        register(ConsentEventTypes.REGULATION_REGISTERED,
-            "Consent Regulation Registered", RegulationRegisteredEvent.class);
+        // Field Aggregate
+        register(ConsentEventTypes.FIELD_REGISTERED,
+            "Field Registered", FieldRegisteredEvent.class);
+        register(ConsentEventTypes.FIELD_UPDATED,
+            "Field Updated", FieldUpdatedEvent.class);
+        register(ConsentEventTypes.FIELD_REMOVED,
+            "Field Removed", FieldRemovedEvent.class);
+        register(ConsentEventTypes.FIELD_CATEGORY_ASSIGNED,
+            "Field Category Assigned", FieldCategoryAssignedEvent.class);
+        register(ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED,
+            "Field Category Unassigned", FieldCategoryUnassignedEvent.class);
 
-        // Delete / unlink event types
-        register(ConsentEventTypes.ENTITY_DELETED,
-            "Consent Entity Deleted", EntityDeletedEvent.class);
-        register(ConsentEventTypes.ENTITY_FIELD_REMOVED,
-            "Consent Entity Field Removed", EntityFieldRemovedEvent.class);
-        register(ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED,
-            "Field-Category Link Removed", FieldCategoryUnlinkedEvent.class);
-        register(ConsentEventTypes.CATEGORY_DELETED,
-            "Consent Category Deleted", CategoryDeletedEvent.class);
-        register(ConsentEventTypes.PURPOSE_DELETED,
-            "Consent Purpose Deleted", PurposeDeletedEvent.class);
+        // Purpose Aggregate
+        register(ConsentEventTypes.PURPOSE_REGISTERED,
+            "Purpose Registered", PurposeRegisteredEvent.class);
+        register(ConsentEventTypes.PURPOSE_UPDATED,
+            "Purpose Updated", PurposeUpdatedEvent.class);
+        register(ConsentEventTypes.PURPOSE_REMOVED,
+            "Purpose Removed", PurposeRemovedEvent.class);
+        register(ConsentEventTypes.PURPOSE_REGULATION_LINKED,
+            "Purpose Regulation Linked", PurposeRegulationLinkedEvent.class);
         register(ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
-            "Purpose-Regulation Link Removed", PurposeRegulationUnlinkedEvent.class);
-        register(ConsentEventTypes.REGULATION_DELETED,
-            "Consent Regulation Deleted", RegulationDeletedEvent.class);
+            "Purpose Regulation Unlinked", PurposeRegulationUnlinkedEvent.class);
+        register(ConsentEventTypes.PURPOSE_POLICY_ADDED,
+            "Purpose Policy Added", PurposePolicyAddedEvent.class);
+        register(ConsentEventTypes.PURPOSE_POLICY_REMOVED,
+            "Purpose Policy Removed", PurposePolicyRemovedEvent.class);
+
+        // Regulation Aggregate
+        register(ConsentEventTypes.REGULATION_REGISTERED,
+            "Regulation Registered", RegulationRegisteredEvent.class);
+        register(ConsentEventTypes.REGULATION_UPDATED,
+            "Regulation Updated", RegulationUpdatedEvent.class);
+        register(ConsentEventTypes.REGULATION_REMOVED,
+            "Regulation Removed", RegulationRemovedEvent.class);
+        register(ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
+            "Regulation Jurisdiction Added", RegulationJurisdictionAddedEvent.class);
+        register(ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
+            "Regulation Jurisdiction Removed", RegulationJurisdictionRemovedEvent.class);
+
+        // SubjectConsent Aggregate
+        register(ConsentEventTypes.CONSENT_GRANTED,
+            "Consent Granted", ConsentGrantedEvent.class);
+        register(ConsentEventTypes.CONSENT_REVOKED,
+            "Consent Revoked", ConsentRevokedEvent.class);
+        register(ConsentEventTypes.CONSENT_EXPIRED,
+            "Consent Expired", ConsentExpiredEvent.class);
+        register(ConsentEventTypes.CONSENT_ALL_REVOKED,
+            "All Consent Revoked", ConsentAllRevokedEvent.class);
+
+        // DSAR Aggregate
+        register(ConsentEventTypes.SUBJECT_AUDIT_DELETED,
+            "Subject Audit Deleted", SubjectAuditDeletedEvent.class);
     }
 
     private <T> void register(

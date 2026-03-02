@@ -17,25 +17,17 @@ import java.time.ZoneOffset;
 import java.util.Map;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
+import com.koostack.operio.plugin.consent.jooq.generated.enums.ConsentAction;
+import com.koostack.operio.plugin.consent.jooq.generated.enums.MaskingType;
+import com.koostack.operio.plugin.consent.jooq.generated.enums.PolicyType;
 
 /**
- * Stream projection handler that materializes tenant consent domain events
+ * Stream projection handler that materializes consent domain events
  * into the consent admin relational schema.
  *
- * <p>Switches on {@code eventType} and executes idempotent SQL statements
- * (upsert via {@code ON CONFLICT DO UPDATE}, or {@code DELETE}) against the
- * consent admin tables: entity, field, category, field_category,
- * consent_policy, purpose, regulation, purpose_regulation, and
- * consent_audit_log.
- *
- * <p>All writes are routed to the correct per-tenant schema via
- * {@link TenantContext}, which is set from the event's {@code tenantId}
- * field before each dispatch.
- *
- * <h2>Thread Safety</h2>
- * <p>This class is safe for concurrent use — all state is final and the
- * underlying jOOQ {@link DSLContext} is thread-safe. {@link TenantContext}
- * is a {@code ScopedValue}, providing per-thread isolation.
+ * <p>Handles events for all 5 aggregates: Field, Purpose, Regulation,
+ * SubjectConsent, and DSAR. All writes are idempotent (upsert or delete)
+ * and routed to the correct per-tenant schema via {@link TenantContext}.
  */
 public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
@@ -63,11 +55,14 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         TenantContext.runWhere(tenantId, () -> {
             try {
-                JsonNode node = payload != null ? objectMapper.readTree(payload) : objectMapper.createObjectNode();
+                JsonNode node = payload != null
+                    ? objectMapper.readTree(payload)
+                    : objectMapper.createObjectNode();
                 dispatch(eventType, node);
                 log.debug("Projected event {} [{}] for tenant {}", messageId, eventType, tenantId);
             } catch (Exception e) {
-                log.error("Failed to project event {} [{}] for tenant {}", messageId, eventType, tenantId, e);
+                log.error("Failed to project event {} [{}] for tenant {}",
+                    messageId, eventType, tenantId, e);
                 throw new RuntimeException(e);
             }
         });
@@ -75,54 +70,57 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
     private void dispatch(String eventType, JsonNode node) {
         switch (eventType) {
-            // -- Entity / Field --
-            case ConsentEventTypes.ENTITY_FIELD_REGISTERED -> handleEntityFieldRegistered(node);
-            case ConsentEventTypes.ENTITY_DELETED -> handleEntityDeleted(node);
-            case ConsentEventTypes.ENTITY_FIELD_REMOVED -> handleEntityFieldRemoved(node);
+            // -- Field Aggregate --
+            case ConsentEventTypes.FIELD_REGISTERED -> handleFieldRegistered(node);
+            case ConsentEventTypes.FIELD_UPDATED -> handleFieldUpdated(node);
+            case ConsentEventTypes.FIELD_REMOVED -> handleFieldRemoved(node);
+            case ConsentEventTypes.FIELD_CATEGORY_ASSIGNED -> handleFieldCategoryAssigned(node);
+            case ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED -> handleFieldCategoryUnassigned(node);
 
-            // -- Field ↔ Category links --
-            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_LINKED -> handleFieldCategoryLinked(node);
-            case ConsentEventTypes.ENTITY_FIELD_CATEGORY_UNLINKED -> handleFieldCategoryUnlinked(node);
-
-            // -- Category --
-            case ConsentEventTypes.CATEGORY_REGISTERED -> handleCategoryRegistered(node);
-            case ConsentEventTypes.CATEGORY_DELETED -> handleCategoryDeleted(node);
-
-            // -- Purpose --
+            // -- Purpose Aggregate --
             case ConsentEventTypes.PURPOSE_REGISTERED -> handlePurposeRegistered(node);
-            case ConsentEventTypes.PURPOSE_DELETED -> handlePurposeDeleted(node);
-
-            // -- Purpose ↔ Regulation links --
+            case ConsentEventTypes.PURPOSE_UPDATED -> handlePurposeUpdated(node);
+            case ConsentEventTypes.PURPOSE_REMOVED -> handlePurposeRemoved(node);
             case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> handlePurposeRegulationLinked(node);
             case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> handlePurposeRegulationUnlinked(node);
+            case ConsentEventTypes.PURPOSE_POLICY_ADDED -> handlePurposePolicyAdded(node);
+            case ConsentEventTypes.PURPOSE_POLICY_REMOVED -> handlePurposePolicyRemoved(node);
 
-            // -- Regulation --
+            // -- Regulation Aggregate --
             case ConsentEventTypes.REGULATION_REGISTERED -> handleRegulationRegistered(node);
-            case ConsentEventTypes.REGULATION_DELETED -> handleRegulationDeleted(node);
+            case ConsentEventTypes.REGULATION_UPDATED -> handleRegulationUpdated(node);
+            case ConsentEventTypes.REGULATION_REMOVED -> handleRegulationRemoved(node);
+            case ConsentEventTypes.REGULATION_JURISDICTION_ADDED -> handleRegulationJurisdictionAdded(node);
+            case ConsentEventTypes.REGULATION_JURISDICTION_REMOVED -> handleRegulationJurisdictionRemoved(node);
 
-            // -- Consent Policy --
-            case ConsentEventTypes.POLICY_GRANTED -> handlePolicyGranted(node);
-            case ConsentEventTypes.POLICY_REVOKED -> handlePolicyRevoked(node);
-            case ConsentEventTypes.POLICY_ALL_REVOKED -> handlePolicyAllRevoked(node);
-            case ConsentEventTypes.POLICY_AUDIT_DELETED -> handlePolicyAuditDeleted(node);
+            // -- SubjectConsent Aggregate --
+            case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGranted(node);
+            case ConsentEventTypes.CONSENT_REVOKED -> handleConsentRevoked(node);
+            case ConsentEventTypes.CONSENT_EXPIRED -> handleConsentExpired(node);
+            case ConsentEventTypes.CONSENT_ALL_REVOKED -> handleConsentAllRevoked(node);
+
+            // -- DSAR Aggregate --
+            case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> handleSubjectAuditDeleted(node);
 
             default -> log.debug("Ignoring unhandled event type: {}", eventType);
         }
     }
 
     // -----------------------------------------------------------------------
-    // Entity / Field
+    // Field Aggregate
     // -----------------------------------------------------------------------
 
-    private void handleEntityFieldRegistered(JsonNode node) {
+    private void handleFieldRegistered(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String fieldName = node.get("fieldName").asText();
         String description = textOrNull(node, "description");
+        String entityDescription = textOrNull(node, "entityDescription");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-        // Upsert entity
+        // Upsert entity (auto-create if needed)
         dsl.insertInto(ENTITY)
             .set(ENTITY.ENTITY_NAME, entityName)
+            .set(ENTITY.DESCRIPTION, entityDescription)
             .set(ENTITY.CREATED_AT, now)
             .set(ENTITY.UPDATED_AT, now)
             .onConflict(ENTITY.ENTITY_NAME)
@@ -130,17 +128,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .set(ENTITY.UPDATED_AT, now)
             .execute();
 
-        // Upsert field (resolve entity_id via subquery)
-        Long entityId = dsl.select(ENTITY.ENTITY_ID)
-            .from(ENTITY)
-            .where(ENTITY.ENTITY_NAME.eq(entityName))
-            .fetchOneInto(Long.class);
-
+        Long entityId = resolveEntityId(entityName);
         if (entityId == null) {
             log.warn("Entity '{}' not found after upsert — skipping field registration", entityName);
             return;
         }
 
+        // Upsert field
         dsl.insertInto(FIELD)
             .set(FIELD.FIELD_NAME, fieldName)
             .set(FIELD.ENTITY_ID, entityId)
@@ -154,93 +148,72 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .execute();
     }
 
-    private void handleEntityDeleted(JsonNode node) {
+    private void handleFieldUpdated(JsonNode node) {
         String entityName = node.get("entityName").asText();
+        String fieldName = node.get("fieldName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-        Long entityId = dsl.select(ENTITY.ENTITY_ID)
-            .from(ENTITY)
-            .where(ENTITY.ENTITY_NAME.eq(entityName))
-            .fetchOneInto(Long.class);
-
+        Long entityId = resolveEntityId(entityName);
         if (entityId != null) {
-            var fieldIds = dsl.select(FIELD.FIELD_ID).from(FIELD).where(FIELD.ENTITY_ID.eq(entityId));
-
-            // FK order: audit_log → consent_policy → field_category → field → entity
-            dsl.deleteFrom(CONSENT_AUDIT_LOG)
-                .where(CONSENT_AUDIT_LOG.FIELD_ID.in(fieldIds))
-                .execute();
-
-            dsl.deleteFrom(CONSENT_POLICY)
-                .where(CONSENT_POLICY.FIELD_ID.in(fieldIds))
-                .execute();
-
-            dsl.deleteFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.FIELD_ID.in(fieldIds))
-                .execute();
-
-            dsl.deleteFrom(FIELD)
-                .where(FIELD.ENTITY_ID.eq(entityId))
+            dsl.update(FIELD)
+                .set(FIELD.DESCRIPTION, description)
+                .set(FIELD.UPDATED_AT, now)
+                .where(FIELD.FIELD_NAME.eq(fieldName))
+                .and(FIELD.ENTITY_ID.eq(entityId))
                 .execute();
         }
-
-        dsl.deleteFrom(ENTITY)
-            .where(ENTITY.ENTITY_NAME.eq(entityName))
-            .execute();
     }
 
-    private void handleEntityFieldRemoved(JsonNode node) {
+    private void handleFieldRemoved(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String fieldName = node.get("fieldName").asText();
 
-        Long entityId = dsl.select(ENTITY.ENTITY_ID)
-            .from(ENTITY)
-            .where(ENTITY.ENTITY_NAME.eq(entityName))
-            .fetchOneInto(Long.class);
-
-        if (entityId != null) {
-            Long fieldId = dsl.select(FIELD.FIELD_ID)
-                .from(FIELD)
-                .where(FIELD.FIELD_NAME.eq(fieldName))
-                .and(FIELD.ENTITY_ID.eq(entityId))
-                .fetchOneInto(Long.class);
-
-            if (fieldId != null) {
-                // FK order: audit_log → consent_policy → field_category → field
-                dsl.deleteFrom(CONSENT_AUDIT_LOG)
-                    .where(CONSENT_AUDIT_LOG.FIELD_ID.eq(fieldId))
-                    .execute();
-
-                dsl.deleteFrom(CONSENT_POLICY)
-                    .where(CONSENT_POLICY.FIELD_ID.eq(fieldId))
-                    .execute();
-
-                dsl.deleteFrom(FIELD_CATEGORY)
-                    .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                    .execute();
-
-                dsl.deleteFrom(FIELD)
-                    .where(FIELD.FIELD_ID.eq(fieldId))
-                    .execute();
-            }
+        Long fieldId = resolveFieldId(entityName, fieldName);
+        if (fieldId != null) {
+            // FK order: consent_ledger → policy → field_category → field
+            dsl.deleteFrom(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.POLICY_ID.in(
+                    dsl.select(POLICY.POLICY_ID).from(POLICY)
+                        .where(POLICY.FIELD_ID.eq(fieldId))
+                ))
+                .execute();
+            dsl.deleteFrom(POLICY)
+                .where(POLICY.FIELD_ID.eq(fieldId))
+                .execute();
+            dsl.deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .execute();
+            dsl.deleteFrom(FIELD)
+                .where(FIELD.FIELD_ID.eq(fieldId))
+                .execute();
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Field ↔ Category links
-    // -----------------------------------------------------------------------
-
-    private void handleFieldCategoryLinked(JsonNode node) {
+    private void handleFieldCategoryAssigned(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String fieldName = node.get("fieldName").asText();
         String categoryName = node.get("categoryName").asText();
+        String categoryDescription = textOrNull(node, "categoryDescription");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        // Auto-create category if needed
+        dsl.insertInto(CATEGORY)
+            .set(CATEGORY.CATEGORY_NAME, categoryName)
+            .set(CATEGORY.DESCRIPTION, categoryDescription)
+            .set(CATEGORY.CREATED_AT, now)
+            .set(CATEGORY.UPDATED_AT, now)
+            .onConflict(CATEGORY.CATEGORY_NAME)
+            .doUpdate()
+            .set(CATEGORY.UPDATED_AT, now)
+            .execute();
 
         Long fieldId = resolveFieldId(entityName, fieldName);
         Long categoryId = resolveCategoryId(categoryName);
 
         if (fieldId == null || categoryId == null) {
-            log.warn("Cannot link field '{}/{}' to category '{}' — field or category not found",
-                entityName, fieldName, categoryName);
+            log.warn("Cannot assign category '{}' to field '{}/{}' — not found",
+                categoryName, entityName, fieldName);
             return;
         }
 
@@ -254,7 +227,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .execute();
     }
 
-    private void handleFieldCategoryUnlinked(JsonNode node) {
+    private void handleFieldCategoryUnassigned(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String fieldName = node.get("fieldName").asText();
         String categoryName = node.get("categoryName").asText();
@@ -271,52 +244,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     }
 
     // -----------------------------------------------------------------------
-    // Category
-    // -----------------------------------------------------------------------
-
-    private void handleCategoryRegistered(JsonNode node) {
-        String categoryName = node.get("categoryName").asText();
-        String description = textOrNull(node, "description");
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-
-        dsl.insertInto(CATEGORY)
-            .set(CATEGORY.CATEGORY_NAME, categoryName)
-            .set(CATEGORY.DESCRIPTION, description)
-            .set(CATEGORY.CREATED_AT, now)
-            .set(CATEGORY.UPDATED_AT, now)
-            .onConflict(CATEGORY.CATEGORY_NAME)
-            .doUpdate()
-            .set(CATEGORY.DESCRIPTION, description)
-            .set(CATEGORY.UPDATED_AT, now)
-            .execute();
-    }
-
-    private void handleCategoryDeleted(JsonNode node) {
-        String categoryName = node.get("categoryName").asText();
-
-        Long categoryId = resolveCategoryId(categoryName);
-        if (categoryId != null) {
-            // FK order: audit_log → consent_policy → field_category → category
-            dsl.deleteFrom(CONSENT_AUDIT_LOG)
-                .where(CONSENT_AUDIT_LOG.CATEGORY_ID.eq(categoryId))
-                .execute();
-
-            dsl.deleteFrom(CONSENT_POLICY)
-                .where(CONSENT_POLICY.CATEGORY_ID.eq(categoryId))
-                .execute();
-
-            dsl.deleteFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-                .execute();
-        }
-
-        dsl.deleteFrom(CATEGORY)
-            .where(CATEGORY.CATEGORY_NAME.eq(categoryName))
-            .execute();
-    }
-
-    // -----------------------------------------------------------------------
-    // Purpose
+    // Purpose Aggregate
     // -----------------------------------------------------------------------
 
     private void handlePurposeRegistered(JsonNode node) {
@@ -336,20 +264,25 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .execute();
     }
 
-    private void handlePurposeDeleted(JsonNode node) {
+    private void handlePurposeUpdated(JsonNode node) {
+        handlePurposeRegistered(node);
+    }
+
+    private void handlePurposeRemoved(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
 
         Long purposeId = resolvePurposeId(purposeName);
         if (purposeId != null) {
-            // FK order: audit_log → consent_policy → purpose_regulation → purpose
-            dsl.deleteFrom(CONSENT_AUDIT_LOG)
-                .where(CONSENT_AUDIT_LOG.PURPOSE_ID.eq(purposeId))
+            // FK order: consent_ledger → policy → purpose_regulation → purpose
+            dsl.deleteFrom(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.POLICY_ID.in(
+                    dsl.select(POLICY.POLICY_ID).from(POLICY)
+                        .where(POLICY.PURPOSE_ID.eq(purposeId))
+                ))
                 .execute();
-
-            dsl.deleteFrom(CONSENT_POLICY)
-                .where(CONSENT_POLICY.PURPOSE_ID.eq(purposeId))
+            dsl.deleteFrom(POLICY)
+                .where(POLICY.PURPOSE_ID.eq(purposeId))
                 .execute();
-
             dsl.deleteFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId))
                 .execute();
@@ -360,14 +293,12 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .execute();
     }
 
-    // -----------------------------------------------------------------------
-    // Purpose ↔ Regulation links
-    // -----------------------------------------------------------------------
-
     private void handlePurposeRegulationLinked(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
         String regulationName = node.get("regulationName").asText();
-        String legalBasis = textOrNull(node, "legalBasis");
+        String lawfulBasis = textOrNull(node, "lawfulBasis");
+        String onGranted = textOrNull(node, "onGranted");
+        String onDenied = textOrNull(node, "onDenied");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         Long purposeId = resolvePurposeId(purposeName);
@@ -382,12 +313,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         dsl.insertInto(PURPOSE_REGULATION)
             .set(PURPOSE_REGULATION.PURPOSE_ID, purposeId)
             .set(PURPOSE_REGULATION.REGULATION_ID, regulationId)
-            .set(PURPOSE_REGULATION.LEGAL_BASIS, legalBasis)
+            .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
+            .set(PURPOSE_REGULATION.ON_GRANTED, MaskingType.lookupLiteral(onGranted))
+            .set(PURPOSE_REGULATION.ON_DENIED, MaskingType.lookupLiteral(onDenied))
             .set(PURPOSE_REGULATION.CREATED_AT, now)
             .set(PURPOSE_REGULATION.UPDATED_AT, now)
             .onConflict(PURPOSE_REGULATION.PURPOSE_ID, PURPOSE_REGULATION.REGULATION_ID)
             .doUpdate()
-            .set(PURPOSE_REGULATION.LEGAL_BASIS, legalBasis)
+            .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
+            .set(PURPOSE_REGULATION.ON_GRANTED, MaskingType.lookupLiteral(onGranted))
+            .set(PURPOSE_REGULATION.ON_DENIED, MaskingType.lookupLiteral(onDenied))
             .set(PURPOSE_REGULATION.UPDATED_AT, now)
             .execute();
     }
@@ -407,41 +342,135 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         }
     }
 
+    private void handlePurposePolicyAdded(JsonNode node) {
+        String purposeName = node.get("purposeName").asText();
+        String policyType = node.get("policyType").asText();
+        String fieldName = textOrNull(node, "fieldName");
+        String entityName = textOrNull(node, "entityName");
+        String categoryName = textOrNull(node, "categoryName");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        Long purposeId = resolvePurposeId(purposeName);
+        if (purposeId == null) {
+            log.warn("Purpose '{}' not found — cannot add policy", purposeName);
+            return;
+        }
+
+        Long fieldId = null;
+        Long categoryId = null;
+
+        if ("FIELD".equals(policyType)) {
+            fieldId = resolveFieldId(entityName, fieldName);
+            if (fieldId == null) {
+                log.warn("Field '{}/{}' not found — cannot add policy", entityName, fieldName);
+                return;
+            }
+            dsl.insertInto(POLICY)
+                .set(POLICY.PURPOSE_ID, purposeId)
+                .set(POLICY.FIELD_ID, fieldId)
+                .set(POLICY.POLICY_TYPE, PolicyType.lookupLiteral(policyType))
+                .set(POLICY.CREATED_AT, now)
+                .set(POLICY.UPDATED_AT, now)
+                .onConflict(POLICY.PURPOSE_ID, POLICY.FIELD_ID)
+                .doUpdate()
+                .set(POLICY.UPDATED_AT, now)
+                .execute();
+        } else if ("CATEGORY".equals(policyType)) {
+            categoryId = resolveCategoryId(categoryName);
+            if (categoryId == null) {
+                log.warn("Category '{}' not found — cannot add policy", categoryName);
+                return;
+            }
+            dsl.insertInto(POLICY)
+                .set(POLICY.PURPOSE_ID, purposeId)
+                .set(POLICY.CATEGORY_ID, categoryId)
+                .set(POLICY.POLICY_TYPE, PolicyType.lookupLiteral(policyType))
+                .set(POLICY.CREATED_AT, now)
+                .set(POLICY.UPDATED_AT, now)
+                .onConflict(POLICY.PURPOSE_ID, POLICY.CATEGORY_ID)
+                .doUpdate()
+                .set(POLICY.UPDATED_AT, now)
+                .execute();
+        }
+    }
+
+    private void handlePurposePolicyRemoved(JsonNode node) {
+        String purposeName = node.get("purposeName").asText();
+        String policyType = node.get("policyType").asText();
+        String fieldName = textOrNull(node, "fieldName");
+        String entityName = textOrNull(node, "entityName");
+        String categoryName = textOrNull(node, "categoryName");
+
+        Long purposeId = resolvePurposeId(purposeName);
+        if (purposeId == null) return;
+
+        if ("FIELD".equals(policyType)) {
+            Long fieldId = resolveFieldId(entityName, fieldName);
+            if (fieldId != null) {
+                // Delete consent_ledger entries referencing this policy first
+                dsl.deleteFrom(CONSENT_LEDGER)
+                    .where(CONSENT_LEDGER.POLICY_ID.in(
+                        dsl.select(POLICY.POLICY_ID).from(POLICY)
+                            .where(POLICY.PURPOSE_ID.eq(purposeId))
+                            .and(POLICY.FIELD_ID.eq(fieldId))
+                    ))
+                    .execute();
+                dsl.deleteFrom(POLICY)
+                    .where(POLICY.PURPOSE_ID.eq(purposeId))
+                    .and(POLICY.FIELD_ID.eq(fieldId))
+                    .execute();
+            }
+        } else if ("CATEGORY".equals(policyType)) {
+            Long categoryId = resolveCategoryId(categoryName);
+            if (categoryId != null) {
+                dsl.deleteFrom(CONSENT_LEDGER)
+                    .where(CONSENT_LEDGER.POLICY_ID.in(
+                        dsl.select(POLICY.POLICY_ID).from(POLICY)
+                            .where(POLICY.PURPOSE_ID.eq(purposeId))
+                            .and(POLICY.CATEGORY_ID.eq(categoryId))
+                    ))
+                    .execute();
+                dsl.deleteFrom(POLICY)
+                    .where(POLICY.PURPOSE_ID.eq(purposeId))
+                    .and(POLICY.CATEGORY_ID.eq(categoryId))
+                    .execute();
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
-    // Regulation
+    // Regulation Aggregate
     // -----------------------------------------------------------------------
 
     private void handleRegulationRegistered(JsonNode node) {
         String regulationName = node.get("regulationName").asText();
-        String fullName = textOrNull(node, "fullName");
-        String jurisdiction = textOrNull(node, "jurisdiction");
         String description = textOrNull(node, "description");
-        String url = textOrNull(node, "url");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         dsl.insertInto(REGULATION)
             .set(REGULATION.REGULATION_NAME, regulationName)
-            .set(REGULATION.FULL_NAME, fullName)
-            .set(REGULATION.JURISDICTION, jurisdiction)
             .set(REGULATION.DESCRIPTION, description)
-            .set(REGULATION.URL, url)
             .set(REGULATION.CREATED_AT, now)
             .set(REGULATION.UPDATED_AT, now)
             .onConflict(REGULATION.REGULATION_NAME)
             .doUpdate()
-            .set(REGULATION.FULL_NAME, fullName)
-            .set(REGULATION.JURISDICTION, jurisdiction)
             .set(REGULATION.DESCRIPTION, description)
-            .set(REGULATION.URL, url)
             .set(REGULATION.UPDATED_AT, now)
             .execute();
     }
 
-    private void handleRegulationDeleted(JsonNode node) {
+    private void handleRegulationUpdated(JsonNode node) {
+        handleRegulationRegistered(node);
+    }
+
+    private void handleRegulationRemoved(JsonNode node) {
         String regulationName = node.get("regulationName").asText();
 
         Long regulationId = resolveRegulationId(regulationName);
         if (regulationId != null) {
+            dsl.deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.REGULATION_ID.eq(regulationId))
+                .execute();
             dsl.deleteFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.REGULATION_ID.eq(regulationId))
                 .execute();
@@ -452,149 +481,170 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .execute();
     }
 
+    private void handleRegulationJurisdictionAdded(JsonNode node) {
+        String regulationName = node.get("regulationName").asText();
+        String jurisdictionName = node.get("jurisdictionName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        Long regulationId = resolveRegulationId(regulationName);
+        if (regulationId == null) {
+            log.warn("Regulation '{}' not found — cannot add jurisdiction", regulationName);
+            return;
+        }
+
+        // Upsert jurisdiction
+        dsl.insertInto(JURISDICTION)
+            .set(JURISDICTION.JURISDICTION_NAME, jurisdictionName)
+            .set(JURISDICTION.DESCRIPTION, description)
+            .set(JURISDICTION.CREATED_AT, now)
+            .set(JURISDICTION.UPDATED_AT, now)
+            .onConflict(JURISDICTION.JURISDICTION_NAME)
+            .doUpdate()
+            .set(JURISDICTION.UPDATED_AT, now)
+            .execute();
+
+        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
+        if (jurisdictionId == null) return;
+
+        // Link regulation ↔ jurisdiction
+        dsl.insertInto(REGULATION_JURISDICTION)
+            .set(REGULATION_JURISDICTION.REGULATION_ID, regulationId)
+            .set(REGULATION_JURISDICTION.JURISDICTION_ID, jurisdictionId)
+            .set(REGULATION_JURISDICTION.CREATED_AT, now)
+            .set(REGULATION_JURISDICTION.UPDATED_AT, now)
+            .onConflict(REGULATION_JURISDICTION.REGULATION_ID,
+                        REGULATION_JURISDICTION.JURISDICTION_ID)
+            .doNothing()
+            .execute();
+    }
+
+    private void handleRegulationJurisdictionRemoved(JsonNode node) {
+        String regulationName = node.get("regulationName").asText();
+        String jurisdictionName = node.get("jurisdictionName").asText();
+
+        Long regulationId = resolveRegulationId(regulationName);
+        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
+
+        if (regulationId != null && jurisdictionId != null) {
+            dsl.deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.REGULATION_ID.eq(regulationId))
+                .and(REGULATION_JURISDICTION.JURISDICTION_ID.eq(jurisdictionId))
+                .execute();
+        }
+    }
+
     // -----------------------------------------------------------------------
-    // Consent Policy
+    // SubjectConsent Aggregate (consent ledger — upsert per subject+policy)
     // -----------------------------------------------------------------------
 
-    private void handlePolicyGranted(JsonNode node) {
+    private void handleConsentGranted(JsonNode node) {
+        upsertConsentLedger(node, "GRANT");
+    }
+
+    private void handleConsentRevoked(JsonNode node) {
+        upsertConsentLedger(node, "REVOKE");
+    }
+
+    private void handleConsentExpired(JsonNode node) {
+        upsertConsentLedger(node, "EXPIRE");
+    }
+
+    private void upsertConsentLedger(JsonNode node, String action) {
         String subjectId = node.get("subjectId").asText();
-        String purposeName = node.get("purposeName").asText();
-        String fieldName = textOrNull(node, "fieldName");
-        String entityName = textOrNull(node, "entityName");
-        String category = textOrNull(node, "category");
-        boolean granted = node.get("granted").asBoolean();
+        long policyId = node.get("policyId").asLong();
+        String actor = textOrNull(node, "actor");
+        String ipAddress = textOrNull(node, "ipAddress");
+        String userAgent = textOrNull(node, "userAgent");
         LocalDateTime expiresAt = instantToLocal(node, "expiresAt");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        ConsentAction consentAction = ConsentAction.lookupLiteral(action);
 
-        Long purposeId = resolvePurposeId(purposeName);
-        if (purposeId == null) {
-            log.warn("Purpose '{}' not found — cannot project policy grant for subject '{}'",
-                purposeName, subjectId);
-            return;
-        }
-
-        Long fieldId = null;
-        Long categoryId = null;
-
-        if (fieldName != null) {
-            fieldId = resolveFieldId(entityName, fieldName);
-            if (fieldId == null) {
-                log.warn("Field '{}/{}' not found — cannot project policy grant", entityName, fieldName);
-                return;
-            }
-            upsertFieldPolicy(subjectId, fieldId, purposeId, granted, expiresAt, now);
-        } else if (category != null) {
-            categoryId = resolveCategoryId(category);
-            if (categoryId == null) {
-                log.warn("Category '{}' not found — cannot project policy grant", category);
-                return;
-            }
-            upsertCategoryPolicy(subjectId, categoryId, purposeId, granted, expiresAt, now);
-        } else {
-            return;
-        }
-
-        // Append audit trail entry
-        dsl.insertInto(CONSENT_AUDIT_LOG)
-            .set(CONSENT_AUDIT_LOG.SUBJECT_ID, subjectId)
-            .set(CONSENT_AUDIT_LOG.FIELD_ID, fieldId)
-            .set(CONSENT_AUDIT_LOG.CATEGORY_ID, categoryId)
-            .set(CONSENT_AUDIT_LOG.PURPOSE_ID, purposeId)
-            .set(CONSENT_AUDIT_LOG.ACTION, granted ? "GRANTED" : "REVOKED")
-            .set(CONSENT_AUDIT_LOG.GRANTED, granted)
-            .set(CONSENT_AUDIT_LOG.EXPIRES_AT, expiresAt)
-            .set(CONSENT_AUDIT_LOG.CREATED_AT, now)
+        dsl.insertInto(CONSENT_LEDGER)
+            .set(CONSENT_LEDGER.POLICY_ID, policyId)
+            .set(CONSENT_LEDGER.SUBJECT_ID, subjectId)
+            .set(CONSENT_LEDGER.ACTION, consentAction)
+            .set(CONSENT_LEDGER.ACTOR, actor)
+            .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
+            .set(CONSENT_LEDGER.USER_AGENT, userAgent)
+            .set(CONSENT_LEDGER.CREATED_AT, now)
+            .set(CONSENT_LEDGER.UPDATED_AT, now)
+            .set(CONSENT_LEDGER.EXPIRES_AT, expiresAt)
+            .onConflict(CONSENT_LEDGER.SUBJECT_ID, CONSENT_LEDGER.POLICY_ID)
+            .doUpdate()
+            .set(CONSENT_LEDGER.ACTION, consentAction)
+            .set(CONSENT_LEDGER.ACTOR, actor)
+            .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
+            .set(CONSENT_LEDGER.USER_AGENT, userAgent)
+            .set(CONSENT_LEDGER.UPDATED_AT, now)
+            .set(CONSENT_LEDGER.EXPIRES_AT, expiresAt)
             .execute();
     }
 
-    private void handlePolicyRevoked(JsonNode node) {
-        // Revocation uses the same upsert path with granted=false
-        handlePolicyGranted(node);
-    }
-
-    private void handlePolicyAllRevoked(JsonNode node) {
+    private void handleConsentAllRevoked(JsonNode node) {
         String subjectId = node.get("subjectId").asText();
+        String actor = textOrNull(node, "actor");
+        String ipAddress = textOrNull(node, "ipAddress");
+        String userAgent = textOrNull(node, "userAgent");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-        dsl.deleteFrom(CONSENT_POLICY)
-            .where(CONSENT_POLICY.SUBJECT_ID.eq(subjectId))
-            .execute();
-
-        // Audit the bulk revocation
-        dsl.insertInto(CONSENT_AUDIT_LOG)
-            .set(CONSENT_AUDIT_LOG.SUBJECT_ID, subjectId)
-            .set(CONSENT_AUDIT_LOG.ACTION, "ALL_REVOKED")
-            .set(CONSENT_AUDIT_LOG.GRANTED, false)
-            .set(CONSENT_AUDIT_LOG.CREATED_AT, now)
+        // Update all ledger entries for this subject to REVOKE
+        dsl.update(CONSENT_LEDGER)
+            .set(CONSENT_LEDGER.ACTION, ConsentAction.REVOKE)
+            .set(CONSENT_LEDGER.ACTOR, actor)
+            .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
+            .set(CONSENT_LEDGER.USER_AGENT, userAgent)
+            .set(CONSENT_LEDGER.UPDATED_AT, now)
+            .set(CONSENT_LEDGER.EXPIRES_AT, (LocalDateTime) null)
+            .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
             .execute();
     }
 
-    private void handlePolicyAuditDeleted(JsonNode node) {
+    // -----------------------------------------------------------------------
+    // DSAR Aggregate
+    // -----------------------------------------------------------------------
+
+    private void handleSubjectAuditDeleted(JsonNode node) {
         String subjectId = node.get("subjectId").asText();
+        String deletionRequestId = node.get("deletionRequestId").asText();
+        String actor = textOrNull(node, "actor");
+        String ipAddress = textOrNull(node, "ipAddress");
+        String userAgent = textOrNull(node, "userAgent");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-        dsl.deleteFrom(CONSENT_AUDIT_LOG)
-            .where(CONSENT_AUDIT_LOG.SUBJECT_ID.eq(subjectId))
+        // Count what will be deleted
+        int ledgerCount = dsl.selectCount().from(CONSENT_LEDGER)
+            .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
+            .fetchOneInto(int.class);
+
+        // Delete consent ledger entries for this subject
+        dsl.deleteFrom(CONSENT_LEDGER)
+            .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
+            .execute();
+
+        // Record the DSAR action
+        dsl.insertInto(DSAR_AUDIT_LOG)
+            .set(DSAR_AUDIT_LOG.SUBJECT_ID, subjectId)
+            .set(DSAR_AUDIT_LOG.DELETION_REQUEST_ID, deletionRequestId)
+            .set(DSAR_AUDIT_LOG.POLICIES_DELETED, ledgerCount)
+            .set(DSAR_AUDIT_LOG.STATUS, "SUCCESS")
+            .set(DSAR_AUDIT_LOG.ACTOR, actor)
+            .set(DSAR_AUDIT_LOG.IP_ADDRESS, ipAddress)
+            .set(DSAR_AUDIT_LOG.USER_AGENT, userAgent)
+            .set(DSAR_AUDIT_LOG.CREATED_AT, now)
             .execute();
     }
 
     // -----------------------------------------------------------------------
-    // Helpers
+    // ID Resolution Helpers
     // -----------------------------------------------------------------------
 
-    private void upsertFieldPolicy(
-        String subjectId, Long fieldId, Long purposeId,
-        boolean granted, LocalDateTime expiresAt, LocalDateTime now
-    ) {
-        var insert = dsl.insertInto(CONSENT_POLICY)
-            .set(CONSENT_POLICY.SUBJECT_ID, subjectId)
-            .set(CONSENT_POLICY.FIELD_ID, fieldId)
-            .set(CONSENT_POLICY.PURPOSE_ID, purposeId)
-            .set(CONSENT_POLICY.GRANTED, granted)
-            .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
-            .set(CONSENT_POLICY.CREATED_AT, now)
-            .set(CONSENT_POLICY.UPDATED_AT, now);
-
-        if (granted) {
-            insert.set(CONSENT_POLICY.GRANTED_AT, now);
-        } else {
-            insert.set(CONSENT_POLICY.REVOKED_AT, now);
-        }
-
-        insert.onConflict(CONSENT_POLICY.SUBJECT_ID, CONSENT_POLICY.FIELD_ID, CONSENT_POLICY.PURPOSE_ID)
-            .doUpdate()
-            .set(CONSENT_POLICY.GRANTED, granted)
-            .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
-            .set(CONSENT_POLICY.UPDATED_AT, now)
-            .set(granted ? CONSENT_POLICY.GRANTED_AT : CONSENT_POLICY.REVOKED_AT, now)
-            .execute();
-    }
-
-    private void upsertCategoryPolicy(
-        String subjectId, Long categoryId, Long purposeId,
-        boolean granted, LocalDateTime expiresAt, LocalDateTime now
-    ) {
-        var insert = dsl.insertInto(CONSENT_POLICY)
-            .set(CONSENT_POLICY.SUBJECT_ID, subjectId)
-            .set(CONSENT_POLICY.CATEGORY_ID, categoryId)
-            .set(CONSENT_POLICY.PURPOSE_ID, purposeId)
-            .set(CONSENT_POLICY.GRANTED, granted)
-            .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
-            .set(CONSENT_POLICY.CREATED_AT, now)
-            .set(CONSENT_POLICY.UPDATED_AT, now);
-
-        if (granted) {
-            insert.set(CONSENT_POLICY.GRANTED_AT, now);
-        } else {
-            insert.set(CONSENT_POLICY.REVOKED_AT, now);
-        }
-
-        insert.onConflict(CONSENT_POLICY.SUBJECT_ID, CONSENT_POLICY.CATEGORY_ID, CONSENT_POLICY.PURPOSE_ID)
-            .doUpdate()
-            .set(CONSENT_POLICY.GRANTED, granted)
-            .set(CONSENT_POLICY.EXPIRES_AT, expiresAt)
-            .set(CONSENT_POLICY.UPDATED_AT, now)
-            .set(granted ? CONSENT_POLICY.GRANTED_AT : CONSENT_POLICY.REVOKED_AT, now)
-            .execute();
+    private Long resolveEntityId(String entityName) {
+        if (entityName == null) return null;
+        return dsl.select(ENTITY.ENTITY_ID)
+            .from(ENTITY)
+            .where(ENTITY.ENTITY_NAME.eq(entityName))
+            .fetchOneInto(Long.class);
     }
 
     private Long resolveFieldId(String entityName, String fieldName) {
@@ -630,6 +680,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .where(REGULATION.REGULATION_NAME.eq(regulationName))
             .fetchOneInto(Long.class);
     }
+
+    private Long resolveJurisdictionId(String jurisdictionName) {
+        if (jurisdictionName == null) return null;
+        return dsl.select(JURISDICTION.JURISDICTION_ID)
+            .from(JURISDICTION)
+            .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
+            .fetchOneInto(Long.class);
+    }
+
+    // -----------------------------------------------------------------------
+    // JSON Helpers
+    // -----------------------------------------------------------------------
 
     private static String textOrNull(JsonNode node, String field) {
         JsonNode child = node.get(field);

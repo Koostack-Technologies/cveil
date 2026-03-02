@@ -10,9 +10,8 @@ import java.util.Set;
  * names found during the scan.
  *
  * <p>Consumers use this to register the discovered metadata into the
- * consent admin schema via
- * {@link com.koostack.operio.core.service.ConsentAdminService} registration
- * methods.
+ * consent admin schema via {@link com.koostack.operio.core.TenantService}
+ * registration methods.
  *
  * @param fields     every discovered sensitive field, possibly empty
  * @param categories the distinct category names extracted from the
