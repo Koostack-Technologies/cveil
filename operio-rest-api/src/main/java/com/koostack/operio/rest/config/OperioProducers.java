@@ -34,7 +34,6 @@ import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.consent.redis.ConsentPolicyRedisRepository;
-import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
@@ -62,6 +61,7 @@ import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.quarkus.arc.ClientProxy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -307,7 +307,8 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public PlatformAdminService platformAdminService(TenantService tenantService) {
-        if (tenantService instanceof DefaultTenantService dts) {
+        TenantService unwrapped = ClientProxy.unwrap(tenantService);
+        if (unwrapped instanceof DefaultTenantService dts) {
             PlatformAdminService service = dts.platformAdminService();
             if (service != null) {
                 LOG.debug("Operio REST API: PlatformAdminService available");
@@ -324,7 +325,8 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public CoreCommandService coreCommandService(TenantService tenantService) {
-        if (tenantService instanceof DefaultTenantService dts) {
+        TenantService unwrapped = ClientProxy.unwrap(tenantService);
+        if (unwrapped instanceof DefaultTenantService dts) {
             CoreCommandService service = dts.coreCommandService();
             if (service != null) {
                 LOG.debug("Operio REST API: CoreCommandService available");
@@ -339,7 +341,8 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public CoreQueryService coreQueryService(TenantService tenantService) {
-        if (tenantService instanceof DefaultTenantService dts) {
+        TenantService unwrapped = ClientProxy.unwrap(tenantService);
+        if (unwrapped instanceof DefaultTenantService dts) {
             CoreQueryService service = dts.coreQueryService();
             if (service != null) {
                 LOG.debug("Operio REST API: CoreQueryService available");
@@ -366,7 +369,8 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public TokenValidationService tokenValidationService(TenantService tenantService) {
-        if (tenantService instanceof DefaultTenantService dts) {
+        TenantService unwrapped = ClientProxy.unwrap(tenantService);
+        if (unwrapped instanceof DefaultTenantService dts) {
             TokenValidationService service = dts.tokenValidationService();
             if (service != null) {
                 LOG.debug("Operio REST API: TokenValidationService available");
@@ -634,7 +638,7 @@ public class OperioProducers {
         // Inject consumer into TenantManager for lifecycle orchestration,
         // then trigger startup reconciliation (adds consumers for all
         // existing active tenants).
-        if (tenantService instanceof DefaultTenantService dts) {
+        if (ClientProxy.unwrap(tenantService) instanceof DefaultTenantService dts) {
             @SuppressWarnings("rawtypes")
             PlatformAdminService rawService = dts.platformAdminService();
             if (rawService instanceof JooqPlatformAdminService platformService) {
@@ -711,13 +715,21 @@ public class OperioProducers {
         // -- Redis config (optional) ------------------------------------------
         RedisPluginConfig redisPluginConfig = config
             .redis()
-            .map(redis ->
-                (RedisPluginConfig) new RedisConsentDecisionServiceConfig(
-                    redis.host(),
-                    redis.port(),
-                    redis.password().filter(pw -> !pw.isBlank()).orElse(null)
-                )
-            )
+            .<RedisPluginConfig>map(redis -> {
+                String pw = redis.password().filter(p -> !p.isBlank()).orElse(null);
+                RedisClientFactory.TlsConfig tls = redis.tlsEnabled()
+                    ? new RedisClientFactory.TlsConfig(
+                        true,
+                        redis.tlsCaCertPath().orElse(null),
+                        redis.tlsVerifyPeer())
+                    : null;
+                return new RedisPluginConfig() {
+                    @Override public String host() { return redis.host(); }
+                    @Override public int port() { return redis.port(); }
+                    @Override public String password() { return pw; }
+                    @Override public RedisClientFactory.TlsConfig tlsConfig() { return tls; }
+                };
+            })
             .orElse(null);
 
         // -- Platform event service -------------------------------------------
@@ -1171,7 +1183,8 @@ public class OperioProducers {
             redis.host(),
             redis.port(),
             adminPool,
-            lookup
+            lookup,
+            tlsConfig
         );
     }
 
@@ -1279,16 +1292,21 @@ public class OperioProducers {
         // createTenant().
         RedisPluginConfig redisPluginConfig = config
             .redis()
-            .map(redis ->
-                (RedisPluginConfig) new RedisConsentDecisionServiceConfig(
-                    redis.host(),
-                    redis.port(),
-                    redis
-                        .password()
-                        .filter(pw -> !pw.isBlank())
-                        .orElse(null)
-                )
-            )
+            .<RedisPluginConfig>map(redis -> {
+                String pw = redis.password().filter(p -> !p.isBlank()).orElse(null);
+                RedisClientFactory.TlsConfig tls = redis.tlsEnabled()
+                    ? new RedisClientFactory.TlsConfig(
+                        true,
+                        redis.tlsCaCertPath().orElse(null),
+                        redis.tlsVerifyPeer())
+                    : null;
+                return new RedisPluginConfig() {
+                    @Override public String host() { return redis.host(); }
+                    @Override public int port() { return redis.port(); }
+                    @Override public String password() { return pw; }
+                    @Override public RedisClientFactory.TlsConfig tlsConfig() { return tls; }
+                };
+            })
             .orElse(null);
 
         LOG.info(

@@ -25,4 +25,12 @@ public interface RedisPluginConfig extends PluginConfig {
      * @return the Redis server password, or {@code null} if no authentication is required
      */
     String password();
+
+    /**
+     * @return optional TLS configuration for encrypted connections,
+     *         or {@code null} if TLS is not configured
+     */
+    default RedisClientFactory.TlsConfig tlsConfig() {
+        return null;
+    }
 }

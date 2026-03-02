@@ -93,7 +93,8 @@ public class JooqPlatformEventService
                     RedisClientFactory.createClient(
                         config.redis().host(),
                         config.redis().port(),
-                        config.redis().password()
+                        config.redis().password(),
+                        config.redis().tlsConfig()
                     )
                 );
             }

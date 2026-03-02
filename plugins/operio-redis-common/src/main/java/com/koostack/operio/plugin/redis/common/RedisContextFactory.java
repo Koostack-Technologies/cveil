@@ -42,14 +42,12 @@ public final class RedisContextFactory {
      * @return a configured {@link JedisPooled} instance
      */
     public static JedisPooled createClient(RedisPluginConfig config) {
-        if (config.password() != null && !config.password().isBlank()) {
-            return RedisClientFactory.createClient(
-                config.host(),
-                config.port(),
-                config.password()
-            );
-        }
-        return RedisClientFactory.createClient(config.host(), config.port());
+        return RedisClientFactory.createClient(
+            config.host(),
+            config.port(),
+            config.password(),
+            config.tlsConfig()
+        );
     }
 
     /**
@@ -98,7 +96,8 @@ public final class RedisContextFactory {
             config.host(),
             config.port(),
             adminPool,
-            credentialLookup
+            credentialLookup,
+            config.tlsConfig()
         );
     }
 }

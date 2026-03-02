@@ -124,7 +124,7 @@ public class JooqPlatformAdminService
      */
     @Override
     public void configure(PlatformJooqConfig config) {
-        // Create the DataSource — shared by DSLContext and TenantManager (for Flyway)
+        // Create the DataSource — used by Flyway for the old admin migrations.
         DataSource dataSource = JooqDataSourceFactory.createDataSource(
             config,
             "operio-platform-jooq"
@@ -144,19 +144,35 @@ public class JooqPlatformAdminService
             .load()
             .migrate();
 
-        // Create the platform DSLContext (non-tenant-aware).
-        // The jOOQ codegen runs against H2 which uses UPPER_CASE identifiers.
-        // Postgres stores unquoted identifiers as lowercase, so quoted
-        // "PUBLIC"."TENANT" won't match the actual `tenant` table.
-        // Setting renderNameCase=LOWER makes jOOQ emit lowercase quoted
-        // identifiers that match the Postgres catalog.
+        // Create a DataSource with search_path so that unqualified table
+        // names (e.g. "tenant") resolve to the CQRS projection schema
+        // (platform_core) first, then fall back to public for tables
+        // that only exist there (api_key, idp_config, etc.).
         SQLDialect sqlDialect = SQLDialect.valueOf(
             config.dialect().toUpperCase()
         );
-        Settings settings = new Settings().withRenderNameCase(
-            RenderNameCase.LOWER
+        String jdbcUrl = config.connectionString();
+        if (jdbcUrl != null && jdbcUrl.startsWith("jdbc:postgresql")) {
+            String sep = jdbcUrl.contains("?") ? "&" : "?";
+            jdbcUrl = jdbcUrl + sep + "stringtype=unspecified";
+        }
+        com.zaxxer.hikari.HikariConfig hikariCfg = new com.zaxxer.hikari.HikariConfig();
+        hikariCfg.setJdbcUrl(jdbcUrl);
+        hikariCfg.setPoolName("operio-platform-admin");
+        if (config.username() != null) hikariCfg.setUsername(config.username());
+        if (config.password() != null) hikariCfg.setPassword(config.password());
+        hikariCfg.setConnectionInitSql(
+            "SET search_path TO platform_core, public"
         );
-        this.platformDslContext = DSL.using(dataSource, sqlDialect, settings);
+        DataSource adminDataSource = new com.zaxxer.hikari.HikariDataSource(hikariCfg);
+
+        // renderSchema=false prevents jOOQ from emitting "public"."tenant" —
+        // instead it emits just "tenant" which search_path resolves to
+        // platform_core.tenant (the CQRS read model).
+        Settings settings = new Settings()
+            .withRenderNameCase(RenderNameCase.LOWER)
+            .withRenderSchema(false);
+        this.platformDslContext = DSL.using(adminDataSource, sqlDialect, settings);
 
         this.tenantRepository = new TenantRepository(
             platformDslContext,

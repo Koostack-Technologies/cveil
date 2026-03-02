@@ -131,6 +131,7 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
     private final int port;
     private final JedisPooled adminPool;
     private final TenantCredentialLookup credentialLookup;
+    private final RedisClientFactory.TlsConfig tlsConfig;
     private final ConcurrentMap<String, JedisPooled> tenantPools;
 
     // -----------------------------------------------------------------------
@@ -138,7 +139,7 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates a new tenant-aware Jedis provider.
+     * Creates a new tenant-aware Jedis provider without TLS.
      *
      * @param host             the Redis server hostname
      * @param port             the Redis server port
@@ -152,6 +153,28 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
         int port,
         JedisPooled adminPool,
         TenantCredentialLookup credentialLookup
+    ) {
+        this(host, port, adminPool, credentialLookup, null);
+    }
+
+    /**
+     * Creates a new tenant-aware Jedis provider with optional TLS.
+     *
+     * @param host             the Redis server hostname
+     * @param port             the Redis server port
+     * @param adminPool        the admin-level {@link JedisPooled} (default user),
+     *                         used when no tenant context is active
+     * @param credentialLookup callback to resolve per-tenant ACL credentials
+     * @param tlsConfig        optional TLS configuration for per-tenant pools
+     *                         ({@code null} to disable TLS)
+     * @throws NullPointerException if any required argument is {@code null}
+     */
+    public TenantAwareJedisProvider(
+        String host,
+        int port,
+        JedisPooled adminPool,
+        TenantCredentialLookup credentialLookup,
+        RedisClientFactory.TlsConfig tlsConfig
     ) {
         if (host == null || host.isBlank()) {
             throw new NullPointerException(
@@ -172,6 +195,7 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
         this.port = port;
         this.adminPool = adminPool;
         this.credentialLookup = credentialLookup;
+        this.tlsConfig = tlsConfig;
         this.tenantPools = new ConcurrentHashMap<>();
     }
 
@@ -318,15 +342,12 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
             credentials.aclUsername()
         );
 
-        // JedisPooled(host, port, user, password) — authenticates as the
-        // tenant's ACL user, which is restricted to keys matching
-        // {appName}:{tenantId}:* by the Redis ACL rule set during
-        // TenantManager.provisionTenant().
-        return new JedisPooled(
+        return RedisClientFactory.createClient(
             host,
             port,
             credentials.aclUsername(),
-            credentials.aclPassword()
+            credentials.aclPassword(),
+            tlsConfig
         );
     }
 }

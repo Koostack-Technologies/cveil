@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.platform.jooq;
 
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener;
+import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
@@ -770,7 +771,41 @@ public class TenantManager {
      * @return a connected and authenticated {@link Jedis} instance
      */
     private Jedis createJedisConnection() {
-        Jedis jedis = new Jedis(redisConfig.host(), redisConfig.port());
+        RedisClientFactory.TlsConfig tls = redisConfig.tlsConfig();
+        Jedis jedis;
+        if (tls != null && tls.isEnabled()) {
+            try {
+                javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+                javax.net.ssl.TrustManager[] tm;
+                if (tls.isVerifyPeer() && tls.getCaCertPath() != null && !tls.getCaCertPath().isBlank()) {
+                    java.nio.file.Path caPath = java.nio.file.Paths.get(tls.getCaCertPath());
+                    byte[] certBytes = java.nio.file.Files.readAllBytes(caPath);
+                    java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+                    java.security.KeyStore ks = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType());
+                    ks.load(null, null);
+                    int i = 1;
+                    for (java.security.cert.Certificate cert : cf.generateCertificates(new java.io.ByteArrayInputStream(certBytes))) {
+                        ks.setCertificateEntry("cert-" + i++, cert);
+                    }
+                    javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory.getInstance(
+                        javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+                    tmf.init(ks);
+                    tm = tmf.getTrustManagers();
+                } else {
+                    tm = new javax.net.ssl.TrustManager[]{new javax.net.ssl.X509TrustManager() {
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] c, String a) {}
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] c, String a) {}
+                    }};
+                }
+                sslContext.init(null, tm, new java.security.SecureRandom());
+                jedis = new Jedis(redisConfig.host(), redisConfig.port(), true, sslContext.getSocketFactory(), null, null);
+            } catch (Exception e) {
+                throw new OperioServiceException("Failed to create TLS Jedis connection for ACL operations", e);
+            }
+        } else {
+            jedis = new Jedis(redisConfig.host(), redisConfig.port());
+        }
         if (
             redisConfig.password() != null && !redisConfig.password().isBlank()
         ) {
