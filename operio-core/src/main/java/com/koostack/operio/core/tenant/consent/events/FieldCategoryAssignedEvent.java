@@ -6,5 +6,6 @@ public record FieldCategoryAssignedEvent(
         String entityName,
         String fieldName,
         String categoryName,
-        String categoryDescription
+        String categoryDescription,
+        FieldSnapshot snapshot
 ) implements DomainEvent {}

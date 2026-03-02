@@ -43,8 +43,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
     private static final Logger log = LoggerFactory.getLogger(RedisInvalidationSubscriber.class);
-    private static final String CHANNEL_PREFIX = RedisInvalidationPublisher.CHANNEL_PREFIX;
-    static final String CONTROL_CHANNEL = CHANNEL_PREFIX + "__control__";
+    static final String DEFAULT_CHANNEL_PREFIX = RedisInvalidationPublisher.DEFAULT_CHANNEL_PREFIX;
 
     private static final long INITIAL_BACKOFF_MS = 1_000;
     private static final long MAX_BACKOFF_MS = 30_000;
@@ -52,6 +51,8 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
     private final JedisPooled adminJedis;
     private final ObjectMapper objectMapper;
+    private final String channelPrefix;
+    private final String controlChannel;
 
     /** Exponential backoff for reconnection, reset on successful subscribe. */
     private final AtomicLong backoffMs = new AtomicLong(INITIAL_BACKOFF_MS);
@@ -73,8 +74,14 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
     private volatile Thread subscriberThread;
 
     public RedisInvalidationSubscriber(JedisPooled adminJedis, ObjectMapper objectMapper) {
+        this(adminJedis, objectMapper, DEFAULT_CHANNEL_PREFIX);
+    }
+
+    public RedisInvalidationSubscriber(JedisPooled adminJedis, ObjectMapper objectMapper, String channelPrefix) {
         this.adminJedis = Objects.requireNonNull(adminJedis, "adminJedis");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.channelPrefix = Objects.requireNonNull(channelPrefix, "channelPrefix");
+        this.controlChannel = channelPrefix + "__control__";
         startSubscriberThread();
     }
 
@@ -190,7 +197,7 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
     private String[] getActiveChannels() {
         String[] active = channelSinks.keySet().toArray(new String[0]); // snapshot
         String[] channels = new String[active.length + 1];
-        channels[0] = CONTROL_CHANNEL;
+        channels[0] = controlChannel;
         System.arraycopy(active, 0, channels, 1, active.length);
         return channels;
     }
@@ -223,7 +230,7 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
         if (lastSinkRemoved[0]) {
             JedisPubSub handler = this.pubSubHandler;
-            if (handler != null && handler.isSubscribed() && !channel.equals(CONTROL_CHANNEL)) {
+            if (handler != null && handler.isSubscribed() && !channel.equals(controlChannel)) {
                 try {
                     handler.unsubscribe(channel);
                     log.debug("Unsubscribed from Redis channel {} (no remaining sinks)", channel);
@@ -234,8 +241,8 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
         }
     }
 
-    static String channelFor(String tenantId) {
-        return CHANNEL_PREFIX + tenantId;
+    String channelFor(String tenantId) {
+        return channelPrefix + tenantId;
     }
 
     // ── JedisPubSub handler ─────────────────────────────────────────────────
@@ -256,7 +263,7 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
         @Override
         public void onMessage(String channel, String message) {
-            if (CONTROL_CHANNEL.equals(channel)) return;
+            if (controlChannel.equals(channel)) return;
 
             CacheInvalidationMessage parsed;
             try {

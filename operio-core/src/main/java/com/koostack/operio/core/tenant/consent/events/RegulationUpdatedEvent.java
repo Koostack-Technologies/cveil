@@ -4,5 +4,6 @@ import com.koostack.operio.core.event.DomainEvent;
 
 public record RegulationUpdatedEvent(
         String regulationName,
-        String description
+        String description,
+        RegulationSnapshot snapshot
 ) implements DomainEvent {}

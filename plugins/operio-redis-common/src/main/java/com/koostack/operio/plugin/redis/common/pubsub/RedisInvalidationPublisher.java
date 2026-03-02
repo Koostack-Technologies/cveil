@@ -18,7 +18,8 @@ import java.util.Objects;
 /**
  * Publishes {@link CacheInvalidationMessage}s to Redis Pub/Sub channels.
  *
- * <p>Channel name format: {@code operio:consent-cache-invalidation:{tenantId}}.
+ * <p>Channel name format: {@code {channelPrefix}{tenantId}}.  The default
+ * prefix is {@value #DEFAULT_CHANNEL_PREFIX}.
  *
  * <p><b>Important:</b> The {@code adminJedis} connection must be an admin pool
  * (not a tenant-scoped pool from {@code TenantAwareJedisProvider}).  Tenant ACL
@@ -31,14 +32,25 @@ import java.util.Objects;
 public class RedisInvalidationPublisher implements InvalidationPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(RedisInvalidationPublisher.class);
-    static final String CHANNEL_PREFIX = "operio:consent-cache-invalidation:";
+    static final String DEFAULT_CHANNEL_PREFIX = "operio:consent-cache-invalidation:";
 
     private final JedisPooled adminJedis;
     private final ObjectMapper objectMapper;
+    private final String channelPrefix;
 
     public RedisInvalidationPublisher(JedisPooled adminJedis, ObjectMapper objectMapper) {
+        this(adminJedis, objectMapper, DEFAULT_CHANNEL_PREFIX);
+    }
+
+    public RedisInvalidationPublisher(JedisPooled adminJedis, ObjectMapper objectMapper, String channelPrefix) {
         this.adminJedis = Objects.requireNonNull(adminJedis, "adminJedis");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.channelPrefix = Objects.requireNonNull(channelPrefix, "channelPrefix");
+    }
+
+    /** Returns the channel prefix used by this publisher. */
+    public String channelPrefix() {
+        return channelPrefix;
     }
 
     @Override
@@ -87,7 +99,7 @@ public class RedisInvalidationPublisher implements InvalidationPublisher {
         }
     }
 
-    static String channelFor(String tenantId) {
-        return CHANNEL_PREFIX + tenantId;
+    String channelFor(String tenantId) {
+        return channelPrefix + tenantId;
     }
 }

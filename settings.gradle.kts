@@ -36,6 +36,7 @@ include("platform:operio-platform-event-jooq")
 include("tenant:operio-tenant-event-jooq")
 include("tenant:operio-consent-admin-projection-jooq")
 include("tenant:operio-consent-decision-projection-redis")
+include("tenant:operio-consent-admin-projection-redis")
 
 // --- Tenant Authz ---
 include("tenant:operio-authz-schema")

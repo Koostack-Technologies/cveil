@@ -5,5 +5,6 @@ import com.koostack.operio.core.event.DomainEvent;
 public record FieldUpdatedEvent(
         String entityName,
         String fieldName,
-        String description
+        String description,
+        FieldSnapshot snapshot
 ) implements DomainEvent {}

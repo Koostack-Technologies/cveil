@@ -453,6 +453,7 @@ public class EmbeddedConsentSyncServiceImpl
                         scope.fieldName(),
                         scope.entityName(),
                         scope.category(),
+                        null,
                         null
                     );
                     caffeineMappingRepo.addFieldToCategory(

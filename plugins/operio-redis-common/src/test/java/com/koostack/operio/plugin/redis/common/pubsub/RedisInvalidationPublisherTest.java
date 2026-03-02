@@ -24,8 +24,10 @@ class RedisInvalidationPublisherTest {
     @Test
     @DisplayName("channelFor() produces correct channel name")
     void channelFormat() {
-        assertEquals("operio:consent-cache-invalidation:acme", RedisInvalidationPublisher.channelFor("acme"));
-        assertEquals("operio:consent-cache-invalidation:tenant-123", RedisInvalidationPublisher.channelFor("tenant-123"));
+        JedisPooled dummy = new JedisPooled("localhost", 1);
+        RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(dummy, objectMapper);
+        assertEquals("operio:consent-cache-invalidation:acme", publisher.channelFor("acme"));
+        assertEquals("operio:consent-cache-invalidation:tenant-123", publisher.channelFor("tenant-123"));
     }
 
     @Test
@@ -85,11 +87,20 @@ class RedisInvalidationPublisherTest {
     }
 
     @Test
-    @DisplayName("CHANNEL_PREFIX is shared with subscriber (cross-check)")
+    @DisplayName("DEFAULT_CHANNEL_PREFIX is shared with subscriber (cross-check)")
     void channelPrefixSharedWithSubscriber() {
         assertEquals(
-                RedisInvalidationPublisher.channelFor("x"),
-                RedisInvalidationSubscriber.channelFor("x"),
-                "Publisher and subscriber must use the same channel prefix");
+                RedisInvalidationPublisher.DEFAULT_CHANNEL_PREFIX,
+                RedisInvalidationSubscriber.DEFAULT_CHANNEL_PREFIX,
+                "Publisher and subscriber must use the same default channel prefix");
+    }
+
+    @Test
+    @DisplayName("Custom channel prefix is used in channelFor()")
+    void customChannelPrefix() {
+        JedisPooled dummy = new JedisPooled("localhost", 1);
+        RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(dummy, objectMapper, "operio:admin:");
+        assertEquals("operio:admin:acme", publisher.channelFor("acme"));
+        assertEquals("operio:admin:", publisher.channelPrefix());
     }
 }

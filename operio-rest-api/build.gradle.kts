@@ -62,6 +62,7 @@ dependencies {
     implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer
     implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
     implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
+    implementation(project(":tenant:operio-consent-admin-projection-redis"))    // Redis admin projection
 
     // -- Platform CQRS modules ------------------------------------------------
     implementation(project(":platform:operio-platform-event-jooq"))              // JooqPlatformEventService

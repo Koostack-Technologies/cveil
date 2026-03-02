@@ -5,6 +5,9 @@ import com.koostack.operio.core.models.*;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
+import com.koostack.operio.core.tenant.consent.events.FieldSnapshot;
+import com.koostack.operio.core.tenant.consent.events.PurposeSnapshot;
+import com.koostack.operio.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,7 +151,8 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void updateField(String fieldName, String entityName, String description) {
-        commandService().updateFieldCommand(fieldName, entityName, description);
+        FieldSnapshot snapshot = buildFieldSnapshot(fieldName, entityName, description);
+        commandService().updateFieldCommand(fieldName, entityName, description, snapshot);
     }
 
     @Override
@@ -159,15 +163,41 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public void assignFieldCategory(String fieldName, String entityName,
                                     String categoryName, String categoryDescription) {
+        FieldView current = queryService().getField(fieldName, entityName);
+        List<String> newCategories = new ArrayList<>();
+        if (current != null) {
+            current.categories().forEach(c -> newCategories.add(c.categoryName()));
+        }
+        if (!newCategories.contains(categoryName)) {
+            newCategories.add(categoryName);
+        }
+        var snapshot = new FieldSnapshot(
+                fieldName,
+                entityName,
+                current != null ? current.description() : null,
+                List.copyOf(newCategories));
         commandService().assignFieldCategoryCommand(
-            fieldName, entityName, categoryName, categoryDescription
+            fieldName, entityName, categoryName, categoryDescription, snapshot
         );
     }
 
     @Override
     public void unassignFieldCategory(String fieldName, String entityName,
                                       String categoryName) {
-        commandService().unassignFieldCategoryCommand(fieldName, entityName, categoryName);
+        FieldView current = queryService().getField(fieldName, entityName);
+        List<String> newCategories = new ArrayList<>();
+        if (current != null) {
+            current.categories().stream()
+                .map(FieldView.CategoryView::categoryName)
+                .filter(name -> !name.equals(categoryName))
+                .forEach(newCategories::add);
+        }
+        var snapshot = new FieldSnapshot(
+                fieldName,
+                entityName,
+                current != null ? current.description() : null,
+                List.copyOf(newCategories));
+        commandService().unassignFieldCategoryCommand(fieldName, entityName, categoryName, snapshot);
     }
 
     // -----------------------------------------------------------------------
@@ -181,7 +211,8 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void updatePurpose(String purposeName, String description) {
-        commandService().updatePurposeCommand(purposeName, description);
+        PurposeSnapshot snapshot = buildPurposeSnapshot(purposeName, description);
+        commandService().updatePurposeCommand(purposeName, description, snapshot);
     }
 
     @Override
@@ -193,22 +224,67 @@ public class DefaultTenantService extends Operio implements TenantService {
     public void linkPurposeToRegulation(String purposeName, String regulationName,
                                         String lawfulBasis, String onGranted,
                                         String onDenied) {
+        PurposeView current = queryService().getPurpose(purposeName);
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();
+        List<PurposeSnapshot.PolicySnapshot> policies = List.of();
+        if (current != null) {
+            current.regulations().stream()
+                .filter(r -> !r.regulationName().equals(regulationName))
+                .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
+                    r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
+                .forEach(regs::add);
+            policies = toPolicySnapshots(current);
+        }
+        regs.add(new PurposeSnapshot.RegulationLinkSnapshot(
+            regulationName, lawfulBasis, onGranted, onDenied));
+        var snapshot = new PurposeSnapshot(
+                purposeName,
+                current != null ? current.description() : null,
+                List.copyOf(regs), policies);
         commandService().linkPurposeToRegulationCommand(
-            purposeName, regulationName, lawfulBasis, onGranted, onDenied
+            purposeName, regulationName, lawfulBasis, onGranted, onDenied, snapshot
         );
     }
 
     @Override
     public void unlinkPurposeFromRegulation(String purposeName, String regulationName) {
-        commandService().unlinkPurposeFromRegulationCommand(purposeName, regulationName);
+        PurposeView current = queryService().getPurpose(purposeName);
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();
+        List<PurposeSnapshot.PolicySnapshot> policies = List.of();
+        if (current != null) {
+            current.regulations().stream()
+                .filter(r -> !r.regulationName().equals(regulationName))
+                .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
+                    r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
+                .forEach(regs::add);
+            policies = toPolicySnapshots(current);
+        }
+        var snapshot = new PurposeSnapshot(
+                purposeName,
+                current != null ? current.description() : null,
+                List.copyOf(regs), policies);
+        commandService().unlinkPurposeFromRegulationCommand(purposeName, regulationName, snapshot);
     }
 
     @Override
     public void addPurposePolicy(String purposeName, String policyType,
                                  String fieldName, String entityName,
                                  String categoryName) {
+        PurposeView current = queryService().getPurpose(purposeName);
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
+        List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
+        if (current != null) {
+            regs = toRegulationLinkSnapshots(current);
+            toPolicySnapshots(current).forEach(policies::add);
+        }
+        policies.add(new PurposeSnapshot.PolicySnapshot(
+            policyType, fieldName, entityName, categoryName));
+        var snapshot = new PurposeSnapshot(
+                purposeName,
+                current != null ? current.description() : null,
+                regs, List.copyOf(policies));
         commandService().addPurposePolicyCommand(
-            purposeName, policyType, fieldName, entityName, categoryName
+            purposeName, policyType, fieldName, entityName, categoryName, snapshot
         );
     }
 
@@ -216,8 +292,27 @@ public class DefaultTenantService extends Operio implements TenantService {
     public void removePurposePolicy(String purposeName, String policyType,
                                     String fieldName, String entityName,
                                     String categoryName) {
+        PurposeView current = queryService().getPurpose(purposeName);
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
+        List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
+        if (current != null) {
+            regs = toRegulationLinkSnapshots(current);
+            current.policies().stream()
+                .filter(p -> !(p.policyType().equals(policyType)
+                    && equalsNullable(fieldNameOrNull(p), fieldName)
+                    && equalsNullable(entityNameOrNull(p), entityName)
+                    && equalsNullable(categoryNameOrNull(p), categoryName)))
+                .map(p -> new PurposeSnapshot.PolicySnapshot(
+                    p.policyType(), fieldNameOrNull(p),
+                    entityNameOrNull(p), categoryNameOrNull(p)))
+                .forEach(policies::add);
+        }
+        var snapshot = new PurposeSnapshot(
+                purposeName,
+                current != null ? current.description() : null,
+                regs, List.copyOf(policies));
         commandService().removePurposePolicyCommand(
-            purposeName, policyType, fieldName, entityName, categoryName
+            purposeName, policyType, fieldName, entityName, categoryName, snapshot
         );
     }
 
@@ -232,7 +327,8 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void updateRegulation(String regulationName, String description) {
-        commandService().updateRegulationCommand(regulationName, description);
+        RegulationSnapshot snapshot = buildRegulationSnapshot(regulationName, description);
+        commandService().updateRegulationCommand(regulationName, description, snapshot);
     }
 
     @Override
@@ -244,15 +340,41 @@ public class DefaultTenantService extends Operio implements TenantService {
     public void addRegulationJurisdiction(String regulationName,
                                           String jurisdictionName,
                                           String description) {
+        RegulationView current = queryService().getRegulation(regulationName);
+        List<String> jurisdictions = new ArrayList<>();
+        String regDescription = null;
+        if (current != null) {
+            current.activeJurisdictions().forEach(
+                j -> jurisdictions.add(j.jurisdictionName()));
+            regDescription = current.description();
+        }
+        if (!jurisdictions.contains(jurisdictionName)) {
+            jurisdictions.add(jurisdictionName);
+        }
+        var snapshot = new RegulationSnapshot(
+                regulationName, regDescription, List.copyOf(jurisdictions));
         commandService().addRegulationJurisdictionCommand(
-            regulationName, jurisdictionName, description
+            regulationName, jurisdictionName, description, snapshot
         );
     }
 
     @Override
     public void removeRegulationJurisdiction(String regulationName,
                                              String jurisdictionName) {
-        commandService().removeRegulationJurisdictionCommand(regulationName, jurisdictionName);
+        RegulationView current = queryService().getRegulation(regulationName);
+        List<String> jurisdictions = new ArrayList<>();
+        String regDescription = null;
+        if (current != null) {
+            current.activeJurisdictions().stream()
+                .map(RegulationView.JurisdictionView::jurisdictionName)
+                .filter(name -> !name.equals(jurisdictionName))
+                .forEach(jurisdictions::add);
+            regDescription = current.description();
+        }
+        var snapshot = new RegulationSnapshot(
+                regulationName, regDescription, List.copyOf(jurisdictions));
+        commandService().removeRegulationJurisdictionCommand(
+            regulationName, jurisdictionName, snapshot);
     }
 
     // -----------------------------------------------------------------------
@@ -469,5 +591,60 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     private static boolean isWildcardOrBlank(String value) {
         return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
+    }
+
+    // -----------------------------------------------------------------------
+    // Snapshot builders — compute post-mutation aggregate state for enrichment
+    // -----------------------------------------------------------------------
+
+    private FieldSnapshot buildFieldSnapshot(String fieldName, String entityName,
+                                             String newDescription) {
+        FieldView current = queryService().getField(fieldName, entityName);
+        List<String> categoryNames = current != null
+            ? current.categories().stream()
+                .map(FieldView.CategoryView::categoryName).toList()
+            : List.of();
+        return new FieldSnapshot(fieldName, entityName, newDescription, categoryNames);
+    }
+
+    private PurposeSnapshot buildPurposeSnapshot(String purposeName, String newDescription) {
+        PurposeView current = queryService().getPurpose(purposeName);
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs = current != null
+            ? toRegulationLinkSnapshots(current) : List.of();
+        List<PurposeSnapshot.PolicySnapshot> policies = current != null
+            ? toPolicySnapshots(current) : List.of();
+        return new PurposeSnapshot(purposeName, newDescription, regs, policies);
+    }
+
+    private RegulationSnapshot buildRegulationSnapshot(String regulationName,
+                                                       String newDescription) {
+        RegulationView current = queryService().getRegulation(regulationName);
+        List<String> jurisdictions = current != null
+            ? current.activeJurisdictions().stream()
+                .map(RegulationView.JurisdictionView::jurisdictionName).toList()
+            : List.of();
+        return new RegulationSnapshot(regulationName, newDescription, jurisdictions);
+    }
+
+    private static List<PurposeSnapshot.RegulationLinkSnapshot> toRegulationLinkSnapshots(
+            PurposeView view) {
+        return view.regulations().stream()
+            .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
+                r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
+            .toList();
+    }
+
+    private static List<PurposeSnapshot.PolicySnapshot> toPolicySnapshots(PurposeView view) {
+        return view.policies().stream()
+            .map(p -> new PurposeSnapshot.PolicySnapshot(
+                p.policyType(),
+                fieldNameOrNull(p),
+                entityNameOrNull(p),
+                categoryNameOrNull(p)))
+            .toList();
+    }
+
+    private static boolean equalsNullable(String a, String b) {
+        return java.util.Objects.equals(a, b);
     }
 }

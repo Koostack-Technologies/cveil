@@ -4,5 +4,6 @@ import com.koostack.operio.core.event.DomainEvent;
 
 public record RegulationJurisdictionRemovedEvent(
         String regulationName,
-        String jurisdictionName
+        String jurisdictionName,
+        RegulationSnapshot snapshot
 ) implements DomainEvent {}

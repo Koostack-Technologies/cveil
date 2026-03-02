@@ -49,7 +49,13 @@ import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import com.koostack.operio.plugin.redis.common.pubsub.RedisInvalidationPublisher;
+import com.koostack.operio.plugin.redis.common.pubsub.RedisInvalidationSubscriber;
+import com.koostack.operio.core.tenant.consent.invalidation.SubscriptionManager;
 import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectionHandler;
+import com.koostack.operio.tenant.consent.projection.admin.redis.ConsentAdminRedisProjectionHandler;
+import com.koostack.operio.tenant.consent.projection.admin.redis.ConsentAdminRedisRepository;
+import com.koostack.operio.tenant.consent.projection.admin.redis.RedisConsentAdminQueryService;
+import com.koostack.operio.tenant.consent.projection.admin.redis.RedisFirstConsentAdminQueryService;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentDecisionProjectionHandler;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
@@ -60,6 +66,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -222,6 +229,10 @@ public class OperioProducers {
         JooqConsentAdminCommandService commandService = new JooqConsentAdminCommandService();
         JooqConsentAdminQueryService queryService = new JooqConsentAdminQueryService();
 
+        // Redis-backed admin query service (wraps JOOQ with Redis-first fallback)
+        RedisConsentAdminQueryService redisAdminQueryService = null;
+        com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> effectiveQueryService = queryService;
+
         if (MODE_PRODUCTION.equalsIgnoreCase(mode) && consentBundle instanceof CoreConsentBundle coreBundle) {
             // Event service for the command service (publishes to event store + Redis streams)
             JooqConsentAdminServiceConfig jooqConfig = coreBundle.jooqConfig();
@@ -243,6 +254,17 @@ public class OperioProducers {
             commandService.configure(new ConsentAdminCommandConfig(eventService));
             queryService.configure(jooqConfig);
 
+            // Wrap with Redis-first composite if Redis is available
+            if (tenantAwareJedisProvider != null) {
+                ObjectMapper redisMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+                ConsentAdminRedisRepository adminRedisRepo =
+                    new ConsentAdminRedisRepository(tenantAwareJedisProvider, redisMapper);
+                redisAdminQueryService = new RedisConsentAdminQueryService(adminRedisRepo);
+                effectiveQueryService = new RedisFirstConsentAdminQueryService(
+                    redisAdminQueryService, queryService);
+                LOG.info("Operio REST API: consent admin query service wired with Redis-first fallback");
+            }
+
             LOG.info("Operio REST API: command service (event-sourced) and query service (jOOQ) wired");
         }
 
@@ -252,7 +274,7 @@ public class OperioProducers {
         }
 
         DefaultTenantService tenantService = builder.buildTenantService(
-            commandService, queryService
+            commandService, effectiveQueryService
         );
 
         LOG.info(
@@ -520,6 +542,7 @@ public class OperioProducers {
 
     private TenantStreamConsumer tenantStreamConsumer;
     private AbstractStreamConsumer platformStreamConsumer;
+    private SubscriptionManager adminSubscriptionManager;
 
     /**
      * Produces the {@link TenantStreamConsumer} that runs both the consent
@@ -581,6 +604,31 @@ public class OperioProducers {
             LOG.warn("Operio REST API: admin projection handler NOT wired — consent DB config missing");
         }
 
+        // Redis admin projection handler — materializes consent admin
+        // aggregates (Field, Purpose, Regulation, SubjectConsent) into Redis
+        // and publishes invalidation on the admin channel.
+        ObjectMapper adminRedisMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        ConsentAdminRedisRepository adminRedisRepo =
+            new ConsentAdminRedisRepository(tenantAwareJedisProvider, adminRedisMapper);
+        RedisInvalidationPublisher adminInvalidationPublisher =
+            new RedisInvalidationPublisher(adminRedisPool, adminRedisMapper,
+                "operio:consent-admin-invalidation:");
+        ConsentAdminRedisProjectionHandler adminRedisHandler =
+            new ConsentAdminRedisProjectionHandler(adminRedisRepo, adminInvalidationPublisher);
+        consumer.registerHandler("admin-redis-projection", adminRedisHandler);
+        LOG.info("Operio REST API: admin Redis projection handler wired (group=admin-redis-projection)");
+
+        // Admin invalidation subscriber + SubscriptionManager for SSE
+        try {
+            RedisInvalidationSubscriber adminSubscriber =
+                new RedisInvalidationSubscriber(adminRedisPool, adminRedisMapper,
+                    "operio:consent-admin-invalidation:");
+            this.adminSubscriptionManager = new SubscriptionManager(adminSubscriber);
+            LOG.info("Operio REST API: admin SubscriptionManager wired for SSE");
+        } catch (Exception e) {
+            LOG.warn("Operio REST API: admin SubscriptionManager NOT wired — Redis subscriber init failed", e);
+        }
+
         this.tenantStreamConsumer = consumer;
 
         // Inject consumer into TenantManager for lifecycle orchestration,
@@ -596,8 +644,20 @@ public class OperioProducers {
             }
         }
 
-        LOG.info("Operio REST API: tenant stream consumer created (groups=decision-projection,admin-projection)");
+        LOG.info("Operio REST API: tenant stream consumer created (groups=decision-projection,admin-projection,admin-redis-projection)");
         return consumer;
+    }
+
+    /**
+     * Produces the admin {@link SubscriptionManager} that bridges Redis
+     * Pub/Sub invalidation signals to SSE endpoints for consent admin
+     * aggregate changes.
+     */
+    @Produces
+    @ApplicationScoped
+    @Named("adminSubscriptionManager")
+    public SubscriptionManager adminSubscriptionManager() {
+        return adminSubscriptionManager;
     }
 
     /**
@@ -609,6 +669,14 @@ public class OperioProducers {
         if (tenantStreamConsumer != null) {
             LOG.info("Operio REST API: stopping tenant stream consumer");
             tenantStreamConsumer.close();
+        }
+        if (adminSubscriptionManager != null) {
+            LOG.info("Operio REST API: stopping admin subscription manager");
+            try {
+                adminSubscriptionManager.close();
+            } catch (Exception e) {
+                LOG.warn("Error closing admin subscription manager", e);
+            }
         }
         if (platformStreamConsumer != null) {
             LOG.info("Operio REST API: stopping platform stream consumer");

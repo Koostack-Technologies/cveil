@@ -82,17 +82,6 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void updateFieldCommand(String fieldName, String entityName, String description) {
-        Objects.requireNonNull(fieldName, "fieldName must not be null");
-        String tenantId = TenantContext.require();
-        String normalized = FieldAggregate.normalizeEntityName(entityName);
-        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
-        var payload = new FieldUpdatedEvent(normalized, fieldName, description);
-        publishEvent(tenantId, ConsentEventTypes.FIELD_UPDATED,
-            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    @Override
     public void removeFieldCommand(String fieldName, String entityName) {
         Objects.requireNonNull(fieldName, "fieldName must not be null");
         String tenantId = TenantContext.require();
@@ -104,28 +93,41 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
+    public void updateFieldCommand(String fieldName, String entityName,
+                                   String description, FieldSnapshot snapshot) {
+        Objects.requireNonNull(fieldName, "fieldName must not be null");
+        String tenantId = TenantContext.require();
+        String normalized = FieldAggregate.normalizeEntityName(entityName);
+        UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
+        var payload = new FieldUpdatedEvent(normalized, fieldName, description, snapshot);
+        publishEvent(tenantId, ConsentEventTypes.FIELD_UPDATED,
+            FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
     public void assignFieldCategoryCommand(String fieldName, String entityName,
-                                           String categoryName, String categoryDescription) {
+                                           String categoryName, String categoryDescription,
+                                           FieldSnapshot snapshot) {
         Objects.requireNonNull(fieldName, "fieldName must not be null");
         Objects.requireNonNull(categoryName, "categoryName must not be null");
         String tenantId = TenantContext.require();
         String normalized = FieldAggregate.normalizeEntityName(entityName);
         UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
         var payload = new FieldCategoryAssignedEvent(
-            normalized, fieldName, categoryName, categoryDescription);
+            normalized, fieldName, categoryName, categoryDescription, snapshot);
         publishEvent(tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED,
             FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
     public void unassignFieldCategoryCommand(String fieldName, String entityName,
-                                             String categoryName) {
+                                             String categoryName, FieldSnapshot snapshot) {
         Objects.requireNonNull(fieldName, "fieldName must not be null");
         Objects.requireNonNull(categoryName, "categoryName must not be null");
         String tenantId = TenantContext.require();
         String normalized = FieldAggregate.normalizeEntityName(entityName);
         UUID aggregateId = FieldAggregate.deriveId(normalized, fieldName);
-        var payload = new FieldCategoryUnassignedEvent(normalized, fieldName, categoryName);
+        var payload = new FieldCategoryUnassignedEvent(normalized, fieldName, categoryName, snapshot);
         publishEvent(tenantId, ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED,
             FieldAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
@@ -145,16 +147,6 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void updatePurposeCommand(String purposeName, String description) {
-        Objects.requireNonNull(purposeName, "purposeName must not be null");
-        String tenantId = TenantContext.require();
-        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
-        var payload = new PurposeUpdatedEvent(purposeName, description);
-        publishEvent(tenantId, ConsentEventTypes.PURPOSE_UPDATED,
-            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    @Override
     public void removePurposeCommand(String purposeName) {
         Objects.requireNonNull(purposeName, "purposeName must not be null");
         String tenantId = TenantContext.require();
@@ -165,26 +157,38 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
+    public void updatePurposeCommand(String purposeName, String description,
+                                     PurposeSnapshot snapshot) {
+        Objects.requireNonNull(purposeName, "purposeName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = PurposeAggregate.deriveId(purposeName);
+        var payload = new PurposeUpdatedEvent(purposeName, description, snapshot);
+        publishEvent(tenantId, ConsentEventTypes.PURPOSE_UPDATED,
+            PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
     public void linkPurposeToRegulationCommand(String purposeName, String regulationName,
                                                String lawfulBasis, String onGranted,
-                                               String onDenied) {
+                                               String onDenied, PurposeSnapshot snapshot) {
         Objects.requireNonNull(purposeName, "purposeName must not be null");
         Objects.requireNonNull(regulationName, "regulationName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
         var payload = new PurposeRegulationLinkedEvent(
-            purposeName, regulationName, lawfulBasis, onGranted, onDenied);
+            purposeName, regulationName, lawfulBasis, onGranted, onDenied, snapshot);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
-    public void unlinkPurposeFromRegulationCommand(String purposeName, String regulationName) {
+    public void unlinkPurposeFromRegulationCommand(String purposeName, String regulationName,
+                                                   PurposeSnapshot snapshot) {
         Objects.requireNonNull(purposeName, "purposeName must not be null");
         Objects.requireNonNull(regulationName, "regulationName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
-        var payload = new PurposeRegulationUnlinkedEvent(purposeName, regulationName);
+        var payload = new PurposeRegulationUnlinkedEvent(purposeName, regulationName, snapshot);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
@@ -192,13 +196,13 @@ public class JooqConsentAdminCommandService
     @Override
     public void addPurposePolicyCommand(String purposeName, String policyType,
                                         String fieldName, String entityName,
-                                        String categoryName) {
+                                        String categoryName, PurposeSnapshot snapshot) {
         Objects.requireNonNull(purposeName, "purposeName must not be null");
         Objects.requireNonNull(policyType, "policyType must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
         var payload = new PurposePolicyAddedEvent(
-            purposeName, policyType, fieldName, entityName, categoryName);
+            purposeName, policyType, fieldName, entityName, categoryName, snapshot);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_POLICY_ADDED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
@@ -206,13 +210,13 @@ public class JooqConsentAdminCommandService
     @Override
     public void removePurposePolicyCommand(String purposeName, String policyType,
                                            String fieldName, String entityName,
-                                           String categoryName) {
+                                           String categoryName, PurposeSnapshot snapshot) {
         Objects.requireNonNull(purposeName, "purposeName must not be null");
         Objects.requireNonNull(policyType, "policyType must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(purposeName);
         var payload = new PurposePolicyRemovedEvent(
-            purposeName, policyType, fieldName, entityName, categoryName);
+            purposeName, policyType, fieldName, entityName, categoryName, snapshot);
         publishEvent(tenantId, ConsentEventTypes.PURPOSE_POLICY_REMOVED,
             PurposeAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
@@ -232,16 +236,6 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
-    public void updateRegulationCommand(String regulationName, String description) {
-        Objects.requireNonNull(regulationName, "regulationName must not be null");
-        String tenantId = TenantContext.require();
-        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        var payload = new RegulationUpdatedEvent(regulationName, description);
-        publishEvent(tenantId, ConsentEventTypes.REGULATION_UPDATED,
-            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
-    }
-
-    @Override
     public void removeRegulationCommand(String regulationName) {
         Objects.requireNonNull(regulationName, "regulationName must not be null");
         String tenantId = TenantContext.require();
@@ -252,27 +246,40 @@ public class JooqConsentAdminCommandService
     }
 
     @Override
+    public void updateRegulationCommand(String regulationName, String description,
+                                        RegulationSnapshot snapshot) {
+        Objects.requireNonNull(regulationName, "regulationName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = RegulationAggregate.deriveId(regulationName);
+        var payload = new RegulationUpdatedEvent(regulationName, description, snapshot);
+        publishEvent(tenantId, ConsentEventTypes.REGULATION_UPDATED,
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
     public void addRegulationJurisdictionCommand(String regulationName,
                                                  String jurisdictionName,
-                                                 String description) {
+                                                 String description,
+                                                 RegulationSnapshot snapshot) {
         Objects.requireNonNull(regulationName, "regulationName must not be null");
         Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
         var payload = new RegulationJurisdictionAddedEvent(
-            regulationName, jurisdictionName, description);
+            regulationName, jurisdictionName, description, snapshot);
         publishEvent(tenantId, ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
             RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }
 
     @Override
     public void removeRegulationJurisdictionCommand(String regulationName,
-                                                    String jurisdictionName) {
+                                                    String jurisdictionName,
+                                                    RegulationSnapshot snapshot) {
         Objects.requireNonNull(regulationName, "regulationName must not be null");
         Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        var payload = new RegulationJurisdictionRemovedEvent(regulationName, jurisdictionName);
+        var payload = new RegulationJurisdictionRemovedEvent(regulationName, jurisdictionName, snapshot);
         publishEvent(tenantId, ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
             RegulationAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }

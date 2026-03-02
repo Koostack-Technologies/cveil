@@ -47,14 +47,14 @@ class RedisInvalidationSubscriberTest {
     @DisplayName("channelFor() produces correct channel name")
     void channelFormat() {
         assertEquals("operio:consent-cache-invalidation:acme",
-                RedisInvalidationSubscriber.channelFor("acme"));
+                subscriber.channelFor("acme"));
     }
 
     @Test
-    @DisplayName("CONTROL_CHANNEL uses __control__ sentinel")
+    @DisplayName("Control channel uses __control__ sentinel")
     void controlChannel() {
         assertEquals("operio:consent-cache-invalidation:__control__",
-                RedisInvalidationSubscriber.CONTROL_CHANNEL);
+                RedisInvalidationSubscriber.DEFAULT_CHANNEL_PREFIX + "__control__");
     }
 
     @Test

@@ -5,5 +5,6 @@ import com.koostack.operio.core.event.DomainEvent;
 public record FieldCategoryUnassignedEvent(
         String entityName,
         String fieldName,
-        String categoryName
+        String categoryName,
+        FieldSnapshot snapshot
 ) implements DomainEvent {}

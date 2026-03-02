@@ -78,7 +78,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         @Test
         void publishesFieldUpdatedEvent() {
             TenantContext.runWhere(TENANT, () ->
-                service.updateFieldCommand("email", "User", "Updated description")
+                service.updateFieldCommand("email", "User", "Updated description", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -90,7 +90,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullFieldNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.updateFieldCommand(null, "User", "desc")
+                    service.updateFieldCommand(null, "User", "desc", null)
                 ));
         }
     }
@@ -124,7 +124,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         @Test
         void publishesFieldCategoryAssignedEvent() {
             TenantContext.runWhere(TENANT, () ->
-                service.assignFieldCategoryCommand("email", "User", "PII", "Personal data")
+                service.assignFieldCategoryCommand("email", "User", "PII", "Personal data", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -136,7 +136,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullFieldNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.assignFieldCategoryCommand(null, "User", "PII", "desc")
+                    service.assignFieldCategoryCommand(null, "User", "PII", "desc", null)
                 ));
         }
 
@@ -144,7 +144,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullCategoryNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.assignFieldCategoryCommand("email", "User", null, "desc")
+                    service.assignFieldCategoryCommand("email", "User", null, "desc", null)
                 ));
         }
     }
@@ -155,7 +155,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         @Test
         void publishesFieldCategoryUnassignedEvent() {
             TenantContext.runWhere(TENANT, () ->
-                service.unassignFieldCategoryCommand("email", "User", "PII")
+                service.unassignFieldCategoryCommand("email", "User", "PII", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -167,7 +167,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullFieldNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.unassignFieldCategoryCommand(null, "User", "PII")
+                    service.unassignFieldCategoryCommand(null, "User", "PII", null)
                 ));
         }
 
@@ -175,7 +175,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullCategoryNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.unassignFieldCategoryCommand("email", "User", null)
+                    service.unassignFieldCategoryCommand("email", "User", null, null)
                 ));
         }
     }
@@ -213,7 +213,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         @Test
         void publishesPurposeUpdatedEvent() {
             TenantContext.runWhere(TENANT, () ->
-                service.updatePurposeCommand("marketing", "Updated description")
+                service.updatePurposeCommand("marketing", "Updated description", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -225,7 +225,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullPurposeNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.updatePurposeCommand(null, "desc")
+                    service.updatePurposeCommand(null, "desc", null)
                 ));
         }
     }
@@ -260,7 +260,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void publishesPurposeRegulationLinkedEvent() {
             TenantContext.runWhere(TENANT, () ->
                 service.linkPurposeToRegulationCommand("marketing", "GDPR",
-                    "consent", "PLAINTEXT", "REDACT_ALL")
+                    "consent", "PLAINTEXT", "REDACT_ALL", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -273,7 +273,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.linkPurposeToRegulationCommand(null, "GDPR",
-                        "consent", null, null)
+                        "consent", null, null, null)
                 ));
         }
 
@@ -282,7 +282,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.linkPurposeToRegulationCommand("marketing", null,
-                        "consent", null, null)
+                        "consent", null, null, null)
                 ));
         }
     }
@@ -294,7 +294,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullPurposeNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.unlinkPurposeFromRegulationCommand(null, "GDPR")
+                    service.unlinkPurposeFromRegulationCommand(null, "GDPR", null)
                 ));
         }
 
@@ -302,7 +302,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullRegulationNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.unlinkPurposeFromRegulationCommand("marketing", null)
+                    service.unlinkPurposeFromRegulationCommand("marketing", null, null)
                 ));
         }
     }
@@ -315,7 +315,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.addPurposePolicyCommand(null, "FIELD",
-                        "email", "User", null)
+                        "email", "User", null, null)
                 ));
         }
 
@@ -324,7 +324,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.addPurposePolicyCommand("marketing", null,
-                        "email", "User", null)
+                        "email", "User", null, null)
                 ));
         }
     }
@@ -337,7 +337,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.removePurposePolicyCommand(null, "FIELD",
-                        "email", "User", null)
+                        "email", "User", null, null)
                 ));
         }
 
@@ -346,7 +346,7 @@ class JooqConsentAdminCommandServiceValidationTest {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
                     service.removePurposePolicyCommand("marketing", null,
-                        "email", "User", null)
+                        "email", "User", null, null)
                 ));
         }
     }
@@ -384,7 +384,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         @Test
         void publishesRegulationUpdatedEvent() {
             TenantContext.runWhere(TENANT, () ->
-                service.updateRegulationCommand("GDPR", "Updated description")
+                service.updateRegulationCommand("GDPR", "Updated description", null)
             );
 
             assertEquals(1, publishedEvents.size());
@@ -396,7 +396,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullRegulationNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.updateRegulationCommand(null, "desc")
+                    service.updateRegulationCommand(null, "desc", null)
                 ));
         }
     }
@@ -431,7 +431,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullRegulationNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.addRegulationJurisdictionCommand(null, "EU", "European Union")
+                    service.addRegulationJurisdictionCommand(null, "EU", "European Union", null)
                 ));
         }
 
@@ -439,7 +439,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullJurisdictionNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.addRegulationJurisdictionCommand("GDPR", null, "desc")
+                    service.addRegulationJurisdictionCommand("GDPR", null, "desc", null)
                 ));
         }
     }
@@ -451,7 +451,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullRegulationNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.removeRegulationJurisdictionCommand(null, "EU")
+                    service.removeRegulationJurisdictionCommand(null, "EU", null)
                 ));
         }
 
@@ -459,7 +459,7 @@ class JooqConsentAdminCommandServiceValidationTest {
         void nullJurisdictionNameThrows() {
             assertThrows(NullPointerException.class, () ->
                 TenantContext.runWhere(TENANT, () ->
-                    service.removeRegulationJurisdictionCommand("GDPR", null)
+                    service.removeRegulationJurisdictionCommand("GDPR", null, null)
                 ));
         }
     }

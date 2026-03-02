@@ -7,5 +7,6 @@ public record PurposeRegulationLinkedEvent(
         String regulationName,
         String lawfulBasis,
         String onGranted,
-        String onDenied
+        String onDenied,
+        PurposeSnapshot snapshot
 ) implements DomainEvent {}

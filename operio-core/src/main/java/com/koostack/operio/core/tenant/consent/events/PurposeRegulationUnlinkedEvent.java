@@ -4,5 +4,6 @@ import com.koostack.operio.core.event.DomainEvent;
 
 public record PurposeRegulationUnlinkedEvent(
         String purposeName,
-        String regulationName
+        String regulationName,
+        PurposeSnapshot snapshot
 ) implements DomainEvent {}

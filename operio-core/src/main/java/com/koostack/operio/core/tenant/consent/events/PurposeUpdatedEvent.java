@@ -4,5 +4,6 @@ import com.koostack.operio.core.event.DomainEvent;
 
 public record PurposeUpdatedEvent(
         String purposeName,
-        String description
+        String description,
+        PurposeSnapshot snapshot
 ) implements DomainEvent {}

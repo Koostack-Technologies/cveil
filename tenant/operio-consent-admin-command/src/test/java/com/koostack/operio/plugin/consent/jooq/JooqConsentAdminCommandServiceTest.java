@@ -90,7 +90,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void updateFieldChangesDescription() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerFieldCommand("phone", "User", "Phone number", "User entity");
-            commandService.updateFieldCommand("phone", "User", "Mobile phone number");
+            commandService.updateFieldCommand("phone", "User", "Mobile phone number", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -123,7 +123,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void assignFieldCategoryAddsCategory() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerFieldCommand("ssn", "Person", "Social Security Number", "Person entity");
-            commandService.assignFieldCategoryCommand("ssn", "Person", "PII", "Personally Identifiable Information");
+            commandService.assignFieldCategoryCommand("ssn", "Person", "PII", "Personally Identifiable Information", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -146,8 +146,8 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void assignFieldCategoryIsIdempotent() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerFieldCommand("dob", "Person", "Date of birth", "Person entity");
-            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data");
-            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data"); // duplicate
+            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data", null);
+            commandService.assignFieldCategoryCommand("dob", "Person", "PII", "PII data", null); // duplicate
         });
 
         AggregateKey key = new AggregateKey(
@@ -167,8 +167,8 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void assignMultipleCategoriesToField() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerFieldCommand("diagnosis", "Patient", "Medical diagnosis", "Patient entity");
-            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "HEALTH", "Health data");
-            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "SENSITIVE", "Sensitive data");
+            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "HEALTH", "Health data", null);
+            commandService.assignFieldCategoryCommand("diagnosis", "Patient", "SENSITIVE", "Sensitive data", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -186,9 +186,9 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void unassignFieldCategoryRemovesCategory() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerFieldCommand("address", "User", "Mailing address", "User entity");
-            commandService.assignFieldCategoryCommand("address", "User", "PII", "PII data");
-            commandService.assignFieldCategoryCommand("address", "User", "CONTACT", "Contact info");
-            commandService.unassignFieldCategoryCommand("address", "User", "PII");
+            commandService.assignFieldCategoryCommand("address", "User", "PII", "PII data", null);
+            commandService.assignFieldCategoryCommand("address", "User", "CONTACT", "Contact info", null);
+            commandService.unassignFieldCategoryCommand("address", "User", "PII", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -238,7 +238,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void updatePurposeChangesDescription() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerPurposeCommand("analytics", "Usage analytics");
-            commandService.updatePurposeCommand("analytics", "Advanced usage analytics and reporting");
+            commandService.updatePurposeCommand("analytics", "Advanced usage analytics and reporting", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -271,8 +271,8 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void linkPurposeToRegulationAddsLink() throws Exception {
         TenantContext.runWhere(TENANT, () ->
             commandService.linkPurposeToRegulationCommand(
-                "marketing", "GDPR", "explicit-consent", "allow-processing", "block-processing"
-            )
+                "marketing", "GDPR", "explicit-consent", "allow-processing", "block-processing",
+                null)
         );
 
         AggregateKey key = new AggregateKey(
@@ -299,11 +299,11 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerPurposeCommand("data-sharing", "Third-party data sharing");
             commandService.linkPurposeToRegulationCommand(
-                "data-sharing", "GDPR", "explicit-consent", "share", "block"
-            );
+                "data-sharing", "GDPR", "explicit-consent", "share", "block",
+                null);
             commandService.linkPurposeToRegulationCommand(
-                "data-sharing", "CCPA", "opt-out", "share", "stop-sharing"
-            );
+                "data-sharing", "CCPA", "opt-out", "share", "stop-sharing",
+                null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -322,12 +322,12 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerPurposeCommand("profiling", "User profiling");
             commandService.linkPurposeToRegulationCommand(
-                "profiling", "GDPR", "legitimate-interest", "profile", "anonymize"
-            );
+                "profiling", "GDPR", "legitimate-interest", "profile", "anonymize",
+                null);
             commandService.linkPurposeToRegulationCommand(
-                "profiling", "CCPA", "opt-out", "profile", "stop"
-            );
-            commandService.unlinkPurposeFromRegulationCommand("profiling", "GDPR");
+                "profiling", "CCPA", "opt-out", "profile", "stop",
+                null);
+            commandService.unlinkPurposeFromRegulationCommand("profiling", "GDPR", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -349,7 +349,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void addPurposePolicyAddsPolicy() throws Exception {
         TenantContext.runWhere(TENANT, () ->
             commandService.addPurposePolicyCommand(
-                "marketing", "field", "email", "User", "PII"
+                "marketing", "field", "email", "User", "PII", null
             )
         );
 
@@ -376,10 +376,10 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void removePurposePolicyRemovesPolicy() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.addPurposePolicyCommand(
-                "marketing", "field", "phone", "User", "PII"
+                "marketing", "field", "phone", "User", "PII", null
             );
             commandService.removePurposePolicyCommand(
-                "marketing", "field", "phone", "User", "PII"
+                "marketing", "field", "phone", "User", "PII", null
             );
         });
 
@@ -429,7 +429,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     void updateRegulationChangesDescription() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
             commandService.registerRegulationCommand("CCPA", "California Consumer Privacy Act");
-            commandService.updateRegulationCommand("CCPA", "California Consumer Privacy Act (amended)");
+            commandService.updateRegulationCommand("CCPA", "California Consumer Privacy Act (amended)", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -461,7 +461,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Order(23)
     void addRegulationJurisdictionAddsJurisdiction() throws Exception {
         TenantContext.runWhere(TENANT, () ->
-            commandService.addRegulationJurisdictionCommand("GDPR", "EU", "European Union")
+            commandService.addRegulationJurisdictionCommand("GDPR", "EU", "European Union", null)
         );
 
         AggregateKey key = new AggregateKey(
@@ -484,8 +484,8 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Order(24)
     void addMultipleJurisdictionsToRegulation() throws Exception {
         TenantContext.runWhere(TENANT, () -> {
-            commandService.addRegulationJurisdictionCommand("GDPR", "EEA", "European Economic Area");
-            commandService.addRegulationJurisdictionCommand("GDPR", "UK", "United Kingdom");
+            commandService.addRegulationJurisdictionCommand("GDPR", "EEA", "European Economic Area", null);
+            commandService.addRegulationJurisdictionCommand("GDPR", "UK", "United Kingdom", null);
         });
 
         AggregateKey key = new AggregateKey(
@@ -503,7 +503,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
     @Order(25)
     void removeRegulationJurisdictionRemovesJurisdiction() throws Exception {
         TenantContext.runWhere(TENANT, () ->
-            commandService.removeRegulationJurisdictionCommand("GDPR", "EEA")
+            commandService.removeRegulationJurisdictionCommand("GDPR", "EEA", null)
         );
 
         AggregateKey key = new AggregateKey(
