@@ -5,7 +5,7 @@ import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.SubjectConsentView;
-import com.koostack.operio.core.DefaultTenantService;
+
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.rest.auth.Roles;
@@ -640,16 +640,7 @@ public class ConsentResource {
             SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
 
             // Count cached Redis keys for the subject (if applicable)
-            long cachedKeyCount = 0;
-            if (tenantService instanceof DefaultTenantService dts) {
-                var decisionService = dts.consentService();
-                if (
-                    decisionService instanceof
-                        com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
-                ) {
-                    cachedKeyCount = redis.countCachedKeysForSubject(subjectId);
-                }
-            }
+            long cachedKeyCount = tenantService.countCachedKeysForSubject(subjectId);
 
             SubjectDataExport export = new SubjectDataExport(
                 subjectId,
@@ -801,21 +792,15 @@ public class ConsentResource {
 
             // Step 2: Delete cached keys from Redis (if applicable)
             try {
-                if (tenantService instanceof DefaultTenantService dts) {
-                    var decisionService = dts.consentService();
-                    if (
-                        decisionService instanceof
-                            com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService redis
-                    ) {
-                        cachedKeysDeleted = redis.deleteAllCachedKeysForSubject(
-                            subjectId
-                        );
-                        LOG.info(
-                            "Deleted {} cached keys for subject: {}",
-                            cachedKeysDeleted,
-                            subjectId
-                        );
-                    }
+                cachedKeysDeleted = tenantService.deleteCachedKeysForSubject(
+                    subjectId
+                );
+                if (cachedKeysDeleted > 0) {
+                    LOG.info(
+                        "Deleted {} cached keys for subject: {}",
+                        cachedKeysDeleted,
+                        subjectId
+                    );
                 }
             } catch (Exception e) {
                 LOG.error(

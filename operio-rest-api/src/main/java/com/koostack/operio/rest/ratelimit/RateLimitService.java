@@ -1,9 +1,10 @@
 package com.koostack.operio.rest.ratelimit;
 
+import com.koostack.operio.core.metrics.Metric;
+import com.koostack.operio.core.metrics.MetricPublisherService;
+import com.koostack.operio.core.metrics.MetricType;
 import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
-import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
-import com.koostack.operio.plugin.platform.jooq.RateLimitCounterRepository;
 import com.koostack.operio.rest.config.OperioConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -16,6 +17,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -27,16 +29,21 @@ import redis.clients.jedis.JedisPooled;
  * Application-scoped CDI bean that encapsulates all rate-limiting logic for
  * the Operio REST API.
  *
- * <p>This service manages two independent rate-limiting dimensions per tenant:
+ * <p>This service manages three independent rate-limiting dimensions per tenant:
  *
  * <ol>
  *   <li><strong>Burst limit</strong> — per-minute request cap enforced via
- *       Redis {@code INCR} on a key with 60-second TTL. Prevents any single
- *       tenant from overwhelming the service in a short time window.</li>
+ *       atomic Redis {@code INCR} on a key with 60-second TTL. Prevents any
+ *       single tenant from overwhelming the service in a short time window.</li>
  *   <li><strong>Monthly evaluation limit</strong> — per-calendar-month cap
- *       on consent evaluation requests, enforced via Redis {@code INCR} on
- *       a key with ~35-day TTL. This is the billable usage counter that
- *       corresponds to the tenant's subscription plan.</li>
+ *       on consent evaluation requests. The service reads the current count
+ *       from Redis and publishes a {@code consent_evaluations} metric to the
+ *       tenant metric stream. The {@code RateLimitRedisMetricProjection}
+ *       asynchronously increments the Redis counter.</li>
+ *   <li><strong>Subject limit</strong> — per-calendar-month cap on distinct
+ *       data subjects. The service reads the HyperLogLog count from Redis
+ *       and publishes a {@code consent_subjects} metric. The projection
+ *       asynchronously adds the subject via {@code PFADD}.</li>
  * </ol>
  *
  * <h2>Redis Key Patterns</h2>
@@ -171,6 +178,12 @@ public class RateLimitService {
         PlatformAdminService
     > platformAdminInstance;
 
+    @Inject
+    @SuppressWarnings("rawtypes")
+    jakarta.enterprise.inject.Instance<
+        MetricPublisherService
+    > metricPublisherInstance;
+
     // -----------------------------------------------------------------------
     // Internal state
     // -----------------------------------------------------------------------
@@ -188,16 +201,6 @@ public class RateLimitService {
      */
     private final ConcurrentMap<String, CachedTenantLimits> limitsCache =
         new ConcurrentHashMap<>();
-
-    /**
-     * Counter repository for durable Postgres persistence of usage metrics.
-     * Lazily resolved from the {@link PlatformAdminService} on first use.
-     * Null if the platform admin service is not available (embedded mode).
-     */
-    private volatile RateLimitCounterRepository counterRepository;
-
-    /** Whether the counter repository has been resolved (even if null). */
-    private volatile boolean counterRepositoryResolved;
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -368,19 +371,14 @@ public class RateLimitService {
     }
 
     /**
-     * Checks and increments the monthly evaluation counter for the given
-     * tenant.
+     * Checks the monthly evaluation counter for the given tenant and
+     * publishes a {@code consent_evaluations} metric.
      *
      * <p>This method should be called only for consent evaluation endpoints
-     * (e.g. {@code POST /api/v1/consent/evaluate}). It atomically
-     * increments a Redis counter keyed to the current UTC year-month and
-     * checks against the tenant's configured {@code evalLimitMonthly}.
-     *
-     * <p>After the Redis increment succeeds, the count is also persisted
-     * to Postgres via {@link RateLimitCounterRepository#increment} as the
-     * durable billing record. The Postgres write is best-effort — if it
-     * fails, the Redis counter (which powers rate limiting) still works
-     * and the reconciliation job will catch up.
+     * (e.g. {@code POST /api/v1/consent/evaluate}). It reads the current
+     * Redis counter (maintained by {@code RateLimitRedisMetricProjection})
+     * and publishes a metric to the tenant stream. The projection
+     * asynchronously increments the counter.
      *
      * <p>At 90% utilization, the result includes a warning flag so the
      * filter can set the {@code X-RateLimit-Warning} header.
@@ -408,15 +406,12 @@ public class RateLimitService {
         String redisKey = KEY_PREFIX + tenantId + EVAL_INFIX + monthKey;
 
         try {
-            // Atomic INCR + conditional EXPIRE via Lua script.
-            long count = (long) jedis.eval(
-                LUA_INCR_EXPIRE,
-                List.of(redisKey),
-                List.of(String.valueOf(MONTHLY_TTL_SECONDS))
-            );
+            // Read current count (maintained by RateLimitRedisMetricProjection)
+            String value = jedis.get(redisKey);
+            long count = value != null ? Long.parseLong(value) : 0;
 
-            // Best-effort: persist the count to Postgres for durable billing
-            persistCounterAsync(tenantId, "evaluations", monthKey);
+            // Publish metric — the projection will INCR the counter
+            publishMetric(tenantId, "consent_evaluations", 1.0, Map.of());
 
             long limit = limits.evalLimitMonthly();
 
@@ -452,18 +447,14 @@ public class RateLimitService {
     }
 
     /**
-     * Checks whether adding a new subject would exceed the tenant's
+     * Checks whether the tenant's subject count exceeds the configured
      * subject limit for the current billing period.
      *
-     * <p>Uses Redis HyperLogLog ({@code PFADD}/{@code PFCOUNT}) for
-     * approximate distinct subject counting with ~0.81% error rate and
-     * only 12KB memory per tenant per month. This is accurate enough
-     * for limit enforcement while being extremely memory-efficient.
-     *
-     * <p>The subject is always added to the HyperLogLog (even if the
-     * limit is not exceeded) so that the count is accurate for future
-     * checks. When {@code PFADD} returns 1 (new subject), the count
-     * is also persisted to Postgres as a durable billing record.
+     * <p>Uses Redis HyperLogLog ({@code PFCOUNT}) for approximate distinct
+     * subject counting with ~0.81% error rate and only 12KB memory per
+     * tenant per month. A {@code consent_subjects} metric is published
+     * to the tenant stream; the {@code RateLimitRedisMetricProjection}
+     * asynchronously adds the subject to the HLL via {@code PFADD}.
      *
      * @param tenantId  the tenant identifier — must not be {@code null}
      * @param subjectId the data subject being granted/revoked consent
@@ -493,20 +484,16 @@ public class RateLimitService {
         String hllKey = KEY_PREFIX + tenantId + SUBJECT_INFIX + monthKey;
 
         try {
-            // PFADD returns 1 if the HLL internal registers were altered
-            // (i.e. the subject is likely new)
-            long added = jedis.pfadd(hllKey, subjectId);
-
-            // Ensure the HLL key has a TTL (35 days like other monthly keys)
-            if (added == 1) {
-                jedis.expire(hllKey, MONTHLY_TTL_SECONDS);
-
-                // Best-effort: persist new subject count to Postgres
-                persistCounterAsync(tenantId, "subjects", monthKey);
-            }
-
-            // PFCOUNT gives approximate distinct count
+            // Read current approximate distinct count (maintained by projection)
             long count = jedis.pfcount(hllKey);
+
+            // Publish metric — the projection will PFADD the subject
+            publishMetric(
+                tenantId,
+                "consent_subjects",
+                1.0,
+                Map.of("subjectId", subjectId)
+            );
 
             Instant resetAt = currentMonth
                 .plusMonths(1)
@@ -616,71 +603,42 @@ public class RateLimitService {
     }
 
     // -----------------------------------------------------------------------
-    // Postgres counter persistence (best-effort)
+    // Metric publishing
     // -----------------------------------------------------------------------
 
     /**
-     * Persists a counter increment to Postgres via the
-     * {@link RateLimitCounterRepository}. Best-effort: failures are logged
+     * Publishes a metric to the tenant metric stream via
+     * {@link MetricPublisherService}. Best-effort: failures are logged
      * but never propagate to the caller.
-     *
-     * @param tenantId the tenant whose counter to persist
-     * @param metric   the metric name
-     * @param period   the billing period (YYYY-MM)
      */
-    private void persistCounterAsync(
+    @SuppressWarnings("unchecked")
+    private void publishMetric(
         String tenantId,
-        String metric,
-        String period
+        String metricName,
+        double value,
+        Map<String, String> dimensions
     ) {
         try {
-            RateLimitCounterRepository repo = getCounterRepository();
-            if (repo != null) {
-                repo.increment(tenantId, metric, period);
+            if (metricPublisherInstance.isResolvable()) {
+                Metric metric = Metric.builder()
+                    .metricName(metricName)
+                    .metricValue(value)
+                    .metricType(MetricType.COUNTER)
+                    .tenantId(tenantId)
+                    .dimensions(dimensions)
+                    .build();
+                metricPublisherInstance.get().publish(metric);
             }
         } catch (Exception e) {
             LOG.debug(
-                "RateLimitService: best-effort Postgres counter sync failed " +
-                    "for tenant='{}', metric='{}', period='{}' — " +
-                    "reconciliation job will catch up",
+                "RateLimitService: best-effort metric publish failed " +
+                    "for tenant='{}', metric='{}' — projection will " +
+                    "not update counter for this request",
                 tenantId,
-                metric,
-                period,
+                metricName,
                 e
             );
         }
-    }
-
-    /**
-     * Lazily resolves the {@link RateLimitCounterRepository} from the
-     * platform admin service. Cached after first resolution.
-     */
-    RateLimitCounterRepository getCounterRepository() {
-        if (!counterRepositoryResolved) {
-            synchronized (this) {
-                if (!counterRepositoryResolved) {
-                    try {
-                        if (platformAdminInstance.isResolvable()) {
-                            Object platformAdmin = platformAdminInstance.get();
-                            if (
-                                platformAdmin instanceof
-                                    JooqPlatformAdminService jooqAdmin
-                            ) {
-                                counterRepository =
-                                    jooqAdmin.rateLimitCounterRepository();
-                            }
-                        }
-                    } catch (Exception e) {
-                        LOG.debug(
-                            "RateLimitService: could not resolve counter repository",
-                            e
-                        );
-                    }
-                    counterRepositoryResolved = true;
-                }
-            }
-        }
-        return counterRepository;
     }
 
     // -----------------------------------------------------------------------

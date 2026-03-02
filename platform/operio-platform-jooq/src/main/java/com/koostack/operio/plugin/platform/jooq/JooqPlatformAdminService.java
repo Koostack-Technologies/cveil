@@ -90,7 +90,6 @@ public class JooqPlatformAdminService
     private TenantRepository tenantRepository;
     private ApiKeyRepository apiKeyRepository;
     private IdpConfigRepository idpConfigRepository;
-    private RateLimitCounterRepository rateLimitCounterRepository;
     private TenantManager tenantManager;
 
     // -----------------------------------------------------------------------
@@ -165,9 +164,6 @@ public class JooqPlatformAdminService
         );
         this.apiKeyRepository = new ApiKeyRepository(platformDslContext);
         this.idpConfigRepository = new IdpConfigRepository(platformDslContext);
-        this.rateLimitCounterRepository = new RateLimitCounterRepository(
-            platformDslContext
-        );
 
         this.tenantManager = new TenantManager(
             platformDslContext,
@@ -243,11 +239,6 @@ public class JooqPlatformAdminService
     /** Returns the IdP config repository. */
     public IdpConfigRepository idpConfigRepository() {
         return idpConfigRepository;
-    }
-
-    /** Returns the rate limit counter repository. */
-    public RateLimitCounterRepository rateLimitCounterRepository() {
-        return rateLimitCounterRepository;
     }
 
     /** Returns the tenant manager. */
@@ -360,7 +351,6 @@ public class JooqPlatformAdminService
         // Delete dependent rows (order matters for FK constraints)
         apiKeyRepository.deleteByTenant(tenantId);
         idpConfigRepository.deleteByTenant(tenantId);
-        rateLimitCounterRepository.deleteByTenant(tenantId);
 
         // Delete the tenant row
         tenantRepository.delete(tenantId);

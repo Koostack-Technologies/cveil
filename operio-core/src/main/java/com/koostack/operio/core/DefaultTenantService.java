@@ -496,6 +496,34 @@ public class DefaultTenantService extends Operio implements TenantService {
         );
     }
 
+    @Override
+    public long countCachedKeysForSubject(String subject) {
+        var decisionService = consentService();
+        try {
+            var method = decisionService.getClass()
+                .getMethod("countCachedKeysForSubject", String.class);
+            return (long) method.invoke(decisionService, subject);
+        } catch (NoSuchMethodException e) {
+            return 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    @Override
+    public long deleteCachedKeysForSubject(String subject) {
+        var decisionService = consentService();
+        try {
+            var method = decisionService.getClass()
+                .getMethod("deleteAllCachedKeysForSubject", String.class);
+            return (long) method.invoke(decisionService, subject);
+        } catch (NoSuchMethodException e) {
+            return 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     // -----------------------------------------------------------------------
     // IAM — Role Management
     // -----------------------------------------------------------------------

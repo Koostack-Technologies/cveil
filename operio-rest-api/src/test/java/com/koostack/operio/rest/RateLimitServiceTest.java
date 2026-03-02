@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.koostack.operio.core.metrics.Metric;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -99,6 +101,10 @@ class RateLimitServiceTest {
     private PlatformAdminService platformAdmin;
 
     @Mock
+    @SuppressWarnings("rawtypes")
+    private Instance metricPublisherInstance;
+
+    @Mock
     private OperioConfig config;
 
     private RateLimitService service;
@@ -113,6 +119,7 @@ class RateLimitServiceTest {
         service = new RateLimitService();
         injectField(service, "jedis", jedis);
         injectField(service, "platformAdminInstance", platformAdminInstance);
+        injectField(service, "metricPublisherInstance", metricPublisherInstance);
         injectField(service, "config", config);
 
         // Default: platform admin service is resolvable and returns a tenant
@@ -121,6 +128,9 @@ class RateLimitServiceTest {
         lenient()
             .when(platformAdmin.getTenant(TENANT_ID))
             .thenReturn(tenantInfo(60, 10_000L, 1_000_000L));
+
+        // Default: metric publisher is not resolvable (best-effort, not required)
+        lenient().when(metricPublisherInstance.isResolvable()).thenReturn(false);
     }
 
     // -----------------------------------------------------------------------
@@ -182,6 +192,16 @@ class RateLimitServiceTest {
     private void stubEvalThrows() {
         when(jedis.eval(anyString(), anyList(), anyList())).thenThrow(
             new RuntimeException("Redis connection lost")
+        );
+    }
+
+    /**
+     * Stubs {@code jedis.get()} to return the given count (as a String).
+     * Used for monthly evaluation tests where the service reads via GET.
+     */
+    private void stubGetReturns(long count) {
+        lenient().when(jedis.get(anyString())).thenReturn(
+            String.valueOf(count)
         );
     }
 
@@ -520,80 +540,34 @@ class RateLimitServiceTest {
     }
 
     // =====================================================================
-    // checkMonthly() — Lua script atomicity
+    // checkMonthly() — read via GET + publish metric
     // =====================================================================
 
     @Nested
-    @DisplayName("checkMonthly() — atomic Lua script")
-    class CheckMonthlyLuaScript {
+    @DisplayName("checkMonthly() — read via GET + publish metric")
+    class CheckMonthlyReadAndPublish {
 
         @Test
-        @DisplayName("calls jedis.eval with correct Lua script")
-        void usesLuaScript() {
-            stubEvalReturns(1L);
+        @DisplayName("reads count via jedis.get (not eval/INCR)")
+        void usesGetNotEval() {
+            stubGetReturns(1L);
             service.checkMonthly(TENANT_ID);
 
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<String> scriptCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
-
-            verify(jedis).eval(scriptCaptor.capture(), anyList(), anyList());
-
-            assertEquals(
-                EXPECTED_LUA_SCRIPT,
-                scriptCaptor.getValue(),
-                "Monthly check must use the same atomic Lua script"
-            );
-        }
-
-        @Test
-        @DisplayName("passes correct Redis key with eval infix and month")
-        void correctRedisKey() {
-            stubEvalReturns(1L);
-            service.checkMonthly(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(
-                List.class
-            );
-
-            verify(jedis).eval(anyString(), keysCaptor.capture(), anyList());
-
-            String key = keysCaptor.getValue().get(0);
             String expectedMonth = YearMonth.now(ZoneOffset.UTC).format(
                 MONTH_FORMATTER
             );
             String expectedKey =
                 KEY_PREFIX + TENANT_ID + EVAL_INFIX + expectedMonth;
 
-            assertEquals(expectedKey, key);
-        }
-
-        @Test
-        @DisplayName("passes monthly TTL (35 days in seconds) as ARGV[1]")
-        void correctTtlArgument() {
-            stubEvalReturns(1L);
-            service.checkMonthly(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<String>> argsCaptor = ArgumentCaptor.forClass(
-                List.class
-            );
-
-            verify(jedis).eval(anyString(), anyList(), argsCaptor.capture());
-
-            assertEquals(
-                String.valueOf(MONTHLY_TTL_SECONDS),
-                argsCaptor.getValue().get(0),
-                "ARGV[1] should be the monthly TTL (35 days in seconds)"
-            );
+            verify(jedis).get(expectedKey);
+            verify(jedis, never()).eval(anyString(), anyList(), anyList());
+            verify(jedis, never()).incr(anyString());
         }
 
         @Test
         @DisplayName("does NOT call incr() or expire() separately")
         void doesNotCallIncrOrExpireSeparately() {
-            stubEvalReturns(1L);
+            stubGetReturns(1L);
             service.checkMonthly(TENANT_ID);
 
             verify(jedis, never()).incr(anyString());
@@ -614,7 +588,7 @@ class RateLimitServiceTest {
             "first evaluation (count=1) — remaining = 9999, not exceeded"
         )
         void firstEvaluation() {
-            stubEvalReturns(1L);
+            stubGetReturns(1L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(10_000L, result.limit());
@@ -629,7 +603,7 @@ class RateLimitServiceTest {
             "under limit (count=5000) — remaining = 5000, not exceeded, no warning"
         )
         void underLimit() {
-            stubEvalReturns(5_000L);
+            stubGetReturns(5_000L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(5_000L, result.remaining());
@@ -645,7 +619,7 @@ class RateLimitServiceTest {
             "at 90% threshold (count=9000) — warning = true, not exceeded"
         )
         void atWarningThreshold() {
-            stubEvalReturns(9_000L);
+            stubGetReturns(9_000L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(1_000L, result.remaining());
@@ -659,7 +633,7 @@ class RateLimitServiceTest {
         @Test
         @DisplayName("above 90% (count=9500) — warning = true, not exceeded")
         void aboveWarningThreshold() {
-            stubEvalReturns(9_500L);
+            stubGetReturns(9_500L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(500L, result.remaining());
@@ -670,7 +644,7 @@ class RateLimitServiceTest {
         @Test
         @DisplayName("at limit (count=10000) — remaining = 0, not exceeded")
         void atLimit() {
-            stubEvalReturns(10_000L);
+            stubGetReturns(10_000L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(0L, result.remaining());
@@ -687,7 +661,7 @@ class RateLimitServiceTest {
             "exceeded (count=10001) — remaining = 0, monthlyExceeded = true"
         )
         void exceeded() {
-            stubEvalReturns(10_001L);
+            stubGetReturns(10_001L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(0L, result.remaining());
@@ -698,7 +672,7 @@ class RateLimitServiceTest {
         @Test
         @DisplayName("well over limit (count=50000) — remaining clamped to 0")
         void wellOverLimit() {
-            stubEvalReturns(50_000L);
+            stubGetReturns(50_000L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertEquals(0L, result.remaining());
@@ -708,7 +682,7 @@ class RateLimitServiceTest {
         @Test
         @DisplayName("monthly result never sets burstExceeded")
         void noBurstFlag() {
-            stubEvalReturns(99_999L);
+            stubGetReturns(99_999L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             assertFalse(
@@ -720,7 +694,7 @@ class RateLimitServiceTest {
         @Test
         @DisplayName("warning is false when exceeded (only one flag set)")
         void warningFalseWhenExceeded() {
-            stubEvalReturns(10_001L);
+            stubGetReturns(10_001L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             // The code: boolean warning = !exceeded && count >= (long)(limit * 0.9)
@@ -732,9 +706,20 @@ class RateLimitServiceTest {
         }
 
         @Test
+        @DisplayName("null GET result treated as count=0")
+        void nullGetResultTreatedAsZero() {
+            when(jedis.get(anyString())).thenReturn(null);
+            RateLimitResult result = service.checkMonthly(TENANT_ID);
+
+            assertEquals(10_000L, result.limit());
+            assertEquals(10_000L, result.remaining());
+            assertFalse(result.monthlyExceeded());
+        }
+
+        @Test
         @DisplayName("resetAt is first instant of next UTC month")
         void resetAtIsNextMonth() {
-            stubEvalReturns(1L);
+            stubGetReturns(1L);
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
             YearMonth currentMonth = YearMonth.now(ZoneOffset.UTC);
@@ -778,9 +763,11 @@ class RateLimitServiceTest {
         }
 
         @Test
-        @DisplayName("returns UNLIMITED on Redis eval error (fail-open)")
+        @DisplayName("returns UNLIMITED on Redis GET error (fail-open)")
         void failOpenOnRedisError() {
-            stubEvalThrows();
+            when(jedis.get(anyString())).thenThrow(
+                new RuntimeException("Redis connection lost")
+            );
 
             RateLimitResult result = service.checkMonthly(TENANT_ID);
 
@@ -788,9 +775,11 @@ class RateLimitServiceTest {
         }
 
         @Test
-        @DisplayName("Redis eval exception does not propagate")
+        @DisplayName("Redis GET exception does not propagate")
         void exceptionDoesNotPropagate() {
-            stubEvalThrows();
+            when(jedis.get(anyString())).thenThrow(
+                new RuntimeException("Redis connection lost")
+            );
             assertDoesNotThrow(() -> service.checkMonthly(TENANT_ID));
         }
     }
@@ -924,75 +913,26 @@ class RateLimitServiceTest {
     }
 
     // =====================================================================
-    // Burst + Monthly use same Lua script (consistency check)
+    // Burst uses Lua eval, Monthly uses GET (divergence check)
     // =====================================================================
 
     @Nested
-    @DisplayName("Script consistency between burst and monthly")
-    class ScriptConsistency {
+    @DisplayName("Burst vs Monthly Redis operation divergence")
+    class BurstVsMonthlyDivergence {
 
         @Test
-        @DisplayName("both burst and monthly use identical Lua script text")
-        void sameScript() {
-            stubEvalReturns(1L);
-
-            service.checkBurst(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<String> burstScript = ArgumentCaptor.forClass(
-                String.class
-            );
-            verify(jedis).eval(burstScript.capture(), anyList(), anyList());
-
-            reset(jedis);
-            stubEvalReturns(1L);
-
-            service.checkMonthly(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<String> monthlyScript = ArgumentCaptor.forClass(
-                String.class
-            );
-            verify(jedis).eval(monthlyScript.capture(), anyList(), anyList());
-
-            assertEquals(
-                burstScript.getValue(),
-                monthlyScript.getValue(),
-                "Burst and monthly checks should use the same Lua script"
-            );
-        }
-
-        @Test
-        @DisplayName("burst and monthly use different TTL values")
-        void differentTtls() {
+        @DisplayName("burst uses eval (Lua script), monthly uses GET")
+        void differentOperations() {
             stubEvalReturns(1L);
             service.checkBurst(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<String>> burstArgs = ArgumentCaptor.forClass(
-                List.class
-            );
-            verify(jedis).eval(anyString(), anyList(), burstArgs.capture());
-            String burstTtl = burstArgs.getValue().get(0);
+            verify(jedis).eval(anyString(), anyList(), anyList());
+            verify(jedis, never()).get(anyString());
 
             reset(jedis);
-            stubEvalReturns(1L);
+            stubGetReturns(1L);
             service.checkMonthly(TENANT_ID);
-
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<String>> monthlyArgs = ArgumentCaptor.forClass(
-                List.class
-            );
-            verify(jedis).eval(anyString(), anyList(), monthlyArgs.capture());
-            String monthlyTtl = monthlyArgs.getValue().get(0);
-
-            assertNotEquals(
-                burstTtl,
-                monthlyTtl,
-                "Burst and monthly should use different TTL values"
-            );
-            assertEquals("120", burstTtl);
-            assertEquals(String.valueOf(MONTHLY_TTL_SECONDS), monthlyTtl);
+            verify(jedis).get(anyString());
+            verify(jedis, never()).eval(anyString(), anyList(), anyList());
         }
 
         @Test
@@ -1009,27 +949,25 @@ class RateLimitServiceTest {
             String burstKey = burstKeys.getValue().get(0);
 
             reset(jedis);
-            stubEvalReturns(1L);
+            stubGetReturns(1L);
             service.checkMonthly(TENANT_ID);
 
-            @SuppressWarnings("unchecked")
-            ArgumentCaptor<List<String>> monthlyKeys = ArgumentCaptor.forClass(
-                List.class
+            ArgumentCaptor<String> monthlyKey = ArgumentCaptor.forClass(
+                String.class
             );
-            verify(jedis).eval(anyString(), monthlyKeys.capture(), anyList());
-            String monthlyKey = monthlyKeys.getValue().get(0);
+            verify(jedis).get(monthlyKey.capture());
 
             assertTrue(
                 burstKey.contains(BURST_INFIX),
                 "Burst key should contain ':burst:'"
             );
             assertTrue(
-                monthlyKey.contains(EVAL_INFIX),
+                monthlyKey.getValue().contains(EVAL_INFIX),
                 "Monthly key should contain ':eval:'"
             );
             assertNotEquals(
                 burstKey,
-                monthlyKey,
+                monthlyKey.getValue(),
                 "Burst and monthly should use different Redis keys"
             );
         }
@@ -1156,7 +1094,7 @@ class RateLimitServiceTest {
             );
 
             // 90% of 1,000,000 = 900,000
-            stubEvalReturns(900_000L);
+            stubGetReturns(900_000L);
             RateLimitResult result = service.checkMonthly("enterprise");
 
             assertEquals(1_000_000L, result.limit());
@@ -1183,7 +1121,7 @@ class RateLimitServiceTest {
             );
 
             // 89.99% → count = 8999 out of 10000
-            stubEvalReturns(8_999L);
+            stubGetReturns(8_999L);
             RateLimitResult result = service.checkMonthly("almost");
 
             assertFalse(
@@ -1211,6 +1149,11 @@ class RateLimitServiceTest {
                 "platformAdminInstance",
                 platformAdminInstance
             );
+            injectField(
+                freshService,
+                "metricPublisherInstance",
+                metricPublisherInstance
+            );
 
             when(config.redis()).thenReturn(Optional.empty());
 
@@ -1232,6 +1175,11 @@ class RateLimitServiceTest {
                 freshService,
                 "platformAdminInstance",
                 platformAdminInstance
+            );
+            injectField(
+                freshService,
+                "metricPublisherInstance",
+                metricPublisherInstance
             );
 
             assertDoesNotThrow(() -> {

@@ -136,6 +136,24 @@ public interface TenantService extends OperioService {
 
     void deleteSubjectAudit(String subject, String deletionRequestId);
 
+    /**
+     * Returns the number of cached consent-decision keys for the given subject.
+     * Implementations backed by a cache (e.g. Redis) should override this;
+     * the default returns {@code 0} (no cache).
+     */
+    default long countCachedKeysForSubject(String subject) {
+        return 0;
+    }
+
+    /**
+     * Deletes all cached consent-decision keys for the given subject.
+     * Implementations backed by a cache (e.g. Redis) should override this;
+     * the default is a no-op returning {@code 0}.
+     */
+    default long deleteCachedKeysForSubject(String subject) {
+        return 0;
+    }
+
     // -----------------------------------------------------------------------
     // IAM — Role Management
     // -----------------------------------------------------------------------

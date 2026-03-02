@@ -111,6 +111,9 @@ public class RequestTracingFilter
      */
     public static final String REQUEST_ID_PROPERTY = "operio.request-id";
 
+    /** JAX-RS request property key for the request start time (nanos). */
+    private static final String START_TIME_PROPERTY = "operio.request-start-nanos";
+
     /** MDC key for the request correlation ID. */
     public static final String MDC_REQUEST_ID = "requestId";
 
@@ -171,13 +174,29 @@ public class RequestTracingFilter
         // 2. Store as request property for downstream access
         requestCtx.setProperty(REQUEST_ID_PROPERTY, requestId);
 
-        // 3. Set MDC for structured logging
+        // 3. Record start time for duration tracking
+        requestCtx.setProperty(START_TIME_PROPERTY, System.nanoTime());
+
+        // 4. Set MDC for structured logging
         MDC.put(MDC_REQUEST_ID, requestId);
 
         // tenantId and subject are not yet available (auth hasn't run).
         // Set placeholder values so log format doesn't show blanks.
         MDC.put(MDC_TENANT_ID, MDC_ABSENT);
         MDC.put(MDC_SUBJECT, MDC_ABSENT);
+
+        // 5. INFO-level request start log (method + path only)
+        String method = requestCtx.getMethod();
+        String path = requestCtx.getUriInfo().getAbsolutePath().getPath();
+        LOG.info("→ {} {}", method, path);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                "→ {} {} (full URI: {})",
+                method,
+                path,
+                requestCtx.getUriInfo().getRequestUri()
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -223,19 +242,33 @@ public class RequestTracingFilter
             //    for any final response-phase log lines)
             enrichMdcWithIdentity();
 
+            // 4. Compute request duration
+            String method = requestCtx.getMethod();
+            String path = requestCtx.getUriInfo().getAbsolutePath().getPath();
+            int status = responseCtx.getStatus();
+            long durationMs = -1;
+            Object startObj = requestCtx.getProperty(START_TIME_PROPERTY);
+            if (startObj instanceof Long startNanos) {
+                durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+            }
+
+            // 5. INFO-level request completion log (method + path + status + duration)
+            LOG.info("← {} {} {} {}ms", method, path, status, durationMs);
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
-                    "Completed {} {} → {} [requestId={}, tenant={}, subject={}]",
-                    requestCtx.getMethod(),
-                    requestCtx.getUriInfo().getRequestUri().getPath(),
-                    responseCtx.getStatus(),
+                    "← {} {} {} {}ms (full URI: {}, requestId={}, tenant={}, subject={})",
+                    method,
+                    path,
+                    status,
+                    durationMs,
+                    requestCtx.getUriInfo().getRequestUri(),
                     requestId != null ? requestId : MDC_ABSENT,
                     MDC.get(MDC_TENANT_ID),
                     MDC.get(MDC_SUBJECT)
                 );
             }
         } finally {
-            // 4. Clear MDC to prevent context leaking.
+            // Clear MDC to prevent context leaking.
             //    With virtual threads each request has its own thread, but
             //    clearing is still good hygiene and protects against any
             //    thread-reuse edge cases.

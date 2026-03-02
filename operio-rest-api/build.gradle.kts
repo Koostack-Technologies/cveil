@@ -37,7 +37,7 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-health")     // MicroProfile Health
     implementation("io.quarkus:quarkus-smallrye-openapi")    // OpenAPI spec + Swagger UI
     implementation("io.quarkus:quarkus-config-yaml")         // YAML config support
-    implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs (counter reconciliation)
+    implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs
     implementation("io.quarkus:quarkus-rest-qute")           // Qute templating for site pages
 
     // -- Operio core (framework-agnostic) -------------------------------------
@@ -77,6 +77,10 @@ dependencies {
     implementation(project(":platform:operio-iam-query"))                         // JooqIamQueryService
     implementation(project(":platform:operio-iam-projection-jooq"))              // IamProjectionHandler
     implementation(project(":platform:operio-plan-query-jooq"))                  // JooqPlanQueryService
+
+    // -- Metrics modules (MetricPublisherService + projections) ----------------
+    implementation(project(":tenant:operio-tenant-metrics-redis"))               // TenantRedisMetricPublisher + projections
+    implementation(project(":platform:operio-platform-metrics-redis"))           // PlatformRedisMetricPublisher + projections
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")

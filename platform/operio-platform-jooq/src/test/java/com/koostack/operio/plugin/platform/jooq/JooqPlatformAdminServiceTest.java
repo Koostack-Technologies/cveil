@@ -62,7 +62,6 @@ class JooqPlatformAdminServiceTest {
     private TenantRepository tenantRepo;
     private ApiKeyRepository apiKeyRepo;
     private IdpConfigRepository idpConfigRepo;
-    private RateLimitCounterRepository rateLimitCounterRepo;
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -93,7 +92,6 @@ class JooqPlatformAdminServiceTest {
         tenantRepo = new TenantRepository(dsl);
         apiKeyRepo = new ApiKeyRepository(dsl);
         idpConfigRepo = new IdpConfigRepository(dsl);
-        rateLimitCounterRepo = new RateLimitCounterRepository(dsl);
     }
 
     @AfterAll
@@ -722,7 +720,6 @@ class JooqPlatformAdminServiceTest {
             assertNotNull(service.tenantRepository());
             assertNotNull(service.apiKeyRepository());
             assertNotNull(service.idpConfigRepository());
-            assertNotNull(service.rateLimitCounterRepository());
             assertNotNull(service.tenantManager());
         }
     }
@@ -1235,208 +1232,6 @@ class JooqPlatformAdminServiceTest {
             // On upsert, created_at should remain the original value
             // (the ON CONFLICT UPDATE clause doesn't touch created_at/created_by)
             assertNotNull(updated.getCreatedAt());
-        }
-    }
-
-    // =======================================================================
-    // RateLimitCounterRepository
-    // =======================================================================
-
-    @Nested
-    @DisplayName("RateLimitCounterRepository")
-    class RateLimitCounterTests {
-
-        @Test
-        @DisplayName("get returns 0 for non-existent counter")
-        void getReturnsZeroWhenMissing() {
-            seedTenant("acme", "Acme Corp", "free");
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("increment creates counter with value 1 on first call")
-        void incrementCreates() {
-            seedTenant("acme", "Acme Corp", "free");
-            long value = rateLimitCounterRepo.increment(
-                "acme",
-                "evaluations",
-                "2025-07"
-            );
-            assertEquals(1L, value);
-        }
-
-        @Test
-        @DisplayName("increment increments existing counter")
-        void incrementExisting() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            long value = rateLimitCounterRepo.increment(
-                "acme",
-                "evaluations",
-                "2025-07"
-            );
-            assertEquals(3L, value);
-        }
-
-        @Test
-        @DisplayName("different metrics are tracked independently")
-        void independentMetrics() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "subjects", "2025-07");
-
-            assertEquals(
-                2L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-            assertEquals(
-                1L,
-                rateLimitCounterRepo.get("acme", "subjects", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("different periods are tracked independently")
-        void independentPeriods() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-06");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-06");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-
-            assertEquals(
-                2L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-06")
-            );
-            assertEquals(
-                1L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("different tenants are tracked independently")
-        void independentTenants() {
-            seedTenant("acme", "Acme Corp", "free");
-            seedTenant("beta", "Beta Inc", "free");
-
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("beta", "evaluations", "2025-07");
-
-            assertEquals(
-                2L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-            assertEquals(
-                1L,
-                rateLimitCounterRepo.get("beta", "evaluations", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("reset deletes counter row")
-        void reset() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-
-            int deleted = rateLimitCounterRepo.reset(
-                "acme",
-                "evaluations",
-                "2025-07"
-            );
-            assertEquals(1, deleted);
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("reset returns 0 for non-existent counter")
-        void resetNonExistent() {
-            assertEquals(
-                0,
-                rateLimitCounterRepo.reset("nope", "evaluations", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("deleteByTenant removes all counters for tenant")
-        void deleteByTenant() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-06");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "subjects", "2025-07");
-
-            int deleted = rateLimitCounterRepo.deleteByTenant("acme");
-            assertEquals(3, deleted);
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-06")
-            );
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get("acme", "evaluations", "2025-07")
-            );
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get("acme", "subjects", "2025-07")
-            );
-        }
-
-        @Test
-        @DisplayName("deleteByTenant returns 0 for unknown tenant")
-        void deleteByTenantEmpty() {
-            assertEquals(0, rateLimitCounterRepo.deleteByTenant("nonexistent"));
-        }
-
-        @Test
-        @DisplayName(
-            "increment many times returns monotonically increasing values"
-        )
-        void incrementMonotonic() {
-            seedTenant("acme", "Acme Corp", "free");
-            for (int i = 1; i <= 10; i++) {
-                long val = rateLimitCounterRepo.increment(
-                    "acme",
-                    "evaluations",
-                    "2025-08"
-                );
-                assertEquals(i, val, "increment #" + i + " should return " + i);
-            }
-        }
-
-        @Test
-        @DisplayName("reset then re-increment starts from 1")
-        void resetThenReIncrement() {
-            seedTenant("acme", "Acme Corp", "free");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.increment("acme", "evaluations", "2025-07");
-            rateLimitCounterRepo.reset("acme", "evaluations", "2025-07");
-
-            long afterReset = rateLimitCounterRepo.get(
-                "acme",
-                "evaluations",
-                "2025-07"
-            );
-            assertEquals(0L, afterReset, "counter should be 0 after reset");
-
-            long afterReIncrement = rateLimitCounterRepo.increment(
-                "acme",
-                "evaluations",
-                "2025-07"
-            );
-            assertEquals(
-                1L,
-                afterReIncrement,
-                "re-increment after reset should start from 1"
-            );
         }
     }
 
@@ -2568,27 +2363,6 @@ class JooqPlatformAdminServiceTest {
     class ServiceCascades {
 
         @Test
-        @DisplayName("deleteTenant cascades to rate_limit_counters")
-        void deleteTenantCascadesCounters() {
-            service.createTenant("acme", "Acme Corp", "free");
-
-            // Seed some counters via the shared repo
-            RateLimitCounterRepository counters =
-                service.rateLimitCounterRepository();
-            counters.increment("acme", "evaluations", "2025-07");
-            counters.increment("acme", "evaluations", "2025-07");
-            counters.increment("acme", "subjects", "2025-07");
-
-            assertEquals(2L, counters.get("acme", "evaluations", "2025-07"));
-
-            service.deleteTenant("acme");
-
-            // Counters should be gone
-            assertEquals(0L, counters.get("acme", "evaluations", "2025-07"));
-            assertEquals(0L, counters.get("acme", "subjects", "2025-07"));
-        }
-
-        @Test
         @DisplayName("createTenant + deleteTenant leaves no orphan data")
         void noOrphanData() {
             service.createTenant("orphan_test", "Orphan Test", "pro");
@@ -2604,9 +2378,6 @@ class JooqPlatformAdminServiceTest {
                 "auth0",
                 Map.of("issuerUrl", "https://test.auth0.com")
             );
-            service
-                .rateLimitCounterRepository()
-                .increment("orphan_test", "evaluations", "2025-07");
 
             service.deleteTenant("orphan_test");
 
@@ -2614,14 +2385,6 @@ class JooqPlatformAdminServiceTest {
             assertTrue(tenantRepo.findById("orphan_test").isEmpty());
             assertTrue(apiKeyRepo.findByTenant("orphan_test").isEmpty());
             assertTrue(idpConfigRepo.findByTenant("orphan_test").isEmpty());
-            assertEquals(
-                0L,
-                rateLimitCounterRepo.get(
-                    "orphan_test",
-                    "evaluations",
-                    "2025-07"
-                )
-            );
         }
 
         @Test
@@ -2811,29 +2574,6 @@ class JooqPlatformAdminServiceTest {
             assertEquals(1, service.listIdpConfigs("tenant_a").size());
             assertEquals(0, service.listIdpConfigs("tenant_b").size());
 
-            // Rate limit counters are tenant-isolated
-            service
-                .rateLimitCounterRepository()
-                .increment("tenant_a", "evaluations", "2025-07");
-            service
-                .rateLimitCounterRepository()
-                .increment("tenant_a", "evaluations", "2025-07");
-            service
-                .rateLimitCounterRepository()
-                .increment("tenant_b", "evaluations", "2025-07");
-            assertEquals(
-                2L,
-                service
-                    .rateLimitCounterRepository()
-                    .get("tenant_a", "evaluations", "2025-07")
-            );
-            assertEquals(
-                1L,
-                service
-                    .rateLimitCounterRepository()
-                    .get("tenant_b", "evaluations", "2025-07")
-            );
-
             // Delete tenant_a — tenant_b is unaffected
             service.deleteTenant("tenant_a");
             assertThrows(OperioServiceException.class, () ->
@@ -2845,20 +2585,6 @@ class JooqPlatformAdminServiceTest {
             assertEquals("tenant_b", b.tenantId());
             IdentityContext ctxBAgain = verifier.verifyToken(keyB);
             assertEquals("tenant_b", ctxBAgain.tenantId());
-
-            // Tenant B counters unaffected by tenant A deletion
-            assertEquals(
-                1L,
-                service
-                    .rateLimitCounterRepository()
-                    .get("tenant_b", "evaluations", "2025-07")
-            );
-            assertEquals(
-                0L,
-                service
-                    .rateLimitCounterRepository()
-                    .get("tenant_a", "evaluations", "2025-07")
-            );
         }
 
         @Test
