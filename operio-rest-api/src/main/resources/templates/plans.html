@@ -1,0 +1,180 @@
+{#include base.html}
+{#title}Plans{/title}
+{#content}
+
+    <main class="relative z-10 flex-grow px-4 sm:px-6 lg:px-8 py-16">
+        <div class="max-w-7xl mx-auto">
+
+            <!-- Page Header -->
+            <div class="text-center mb-16">
+                <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Simple, transparent pricing</h1>
+                <p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, scale as you grow. Every plan includes the full consent engine, immutable audit ledger, and data masking — pay only for what you use beyond your quota.</p>
+            </div>
+
+            <!-- Pricing Cards -->
+            <div class="grid md:grid-cols-3 gap-8 mb-20">
+                {#for tier in tiers}
+                <div class="relative rounded-2xl border {#if tier.highlighted}border-operio-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
+                    {#if tier.highlighted}
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-operio-500 text-gray-900 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Most Popular</div>
+                    {/if}
+
+                    <div class="mb-8">
+                        <h3 class="text-xl font-bold mb-2">{tier.name}</h3>
+                        <p class="text-gray-400 text-sm mb-6">{tier.description}</p>
+                        <div class="flex items-baseline gap-1">
+                            <span class="text-4xl font-bold">{tier.price}</span>
+                            <span class="text-gray-500">{tier.period}</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 mb-8 flex-grow">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-white font-medium">{tier.evaluations}</span>
+                                <span class="text-gray-400"> consent evaluations / mo</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Overage: </span>
+                                <span class="text-white font-medium">{tier.overage}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Data masking: </span>
+                                <span class="text-white font-medium">{tier.masking}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Audit retention: </span>
+                                <span class="text-white font-medium">{tier.auditRetention}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Support: </span>
+                                <span class="text-white font-medium">{tier.support}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Data residency: </span>
+                                <span class="text-white font-medium">{tier.residency}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            {#if tier.sso}
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            {#else}
+                            <svg class="w-5 h-5 text-gray-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            {/if}
+                            <div>
+                                <span class="text-gray-400">SSO / SAML: </span>
+                                <span class="{#if tier.sso}text-white font-medium{#else}text-gray-600{/if}">{#if tier.sso}Included{#else}Not included{/if}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-operio-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Uptime SLA: </span>
+                                <span class="text-white font-medium">{tier.sla}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="#" class="{#if tier.highlighted}bg-operio-500 text-gray-900 hover:bg-operio-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded-lg font-semibold text-center transition-all">
+                        {tier.cta}
+                    </a>
+                </div>
+                {/for}
+            </div>
+
+            <!-- Pay As You Go Note -->
+            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-xl p-8 text-center mb-16">
+                <h3 class="text-xl font-bold mb-3">Pay as you go, always</h3>
+                <p class="text-gray-400 leading-relaxed">
+                    Every plan includes a baseline quota of consent evaluations per month. Go beyond your limit and you're automatically billed at the overage rate — no hard cutoffs, no surprises. Usage resets on the first of each calendar month.
+                </p>
+            </div>
+
+            <!-- Feature Comparison -->
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-2xl font-bold mb-8 text-center">Full feature comparison</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-800">
+                                <th class="py-4 pr-4 font-medium text-gray-400">Feature</th>
+                                <th class="py-4 px-4 font-medium text-gray-400 text-center">Starter</th>
+                                <th class="py-4 px-4 font-medium text-operio-500 text-center">Pro</th>
+                                <th class="py-4 pl-4 font-medium text-gray-400 text-center">Enterprise</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-gray-300">
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Monthly evaluations</td>
+                                <td class="py-3 px-4 text-center">50,000</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">500,000</td>
+                                <td class="py-3 pl-4 text-center">Unlimited</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Overage rate</td>
+                                <td class="py-3 px-4 text-center">$0.002</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">$0.001</td>
+                                <td class="py-3 pl-4 text-center">Custom</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Data masking</td>
+                                <td class="py-3 px-4 text-center">Basic</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">Full field-level</td>
+                                <td class="py-3 pl-4 text-center">Full + custom</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Audit log retention</td>
+                                <td class="py-3 px-4 text-center">30 days</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">1 year</td>
+                                <td class="py-3 pl-4 text-center">Unlimited</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Support</td>
+                                <td class="py-3 px-4 text-center">Community</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">Priority (24h)</td>
+                                <td class="py-3 pl-4 text-center">Dedicated (1h)</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Data residency</td>
+                                <td class="py-3 px-4 text-center">Shared</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">Dedicated region</td>
+                                <td class="py-3 pl-4 text-center">Custom / on-prem</td>
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">SSO / SAML</td>
+                                <td class="py-3 px-4 text-center text-gray-600">—</td>
+                                <td class="py-3 px-4 text-center text-operio-500">✓</td>
+                                <td class="py-3 pl-4 text-center text-operio-500">✓</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 pr-4">Uptime SLA</td>
+                                <td class="py-3 px-4 text-center">99.9%</td>
+                                <td class="py-3 px-4 text-center font-medium text-white">99.95%</td>
+                                <td class="py-3 pl-4 text-center">99.99%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+{/content}
+{/include}

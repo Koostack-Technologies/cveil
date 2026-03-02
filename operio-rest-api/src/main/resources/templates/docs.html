@@ -1,0 +1,231 @@
+{#include base.html}
+{#title}Documentation{/title}
+{#content}
+
+    <main class="relative z-10 flex-grow px-4 sm:px-6 lg:px-8 py-16">
+        <div class="max-w-5xl mx-auto">
+
+            <!-- Page Header -->
+            <div class="mb-16">
+                <h1 class="text-4xl md:text-5xl font-bold tracking-tight mb-4">Documentation</h1>
+                <p class="text-lg text-gray-400 max-w-2xl">Everything you need to integrate Operio into your application — from first API call to production deployment.</p>
+            </div>
+
+            <!-- Getting Started -->
+            <section class="mb-20">
+                <h2 class="text-2xl font-bold mb-8 pb-4 border-b border-gray-800">Getting Started</h2>
+
+                <div class="space-y-12">
+                    <!-- Step 1 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="w-8 h-8 rounded-full bg-operio-900/50 border border-operio-500/30 text-operio-500 flex items-center justify-center text-sm font-bold">1</span>
+                            <h3 class="text-xl font-semibold">Create your Workspace</h3>
+                        </div>
+                        <p class="text-gray-400 mb-4 ml-11">Sign up and create a workspace from the platform dashboard. Each workspace is an isolated tenant with its own database schema and Redis streams.</p>
+                        <div class="ml-11 bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
+                            <p><span class="text-gray-500"># Create a workspace via the Platform API</span></p>
+                            <p>curl -X POST https://api.operio.dev/api/v1/platform/tenants \</p>
+                            <p class="ml-4">-H "Authorization: Bearer $OPERIO_API_KEY" \</p>
+                            <p class="ml-4">-H "Content-Type: application/json" \</p>
+                            <p class="ml-4">-d '{"{"}"name": "my-app", "region": "us-east-1"{"}"}'</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="w-8 h-8 rounded-full bg-operio-900/50 border border-operio-500/30 text-operio-500 flex items-center justify-center text-sm font-bold">2</span>
+                            <h3 class="text-xl font-semibold">Install the SDK</h3>
+                        </div>
+                        <p class="text-gray-400 mb-4 ml-11">Add the Operio SDK to your project. We support Node.js, Python, Java, and Go.</p>
+                        <div class="ml-11 grid md:grid-cols-2 gap-4">
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
+                                <p class="text-gray-500 mb-2"># Node.js</p>
+                                <p>npm install @operio/node</p>
+                            </div>
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
+                                <p class="text-gray-500 mb-2"># Python</p>
+                                <p>pip install operio</p>
+                            </div>
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
+                                <p class="text-gray-500 mb-2"># Java (Maven)</p>
+                                <p>&lt;dependency&gt;</p>
+                                <p class="ml-2">&lt;groupId&gt;dev.operio&lt;/groupId&gt;</p>
+                                <p class="ml-2">&lt;artifactId&gt;operio-sdk&lt;/artifactId&gt;</p>
+                                <p>&lt;/dependency&gt;</p>
+                            </div>
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
+                                <p class="text-gray-500 mb-2"># Go</p>
+                                <p>go get github.com/operio/operio-go</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="w-8 h-8 rounded-full bg-operio-900/50 border border-operio-500/30 text-operio-500 flex items-center justify-center text-sm font-bold">3</span>
+                            <h3 class="text-xl font-semibold">Record your first consent</h3>
+                        </div>
+                        <p class="text-gray-400 mb-4 ml-11">Grant consent for a subject and purpose. The event is immutably recorded in the audit ledger.</p>
+                        <div class="ml-11 bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                            <p><span class="text-purple-400">import</span> {"{"} Operio {"}"} <span class="text-purple-400">from</span> <span class="text-green-300">'@operio/node'</span>;</p>
+                            <br>
+                            <p><span class="text-purple-400">const</span> operio = <span class="text-purple-400">new</span> Operio(<span class="text-green-300">'op_live_sk_...'</span>);</p>
+                            <br>
+                            <p><span class="text-gray-500">// Grant consent</span></p>
+                            <p><span class="text-purple-400">await</span> operio.consent.grant({"{"}</p>
+                            <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
+                            <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span>,</p>
+                            <p class="ml-4">expiresAt: <span class="text-green-300">'2027-01-01T00:00:00Z'</span></p>
+                            <p>{"}"});</p>
+                            <br>
+                            <p><span class="text-gray-500">// Evaluate consent (sub-millisecond)</span></p>
+                            <p><span class="text-purple-400">const</span> allowed = <span class="text-purple-400">await</span> operio.consent.evaluate({"{"}</p>
+                            <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
+                            <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span></p>
+                            <p>{"}"});</p>
+                            <p><span class="text-gray-500">// → true</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Reference -->
+            <section class="mb-20">
+                <h2 class="text-2xl font-bold mb-8 pb-4 border-b border-gray-800">API Reference</h2>
+                <p class="text-gray-400 mb-8">All endpoints require a Bearer token via the <code class="text-operio-500 bg-operio-900/30 px-1.5 py-0.5 rounded text-sm">Authorization</code> header. Base URL: <code class="text-operio-500 bg-operio-900/30 px-1.5 py-0.5 rounded text-sm">https://api.operio.dev/api/v1</code></p>
+
+                <!-- Consent API -->
+                <div class="mb-12">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-operio-500"></span>
+                        Consent API
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400">
+                                    <th class="py-3 pr-4 font-medium">Method</th>
+                                    <th class="py-3 pr-4 font-medium">Endpoint</th>
+                                    <th class="py-3 font-medium">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-300">
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/consent/grant</td>
+                                    <td class="py-3">Grant consent for a subject and purpose</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/consent/revoke</td>
+                                    <td class="py-3">Revoke consent for a subject and purpose</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/consent/evaluate</td>
+                                    <td class="py-3">Evaluate whether consent is active for a subject + purpose</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/consent/status</td>
+                                    <td class="py-3">Get full consent status for a subject across all purposes</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Admin API -->
+                <div class="mb-12">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-cyan-500"></span>
+                        Admin API
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400">
+                                    <th class="py-3 pr-4 font-medium">Method</th>
+                                    <th class="py-3 pr-4 font-medium">Endpoint</th>
+                                    <th class="py-3 font-medium">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-300">
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/admin/fields</td>
+                                    <td class="py-3">List all registered sensitive fields</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/admin/fields</td>
+                                    <td class="py-3">Register a new sensitive field</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/admin/purposes</td>
+                                    <td class="py-3">List all registered consent purposes</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/admin/purposes</td>
+                                    <td class="py-3">Register a new consent purpose</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/admin/categories</td>
+                                    <td class="py-3">Create a consent category and link fields</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Auth API -->
+                <div class="mb-12">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+                        Authentication
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400">
+                                    <th class="py-3 pr-4 font-medium">Method</th>
+                                    <th class="py-3 pr-4 font-medium">Endpoint</th>
+                                    <th class="py-3 font-medium">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-300">
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/auth/login</td>
+                                    <td class="py-3">Authenticate and receive an API token</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/auth/refresh</td>
+                                    <td class="py-3">Refresh an expired access token</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6 text-center">
+                    <p class="text-gray-400 mb-3">For interactive API exploration with request/response examples:</p>
+                    <a href="/q/swagger-ui" class="inline-flex items-center gap-2 bg-operio-500 text-gray-900 hover:bg-operio-600 px-6 py-2.5 rounded-lg font-semibold transition-all">
+                        Open API Explorer (Swagger UI)
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+{/content}
+{/include}

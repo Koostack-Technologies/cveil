@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{#insert title}Operio{/insert} | Enterprise Consent &amp; Data Masking API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        operio: {
+                            50: '#f0fdfa',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            900: '#134e4a',
+                            950: '#042f2e',
+                        },
+                        gray: {
+                            900: '#0a0f1c',
+                            800: '#172136',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0a0f1c; color: #f8fafc; }
+        .bg-glow {
+            position: absolute;
+            top: 0; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 400px;
+            background: radial-gradient(circle, rgba(20, 184, 166, 0.15) 0%, rgba(10, 15, 28, 0) 70%);
+            pointer-events: none; z-index: 0;
+        }
+        .text-glow { text-shadow: 0 0 30px rgba(20, 184, 166, 0.4); }
+    </style>
+    {#insert head}{/insert}
+</head>
+<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <div class="bg-glow"></div>
+
+    <!-- Navigation -->
+    <nav class="relative z-10 border-b border-gray-800 bg-gray-900/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded bg-gradient-to-br from-operio-500 to-cyan-500 flex items-center justify-center font-bold text-gray-900">O</div>
+                <span class="text-xl font-bold tracking-tight text-white">operio</span>
+            </a>
+            <div class="hidden md:flex space-x-8 text-sm font-medium text-gray-400">
+                <a href="/" class="hover:text-white transition-colors">Home</a>
+                <a href="/docs" class="hover:text-white transition-colors">Documentation</a>
+                <a href="/plans" class="hover:text-white transition-colors">Plans</a>
+                <a href="/q/swagger-ui" class="hover:text-white transition-colors">API Explorer</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="#" class="text-gray-300 hover:text-white text-sm font-medium py-2">Sign In</a>
+                <a href="#" class="bg-white text-gray-900 hover:bg-gray-100 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-[0_0_15px_rgba(255,255,255,0.1)]">Get API Keys</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Content -->
+    {#insert content}No content provided.{/insert}
+
+    <!-- Footer -->
+    <footer class="relative z-10 border-t border-gray-800 bg-[#0a0f1c] py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6 text-sm text-gray-500">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-gray-400 text-xs">O</div>
+                <span>&copy; 2026 Operio Inc. All rights reserved.</span>
+            </div>
+            <div class="flex space-x-6">
+                <a href="/docs" class="hover:text-gray-300">Documentation</a>
+                <a href="/q/swagger-ui" class="hover:text-gray-300">API Reference</a>
+                <a href="#" class="hover:text-gray-300">Security &amp; SOC2</a>
+                <a href="#" class="hover:text-gray-300">Privacy Policy</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

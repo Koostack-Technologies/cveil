@@ -38,6 +38,7 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-openapi")    // OpenAPI spec + Swagger UI
     implementation("io.quarkus:quarkus-config-yaml")         // YAML config support
     implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs (counter reconciliation)
+    implementation("io.quarkus:quarkus-rest-qute")           // Qute templating for site pages
 
     // -- Operio core (framework-agnostic) -------------------------------------
     implementation(project(":operio-core"))
