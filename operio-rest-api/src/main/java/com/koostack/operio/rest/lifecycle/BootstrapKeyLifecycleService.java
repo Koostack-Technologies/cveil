@@ -1,8 +1,8 @@
 package com.koostack.operio.rest.lifecycle;
 
-import com.koostack.operio.core.models.ApiKeyInfo;
-import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.core.models.TenantInfo;
+import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -79,7 +79,11 @@ public class BootstrapKeyLifecycleService {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    PlatformAdminService platformAdminService;
+    CoreQueryService coreQueryService;
+
+    @Inject
+    @SuppressWarnings("rawtypes")
+    IamQueryService iamQueryService;
 
     // -----------------------------------------------------------------------
     // Startup check
@@ -94,7 +98,7 @@ public class BootstrapKeyLifecycleService {
      * immediately (no need to wait for the first API key creation in
      * this process).
      *
-     * <p>If {@code PlatformAdminService} is not available (embedded
+     * <p>If query services are not available (embedded
      * mode), the check is skipped entirely — embedded mode does not
      * support multi-tenant management or API key authentication.
      *
@@ -119,9 +123,9 @@ public class BootstrapKeyLifecycleService {
             );
         }
 
-        if (platformAdminService == null) {
+        if (coreQueryService == null || iamQueryService == null) {
             LOG.debug(
-                "Bootstrap key lifecycle: PlatformAdminService not available " +
+                "Bootstrap key lifecycle: query services not available " +
                     "(embedded mode) — skipping startup API key check"
             );
             return;
@@ -337,14 +341,15 @@ public class BootstrapKeyLifecycleService {
      *
      * @return {@code true} if at least one active API key exists
      */
+    @SuppressWarnings("unchecked")
     private boolean checkForExistingApiKeys() {
-        List<TenantInfo> tenants = platformAdminService.listTenants();
+        List<TenantInfo> tenants = coreQueryService.listTenants();
         if (tenants == null || tenants.isEmpty()) {
             return false;
         }
 
         for (TenantInfo tenant : tenants) {
-            List<ApiKeyInfo> keys = platformAdminService.listApiKeys(
+            List<IamQueryService.ApiKeyInfo> keys = iamQueryService.listApiKeys(
                 tenant.tenantId()
             );
             if (keys != null) {

@@ -75,7 +75,7 @@ import redis.clients.jedis.JedisPooled;
  *
  * <h2>Embedded Mode</h2>
  * <p>When {@code operio.mode=embedded}, Redis is not configured and the
- * {@link PlatformAdminService} is null. In this case the service reports
+ * {@link CoreQueryService} is null. In this case the service reports
  * itself as unavailable ({@link #isAvailable()} returns {@code false}) and
  * the {@code RateLimitFilter} skips rate limiting entirely.
  *
@@ -202,7 +202,7 @@ public class RateLimitService {
 
     /**
      * Local cache of tenant rate limits, keyed by tenant ID. Entries are
-     * lazily loaded from {@link PlatformAdminService} and evicted after
+     * lazily loaded from {@link CoreQueryService} and evicted after
      * {@link #CACHE_TTL}.
      */
     private final ConcurrentMap<String, CachedTenantLimits> limitsCache =
@@ -295,7 +295,7 @@ public class RateLimitService {
      * Whether rate limiting is operationally available.
      *
      * <p>Returns {@code true} only when both Redis is connected and a
-     * {@link PlatformAdminService} is available for looking up tenant
+     * {@link CoreQueryService} is available for looking up tenant
      * limits. In embedded mode this returns {@code false}.
      *
      * @return {@code true} if rate limiting is active

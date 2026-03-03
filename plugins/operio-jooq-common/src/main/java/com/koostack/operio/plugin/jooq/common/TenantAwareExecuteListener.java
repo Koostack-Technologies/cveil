@@ -38,7 +38,7 @@ import org.jooq.ExecuteListener;
  * <h2>Scope</h2>
  * <p>This listener is intended <strong>only</strong> for the consent-data
  * {@link org.jooq.DSLContext}. The platform {@link org.jooq.DSLContext}
- * (used by {@code JooqPlatformAdminService} and {@code ApiKeyTokenVerifier})
+ * (used by {@code ApiKeyTokenVerifier})
  * targets the shared {@code operio_platform} schema and must
  * <strong>never</strong> be tenant-routed.
  *

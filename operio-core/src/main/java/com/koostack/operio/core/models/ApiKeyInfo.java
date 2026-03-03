@@ -5,8 +5,9 @@ import java.util.Set;
 /**
  * Immutable snapshot of an API key's metadata.
  *
- * <p>Returned by {@link com.koostack.operio.core.service.PlatformAdminService}
- * list/query methods. Never contains the raw key or its hash — only the
+ * <p>Returned by platform query services (e.g.
+ * {@link com.koostack.operio.core.platform.iam.IamQueryService}).
+ * Never contains the raw key or its hash — only the
  * non-sensitive prefix and associated metadata.
  *
  * @param keyPrefix  the first 8 characters of the raw key (used for

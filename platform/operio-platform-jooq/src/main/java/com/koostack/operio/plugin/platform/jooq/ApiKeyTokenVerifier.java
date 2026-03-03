@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  *
  * @see TokenValidationService
  */
-public class ApiKeyTokenVerifier implements TokenValidationService<PlatformJooqConfig> {
+public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
 
     private IamQueryService<?> iamQueryService;
 
@@ -56,43 +56,6 @@ public class ApiKeyTokenVerifier implements TokenValidationService<PlatformJooqC
      */
     public ApiKeyTokenVerifier(IamQueryService<?> iamQueryService) {
         this.iamQueryService = iamQueryService;
-    }
-
-    /**
-     * @deprecated Use {@link #ApiKeyTokenVerifier(IamQueryService)} instead.
-     *             Retained for test backward compatibility.
-     */
-    @Deprecated
-    public ApiKeyTokenVerifier(org.jooq.DSLContext platformDslContext, ApiKeyRepository apiKeyRepository) {
-        this.iamQueryService = new IamQueryService<Void>() {
-            @Override public String getName() { return "test-adapter"; }
-            @Override public int getPriority() { return 0; }
-            @Override public Class<Void> getConfigurationType() { return Void.class; }
-            @Override public void configure(Void config) {}
-            @Override public boolean isReady() { return true; }
-
-            @Override
-            public java.util.List<ApiKeyInfo> listApiKeys(String tenantId) { return java.util.List.of(); }
-
-            @Override
-            public ApiKeyInfo getApiKey(String tenantId, String keyId) { return null; }
-
-            @Override
-            public ApiKeyInfo findByKeyHash(String keyHash) {
-                return apiKeyRepository.findByKeyHash(keyHash)
-                    .map(ak -> new ApiKeyInfo(
-                        ak.getApiKeyId() != null ? ak.getApiKeyId().toString() : null,
-                        ak.getKeyPrefix(), ak.getSubject(),
-                        ak.getTenantId(), null, ak.getSubject(), ak.getRoles(),
-                        ak.getStatus(),
-                        ak.getCreatedAt() != null ? ak.getCreatedAt().toInstant(java.time.ZoneOffset.UTC) : null,
-                        ak.getExpiresAt() != null ? ak.getExpiresAt().toInstant(java.time.ZoneOffset.UTC) : null))
-                    .orElse(null);
-            }
-
-            @Override
-            public ApiKeyInfo findByKeyPrefix(String keyPrefix) { return null; }
-        };
     }
 
     /**
@@ -118,19 +81,13 @@ public class ApiKeyTokenVerifier implements TokenValidationService<PlatformJooqC
     }
 
     @Override
-    public Class<PlatformJooqConfig> getConfigurationType() {
-        return PlatformJooqConfig.class;
+    public Class<Void> getConfigurationType() {
+        return Void.class;
     }
 
-    /**
-     * Legacy configure method — retained for SPI compatibility.
-     * In the CQRS flow, use {@link #setIamQueryService} instead.
-     */
     @Override
-    public void configure(PlatformJooqConfig config) {
+    public void configure(Void config) {
         // No-op: IamQueryService is injected externally in CQRS mode.
-        // Legacy callers that relied on configure() creating its own DSLContext
-        // should switch to the IamQueryService constructor or setter.
     }
 
     @Override

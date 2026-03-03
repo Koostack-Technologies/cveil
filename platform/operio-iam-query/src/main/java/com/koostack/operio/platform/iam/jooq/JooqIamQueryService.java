@@ -1,6 +1,8 @@
 package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.core.platform.iam.IamQueryService;
+import com.koostack.operio.core.query.RetryableQuery;
+import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.slf4j.Logger;
@@ -29,6 +31,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     private static final org.jooq.Field<OffsetDateTime> EXPIRES_AT = field(name("expires_at"), OffsetDateTime.class);
 
     private DSLContext dsl;
+    private RetryConfig retryConfig = RetryableQuery.DEFAULT;
 
     @Override public String getName() { return "jooq-iam-query"; }
     @Override public int getPriority() { return 100; }
@@ -45,41 +48,70 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         return dsl != null;
     }
 
+    public void setRetryConfig(RetryConfig retryConfig) {
+        this.retryConfig = retryConfig;
+    }
+
     @Override
     public List<ApiKeyInfo> listApiKeys(String tenantId) {
-        return dsl.select()
-            .from(API_KEY)
-            .where(TENANT_ID.eq(tenantId))
-            .orderBy(CREATED_AT.desc())
-            .fetch(this::toApiKeyInfo);
+        return RetryableQuery.withRetryCollection(
+            () -> dsl.select()
+                .from(API_KEY)
+                .where(TENANT_ID.eq(tenantId))
+                .orderBy(CREATED_AT.desc())
+                .fetch(this::toApiKeyInfo),
+            retryConfig,
+            "listApiKeys(" + tenantId + ")"
+        );
     }
 
     @Override
     public ApiKeyInfo getApiKey(String tenantId, String keyId) {
-        Record record = dsl.select()
-            .from(API_KEY)
-            .where(TENANT_ID.eq(tenantId))
-            .and(KEY_ID.eq(keyId))
-            .fetchOne();
-        return record != null ? toApiKeyInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(API_KEY)
+                    .where(TENANT_ID.eq(tenantId))
+                    .and(KEY_ID.eq(keyId))
+                    .fetchOne();
+                return record != null ? toApiKeyInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "getApiKey(" + tenantId + ", " + keyId + ")"
+        );
     }
 
     @Override
     public ApiKeyInfo findByKeyHash(String keyHash) {
-        Record record = dsl.select()
-            .from(API_KEY)
-            .where(KEY_HASH.eq(keyHash))
-            .fetchOne();
-        return record != null ? toApiKeyInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(API_KEY)
+                    .where(KEY_HASH.eq(keyHash))
+                    .fetchOne();
+                return record != null ? toApiKeyInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "findByKeyHash"
+        );
     }
 
     @Override
     public ApiKeyInfo findByKeyPrefix(String keyPrefix) {
-        Record record = dsl.select()
-            .from(API_KEY)
-            .where(KEY_PREFIX.eq(keyPrefix))
-            .fetchOne();
-        return record != null ? toApiKeyInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(API_KEY)
+                    .where(KEY_PREFIX.eq(keyPrefix))
+                    .fetchOne();
+                return record != null ? toApiKeyInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "findByKeyPrefix(" + keyPrefix + ")"
+        );
     }
 
     private ApiKeyInfo toApiKeyInfo(Record record) {

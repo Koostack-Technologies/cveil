@@ -6,7 +6,6 @@ import com.koostack.operio.core.service.AuditLogger;
 import com.koostack.operio.core.service.ConsentDecisionService;
 import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.service.MaskingStrategy;
-import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.sdk.SensitiveDiscovery;
 import com.koostack.operio.core.service.SensitiveFieldResolver;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
@@ -55,7 +54,6 @@ public abstract class Operio implements OperioService {
 
     // -- Platform plugins -----------------------------------------------------
     private final TokenValidationService<?> tokenValidationService;
-    private final PlatformAdminService<?> platformAdminService;
     private final IdpProvider<?> idpProvider;
     private final CoreCommandService<?> coreCommandService;
     private final CoreQueryService<?> coreQueryService;
@@ -77,7 +75,6 @@ public abstract class Operio implements OperioService {
         this.maskingStrategy = builder.maskingStrategy;
         this.sensitiveFieldResolver = builder.sensitiveFieldResolver;
         this.tokenValidationService = builder.tokenValidationService;
-        this.platformAdminService = builder.platformAdminService;
         this.idpProvider = builder.idpProvider;
         this.coreCommandService = builder.coreCommandService;
         this.coreQueryService = builder.coreQueryService;
@@ -88,7 +85,6 @@ public abstract class Operio implements OperioService {
 
         // Propagate appName to any service that supports namespacing
         propagateAppName(consentService);
-        propagateAppName(platformAdminService);
     }
 
     /**
@@ -171,14 +167,6 @@ public abstract class Operio implements OperioService {
      */
     public TokenValidationService<?> tokenValidationService() {
         return tokenValidationService;
-    }
-
-    /**
-     * Returns the configured {@link PlatformAdminService}, or {@code null}
-     * if none was registered.
-     */
-    public PlatformAdminService<?> platformAdminService() {
-        return platformAdminService;
     }
 
     /**
@@ -299,7 +287,6 @@ public abstract class Operio implements OperioService {
 
         // -- Platform ---------------------------------------------------------
         private TokenValidationService<?> tokenValidationService;
-        private PlatformAdminService<?> platformAdminService;
         private IdpProvider<?> idpProvider;
         private CoreCommandService<?> coreCommandService;
         private CoreQueryService<?> coreQueryService;
@@ -552,44 +539,6 @@ public abstract class Operio implements OperioService {
          */
         public Builder withTokenValidationService(TokenValidationService<?> service) {
             this.tokenValidationService = service;
-            return this;
-        }
-
-        /**
-         * Resolves a {@link PlatformAdminService} by name via
-         * {@link PluginRegistry} (no configuration).
-         */
-        public Builder withPlatformAdmin(String name) {
-            this.platformAdminService = PluginRegistry.resolve(
-                PlatformAdminService.class,
-                name
-            );
-            return this;
-        }
-
-        /**
-         * Resolves and configures a {@link PlatformAdminService} by name.
-         */
-        public <C extends PluginConfig> Builder withPlatformAdmin(
-            String name,
-            C config
-        ) {
-            this.platformAdminService = PluginRegistry.resolve(
-                PlatformAdminService.class,
-                name,
-                config
-            );
-            return this;
-        }
-
-        /**
-         * Registers a pre-built {@link PlatformAdminService} instance.
-         *
-         * @param service the pre-built platform admin service
-         * @return this builder
-         */
-        public Builder withPlatformAdmin(PlatformAdminService<?> service) {
-            this.platformAdminService = service;
             return this;
         }
 

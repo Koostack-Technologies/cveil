@@ -3,6 +3,8 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.platform.billing.BillingQueryService;
 import com.koostack.operio.core.platform.billing.models.BillingProfileInfo;
 import com.koostack.operio.core.platform.billing.models.SubscriptionInfo;
+import com.koostack.operio.core.query.RetryableQuery;
+import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.slf4j.Logger;
@@ -44,6 +46,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
     private static final org.jooq.Field<OffsetDateTime> SUB_UPDATED_AT = field(name("updated_at"), OffsetDateTime.class);
 
     private DSLContext dsl;
+    private RetryConfig retryConfig = RetryableQuery.DEFAULT;
 
     @Override public String getName() { return "jooq-billing-query"; }
     @Override public int getPriority() { return 100; }
@@ -60,31 +63,53 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
         return dsl != null;
     }
 
+    public void setRetryConfig(RetryConfig retryConfig) {
+        this.retryConfig = retryConfig;
+    }
+
     @Override
     public BillingProfileInfo getBillingProfile(String tenantId) {
-        Record record = dsl.select()
-            .from(BILLING_PROFILE)
-            .where(BP_TENANT_ID.eq(tenantId))
-            .fetchOne();
-        return record != null ? toProfileInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(BILLING_PROFILE)
+                    .where(BP_TENANT_ID.eq(tenantId))
+                    .fetchOne();
+                return record != null ? toProfileInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "getBillingProfile(" + tenantId + ")"
+        );
     }
 
     @Override
     public SubscriptionInfo getSubscription(String tenantId) {
-        Record record = dsl.select()
-            .from(SUBSCRIPTION)
-            .where(SUB_TENANT_ID.eq(tenantId))
-            .fetchOne();
-        return record != null ? toSubscriptionInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(SUBSCRIPTION)
+                    .where(SUB_TENANT_ID.eq(tenantId))
+                    .fetchOne();
+                return record != null ? toSubscriptionInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "getSubscription(" + tenantId + ")"
+        );
     }
 
     @Override
     public List<BillingProfileInfo> listBillingProfiles() {
-        return dsl.select()
-            .from(BILLING_PROFILE)
-            .orderBy(BP_CREATED_AT.asc())
-            .fetch()
-            .map(this::toProfileInfo);
+        return RetryableQuery.withRetryCollection(
+            () -> dsl.select()
+                .from(BILLING_PROFILE)
+                .orderBy(BP_CREATED_AT.asc())
+                .fetch()
+                .map(this::toProfileInfo),
+            retryConfig,
+            "listBillingProfiles"
+        );
     }
 
     private BillingProfileInfo toProfileInfo(Record r) {

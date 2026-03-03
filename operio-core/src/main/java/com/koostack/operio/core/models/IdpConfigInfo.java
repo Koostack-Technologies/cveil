@@ -5,8 +5,8 @@ import java.util.Map;
 /**
  * Immutable snapshot of an external IdP configuration for a tenant.
  *
- * <p>Returned by {@link com.koostack.operio.core.service.PlatformAdminService}
- * IdP query methods. Contains the provider-specific configuration map
+ * <p>Returned by platform query services.
+ * Contains the provider-specific configuration map
  * (e.g. {@code issuerUri}, {@code clientId}, {@code jwksUri}).
  *
  * @param tenantId  the owning tenant

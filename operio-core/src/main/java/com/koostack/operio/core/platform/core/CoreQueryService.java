@@ -1,5 +1,6 @@
 package com.koostack.operio.core.platform.core;
 
+import com.koostack.operio.core.platform.core.models.TenantCredentials;
 import com.koostack.operio.core.platform.core.models.TenantInfo;
 import com.koostack.operio.core.spi.Plugin;
 
@@ -21,4 +22,12 @@ public interface CoreQueryService<T> extends Plugin<T> {
 
     /** List tenants filtered by status (e.g. "active", "suspended", "created"). */
     List<TenantInfo> listTenantsByStatus(String status);
+
+    /**
+     * Retrieve Redis ACL credentials for a tenant, or {@code null} if the
+     * tenant does not exist or has no Redis ACL configured.
+     */
+    default TenantCredentials getTenantCredentials(String tenantId) {
+        return null;
+    }
 }

@@ -6,7 +6,6 @@ import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
-import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.billing.BillingQueryService;
 import com.koostack.operio.core.platform.core.CoreCommandService;
@@ -38,9 +37,6 @@ import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
-import com.koostack.operio.plugin.platform.jooq.JooqPlatformAdminService;
-import com.koostack.operio.plugin.platform.jooq.PlatformJooqConfig;
-import com.koostack.operio.plugin.platform.jooq.TenantRepository;
 import com.koostack.operio.plugin.redis.common.stream.AbstractStreamConsumer;
 import com.koostack.operio.plugin.redis.common.stream.StreamHandler;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
@@ -91,27 +87,25 @@ import org.flywaydb.core.Flyway;
  * <ul>
  *   <li>{@link CoreConsentBundle} — Postgres (jOOQ) + Redis consent stack
  *       with dual-write sync</li>
- *   <li>{@code JooqPlatformAdminService} — tenant lifecycle, API key
- *       management, IdP configuration (wired via SPI with
- *       {@link PlatformJooqConfig})</li>
+ *   <li>CQRS command/query services — tenant lifecycle, API key management,
+ *       billing, and plan management</li>
  *   <li>{@code ApiKeyTokenVerifier} — SHA-256 bearer token verification
- *       against the platform {@code api_key} table (wired via SPI with
- *       {@link PlatformJooqConfig})</li>
+ *       against the {@code platform_iam.api_key} projection table</li>
  * </ul>
  *
  * <h2>Embedded mode ({@code operio.mode=embedded})</h2>
  * <ul>
  *   <li>{@link EmbeddedConsentBundle} — H2 in-memory + Caffeine cache,
  *       zero external infrastructure (ideal for local dev and testing)</li>
- *   <li>Platform admin and token verifier are <strong>not</strong> wired —
- *       embedded mode has no multi-tenant management</li>
+ *   <li>Platform CQRS services and token verifier are <strong>not</strong>
+ *       wired — embedded mode has no multi-tenant management</li>
  * </ul>
  *
  * <h2>Produced beans</h2>
  * <ul>
  *   <li>{@link Operio} — the primary entry point for consent operations</li>
- *   <li>{@link PlatformAdminService} — tenant/API-key management
- *       (production only; {@code null} in embedded mode)</li>
+ *   <li>{@link CoreQueryService}, {@link CoreCommandService}, etc. — CQRS
+ *       platform services (production only; {@code null} in embedded mode)</li>
  *   <li>{@link TokenValidationService} — bearer token verification
  *       (production only; {@code null} in embedded mode)</li>
  * </ul>
@@ -195,26 +189,20 @@ public class OperioProducers {
                 }
             });
 
-        // -- Platform admin (legacy) + token verifier (production only) -------
-        // The token verifier now uses IamQueryService from the CQRS stack
-        // rather than the old PlatformJooqConfig-based path.
+        // -- Token verifier (production only) ------------------------------------
+        // The token verifier uses IamQueryService from the CQRS stack.
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
-            PlatformJooqConfig platformConfig = createPlatformConfig();
-            builder.withPlatformAdmin("jooq-platform", platformConfig);
-
-            // Wire ApiKeyTokenVerifier with IamQueryService (set later
-            // in wirePlatformCqrsServices, but the reference is captured).
             com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier =
                 new com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier();
             builder.withTokenValidationService(tokenVerifier);
             this.tokenVerifier = tokenVerifier;
 
             LOG.info(
-                "Operio REST API: platform admin and token verifier wired (jooq-platform / api-key)"
+                "Operio REST API: token verifier wired (api-key)"
             );
         } else {
             LOG.info(
-                "Operio REST API: embedded mode — platform admin and token verifier not wired"
+                "Operio REST API: embedded mode — token verifier not wired"
             );
         }
 
@@ -300,38 +288,6 @@ public class OperioProducers {
     // -----------------------------------------------------------------------
 
     /**
-     * Produces the {@link PlatformAdminService} singleton — exposes tenant
-     * lifecycle, API key management, and IdP configuration.
-     *
-     * <p>In production mode this returns the {@code JooqPlatformAdminService}
-     * wired during {@link #operio()} construction. In embedded mode it
-     * returns {@code null} (no platform admin in embedded deployments).
-     *
-     * <p>Downstream consumers (e.g. {@code PlatformResource}) should
-     * null-check or use {@code @Inject Instance<PlatformAdminService>} for
-     * optional injection when running in embedded mode.
-     *
-     * @param tenantService the built {@link TenantService} instance (injected by CDI)
-     * @return the platform admin service, or {@code null} in embedded mode
-     */
-    @Produces
-    @ApplicationScoped
-    @SuppressWarnings("rawtypes")
-    public PlatformAdminService platformAdminService(TenantService tenantService) {
-        TenantService unwrapped = ClientProxy.unwrap(tenantService);
-        if (unwrapped instanceof DefaultTenantService dts) {
-            PlatformAdminService service = dts.platformAdminService();
-            if (service != null) {
-                LOG.debug("Operio REST API: PlatformAdminService available");
-                return service;
-            }
-        }
-        LOG.debug(
-            "Operio REST API: PlatformAdminService not available (embedded mode)"
-        );
-        return null;
-    }
-
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
@@ -529,7 +485,7 @@ public class OperioProducers {
             return null;
         }
 
-        // TODO: Wire per-tenant IdP config lookup from IdpConfigRepository
+        // TODO: Wire per-tenant IdP config lookup from the CQRS query layer
         // For now, all tenants use the platform default (Keycloak).
         return new IdpTenantResolver() {
             @Override
@@ -682,19 +638,6 @@ public class OperioProducers {
 
         this.tenantStreamConsumer = consumer;
 
-        // Inject consumer into TenantManager for lifecycle orchestration,
-        // then trigger startup reconciliation (adds consumers for all
-        // existing active tenants).
-        if (ClientProxy.unwrap(tenantService) instanceof DefaultTenantService dts) {
-            @SuppressWarnings("rawtypes")
-            PlatformAdminService rawService = dts.platformAdminService();
-            if (rawService instanceof JooqPlatformAdminService platformService) {
-                platformService.setStreamConsumer(consumer);
-                platformService.tenantManager().migrateAllTenants();
-                LOG.info("Operio REST API: startup reconciliation complete — stream consumers added for all active tenants");
-            }
-        }
-
         LOG.info("Operio REST API: tenant stream consumer created (groups=decision-projection,admin-projection,admin-redis-projection)");
         return consumer;
     }
@@ -789,9 +732,7 @@ public class OperioProducers {
         );
 
         // Run CQRS schema migrations (event store + domain schemas).
-        // The platform admin service (JooqPlatformAdminService) only runs
-        // db/migration/platform (old admin tables). The event-sourced CQRS
-        // modules need their own migrations.
+        // The event-sourced CQRS modules need their own migrations.
         DataSource migrationDs = JooqDataSourceFactory.createDataSource(
             eventConfig, "operio-cqrs-migrations"
         );
@@ -857,8 +798,16 @@ public class OperioProducers {
         );
 
         // -- Query services ---------------------------------------------------
+        // Build a decryptor for encrypted DB fields (e.g. redis_acl_password).
+        String encryptionKey = platformDb.encryptionKey()
+            .filter(k -> !k.isBlank()).orElse(null);
+        java.util.function.UnaryOperator<String> fieldDecryptor = encryptionKey != null
+            ? raw -> com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor
+                .decryptIfKeyPresent(raw, encryptionKey)
+            : java.util.function.UnaryOperator.identity();
+
         JooqCoreQueryService coreQuerySvc = new JooqCoreQueryService();
-        coreQuerySvc.configure(new JooqCoreQueryConfig(platformDsl));
+        coreQuerySvc.configure(new JooqCoreQueryConfig(platformDsl, fieldDecryptor));
 
         JooqBillingQueryService billingQuerySvc = new JooqBillingQueryService();
         billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
@@ -910,6 +859,11 @@ public class OperioProducers {
 
         TenantManagerProjectionHandler tenantMgrProjection =
             new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc, iamCmdSvc);
+
+        // Startup reconciliation — run Flyway migrations for all existing
+        // active tenants via the new CQRS TenantManagerService.
+        tenantManagerSvc.migrateAllTenants();
+        LOG.info("Operio REST API: startup reconciliation complete — tenant schemas migrated");
 
         // -- Platform stream consumer -----------------------------------------
         AbstractStreamConsumer consumer = new AbstractStreamConsumer(
@@ -1084,15 +1038,8 @@ public class OperioProducers {
         // in depth.
         //
         // The credential lookup queries the platform tenant table for the
-        // redis_acl_user and redis_acl_password columns. This lookup is
+         // redis_acl_user and redis_acl_password columns. This lookup is
         // called once per tenant (result is cached in the provider).
-        //
-        // NOTE: The TenantRepository used here is created from the platform
-        // config (same DB as the PlatformJooqConfig). It is created
-        // eagerly so the credential lookup closure captures it. The
-        // platform admin service creates its own TenantRepository instance
-        // independently — they share the same database but have separate
-        // connection pools, which is fine for read-only credential lookups.
         this.tenantAwareJedisProvider = createTenantAwareJedisProvider(
             redis,
             adminPool,
@@ -1119,14 +1066,9 @@ public class OperioProducers {
      *
      * <p>The provider caches per-tenant {@link JedisPooled} connections,
      * each authenticated as the tenant's dedicated Redis ACL user. The
-     * credential lookup queries the platform {@code tenant} table for the
-     * {@code redis_acl_user} and {@code redis_acl_password} columns.
-     *
-     * <p>This method creates a lightweight read-only
-     * {@link TenantRepository} for the credential lookup. It shares the
-     * same platform database as the {@link JooqPlatformAdminService} but
-     * uses its own connection pool — acceptable for the low-frequency,
-     * once-per-tenant credential lookups.
+     * credential lookup delegates to
+     * {@link CoreQueryService#getTenantCredentials(String)} which reads
+     * from the {@code platform_core.tenant} table.
      *
      * @param redis         the Redis connection config (host, port)
      * @param adminPool     the admin-level JedisPooled (default user)
@@ -1138,96 +1080,29 @@ public class OperioProducers {
         JedisPooled adminPool,
         RedisClientFactory.TlsConfig tlsConfig
     ) {
-        // Create a lightweight TenantRepository for credential lookups.
-        // This uses the platform DB config — same DB as PlatformJooqConfig.
-        OperioConfig.DbConfig platformDb = config
-            .platformDb()
-            .orElseThrow(() ->
-                new IllegalStateException(
-                    "operio.mode=production requires operio.platform-db " +
-                        "to be configured (needed for tenant Redis ACL " +
-                        "credential lookup)"
-                )
-            );
-
-        // -- Validate credentials before creating the DataSource ----------
-        requireNonBlank(platformDb.url(), "operio.platform-db.url");
-        requireNonBlank(
-            platformDb.username().orElse(null),
-            "operio.platform-db.username (env: OPERIO_PLATFORM_DB_USERNAME)"
-        );
-        requireNonBlank(
-            platformDb.password().orElse(null),
-            "operio.platform-db.password (env: OPERIO_PLATFORM_DB_PASSWORD)"
-        );
-
-        // Reuse JooqDataSourceFactory to create a DataSource for the
-        // platform DB. We create a DSLContext from it for the
-        // TenantRepository. This is a separate pool from the one the
-        // PlatformAdminService uses — kept intentionally lightweight
-        // since credential lookups are infrequent (once per tenant).
-        var hikariConfig = new com.zaxxer.hikari.HikariConfig();
-        String platformDbUrlWithSsl = appendSslParameters(
-            platformDb.url(),
-            platformDb
-        );
-        hikariConfig.setJdbcUrl(platformDbUrlWithSsl);
-        platformDb.username().ifPresent(hikariConfig::setUsername);
-        platformDb.password().ifPresent(hikariConfig::setPassword);
-        hikariConfig.setPoolName("operio-redis-acl-lookup");
-        hikariConfig.setMaximumPoolSize(2); // Only used for credential lookups
-        var dataSource = new com.zaxxer.hikari.HikariDataSource(hikariConfig);
-
-        org.jooq.SQLDialect sqlDialect = org.jooq.SQLDialect.valueOf(
-            platformDb.dialect().toUpperCase()
-        );
-        var settings = new org.jooq.conf.Settings().withRenderNameCase(
-            org.jooq.conf.RenderNameCase.LOWER
-        );
-        var dsl = org.jooq.impl.DSL.using(dataSource, sqlDialect, settings);
-        // Pass the encryption key so that findById() transparently decrypts
-        // the redis_acl_password column (encrypted at rest via AES-256-GCM).
-        String encryptionKey = platformDb
-            .encryptionKey()
-            .filter(k -> !k.isBlank())
-            .orElse(null);
-        var tenantRepo = new TenantRepository(dsl, encryptionKey);
-
         TenantAwareJedisProvider.TenantCredentialLookup lookup = tenantId -> {
-            var tenantOpt = tenantRepo.findById(tenantId);
-            if (tenantOpt.isEmpty()) {
-                LOG.warn(
-                    "Tenant '{}' not found in platform DB — cannot " +
-                        "resolve Redis ACL credentials",
+            CoreQueryService<?> cqs = coreQueryService;
+            if (cqs == null) {
+                LOG.error(
+                    "Tenant '{}' credential lookup failed — CoreQueryService " +
+                        "is not yet initialized (startup ordering issue)",
                     tenantId
                 );
                 return null;
             }
-            var tenant = tenantOpt.get();
-            String aclUser = tenant.getRedisAclUser();
-            String aclPassword = tenant.getRedisAclPassword();
-            if (
-                aclUser == null ||
-                aclUser.isBlank() ||
-                aclPassword == null ||
-                aclPassword.isBlank()
-            ) {
+            var creds = cqs.getTenantCredentials(tenantId);
+            if (creds == null) {
                 LOG.warn(
-                    "Tenant '{}' has no Redis ACL credentials " +
-                        "(redis_acl_user='{}', redis_acl_password={}). " +
-                        "This tenant was likely provisioned before per-tenant " +
-                        "Redis ACL isolation was enabled. Run " +
-                        "TenantManager.reprovisionRedisAcl() to generate " +
+                    "Tenant '{}' not found or has no Redis ACL credentials. " +
+                        "Run TenantManager.reprovisionRedisAcl() to generate " +
                         "credentials for this tenant.",
-                    tenantId,
-                    aclUser,
-                    aclPassword != null ? "<set but blank>" : "<null>"
+                    tenantId
                 );
                 return null;
             }
             return new TenantAwareJedisProvider.TenantRedisCredentials(
-                aclUser,
-                aclPassword
+                creds.redisAclUser(),
+                creds.redisAclPassword()
             );
         };
 
@@ -1303,107 +1178,6 @@ public class OperioProducers {
                 e
             );
         }
-    }
-
-    /**
-     * Creates a {@link PlatformJooqConfig} from the
-     * {@code operio.platform-db} and {@code operio.redis} configuration.
-     *
-     * <p>The platform config is used to wire both
-     * {@code JooqPlatformAdminService} (tenant/API-key management) and
-     * {@code ApiKeyTokenVerifier} (bearer token verification). Both share
-     * the same platform database and optionally the same Redis connection
-     * for tenant-scoped ACL provisioning.
-     *
-     * @return the platform configuration
-     * @throws IllegalStateException if {@code operio.platform-db} is not
-     *                               configured
-     */
-    private PlatformJooqConfig createPlatformConfig() {
-        OperioConfig.DbConfig platformDb = config
-            .platformDb()
-            .orElseThrow(() ->
-                new IllegalStateException(
-                    "operio.mode=production requires operio.platform-db to be configured"
-                )
-            );
-
-        // -- Validate credentials are present and non-blank -------------------
-        requireNonBlank(platformDb.url(), "operio.platform-db.url");
-        requireNonBlank(
-            platformDb.username().orElse(null),
-            "operio.platform-db.username (env: OPERIO_PLATFORM_DB_USERNAME)"
-        );
-        requireNonBlank(
-            platformDb.password().orElse(null),
-            "operio.platform-db.password (env: OPERIO_PLATFORM_DB_PASSWORD)"
-        );
-
-        // Append SSL parameters to platform DB JDBC URL if needed
-        String platformDbUrl = appendSslParameters(
-            platformDb.url(),
-            platformDb
-        );
-
-        // ...existing code...
-        // connection from operio.redis. If Redis is not configured, platform
-        // admin still works but skips Redis ACL provisioning during
-        // createTenant().
-        RedisPluginConfig redisPluginConfig = config
-            .redis()
-            .<RedisPluginConfig>map(redis -> {
-                String pw = redis.password().filter(p -> !p.isBlank()).orElse(null);
-                RedisClientFactory.TlsConfig tls = redis.tlsEnabled()
-                    ? new RedisClientFactory.TlsConfig(
-                        true,
-                        redis.tlsCaCertPath().orElse(null),
-                        redis.tlsVerifyPeer())
-                    : null;
-                return new RedisPluginConfig() {
-                    @Override public String host() { return redis.host(); }
-                    @Override public int port() { return redis.port(); }
-                    @Override public String password() { return pw; }
-                    @Override public RedisClientFactory.TlsConfig tlsConfig() { return tls; }
-                };
-            })
-            .orElse(null);
-
-        LOG.info(
-            "Operio REST API: configuring PlatformJooqConfig " +
-                "(platformDb={}, redis={})",
-            platformDb.url(),
-            redisPluginConfig != null
-                ? redisPluginConfig.host() + ":" + redisPluginConfig.port()
-                : "disabled"
-        );
-
-        // -- Encryption key for redis_acl_password at rest --------------------
-        String encryptionKey = platformDb
-            .encryptionKey()
-            .filter(k -> !k.isBlank())
-            .orElse(null);
-        if (encryptionKey == null) {
-            LOG.warn(
-                "Operio REST API: OPERIO_DB_ENCRYPTION_KEY is not set — " +
-                    "redis_acl_password will be stored in PLAINTEXT. " +
-                    "This is a compliance risk under HIPAA §164.312(a)(2)(iv) " +
-                    "and GDPR Article 32. Set the OPERIO_DB_ENCRYPTION_KEY " +
-                    "environment variable before deploying to production."
-            );
-        } else {
-            LOG.info(
-                "Operio REST API: redis_acl_password encryption at rest ENABLED"
-            );
-        }
-
-        return new PlatformJooqConfig(
-            platformDbUrl,
-            platformDb.dialect(),
-            platformDb.username().orElse(null),
-            platformDb.password().orElse(null),
-            redisPluginConfig,
-            encryptionKey
-        );
     }
 
     // -----------------------------------------------------------------------

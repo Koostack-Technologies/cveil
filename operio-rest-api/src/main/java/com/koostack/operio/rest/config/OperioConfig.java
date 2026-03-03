@@ -38,7 +38,7 @@ import java.util.Optional;
  * <h2>Mode Semantics</h2>
  * <ul>
  *   <li>{@code production} — wires {@code CoreConsentBundle} (Postgres + Redis)
- *       and {@code JooqPlatformAdminService} / {@code ApiKeyTokenVerifier} for
+ *       and platform CQRS services / {@code ApiKeyTokenVerifier} for
  *       multi-tenant cloud deployment.</li>
  *   <li>{@code embedded} — wires {@code EmbeddedConsentBundle} (H2 + Caffeine)
  *       for local development and testing. Platform admin and token verifier

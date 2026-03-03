@@ -1,6 +1,8 @@
 package com.koostack.operio.platform.plan.jooq;
 
 import com.koostack.operio.core.platform.plan.PlanQueryService;
+import com.koostack.operio.core.query.RetryableQuery;
+import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.slf4j.Logger;
@@ -26,6 +28,7 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
     private static final org.jooq.Field<Integer> SORT_ORDER = field(name("sort_order"), Integer.class);
 
     private DSLContext dsl;
+    private RetryConfig retryConfig = RetryableQuery.DEFAULT;
 
     @Override public String getName() { return "jooq-plan-query"; }
     @Override public int getPriority() { return 100; }
@@ -42,30 +45,49 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
         return dsl != null;
     }
 
+    public void setRetryConfig(RetryConfig retryConfig) {
+        this.retryConfig = retryConfig;
+    }
+
     @Override
     public PlanInfo getPlan(String planId) {
-        Record record = dsl.select()
-            .from(PLAN)
-            .where(PLAN_ID.eq(planId))
-            .fetchOne();
-        return record != null ? toPlanInfo(record) : null;
+        return RetryableQuery.withRetry(
+            () -> {
+                Record record = dsl.select()
+                    .from(PLAN)
+                    .where(PLAN_ID.eq(planId))
+                    .fetchOne();
+                return record != null ? toPlanInfo(record) : null;
+            },
+            result -> result == null,
+            retryConfig,
+            "getPlan(" + planId + ")"
+        );
     }
 
     @Override
     public List<PlanInfo> listPlans() {
-        return dsl.select()
-            .from(PLAN)
-            .orderBy(SORT_ORDER.asc())
-            .fetch(this::toPlanInfo);
+        return RetryableQuery.withRetryCollection(
+            () -> dsl.select()
+                .from(PLAN)
+                .orderBy(SORT_ORDER.asc())
+                .fetch(this::toPlanInfo),
+            retryConfig,
+            "listPlans"
+        );
     }
 
     @Override
     public List<PlanInfo> listActivePlans() {
-        return dsl.select()
-            .from(PLAN)
-            .where(IS_ACTIVE.eq(true))
-            .orderBy(SORT_ORDER.asc())
-            .fetch(this::toPlanInfo);
+        return RetryableQuery.withRetryCollection(
+            () -> dsl.select()
+                .from(PLAN)
+                .where(IS_ACTIVE.eq(true))
+                .orderBy(SORT_ORDER.asc())
+                .fetch(this::toPlanInfo),
+            retryConfig,
+            "listActivePlans"
+        );
     }
 
     private PlanInfo toPlanInfo(Record record) {

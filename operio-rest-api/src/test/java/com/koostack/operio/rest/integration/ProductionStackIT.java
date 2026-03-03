@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.TenantService;
-import com.koostack.operio.core.service.PlatformAdminService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -111,10 +110,6 @@ class ProductionStackIT {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    PlatformAdminService platformAdminService;
-
-    @Inject
-    @SuppressWarnings("rawtypes")
     TokenValidationService tokenValidationService;
 
     // =======================================================================
@@ -175,16 +170,6 @@ class ProductionStackIT {
             assertTrue(
                 config.platformDb().isPresent(),
                 "operio.platform-db must be configured"
-            );
-        }
-
-        @Test
-        @Order(4)
-        @DisplayName("PlatformAdminService is wired (not null)")
-        void platformAdminWired() {
-            assertNotNull(
-                platformAdminService,
-                "PlatformAdminService must be wired in production mode"
             );
         }
 

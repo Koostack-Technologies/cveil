@@ -3,9 +3,9 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.models.ApiKeyInfo;
-import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.core.models.TenantInfo;
+import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import java.lang.reflect.Field;
@@ -14,7 +14,6 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +54,10 @@ class BootstrapKeyLifecycleServiceTest {
     private OperioConfig.SuperAdminConfig superAdminConfig;
 
     @Mock
-    private PlatformAdminService<?> platformAdminService;
+    private CoreQueryService<?> coreQueryService;
+
+    @Mock
+    private IamQueryService<?> iamQueryService;
 
     private BootstrapKeyLifecycleService service;
 
@@ -63,7 +65,8 @@ class BootstrapKeyLifecycleServiceTest {
     void setUp() throws Exception {
         service = new BootstrapKeyLifecycleService();
         injectField(service, "config", config);
-        injectField(service, "platformAdminService", platformAdminService);
+        injectField(service, "coreQueryService", coreQueryService);
+        injectField(service, "iamQueryService", iamQueryService);
     }
 
     // -----------------------------------------------------------------------
@@ -172,29 +175,40 @@ class BootstrapKeyLifecycleServiceTest {
             "Tenant " + tenantId,
             "STANDARD",
             "ACTIVE",
+            "t_" + tenantId,
+            null,
+            Instant.now(),
             Instant.now()
         );
     }
 
-    private static ApiKeyInfo activeApiKey(String tenantId) {
-        return new ApiKeyInfo(
+    private static IamQueryService.ApiKeyInfo activeApiKey(String tenantId) {
+        return new IamQueryService.ApiKeyInfo(
+            "key-id",
             "key-prefix",
+            "key-name",
             tenantId,
+            "production",
             "admin@" + tenantId,
-            Set.of("admin"),
+            "admin",
             "ACTIVE",
-            Instant.now()
+            Instant.now(),
+            null
         );
     }
 
-    private static ApiKeyInfo revokedApiKey(String tenantId) {
-        return new ApiKeyInfo(
+    private static IamQueryService.ApiKeyInfo revokedApiKey(String tenantId) {
+        return new IamQueryService.ApiKeyInfo(
+            "key-id",
             "key-prefix",
+            "key-name",
             tenantId,
+            "production",
             "admin@" + tenantId,
-            Set.of("admin"),
+            "admin",
             "REVOKED",
-            Instant.now()
+            Instant.now(),
+            null
         );
     }
 
@@ -521,7 +535,7 @@ class BootstrapKeyLifecycleServiceTest {
         @DisplayName("no tenants, no API keys — bootstrap key stays active")
         void noTenantsKeepsActive() throws Exception {
             givenBootstrapKeyConfigured();
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 Collections.emptyList()
             );
 
@@ -538,10 +552,10 @@ class BootstrapKeyLifecycleServiceTest {
         void tenantsNoKeysStaysActive() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 Collections.emptyList()
             );
 
@@ -558,10 +572,10 @@ class BootstrapKeyLifecycleServiceTest {
         void onlyRevokedKeysStaysActive() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(revokedApiKey("acme"))
             );
 
@@ -578,10 +592,10 @@ class BootstrapKeyLifecycleServiceTest {
         void activeKeyAutoDisables() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(activeApiKey("acme"))
             );
 
@@ -599,13 +613,13 @@ class BootstrapKeyLifecycleServiceTest {
             givenBootstrapKeyConfigured();
             TenantInfo t1 = tenantInfo("tenant-1");
             TenantInfo t2 = tenantInfo("tenant-2");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(t1, t2)
             );
-            when(platformAdminService.listApiKeys("tenant-1")).thenReturn(
+            when(iamQueryService.listApiKeys("tenant-1")).thenReturn(
                 Collections.emptyList()
             );
-            when(platformAdminService.listApiKeys("tenant-2")).thenReturn(
+            when(iamQueryService.listApiKeys("tenant-2")).thenReturn(
                 List.of(activeApiKey("tenant-2"))
             );
 
@@ -620,7 +634,7 @@ class BootstrapKeyLifecycleServiceTest {
         )
         void exceptionDuringCheckKeepsDefault() {
             givenBootstrapKeyConfigured();
-            when(platformAdminService.listTenants()).thenThrow(
+            when(coreQueryService.listTenants()).thenThrow(
                 new RuntimeException("DB connection failed")
             );
 
@@ -631,11 +645,12 @@ class BootstrapKeyLifecycleServiceTest {
 
         @Test
         @DisplayName(
-            "null platformAdminService — startup skips check gracefully"
+            "null query services — startup skips check gracefully"
         )
-        void nullPlatformAdmin() throws Exception {
+        void nullQueryServices() throws Exception {
             givenBootstrapKeyConfigured();
-            injectField(service, "platformAdminService", null);
+            injectField(service, "coreQueryService", null);
+            injectField(service, "iamQueryService", null);
 
             assertDoesNotThrow(() -> invokeOnStartup(service));
             assertFalse(service.isBootstrapConsumed());
@@ -645,7 +660,7 @@ class BootstrapKeyLifecycleServiceTest {
         @DisplayName("listTenants returns null — treated as no tenants")
         void nullTenantsList() throws Exception {
             givenBootstrapKeyConfigured();
-            when(platformAdminService.listTenants()).thenReturn(null);
+            when(coreQueryService.listTenants()).thenReturn(null);
 
             invokeOnStartup(service);
 
@@ -660,10 +675,10 @@ class BootstrapKeyLifecycleServiceTest {
         void nullApiKeysList() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(null);
+            when(iamQueryService.listApiKeys("acme")).thenReturn(null);
 
             invokeOnStartup(service);
 
@@ -678,10 +693,10 @@ class BootstrapKeyLifecycleServiceTest {
         void forceOverrideWithExistingKeys() throws Exception {
             givenForceBootstrapEnabled();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(activeApiKey("acme"))
             );
 
@@ -784,10 +799,10 @@ class BootstrapKeyLifecycleServiceTest {
         void startupThenExplicitMark() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(activeApiKey("acme"))
             );
 
@@ -809,19 +824,23 @@ class BootstrapKeyLifecycleServiceTest {
         void activeUppercase() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
 
-            ApiKeyInfo key = new ApiKeyInfo(
+            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
+                "key-id",
                 "pfx",
+                "key-name",
                 "acme",
+                "production",
                 "admin",
-                Set.of("admin"),
+                "admin",
                 "ACTIVE",
-                Instant.now()
+                Instant.now(),
+                null
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(key)
             );
 
@@ -836,19 +855,23 @@ class BootstrapKeyLifecycleServiceTest {
         void activeLowercase() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
 
-            ApiKeyInfo key = new ApiKeyInfo(
+            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
+                "key-id",
                 "pfx",
+                "key-name",
                 "acme",
+                "production",
                 "admin",
-                Set.of("admin"),
+                "admin",
                 "active",
-                Instant.now()
+                Instant.now(),
+                null
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(key)
             );
 
@@ -861,10 +884,10 @@ class BootstrapKeyLifecycleServiceTest {
         void revokedDoesNotTrigger() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(revokedApiKey("acme"))
             );
 
@@ -877,19 +900,23 @@ class BootstrapKeyLifecycleServiceTest {
         void suspendedDoesNotTrigger() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
 
-            ApiKeyInfo key = new ApiKeyInfo(
+            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
+                "key-id",
                 "pfx",
+                "key-name",
                 "acme",
+                "production",
                 "admin",
-                Set.of("admin"),
+                "admin",
                 "SUSPENDED",
-                Instant.now()
+                Instant.now(),
+                null
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(key)
             );
 
@@ -902,10 +929,10 @@ class BootstrapKeyLifecycleServiceTest {
         void mixedStatuses() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 List.of(tenant)
             );
-            when(platformAdminService.listApiKeys("acme")).thenReturn(
+            when(iamQueryService.listApiKeys("acme")).thenReturn(
                 List.of(revokedApiKey("acme"), activeApiKey("acme"))
             );
 
@@ -976,7 +1003,7 @@ class BootstrapKeyLifecycleServiceTest {
         void fullLifecycleScenario() throws Exception {
             // Phase 1: Fresh deployment with bootstrap key configured
             givenBootstrapKeyConfigured();
-            when(platformAdminService.listTenants()).thenReturn(
+            when(coreQueryService.listTenants()).thenReturn(
                 Collections.emptyList()
             );
 
