@@ -128,12 +128,18 @@ public class OperioProducers {
     private static final String MODE_EMBEDDED = "embedded";
 
     // -- Platform CQRS services (set during tenantService() production init) --
-    private CoreCommandService<?> coreCommandService;
-    private BillingCommandService<?> billingCommandService;
-    private CoreQueryService<?> coreQueryService;
-    private com.koostack.operio.core.platform.plan.PlanQueryService<?> planQueryService;
-    private com.koostack.operio.core.platform.iam.IamCommandService<?> iamCommandService;
-    private com.koostack.operio.core.platform.iam.IamQueryService<?> iamQueryService;
+    @SuppressWarnings("rawtypes")
+    private CoreCommandService coreCommandService;
+    @SuppressWarnings("rawtypes")
+    private BillingCommandService billingCommandService;
+    @SuppressWarnings("rawtypes")
+    private CoreQueryService coreQueryService;
+    @SuppressWarnings("rawtypes")
+    private com.koostack.operio.core.platform.plan.PlanQueryService planQueryService;
+    @SuppressWarnings("rawtypes")
+    private com.koostack.operio.core.platform.iam.IamCommandService iamCommandService;
+    @SuppressWarnings("rawtypes")
+    private com.koostack.operio.core.platform.iam.IamQueryService iamQueryService;
     private com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier;
 
     @Inject
@@ -290,7 +296,7 @@ public class OperioProducers {
     /**
     @Produces
     @ApplicationScoped
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public CoreCommandService coreCommandService(TenantService tenantService) {
         TenantService unwrapped = ClientProxy.unwrap(tenantService);
         if (unwrapped instanceof DefaultTenantService dts) {
@@ -306,7 +312,7 @@ public class OperioProducers {
 
     @Produces
     @ApplicationScoped
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public CoreQueryService coreQueryService(TenantService tenantService) {
         TenantService unwrapped = ClientProxy.unwrap(tenantService);
         if (unwrapped instanceof DefaultTenantService dts) {
@@ -1081,7 +1087,8 @@ public class OperioProducers {
         RedisClientFactory.TlsConfig tlsConfig
     ) {
         TenantAwareJedisProvider.TenantCredentialLookup lookup = tenantId -> {
-            CoreQueryService<?> cqs = coreQueryService;
+            @SuppressWarnings("rawtypes")
+            CoreQueryService cqs = coreQueryService;
             if (cqs == null) {
                 LOG.error(
                     "Tenant '{}' credential lookup failed — CoreQueryService " +

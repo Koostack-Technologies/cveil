@@ -18,6 +18,19 @@ quarkus:
     enabled: true # REQUIRED for ScopedValue (TenantContext, RequestContext)
 
   # ---------------------------------------------------------------------------
+  # CDI / ArC — index operio-core so generic plugin types are resolvable
+  # ---------------------------------------------------------------------------
+  arc:
+    # operio-core contains generic SPI interfaces (CoreCommandService<T>, etc.)
+    # that are returned by @Produces methods. ArC needs the Jandex index to
+    # resolve parameterized bean types from non-application JARs.
+    unremovable-types: com.koostack.operio.core.platform.**
+  index-dependency:
+    operio-core:
+      group-id: com.koostack.operio
+      artifact-id: operio-core
+
+  # ---------------------------------------------------------------------------
   # OpenAPI & Swagger UI
   # ---------------------------------------------------------------------------
   smallrye-openapi:

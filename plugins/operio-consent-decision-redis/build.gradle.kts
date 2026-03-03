@@ -7,7 +7,7 @@ dependencies {
     // Internal Project Dependency
     api(project(":operio-core"))
     // Shared Redis infrastructure (Jedis)
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-redis"))
 
     // Test — jedis-mock provides an in-process Redis server (no Docker required)
     testImplementation("com.github.fppt:jedis-mock:1.1.4")

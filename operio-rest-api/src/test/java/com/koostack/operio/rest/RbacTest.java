@@ -31,6 +31,7 @@ import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.resource.CatalogueResource;
+import jakarta.enterprise.inject.Instance;
 import com.koostack.operio.rest.resource.ConsentResource;
 import com.koostack.operio.rest.resource.LegalResource;
 import com.koostack.operio.rest.resource.PlatformResource;
@@ -1567,12 +1568,29 @@ class RbacTest {
             platformService = mock(PlatformService.class);
             bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
 
+            // Create Instance wrappers for CDI programmatic lookup
+            Instance<CoreCommandService> ccsi = mock(Instance.class);
+            when(ccsi.isResolvable()).thenReturn(true);
+            when(ccsi.get()).thenReturn(coreCommandService);
+
+            Instance<CoreQueryService> cqsi = mock(Instance.class);
+            when(cqsi.isResolvable()).thenReturn(true);
+            when(cqsi.get()).thenReturn(coreQueryService);
+
+            Instance<IamCommandService> icsi = mock(Instance.class);
+            when(icsi.isResolvable()).thenReturn(true);
+            when(icsi.get()).thenReturn(iamCommandService);
+
+            Instance<IamQueryService> iqsi = mock(Instance.class);
+            when(iqsi.isResolvable()).thenReturn(true);
+            when(iqsi.get()).thenReturn(iamQueryService);
+
             // Inject via reflection
             for (var entry : java.util.Map.of(
-                "coreCommandService", coreCommandService,
-                "coreQueryService", coreQueryService,
-                "iamCommandService", iamCommandService,
-                "iamQueryService", iamQueryService,
+                "coreCommandServiceInstance", ccsi,
+                "coreQueryServiceInstance", cqsi,
+                "iamCommandServiceInstance", icsi,
+                "iamQueryServiceInstance", iqsi,
                 "platformService", platformService,
                 "bootstrapLifecycle", bootstrapLifecycle
             ).entrySet()) {

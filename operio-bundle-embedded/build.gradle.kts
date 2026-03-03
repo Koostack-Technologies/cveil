@@ -14,7 +14,7 @@ dependencies {
     implementation(project(":sdk:operio-discovery-sensitive-annotation"))
 
     // Transitive dependencies needed for config type resolution
-    implementation(project(":plugins:operio-jooq-common"))
+    implementation(project(":common:operio-jooq"))
 
     // Test
     testImplementation("com.h2database:h2:2.2.224")

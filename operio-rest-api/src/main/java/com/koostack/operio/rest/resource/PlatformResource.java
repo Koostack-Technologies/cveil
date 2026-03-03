@@ -17,6 +17,7 @@ import com.koostack.operio.rest.dto.PlatformDtos.UpdatePlanRequest;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.ratelimit.RateLimitService;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
@@ -65,19 +66,39 @@ public class PlatformResource {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    CoreCommandService coreCommandService;
+    Instance<CoreCommandService> coreCommandServiceInstance;
 
     @Inject
     @SuppressWarnings("rawtypes")
-    CoreQueryService coreQueryService;
+    Instance<CoreQueryService> coreQueryServiceInstance;
 
     @Inject
     @SuppressWarnings("rawtypes")
-    IamCommandService iamCommandService;
+    Instance<IamCommandService> iamCommandServiceInstance;
 
     @Inject
     @SuppressWarnings("rawtypes")
-    IamQueryService iamQueryService;
+    Instance<IamQueryService> iamQueryServiceInstance;
+
+    @SuppressWarnings("rawtypes")
+    private CoreCommandService coreCommandService() {
+        return coreCommandServiceInstance.isResolvable() ? coreCommandServiceInstance.get() : null;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private CoreQueryService coreQueryService() {
+        return coreQueryServiceInstance.isResolvable() ? coreQueryServiceInstance.get() : null;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private IamCommandService iamCommandService() {
+        return iamCommandServiceInstance.isResolvable() ? iamCommandServiceInstance.get() : null;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private IamQueryService iamQueryService() {
+        return iamQueryServiceInstance.isResolvable() ? iamQueryServiceInstance.get() : null;
+    }
 
     @Inject
     com.koostack.operio.core.PlatformService platformService;
@@ -97,7 +118,7 @@ public class PlatformResource {
     }
 
     private void requireCqrsServices() {
-        if (iamCommandService == null || iamQueryService == null || coreQueryService == null) {
+        if (iamCommandService() == null || iamQueryService() == null || coreQueryService() == null) {
             throw new IllegalStateException(
                 "Platform CQRS services are not available in embedded mode. " +
                     "Set operio.mode=production to enable tenant management."
@@ -106,7 +127,7 @@ public class PlatformResource {
     }
 
     private void requireCoreCommandService() {
-        if (coreCommandService == null) {
+        if (coreCommandService() == null) {
             throw new IllegalStateException(
                 "Core command service is not available in embedded mode. " +
                     "Set operio.mode=production to enable tenant management."
@@ -247,7 +268,7 @@ public class PlatformResource {
 
         @SuppressWarnings("unchecked")
         List<com.koostack.operio.core.platform.core.models.TenantInfo> tenants =
-            coreQueryService.listTenants();
+            coreQueryService().listTenants();
 
         List<TenantResponse> dtos = tenants
             .stream()
@@ -306,7 +327,7 @@ public class PlatformResource {
 
         LOG.debug("GET /platform/tenants/{}", tenantId);
 
-        var tenant = coreQueryService.getTenant(tenantId);
+        var tenant = coreQueryService().getTenant(tenantId);
         if (tenant == null) {
             return Response.status(Response.Status.NOT_FOUND)
                 .entity(ErrorResponse.of("not_found", "Tenant not found: " + tenantId))
@@ -366,7 +387,7 @@ public class PlatformResource {
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        coreCommandService.deleteTenant(tenantId);
+        coreCommandService().deleteTenant(tenantId);
 
         return Response.ok(
             MessageResponse.of("Tenant '" + tenantId + "' deleted successfully")
@@ -433,7 +454,7 @@ public class PlatformResource {
             ? String.join(",", request.roles())
             : null;
 
-        IamCommandService.CreateApiTokenResult result = iamCommandService.createApiToken(
+        IamCommandService.CreateApiTokenResult result = iamCommandService().createApiToken(
             request.tenantId(),
             request.subject(),
             "PROD",
@@ -514,7 +535,7 @@ public class PlatformResource {
 
         LOG.debug("GET /platform/api-keys?tenantId={}", tenantId);
 
-        List<IamQueryService.ApiKeyInfo> keys = iamQueryService.listApiKeys(tenantId);
+        List<IamQueryService.ApiKeyInfo> keys = iamQueryService().listApiKeys(tenantId);
 
         List<ApiKeyResponse> dtos = keys
             .stream()
@@ -573,14 +594,14 @@ public class PlatformResource {
 
         LOG.info("DELETE /platform/api-keys/{}", keyPrefix);
 
-        IamQueryService.ApiKeyInfo key = iamQueryService.findByKeyPrefix(keyPrefix);
+        IamQueryService.ApiKeyInfo key = iamQueryService().findByKeyPrefix(keyPrefix);
         if (key == null) {
             return Response.status(Response.Status.NOT_FOUND)
                 .entity(ErrorResponse.of("not_found", "API key not found: " + keyPrefix))
                 .build();
         }
 
-        iamCommandService.revokeApiToken(key.tenantId(), key.keyId());
+        iamCommandService().revokeApiToken(key.tenantId(), key.keyId());
 
         return Response.ok(
             MessageResponse.of("API key '" + keyPrefix + "' revoked")
@@ -659,14 +680,14 @@ public class PlatformResource {
             request.plan()
         );
 
-        coreCommandService.changeTenantPlan(tenantId, request.plan());
+        coreCommandService().changeTenantPlan(tenantId, request.plan());
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);
 
         // Read the existing tenant for metadata; override the plan field
         // because the plan-changed event is projected asynchronously.
-        var tenant = coreQueryService.getTenant(tenantId);
+        var tenant = coreQueryService().getTenant(tenantId);
         TenantResponse response;
         if (tenant != null) {
             response = new TenantResponse(

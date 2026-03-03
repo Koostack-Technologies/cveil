@@ -7,6 +7,7 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -79,11 +80,21 @@ public class BootstrapKeyLifecycleService {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    CoreQueryService coreQueryService;
+    Instance<CoreQueryService> coreQueryServiceInstance;
 
     @Inject
     @SuppressWarnings("rawtypes")
-    IamQueryService iamQueryService;
+    Instance<IamQueryService> iamQueryServiceInstance;
+
+    @SuppressWarnings("rawtypes")
+    private CoreQueryService coreQueryService() {
+        return coreQueryServiceInstance.isResolvable() ? coreQueryServiceInstance.get() : null;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private IamQueryService iamQueryService() {
+        return iamQueryServiceInstance.isResolvable() ? iamQueryServiceInstance.get() : null;
+    }
 
     // -----------------------------------------------------------------------
     // Startup check
@@ -123,7 +134,7 @@ public class BootstrapKeyLifecycleService {
             );
         }
 
-        if (coreQueryService == null || iamQueryService == null) {
+        if (coreQueryService() == null || iamQueryService() == null) {
             LOG.debug(
                 "Bootstrap key lifecycle: query services not available " +
                     "(embedded mode) — skipping startup API key check"
@@ -343,13 +354,13 @@ public class BootstrapKeyLifecycleService {
      */
     @SuppressWarnings("unchecked")
     private boolean checkForExistingApiKeys() {
-        List<TenantInfo> tenants = coreQueryService.listTenants();
+        List<TenantInfo> tenants = coreQueryService().listTenants();
         if (tenants == null || tenants.isEmpty()) {
             return false;
         }
 
         for (TenantInfo tenant : tenants) {
-            List<IamQueryService.ApiKeyInfo> keys = iamQueryService.listApiKeys(
+            List<IamQueryService.ApiKeyInfo> keys = iamQueryService().listApiKeys(
                 tenant.tenantId()
             );
             if (keys != null) {

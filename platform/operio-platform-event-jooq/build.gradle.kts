@@ -9,8 +9,8 @@ plugins {
 dependencies {
     // --- Runtime / API -------------------------------------------------------
     api(project(":operio-core"))
-    implementation(project(":plugins:operio-jooq-common"))
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-jooq"))
+    implementation(project(":common:operio-redis"))
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     // Needs access to consent migrations for TenantManager.provisionTenant()
@@ -35,7 +35,7 @@ sourceSets {
 val jooqCodegen by configurations.creating
 
 dependencies {
-    jooqCodegen(project(":plugins:operio-jooq-common"))
+    jooqCodegen(project(":common:operio-jooq"))
 }
 
 val h2DbFile = layout.buildDirectory.file("h2/platform")

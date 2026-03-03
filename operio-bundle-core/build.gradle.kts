@@ -13,6 +13,6 @@ dependencies {
     implementation(project(":sdk:operio-discovery-sensitive-annotation"))
 
     // Transitive dependencies needed for config type resolution
-    implementation(project(":plugins:operio-jooq-common"))
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-jooq"))
+    implementation(project(":common:operio-redis"))
 }

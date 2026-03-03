@@ -55,8 +55,8 @@ dependencies {
     implementation(project(":tenant:operio-authz-keycloak"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
-    implementation(project(":plugins:operio-jooq-common"))
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-jooq"))
+    implementation(project(":common:operio-redis"))
     implementation(project(":tenant:operio-consent-admin-projection-jooq"))       // Admin schema projection handler
     implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Decision cache projection handler
     implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer

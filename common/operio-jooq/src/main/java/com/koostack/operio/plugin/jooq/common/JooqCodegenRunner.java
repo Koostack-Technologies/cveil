@@ -14,7 +14,7 @@ import org.jooq.meta.jaxb.Target;
  * migrations against it, then invokes the jOOQ code generator to produce
  * Tables, Records, POJOs, and DAOs from the resulting schema.
  *
- * <p>This class lives in {@code operio-jooq-common} so that any jOOQ-backed
+ * <p>This class lives in {@code operio-jooq} so that any jOOQ-backed
  * plugin can reuse it for code generation. It is invoked via a Gradle
  * {@code JavaExec} task and is never used at application runtime.
  *

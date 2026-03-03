@@ -4,5 +4,5 @@ plugins {
 }
 
 dependencies {
-    api(project(":plugins:operio-jooq-common"))
+    api(project(":common:operio-jooq"))
 }

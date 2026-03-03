@@ -5,6 +5,6 @@ plugins {
 
 dependencies {
     api(project(":operio-core"))
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-redis"))
     implementation("org.slf4j:slf4j-api:2.0.16")
 }

@@ -6,7 +6,7 @@ plugins {
 dependencies {
     api(project(":operio-core"))
     api(project(":platform:operio-core-schema"))
-    implementation(project(":plugins:operio-jooq-common"))
+    implementation(project(":common:operio-jooq"))
 }
 
 // ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ sourceSets {
 val jooqCodegen by configurations.creating
 
 dependencies {
-    jooqCodegen(project(":plugins:operio-jooq-common"))
+    jooqCodegen(project(":common:operio-jooq"))
 }
 
 val h2DbFile = layout.buildDirectory.file("h2/platform-core")

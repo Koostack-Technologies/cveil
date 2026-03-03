@@ -9,8 +9,8 @@ dependencies {
     implementation("org.slf4j:slf4j-api:2.0.16")
 
     // --- Test ----------------------------------------------------------------
-    testImplementation(project(":plugins:operio-jooq-common"))
-    testImplementation(project(":plugins:operio-redis-common"))
+    testImplementation(project(":common:operio-jooq"))
+    testImplementation(project(":common:operio-redis"))
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.testcontainers:testcontainers:1.20.6")
     testImplementation("org.testcontainers:junit-jupiter:1.20.6")
