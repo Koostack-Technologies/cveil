@@ -855,9 +855,7 @@ class JooqPlatformAdminServiceTest {
             service.createTenant("nullplan", "NullPlan Corp", null);
             TenantInfo tenant = service.getTenant("nullplan");
             assertEquals("free", tenant.plan());
-            assertEquals(10_000L, tenant.evalLimitMonthly());
-            assertEquals(1_000L, tenant.subjectLimit());
-            assertEquals(100, tenant.burstLimitPerMin());
+
         }
     }
 
@@ -1257,7 +1255,7 @@ class JooqPlatformAdminServiceTest {
             assertEquals("Acme Corp", info.displayName());
             assertEquals("pro", info.plan());
             assertEquals("active", info.status());
-            assertEquals(500_000L, info.evalLimitMonthly());
+
         }
 
         @Test
@@ -1267,7 +1265,7 @@ class JooqPlatformAdminServiceTest {
 
             TenantInfo info = service.getTenant("beta");
             assertEquals("free", info.plan());
-            assertEquals(10_000L, info.evalLimitMonthly());
+
         }
 
         @Test
@@ -1359,7 +1357,7 @@ class JooqPlatformAdminServiceTest {
             service.createTenant("acme", "Acme Corp", "free");
             List<TenantInfo> tenants = service.listTenants();
             assertThrows(UnsupportedOperationException.class, () ->
-                tenants.add(new TenantInfo("x", "x", "x", "x", 0, 0, 0, null))
+                tenants.add(new TenantInfo("x", "x", "x", "x", null))
             );
         }
     }
@@ -2592,16 +2590,11 @@ class JooqPlatformAdminServiceTest {
         void planUpgradeViaService() {
             service.createTenant("upgrade_test", "Upgrade Corp", "free");
             TenantInfo free = service.getTenant("upgrade_test");
-            assertEquals(10_000L, free.evalLimitMonthly());
-            assertEquals(1_000L, free.subjectLimit());
-            assertEquals(100, free.burstLimitPerMin());
 
             // Upgrade to pro via the repository (service doesn't expose updatePlan directly)
             tenantRepo.updatePlan("upgrade_test", "enterprise", "admin");
             TenantInfo enterprise = service.getTenant("upgrade_test");
-            assertEquals(5_000_000L, enterprise.evalLimitMonthly());
-            assertEquals(500_000L, enterprise.subjectLimit());
-            assertEquals(2000, enterprise.burstLimitPerMin());
+            assertEquals("enterprise", enterprise.plan());
         }
 
         @Test

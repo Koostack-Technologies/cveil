@@ -11,5 +11,6 @@ public record ApiKeyGeneratedEvent(
     String keyHash,
     String name,
     String environment,
+    String roles,
     Instant expiresAt
 ) implements DomainEvent {}

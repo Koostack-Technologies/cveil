@@ -751,9 +751,6 @@ public class JooqPlatformAdminService
             tenant.getDisplayName(),
             tenant.getPlan(),
             tenant.getStatus() != null ? tenant.getStatus().toUpperCase() : null,
-            tenant.getEvalLimitMonthly(),
-            tenant.getSubjectLimit(),
-            tenant.getBurstLimitPerMin(),
             tenant.getCreatedAt() != null
                 ? tenant.getCreatedAt().toInstant(ZoneOffset.UTC)
                 : null

@@ -139,6 +139,8 @@ public class OperioProducers {
     private CoreQueryService<?> coreQueryService;
     private com.koostack.operio.core.platform.plan.PlanQueryService<?> planQueryService;
     private com.koostack.operio.core.platform.iam.IamCommandService<?> iamCommandService;
+    private com.koostack.operio.core.platform.iam.IamQueryService<?> iamQueryService;
+    private com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier;
 
     @Inject
     OperioConfig config;
@@ -193,11 +195,20 @@ public class OperioProducers {
                 }
             });
 
-        // -- Platform admin + token verifier (production only) ----------------
+        // -- Platform admin (legacy) + token verifier (production only) -------
+        // The token verifier now uses IamQueryService from the CQRS stack
+        // rather than the old PlatformJooqConfig-based path.
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
             PlatformJooqConfig platformConfig = createPlatformConfig();
             builder.withPlatformAdmin("jooq-platform", platformConfig);
-            builder.withTokenValidationService("api-key", platformConfig);
+
+            // Wire ApiKeyTokenVerifier with IamQueryService (set later
+            // in wirePlatformCqrsServices, but the reference is captured).
+            com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier =
+                new com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier();
+            builder.withTokenValidationService(tokenVerifier);
+            this.tokenVerifier = tokenVerifier;
+
             LOG.info(
                 "Operio REST API: platform admin and token verifier wired (jooq-platform / api-key)"
             );
@@ -350,6 +361,42 @@ public class OperioProducers {
             }
         }
         LOG.debug("Operio REST API: CoreQueryService not available (embedded mode)");
+        return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public com.koostack.operio.core.platform.iam.IamCommandService iamCommandService() {
+        if (iamCommandService != null) {
+            LOG.debug("Operio REST API: IamCommandService available");
+            return iamCommandService;
+        }
+        LOG.debug("Operio REST API: IamCommandService not available (embedded mode)");
+        return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public com.koostack.operio.core.platform.iam.IamQueryService iamQueryService() {
+        if (iamQueryService != null) {
+            LOG.debug("Operio REST API: IamQueryService available");
+            return iamQueryService;
+        }
+        LOG.debug("Operio REST API: IamQueryService not available (embedded mode)");
+        return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public com.koostack.operio.core.platform.plan.PlanQueryService planQueryService() {
+        if (planQueryService != null) {
+            LOG.debug("Operio REST API: PlanQueryService available");
+            return planQueryService;
+        }
+        LOG.debug("Operio REST API: PlanQueryService not available (embedded mode)");
         return null;
     }
 
@@ -822,6 +869,18 @@ public class OperioProducers {
 
         this.coreQueryService = coreQuerySvc;
         this.planQueryService = planQuerySvc;
+
+        com.koostack.operio.platform.iam.jooq.JooqIamQueryService iamQuerySvc =
+            new com.koostack.operio.platform.iam.jooq.JooqIamQueryService();
+        iamQuerySvc.configure(new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(platformDsl));
+        this.iamQueryService = iamQuerySvc;
+
+        // Wire the token verifier with the CQRS IamQueryService so it reads
+        // from platform_iam.api_key instead of the old public.api_key.
+        if (this.tokenVerifier != null) {
+            this.tokenVerifier.setIamQueryService(iamQuerySvc);
+            LOG.info("Operio REST API: ApiKeyTokenVerifier wired with IamQueryService");
+        }
 
         builder.withCoreQueryService(coreQuerySvc);
         builder.withBillingQueryService(billingQuerySvc);

@@ -27,11 +27,12 @@ public interface IamCommandService<T> extends Plugin<T> {
      * Publishes an {@code ApiKeyGeneratedEvent}.
      *
      * @param tenantId    the tenant the key belongs to
-     * @param name        human-readable name for the key
+     * @param name        human-readable name / subject for the key
      * @param environment one of DEV, TEST, PROD
+     * @param roles       comma-separated roles granted to this key, may be {@code null}
      * @return the result containing the one-time plaintext key
      */
-    CreateApiTokenResult createApiToken(String tenantId, String name, String environment);
+    CreateApiTokenResult createApiToken(String tenantId, String name, String environment, String roles);
 
     /**
      * Revoke an existing API token. Publishes an {@code ApiKeyRevokedEvent}.

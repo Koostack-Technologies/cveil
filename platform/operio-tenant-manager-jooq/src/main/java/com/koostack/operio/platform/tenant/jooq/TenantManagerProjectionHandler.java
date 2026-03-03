@@ -82,7 +82,7 @@ public class TenantManagerProjectionHandler {
         for (String env : API_KEY_ENVIRONMENTS) {
             String keyName = tenantId + "-" + env.toLowerCase();
             IamCommandService.CreateApiTokenResult tokenResult =
-                iamCommandService.createApiToken(tenantId, keyName, env);
+                iamCommandService.createApiToken(tenantId, keyName, env, null);
             LOG.info("Generated {} API token for tenant '{}': keyId={}, prefix={}",
                 env, tenantId, tokenResult.keyId(), tokenResult.keyPrefix());
         }

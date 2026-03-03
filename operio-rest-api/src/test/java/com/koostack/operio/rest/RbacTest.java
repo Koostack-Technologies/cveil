@@ -8,7 +8,11 @@ import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.PlatformService;
+import com.koostack.operio.core.platform.core.CoreCommandService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.iam.IamCommandService;
+import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
@@ -1545,28 +1549,37 @@ class RbacTest {
     class PlatformResourceRbac {
 
         private PlatformResource resource;
-        private PlatformAdminService<?> platformAdminService;
+        private CoreCommandService<?> coreCommandService;
+        private CoreQueryService<?> coreQueryService;
+        private IamCommandService<?> iamCommandService;
+        private IamQueryService<?> iamQueryService;
+        private PlatformService platformService;
         private BootstrapKeyLifecycleService bootstrapLifecycle;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new PlatformResource();
-            platformAdminService = mock(PlatformAdminService.class);
+            coreCommandService = mock(CoreCommandService.class);
+            coreQueryService = mock(CoreQueryService.class);
+            iamCommandService = mock(IamCommandService.class);
+            iamQueryService = mock(IamQueryService.class);
+            platformService = mock(PlatformService.class);
             bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
 
             // Inject via reflection
-            var platformField = PlatformResource.class.getDeclaredField(
-                "platformAdminService"
-            );
-            platformField.setAccessible(true);
-            platformField.set(resource, platformAdminService);
-
-            var bootstrapField = PlatformResource.class.getDeclaredField(
-                "bootstrapLifecycle"
-            );
-            bootstrapField.setAccessible(true);
-            bootstrapField.set(resource, bootstrapLifecycle);
+            for (var entry : java.util.Map.of(
+                "coreCommandService", coreCommandService,
+                "coreQueryService", coreQueryService,
+                "iamCommandService", iamCommandService,
+                "iamQueryService", iamQueryService,
+                "platformService", platformService,
+                "bootstrapLifecycle", bootstrapLifecycle
+            ).entrySet()) {
+                var field = PlatformResource.class.getDeclaredField(entry.getKey());
+                field.setAccessible(true);
+                field.set(resource, entry.getValue());
+            }
         }
 
         @Nested
@@ -1577,19 +1590,6 @@ class RbacTest {
             @DisplayName("super-admin → 201")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                var tenantInfo = new TenantInfo(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    "active",
-                    1000L,
-                    10000L,
-                    60,
-                    Instant.now()
-                );
-                when(platformAdminService.getTenant("tenant-1")).thenReturn(
-                    tenantInfo
-                );
                 CreateTenantRequest request = new CreateTenantRequest(
                     "tenant-1",
                     "Tenant One",
@@ -1667,7 +1667,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(platformAdminService.listTenants()).thenReturn(
+                when(coreQueryService.listTenants()).thenReturn(
                     Collections.emptyList()
                 );
                 Response response = resource.listTenants(ctx);
@@ -1717,17 +1717,17 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                var tenantInfo = new TenantInfo(
+                var tenantInfo = new com.koostack.operio.core.platform.core.models.TenantInfo(
                     "t1",
                     "Tenant",
                     "free",
                     "active",
-                    1000L,
-                    10000L,
-                    60,
-                    Instant.now()
+                    "t_t1",
+                    null,
+                    Instant.now(),
+                    null
                 );
-                when(platformAdminService.getTenant("t1")).thenReturn(
+                when(coreQueryService.getTenant("t1")).thenReturn(
                     tenantInfo
                 );
                 Response response = resource.getTenant(ctx, "t1");
@@ -1775,12 +1775,17 @@ class RbacTest {
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 when(
-                    platformAdminService.createApiKey(
+                    iamCommandService.createApiToken(
                         anyString(),
                         anyString(),
-                        anySet()
+                        anyString(),
+                        any()
                     )
-                ).thenReturn("opr_live_test1234567890abcdef");
+                ).thenReturn(new IamCommandService.CreateApiTokenResult(
+                    "key-id-1",
+                    "opr_live",
+                    "opr_live_test1234567890abcdef"
+                ));
                 CreateApiKeyRequest request = new CreateApiKeyRequest(
                     "tenant-1",
                     "test-subject",
@@ -1813,7 +1818,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(platformAdminService.listApiKeys("t1")).thenReturn(
+                when(iamQueryService.listApiKeys("t1")).thenReturn(
                     Collections.emptyList()
                 );
                 Response response = resource.listApiKeys(ctx, "t1");
@@ -1838,6 +1843,9 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
+                when(iamQueryService.findByKeyPrefix("opr_live")).thenReturn(
+                    new IamQueryService.ApiKeyInfo("key-1", "opr_live", "test", "t1", "PROD", null, null, "active", Instant.now(), null)
+                );
                 Response response = resource.revokeApiKey(ctx, "opr_live");
                 assertEquals(200, response.getStatus());
             }

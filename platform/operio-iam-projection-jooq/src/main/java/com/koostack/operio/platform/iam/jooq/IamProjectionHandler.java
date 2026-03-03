@@ -29,6 +29,8 @@ public class IamProjectionHandler {
     private static final org.jooq.Field<String> NAME = field(name("name"), String.class);
     private static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> ENVIRONMENT = field(name("environment"), String.class);
+    private static final org.jooq.Field<String> SUBJECT = field(name("subject"), String.class);
+    private static final org.jooq.Field<String> ROLES = field(name("roles"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
     private static final org.jooq.Field<OffsetDateTime> EXPIRES_AT = field(name("expires_at"), OffsetDateTime.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT = field(name("created_at"), OffsetDateTime.class);
@@ -75,6 +77,8 @@ public class IamProjectionHandler {
             ? node.get("name").asText() : "Default Key";
         String environment = node.has("environment") && !node.get("environment").isNull()
             ? node.get("environment").asText() : "PROD";
+        String roles = node.has("roles") && !node.get("roles").isNull()
+            ? node.get("roles").asText() : null;
         OffsetDateTime now = OffsetDateTime.now();
 
         dsl.insertInto(API_KEY)
@@ -82,8 +86,10 @@ public class IamProjectionHandler {
             .set(KEY_HASH, keyHash)
             .set(KEY_PREFIX, keyPrefix)
             .set(NAME, name)
+            .set(SUBJECT, name)
             .set(TENANT_ID, tenantId)
             .set(ENVIRONMENT, environment)
+            .set(ROLES, roles)
             .set(STATUS, "active")
             .set(CREATED_AT, now)
             .set(UPDATED_AT, now)

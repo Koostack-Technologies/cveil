@@ -6,8 +6,9 @@ import static org.mockito.Mockito.*;
 
 import com.koostack.operio.core.metrics.Metric;
 import com.koostack.operio.core.metrics.MetricPublisherService;
-import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.core.models.TenantInfo;
+import com.koostack.operio.core.platform.plan.PlanQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.ratelimit.RateLimitResult;
 import com.koostack.operio.rest.ratelimit.RateLimitService;
@@ -43,7 +44,7 @@ import redis.clients.jedis.JedisPooled;
  *   <li>Burst limit enforcement (under limit, at limit, exceeded)</li>
  *   <li>Monthly evaluation limit enforcement (under, exceeded, warning at 90%)</li>
  *   <li>Graceful degradation — Redis errors return {@code UNLIMITED}</li>
- *   <li>Unavailable state — no Redis or no PlatformAdminService</li>
+ *   <li>Unavailable state — no Redis or no CoreQueryService</li>
  *   <li>Tenant not found — returns {@code UNLIMITED}</li>
  *   <li>Tenant limit caching — re-uses cached values within TTL</li>
  *   <li>Cache eviction via {@code evictTenantCache}</li>
@@ -94,11 +95,19 @@ class RateLimitServiceTest {
 
     @Mock
     @SuppressWarnings("rawtypes")
-    private Instance platformAdminInstance;
+    private Instance coreQueryInstance;
 
     @Mock
     @SuppressWarnings("rawtypes")
-    private PlatformAdminService platformAdmin;
+    private CoreQueryService coreQuery;
+
+    @Mock
+    @SuppressWarnings("rawtypes")
+    private Instance planQueryInstance;
+
+    @Mock
+    @SuppressWarnings("rawtypes")
+    private PlanQueryService planQuery;
 
     @Mock
     @SuppressWarnings("rawtypes")
@@ -118,16 +127,22 @@ class RateLimitServiceTest {
     void setUp() throws Exception {
         service = new RateLimitService();
         injectField(service, "jedis", jedis);
-        injectField(service, "platformAdminInstance", platformAdminInstance);
+        injectField(service, "coreQueryInstance", coreQueryInstance);
+        injectField(service, "planQueryInstance", planQueryInstance);
         injectField(service, "metricPublisherInstance", metricPublisherInstance);
         injectField(service, "config", config);
 
-        // Default: platform admin service is resolvable and returns a tenant
-        lenient().when(platformAdminInstance.isResolvable()).thenReturn(true);
-        lenient().when(platformAdminInstance.get()).thenReturn(platformAdmin);
+        // Default: core query service is resolvable and returns a tenant
+        lenient().when(coreQueryInstance.isResolvable()).thenReturn(true);
+        lenient().when(coreQueryInstance.get()).thenReturn(coreQuery);
+        lenient().when(planQueryInstance.isResolvable()).thenReturn(true);
+        lenient().when(planQueryInstance.get()).thenReturn(planQuery);
         lenient()
-            .when(platformAdmin.getTenant(TENANT_ID))
-            .thenReturn(tenantInfo(60, 10_000L, 1_000_000L));
+            .when(coreQuery.getTenant(TENANT_ID))
+            .thenReturn(coreTenantInfo(TENANT_ID, "Test Tenant", "pro"));
+        lenient()
+            .when(planQuery.getPlan("pro"))
+            .thenReturn(planInfo(60, 10_000L, 1_000_000L));
 
         // Default: metric publisher is not resolvable (best-effort, not required)
         lenient().when(metricPublisherInstance.isResolvable()).thenReturn(false);
@@ -137,20 +152,38 @@ class RateLimitServiceTest {
     // Helper methods
     // -----------------------------------------------------------------------
 
-    private static TenantInfo tenantInfo(
-        int burstLimitPerMin,
-        long evalLimitMonthly,
-        long subjectLimit
+    private static TenantInfo coreTenantInfo(
+        String tenantId,
+        String displayName,
+        String plan
     ) {
         return new TenantInfo(
-            TENANT_ID,
-            "Test Tenant",
-            "pro",
+            tenantId,
+            displayName,
+            plan,
             "ACTIVE",
-            evalLimitMonthly,
-            subjectLimit,
-            burstLimitPerMin,
+            "schema_" + tenantId,
+            tenantId + "_acl",
+            Instant.now(),
             Instant.now()
+        );
+    }
+
+    private static PlanQueryService.PlanInfo planInfo(
+        int burstLimit,
+        long evalLimit,
+        long subjectLimit
+    ) {
+        return new PlanQueryService.PlanInfo(
+            "plan",
+            "Plan",
+            "",
+            evalLimit,
+            subjectLimit,
+            burstLimit,
+            true,
+            true,
+            1
         );
     }
 
@@ -215,7 +248,7 @@ class RateLimitServiceTest {
 
         @Test
         @DisplayName(
-            "returns true when Redis and PlatformAdminService are present"
+            "returns true when Redis and CoreQueryService are present"
         )
         void availableWhenBothPresent() {
             assertTrue(service.isAvailable());
@@ -230,10 +263,10 @@ class RateLimitServiceTest {
 
         @Test
         @DisplayName(
-            "returns false when PlatformAdminService is not resolvable"
+            "returns false when CoreQueryService is not resolvable"
         )
         void unavailableWhenNoPlatformAdmin() {
-            when(platformAdminInstance.isResolvable()).thenReturn(false);
+            when(coreQueryInstance.isResolvable()).thenReturn(false);
             assertFalse(service.isAvailable());
         }
     }
@@ -496,10 +529,10 @@ class RateLimitServiceTest {
 
         @Test
         @DisplayName(
-            "returns UNLIMITED when PlatformAdminService not resolvable"
+            "returns UNLIMITED when CoreQueryService not resolvable"
         )
         void unlimitedWhenNoPlatformAdmin() {
-            when(platformAdminInstance.isResolvable()).thenReturn(false);
+            when(coreQueryInstance.isResolvable()).thenReturn(false);
 
             RateLimitResult result = service.checkBurst(TENANT_ID);
 
@@ -510,7 +543,7 @@ class RateLimitServiceTest {
         @DisplayName("returns UNLIMITED when tenant not found in platform DB")
         @SuppressWarnings("unchecked")
         void unlimitedWhenTenantNotFound() {
-            when(platformAdmin.getTenant("unknown-tenant")).thenReturn(null);
+            when(coreQuery.getTenant("unknown-tenant")).thenReturn(null);
 
             RateLimitResult result = service.checkBurst("unknown-tenant");
 
@@ -755,7 +788,7 @@ class RateLimitServiceTest {
         @DisplayName("returns UNLIMITED when tenant not found")
         @SuppressWarnings("unchecked")
         void unlimitedWhenTenantNotFound() {
-            when(platformAdmin.getTenant("ghost")).thenReturn(null);
+            when(coreQuery.getTenant("ghost")).thenReturn(null);
 
             RateLimitResult result = service.checkMonthly("ghost");
 
@@ -857,7 +890,7 @@ class RateLimitServiceTest {
             service.checkBurst(TENANT_ID);
 
             // getTenant should only be called once (cached on second call)
-            verify(platformAdmin, times(1)).getTenant(TENANT_ID);
+            verify(coreQuery, times(1)).getTenant(TENANT_ID);
         }
 
         @Test
@@ -867,13 +900,13 @@ class RateLimitServiceTest {
             stubEvalReturns(1L);
 
             service.checkBurst(TENANT_ID);
-            verify(platformAdmin, times(1)).getTenant(TENANT_ID);
+            verify(coreQuery, times(1)).getTenant(TENANT_ID);
 
             service.evictTenantCache(TENANT_ID);
             service.checkBurst(TENANT_ID);
 
             // After eviction, should fetch again
-            verify(platformAdmin, times(2)).getTenant(TENANT_ID);
+            verify(coreQuery, times(2)).getTenant(TENANT_ID);
         }
 
         @Test
@@ -891,24 +924,18 @@ class RateLimitServiceTest {
             stubEvalReturns(1L);
 
             String otherTenant = "other-tenant";
-            when(platformAdmin.getTenant(otherTenant)).thenReturn(
-                new TenantInfo(
-                    otherTenant,
-                    "Other",
-                    "basic",
-                    "ACTIVE",
-                    5_000L,
-                    500_000L,
-                    30,
-                    Instant.now()
-                )
+            when(coreQuery.getTenant(otherTenant)).thenReturn(
+                coreTenantInfo(otherTenant, "Other", "basic")
+            );
+            when(planQuery.getPlan("basic")).thenReturn(
+                planInfo(30, 5_000L, 500_000L)
             );
 
             service.checkBurst(TENANT_ID);
             service.checkBurst(otherTenant);
 
-            verify(platformAdmin, times(1)).getTenant(TENANT_ID);
-            verify(platformAdmin, times(1)).getTenant(otherTenant);
+            verify(coreQuery, times(1)).getTenant(TENANT_ID);
+            verify(coreQuery, times(1)).getTenant(otherTenant);
         }
     }
 
@@ -1055,17 +1082,11 @@ class RateLimitServiceTest {
         @DisplayName("burst limit of 1 — exceeded on second request")
         @SuppressWarnings("unchecked")
         void burstLimitOfOne() {
-            when(platformAdmin.getTenant("tiny-tenant")).thenReturn(
-                new TenantInfo(
-                    "tiny-tenant",
-                    "Tiny",
-                    "free",
-                    "ACTIVE",
-                    100L,
-                    10_000L,
-                    1,
-                    Instant.now()
-                )
+            when(coreQuery.getTenant("tiny-tenant")).thenReturn(
+                coreTenantInfo("tiny-tenant", "Tiny", "free")
+            );
+            when(planQuery.getPlan("free")).thenReturn(
+                planInfo(1, 100L, 10_000L)
             );
 
             stubEvalReturns(2L);
@@ -1080,17 +1101,11 @@ class RateLimitServiceTest {
         @DisplayName("large monthly limit — 90% warning at correct threshold")
         @SuppressWarnings("unchecked")
         void largeMonthlyLimit() {
-            when(platformAdmin.getTenant("enterprise")).thenReturn(
-                new TenantInfo(
-                    "enterprise",
-                    "Enterprise Corp",
-                    "enterprise",
-                    "ACTIVE",
-                    1_000_000L,
-                    50_000_000L,
-                    1000,
-                    Instant.now()
-                )
+            when(coreQuery.getTenant("enterprise")).thenReturn(
+                coreTenantInfo("enterprise", "Enterprise Corp", "enterprise")
+            );
+            when(planQuery.getPlan("enterprise")).thenReturn(
+                planInfo(1000, 1_000_000L, 50_000_000L)
             );
 
             // 90% of 1,000,000 = 900,000
@@ -1107,17 +1122,11 @@ class RateLimitServiceTest {
         @DisplayName("just below 90% — no warning")
         @SuppressWarnings("unchecked")
         void justBelowWarningThreshold() {
-            when(platformAdmin.getTenant("almost")).thenReturn(
-                new TenantInfo(
-                    "almost",
-                    "Almost There",
-                    "pro",
-                    "ACTIVE",
-                    10_000L,
-                    100_000L,
-                    100,
-                    Instant.now()
-                )
+            when(coreQuery.getTenant("almost")).thenReturn(
+                coreTenantInfo("almost", "Almost There", "pro-high")
+            );
+            when(planQuery.getPlan("pro-high")).thenReturn(
+                planInfo(100, 10_000L, 100_000L)
             );
 
             // 89.99% → count = 8999 out of 10000
@@ -1146,8 +1155,13 @@ class RateLimitServiceTest {
             injectField(freshService, "config", config);
             injectField(
                 freshService,
-                "platformAdminInstance",
-                platformAdminInstance
+                "coreQueryInstance",
+                coreQueryInstance
+            );
+            injectField(
+                freshService,
+                "planQueryInstance",
+                planQueryInstance
             );
             injectField(
                 freshService,
@@ -1173,8 +1187,13 @@ class RateLimitServiceTest {
             injectField(freshService, "config", config);
             injectField(
                 freshService,
-                "platformAdminInstance",
-                platformAdminInstance
+                "coreQueryInstance",
+                coreQueryInstance
+            );
+            injectField(
+                freshService,
+                "planQueryInstance",
+                planQueryInstance
             );
             injectField(
                 freshService,

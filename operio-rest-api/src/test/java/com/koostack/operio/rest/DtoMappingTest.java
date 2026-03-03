@@ -644,9 +644,6 @@ class DtoMappingTest {
                 "Acme Corporation",
                 "enterprise",
                 "ACTIVE",
-                100_000L,
-                50_000L,
-                1000,
                 createdAt
             );
 
@@ -656,9 +653,6 @@ class DtoMappingTest {
             assertEquals("Acme Corporation", dto.displayName());
             assertEquals("enterprise", dto.plan());
             assertEquals("ACTIVE", dto.status());
-            assertEquals(100_000L, dto.evalLimitMonthly());
-            assertEquals(50_000L, dto.subjectLimit());
-            assertEquals(1000, dto.burstLimitPerMin());
             assertEquals(createdAt, dto.createdAt());
         }
 
@@ -670,18 +664,12 @@ class DtoMappingTest {
                 "Small Co",
                 "free",
                 "ACTIVE",
-                1_000L,
-                100L,
-                60,
                 Instant.now()
             );
 
             TenantResponse dto = TenantResponse.fromModel(model);
 
             assertEquals("free", dto.plan());
-            assertEquals(1_000L, dto.evalLimitMonthly());
-            assertEquals(100L, dto.subjectLimit());
-            assertEquals(60, dto.burstLimitPerMin());
         }
 
         @Test
@@ -692,9 +680,6 @@ class DtoMappingTest {
                 "Bad Co",
                 "free",
                 "SUSPENDED",
-                0L,
-                0L,
-                0,
                 Instant.now()
             );
 

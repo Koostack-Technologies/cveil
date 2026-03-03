@@ -41,7 +41,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     }
 
     @Override
-    public CreateApiTokenResult createApiToken(String tenantId, String name, String environment) {
+    public CreateApiTokenResult createApiToken(String tenantId, String name, String environment, String roles) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
@@ -55,7 +55,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         String keyHash = sha256Hex(plaintextKey);
 
         var payload = new ApiKeyGeneratedEvent(
-            tenantId, keyId, keyPrefix, keyHash, name, environment, null);
+            tenantId, keyId, keyPrefix, keyHash, name, environment, roles, null);
         publishEvent(IamEventTypes.API_KEY_GENERATED, tenantId, payload);
 
         LOG.info("API token created: tenantId={}, keyId={}, env={}", tenantId, keyId, environment);

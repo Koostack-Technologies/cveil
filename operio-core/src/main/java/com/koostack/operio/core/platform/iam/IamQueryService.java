@@ -21,6 +21,8 @@ public interface IamQueryService<T> extends Plugin<T> {
         String name,
         String tenantId,
         String environment,
+        String subject,
+        String roles,
         String status,
         java.time.Instant createdAt,
         java.time.Instant expiresAt
@@ -42,4 +44,21 @@ public interface IamQueryService<T> extends Plugin<T> {
      * @return the API key metadata, or {@code null} if not found
      */
     ApiKeyInfo getApiKey(String tenantId, String keyId);
+
+    /**
+     * Look up an API key by its SHA-256 hash. Used by the token verifier
+     * on the auth hot path.
+     *
+     * @param keyHash the SHA-256 hex digest of the raw key
+     * @return the API key metadata, or {@code null} if not found
+     */
+    ApiKeyInfo findByKeyHash(String keyHash);
+
+    /**
+     * Look up an API key by its key prefix.
+     *
+     * @param keyPrefix the key prefix (first 8 characters of the raw key)
+     * @return the API key metadata, or {@code null} if not found
+     */
+    ApiKeyInfo findByKeyPrefix(String keyPrefix);
 }

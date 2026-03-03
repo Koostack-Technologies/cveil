@@ -3,8 +3,8 @@ package com.koostack.operio.rest.ratelimit;
 import com.koostack.operio.core.metrics.Metric;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.metrics.MetricType;
-import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.plan.PlanQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -175,8 +175,14 @@ public class RateLimitService {
     @Inject
     @SuppressWarnings("rawtypes")
     jakarta.enterprise.inject.Instance<
-        PlatformAdminService
-    > platformAdminInstance;
+        CoreQueryService
+    > coreQueryInstance;
+
+    @Inject
+    @SuppressWarnings("rawtypes")
+    jakarta.enterprise.inject.Instance<
+        PlanQueryService
+    > planQueryInstance;
 
     @Inject
     @SuppressWarnings("rawtypes")
@@ -295,7 +301,7 @@ public class RateLimitService {
      * @return {@code true} if rate limiting is active
      */
     public boolean isAvailable() {
-        return jedis != null && platformAdminInstance.isResolvable();
+        return jedis != null && coreQueryInstance.isResolvable();
     }
 
     /**
@@ -659,20 +665,37 @@ public class RateLimitService {
             return cached.limits();
         }
 
-        // Fetch from platform admin service
+        // Fetch from CQRS query services
         try {
             @SuppressWarnings("rawtypes")
-            PlatformAdminService platformAdmin = platformAdminInstance.get();
-            TenantInfo tenant = platformAdmin.getTenant(tenantId);
+            CoreQueryService coreQuery = coreQueryInstance.get();
+            @SuppressWarnings("rawtypes")
+            PlanQueryService planQuery = planQueryInstance.get();
+            if (coreQuery == null || planQuery == null) {
+                return null;
+            }
+
+            var tenant = coreQuery.getTenant(tenantId);
             if (tenant == null) {
                 return null;
             }
 
-            TenantLimits limits = new TenantLimits(
-                tenant.burstLimitPerMin(),
-                tenant.evalLimitMonthly(),
-                tenant.subjectLimit()
-            );
+            String planId = tenant.plan();
+            TenantLimits limits;
+            if (planId == null || planId.isBlank()) {
+                limits = new TenantLimits(60, 10_000, 1_000);
+            } else {
+                PlanQueryService.PlanInfo plan = planQuery.getPlan(planId);
+                if (plan != null) {
+                    limits = new TenantLimits(
+                        plan.burstLimit(),
+                        plan.evalLimit(),
+                        plan.subjectLimit()
+                    );
+                } else {
+                    limits = new TenantLimits(60, 10_000, 1_000);
+                }
+            }
 
             limitsCache.put(
                 tenantId,

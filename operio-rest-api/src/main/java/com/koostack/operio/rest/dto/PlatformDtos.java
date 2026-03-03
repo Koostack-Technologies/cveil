@@ -84,27 +84,21 @@ public final class PlatformDtos {
      * Response body for tenant queries ({@code GET /api/v1/platform/tenants}
      * and {@code GET /api/v1/platform/tenants/{id}}).
      *
-     * <p>Contains the full tenant metadata including plan-level limits used
-     * for rate limiting and quota enforcement.
+     * <p>Contains the tenant metadata. Rate-limit and quota fields are
+     * now managed at the subscription level via {@code BillingQueryService}.
      *
-     * @param tenantId          unique tenant identifier
-     * @param displayName       human-readable tenant name
-     * @param plan              subscription plan
-     * @param status            tenant status ({@code "ACTIVE"},
-     *                          {@code "SUSPENDED"}, {@code "DELETED"})
-     * @param evalLimitMonthly  maximum consent evaluations per calendar month
-     * @param subjectLimit      maximum distinct data subjects
-     * @param burstLimitPerMin  maximum requests per minute (burst cap)
-     * @param createdAt         when the tenant was provisioned
+     * @param tenantId    unique tenant identifier
+     * @param displayName human-readable tenant name
+     * @param plan        subscription plan
+     * @param status      tenant status ({@code "ACTIVE"},
+     *                    {@code "SUSPENDED"}, {@code "DELETED"})
+     * @param createdAt   when the tenant was provisioned
      */
     public record TenantResponse(
         String tenantId,
         String displayName,
         String plan,
         String status,
-        long evalLimitMonthly,
-        long subjectLimit,
-        int burstLimitPerMin,
         Instant createdAt
     ) {
         /**
@@ -119,9 +113,24 @@ public final class PlatformDtos {
                 info.displayName(),
                 info.plan(),
                 info.status(),
-                info.evalLimitMonthly(),
-                info.subjectLimit(),
-                info.burstLimitPerMin(),
+                info.createdAt()
+            );
+        }
+
+        /**
+         * Creates a response DTO from the CQRS
+         * {@link com.koostack.operio.core.platform.core.models.TenantInfo} model.
+         *
+         * @param info the CQRS tenant info — must not be {@code null}
+         * @return the DTO representation
+         */
+        public static TenantResponse fromCoreModel(
+                com.koostack.operio.core.platform.core.models.TenantInfo info) {
+            return new TenantResponse(
+                info.tenantId(),
+                info.displayName(),
+                info.plan(),
+                info.status(),
                 info.createdAt()
             );
         }
@@ -235,6 +244,32 @@ public final class PlatformDtos {
                 info.tenantId(),
                 info.subject(),
                 info.roles(),
+                info.status(),
+                info.createdAt()
+            );
+        }
+
+        /**
+         * Creates a response DTO from the CQRS
+         * {@link com.koostack.operio.core.platform.iam.IamQueryService.ApiKeyInfo} model.
+         *
+         * @param info the CQRS API key info — must not be {@code null}
+         * @return the DTO representation
+         */
+        public static ApiKeyResponse fromIamModel(
+                com.koostack.operio.core.platform.iam.IamQueryService.ApiKeyInfo info) {
+            Set<String> roles = null;
+            if (info.roles() != null && !info.roles().isBlank()) {
+                roles = java.util.Arrays.stream(info.roles().split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            }
+            return new ApiKeyResponse(
+                info.keyPrefix(),
+                info.tenantId(),
+                info.subject(),
+                roles,
                 info.status(),
                 info.createdAt()
             );

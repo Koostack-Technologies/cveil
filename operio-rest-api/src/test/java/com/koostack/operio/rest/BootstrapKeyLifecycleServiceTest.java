@@ -172,9 +172,6 @@ class BootstrapKeyLifecycleServiceTest {
             "Tenant " + tenantId,
             "STANDARD",
             "ACTIVE",
-            10_000L,
-            1000L,
-            60,
             Instant.now()
         );
     }

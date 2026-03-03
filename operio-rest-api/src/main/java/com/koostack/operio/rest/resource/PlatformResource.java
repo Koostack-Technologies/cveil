@@ -1,9 +1,9 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.models.ApiKeyInfo;
-import com.koostack.operio.core.models.TenantInfo;
 import com.koostack.operio.core.platform.core.CoreCommandService;
-import com.koostack.operio.core.service.PlatformAdminService;
+import com.koostack.operio.core.platform.core.CoreQueryService;
+import com.koostack.operio.core.platform.iam.IamCommandService;
+import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
@@ -65,11 +65,19 @@ public class PlatformResource {
 
     @Inject
     @SuppressWarnings("rawtypes")
-    PlatformAdminService platformAdminService;
+    CoreCommandService coreCommandService;
 
     @Inject
     @SuppressWarnings("rawtypes")
-    CoreCommandService coreCommandService;
+    CoreQueryService coreQueryService;
+
+    @Inject
+    @SuppressWarnings("rawtypes")
+    IamCommandService iamCommandService;
+
+    @Inject
+    @SuppressWarnings("rawtypes")
+    IamQueryService iamQueryService;
 
     @Inject
     com.koostack.operio.core.PlatformService platformService;
@@ -88,10 +96,10 @@ public class PlatformResource {
         Roles.requireRole(securityContext, Roles.SUPER_ADMIN);
     }
 
-    private void requirePlatformAdmin() {
-        if (platformAdminService == null) {
+    private void requireCqrsServices() {
+        if (iamCommandService == null || iamQueryService == null || coreQueryService == null) {
             throw new IllegalStateException(
-                "Platform administration is not available in embedded mode. " +
+                "Platform CQRS services are not available in embedded mode. " +
                     "Set operio.mode=production to enable tenant management."
             );
         }
@@ -192,7 +200,6 @@ public class PlatformResource {
             request.displayName(),
             request.plan(),
             "created",
-            0, 0, 0,
             null
         );
 
@@ -234,15 +241,17 @@ public class PlatformResource {
     )
     public Response listTenants(@Context SecurityContext securityContext) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         LOG.debug("GET /platform/tenants");
 
-        List<TenantInfo> tenants = platformAdminService.listTenants();
+        @SuppressWarnings("unchecked")
+        List<com.koostack.operio.core.platform.core.models.TenantInfo> tenants =
+            coreQueryService.listTenants();
 
         List<TenantResponse> dtos = tenants
             .stream()
-            .map(TenantResponse::fromModel)
+            .map(TenantResponse::fromCoreModel)
             .toList();
 
         return Response.ok(dtos).build();
@@ -293,13 +302,18 @@ public class PlatformResource {
         ) @PathParam("id") String tenantId
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         LOG.debug("GET /platform/tenants/{}", tenantId);
 
-        TenantInfo tenant = platformAdminService.getTenant(tenantId);
+        var tenant = coreQueryService.getTenant(tenantId);
+        if (tenant == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("not_found", "Tenant not found: " + tenantId))
+                .build();
+        }
 
-        return Response.ok(TenantResponse.fromModel(tenant)).build();
+        return Response.ok(TenantResponse.fromCoreModel(tenant)).build();
     }
 
     @DELETE
@@ -407,7 +421,7 @@ public class PlatformResource {
         @Valid CreateApiKeyRequest request
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         LOG.info(
             "POST /platform/api-keys - tenant={}, subject={}",
@@ -415,18 +429,20 @@ public class PlatformResource {
             request.subject()
         );
 
-        String rawKey = platformAdminService.createApiKey(
+        String roles = request.roles() != null
+            ? String.join(",", request.roles())
+            : null;
+
+        IamCommandService.CreateApiTokenResult result = iamCommandService.createApiToken(
             request.tenantId(),
             request.subject(),
-            request.roles()
+            "PROD",
+            roles
         );
 
-        String keyPrefix =
-            rawKey.length() >= 16 ? rawKey.substring(0, 16) : rawKey;
-
         ApiKeyCreatedResponse response = new ApiKeyCreatedResponse(
-            rawKey,
-            keyPrefix,
+            result.plaintextKey(),
+            result.keyPrefix(),
             request.tenantId(),
             request.subject(),
             request.roles()
@@ -488,7 +504,7 @@ public class PlatformResource {
         ) @QueryParam("tenantId") String tenantId
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException(
@@ -498,11 +514,11 @@ public class PlatformResource {
 
         LOG.debug("GET /platform/api-keys?tenantId={}", tenantId);
 
-        List<ApiKeyInfo> keys = platformAdminService.listApiKeys(tenantId);
+        List<IamQueryService.ApiKeyInfo> keys = iamQueryService.listApiKeys(tenantId);
 
         List<ApiKeyResponse> dtos = keys
             .stream()
-            .map(ApiKeyResponse::fromModel)
+            .map(ApiKeyResponse::fromIamModel)
             .toList();
 
         return Response.ok(dtos).build();
@@ -553,11 +569,18 @@ public class PlatformResource {
         ) @PathParam("prefix") String keyPrefix
     ) {
         requireSuperAdmin(securityContext);
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         LOG.info("DELETE /platform/api-keys/{}", keyPrefix);
 
-        platformAdminService.revokeApiKey(keyPrefix);
+        IamQueryService.ApiKeyInfo key = iamQueryService.findByKeyPrefix(keyPrefix);
+        if (key == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("not_found", "API key not found: " + keyPrefix))
+                .build();
+        }
+
+        iamCommandService.revokeApiToken(key.tenantId(), key.keyId());
 
         return Response.ok(
             MessageResponse.of("API key '" + keyPrefix + "' revoked")
@@ -628,7 +651,7 @@ public class PlatformResource {
     ) {
         requireSuperAdmin(securityContext);
         requireCoreCommandService();
-        requirePlatformAdmin();
+        requireCqrsServices();
 
         LOG.info(
             "PUT /platform/tenants/{}/plan - newPlan={}",
@@ -643,17 +666,19 @@ public class PlatformResource {
 
         // Read the existing tenant for metadata; override the plan field
         // because the plan-changed event is projected asynchronously.
-        TenantInfo tenant = platformAdminService.getTenant(tenantId);
-        TenantResponse response = new TenantResponse(
-            tenant.tenantId(),
-            tenant.displayName(),
-            request.plan(),
-            tenant.status(),
-            tenant.evalLimitMonthly(),
-            tenant.subjectLimit(),
-            tenant.burstLimitPerMin(),
-            tenant.createdAt()
-        );
+        var tenant = coreQueryService.getTenant(tenantId);
+        TenantResponse response;
+        if (tenant != null) {
+            response = new TenantResponse(
+                tenant.tenantId(),
+                tenant.displayName(),
+                request.plan(),
+                tenant.status(),
+                tenant.createdAt()
+            );
+        } else {
+            response = new TenantResponse(tenantId, null, request.plan(), null, null);
+        }
 
         return Response.ok(response).build();
     }
