@@ -38,26 +38,18 @@
                             <span class="w-8 h-8 rounded-full bg-cv-900/50 border border-cv-500/30 text-cv-500 flex items-center justify-center text-sm font-bold">2</span>
                             <h3 class="text-xl font-semibold">Install the SDK</h3>
                         </div>
-                        <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Add the ConsentVeil SDK to your project. We support Node.js, Python, Java, and Go.</p>
+                        <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Add the ConsentVeil SDK to your Java project via Maven or Gradle.</p>
                         <div class="ml-0 sm:ml-11 grid sm:grid-cols-2 gap-4">
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
-                                <p class="text-gray-500 mb-2"># Node.js</p>
-                                <p>npm install @consentveil/node</p>
-                            </div>
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
-                                <p class="text-gray-500 mb-2"># Python</p>
-                                <p>pip install consentveil</p>
-                            </div>
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
-                                <p class="text-gray-500 mb-2"># Java (Maven)</p>
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                                <p class="text-gray-500 mb-2">&lt;!-- Maven --&gt;</p>
                                 <p>&lt;dependency&gt;</p>
                                 <p class="ml-2">&lt;groupId&gt;dev.consentveil&lt;/groupId&gt;</p>
                                 <p class="ml-2">&lt;artifactId&gt;consentveil-sdk&lt;/artifactId&gt;</p>
                                 <p>&lt;/dependency&gt;</p>
                             </div>
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300">
-                                <p class="text-gray-500 mb-2"># Go</p>
-                                <p>go get github.com/consentveil/consentveil-go</p>
+                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                                <p class="text-gray-500 mb-2">// Gradle</p>
+                                <p>implementation <span class="text-green-300">"dev.consentveil:consentveil-sdk"</span></p>
                             </div>
                         </div>
                     </div>
@@ -70,22 +62,20 @@
                         </div>
                         <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Grant consent for a subject and purpose. The event is immutably recorded in the audit ledger.</p>
                         <div class="ml-0 sm:ml-11 bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
-                            <p><span class="text-purple-400">import</span> {"{"} ConsentVeil {"}"} <span class="text-purple-400">from</span> <span class="text-green-300">'@consentveil/node'</span>;</p>
+                            <p><span class="text-purple-400">import</span> dev.consentveil.sdk.ConsentVeil;</p>
                             <br>
-                            <p><span class="text-purple-400">const</span> cv = <span class="text-purple-400">new</span> ConsentVeil(<span class="text-green-300">'cv_live_sk_...'</span>);</p>
+                            <p><span class="text-purple-400">var</span> cv = ConsentVeil.builder()</p>
+                            <p class="ml-4">.apiKey(<span class="text-green-300">"cv_live_sk_..."</span>)</p>
+                            <p class="ml-4">.build();</p>
                             <br>
                             <p><span class="text-gray-500">// Grant consent</span></p>
-                            <p><span class="text-purple-400">await</span> cv.consent.grant({"{"}</p>
-                            <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
-                            <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span>,</p>
-                            <p class="ml-4">expiresAt: <span class="text-green-300">'2027-01-01T00:00:00Z'</span></p>
-                            <p>{"}"});</p>
+                            <p>cv.consent().grant(<span class="text-green-300">"usr_9982"</span>,</p>
+                            <p class="ml-4"><span class="text-green-300">"marketing_emails"</span>,</p>
+                            <p class="ml-4">Instant.parse(<span class="text-green-300">"2027-01-01T00:00:00Z"</span>));</p>
                             <br>
                             <p><span class="text-gray-500">// Evaluate consent (sub-millisecond)</span></p>
-                            <p><span class="text-purple-400">const</span> allowed = <span class="text-purple-400">await</span> cv.consent.evaluate({"{"}</p>
-                            <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
-                            <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span></p>
-                            <p>{"}"});</p>
+                            <p><span class="text-purple-400">boolean</span> allowed = cv.consent().evaluate(</p>
+                            <p class="ml-4"><span class="text-green-300">"usr_9982"</span>, <span class="text-green-300">"marketing_emails"</span>);</p>
                             <p><span class="text-gray-500">// → true</span></p>
                         </div>
                     </div>

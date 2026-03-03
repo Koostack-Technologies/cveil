@@ -26,20 +26,21 @@
 
         <!-- SDK Code Example -->
         <div class="w-full max-w-3xl bg-[#0d1117] rounded-xl border border-gray-700 shadow-2xl overflow-hidden text-left relative">
-            <div class="absolute top-0 right-0 px-4 py-2 text-xs font-mono text-gray-500 border-b border-l border-gray-700 rounded-bl-lg bg-gray-800/50">Node.js SDK</div>
+            <div class="absolute top-0 right-0 px-4 py-2 text-xs font-mono text-gray-500 border-b border-l border-gray-700 rounded-bl-lg bg-gray-800/50">Java SDK</div>
             <div class="p-6 font-mono text-sm overflow-x-auto text-gray-300 leading-relaxed">
-                <p><span class="text-purple-400">import</span> {"{"} ConsentVeil {"}"} <span class="text-purple-400">from</span> <span class="text-green-300">'@consentveil/node'</span>;</p>
+                <p><span class="text-purple-400">import</span> dev.consentveil.sdk.ConsentVeil;</p>
+                <p><span class="text-purple-400">import</span> dev.consentveil.sdk.ConsentResult;</p>
                 <br>
                 <p><span class="text-gray-500">// 1. Initialize with your isolated Workspace Key</span></p>
-                <p><span class="text-purple-400">const</span> cv = <span class="text-purple-400">new</span> ConsentVeil(<span class="text-green-300">'cv_live_sk_8f92...'</span>);</p>
+                <p><span class="text-purple-400">var</span> cv = ConsentVeil.builder()</p>
+                <p class="ml-4">.apiKey(<span class="text-green-300">"cv_live_sk_8f92..."</span>)</p>
+                <p class="ml-4">.build();</p>
                 <br>
                 <p><span class="text-gray-500">// 2. Check consent in &lt; 1ms at the Edge</span></p>
-                <p><span class="text-purple-400">const</span> isAllowed = <span class="text-purple-400">await</span> cv.consent.evaluate({"{"}</p>
-                <p class="ml-4">subjectId: <span class="text-green-300">'usr_9982'</span>,</p>
-                <p class="ml-4">purpose: <span class="text-green-300">'marketing_emails'</span></p>
-                <p>{"}"});</p>
+                <p><span class="text-purple-400">boolean</span> allowed = cv.consent().evaluate(</p>
+                <p class="ml-4"><span class="text-green-300">"usr_9982"</span>, <span class="text-green-300">"marketing_emails"</span>);</p>
                 <br>
-                <p><span class="text-purple-400">if</span> (!isAllowed) <span class="text-blue-400">return</span> res.status(<span class="text-orange-300">403</span>).send(<span class="text-green-300">'Consent missing or expired.'</span>);</p>
+                <p><span class="text-purple-400">if</span> (!allowed) <span class="text-blue-400">throw new</span> ForbiddenException(<span class="text-green-300">"Consent missing or expired."</span>);</p>
             </div>
         </div>
     </main>
