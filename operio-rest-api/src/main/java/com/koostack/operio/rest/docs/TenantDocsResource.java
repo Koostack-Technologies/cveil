@@ -1,9 +1,9 @@
 package com.koostack.operio.rest.docs;
 
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
-import jakarta.inject.Named;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -27,7 +27,7 @@ public class TenantDocsResource {
     OpenApiSplitService splitService;
 
     @Inject
-    @Named("swagger-ui")
+    @Location("swagger-ui")
     Template swaggerUi;
 
     @GET
