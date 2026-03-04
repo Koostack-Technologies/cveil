@@ -85,7 +85,7 @@
             <!-- API Reference -->
             <section class="mb-20">
                 <h2 class="text-2xl font-bold mb-8 pb-4 border-b border-gray-800">API Reference</h2>
-                <p class="text-gray-400 mb-8">All endpoints require a Bearer token via the <code class="text-cv-500 bg-cv-900/30 px-1.5 py-0.5 rounded text-sm">Authorization</code> header. Base URL: <code class="text-cv-500 bg-cv-900/30 px-1.5 py-0.5 rounded text-sm">https://api.consentveil.dev/api/v1</code></p>
+                <p class="text-gray-400 mb-8">All endpoints require a Bearer token via the <code class="text-cv-500 bg-cv-900/30 px-1.5 py-0.5 rounded text-sm">Authorization</code> header. All paths below are relative to the base URL: <code class="text-cv-500 bg-cv-900/30 px-1.5 py-0.5 rounded text-sm">/api/v1</code></p>
 
                 <!-- Consent API -->
                 <div class="mb-12">
@@ -105,34 +105,59 @@
                             <tbody class="text-gray-300">
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/consent/grant</td>
-                                    <td class="py-3">Grant consent for a subject and purpose</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/consent/grant</td>
+                                    <td class="py-3">Grant consent for a single scope</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/consent/revoke</td>
-                                    <td class="py-3">Revoke consent for a subject and purpose</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/consent/revoke</td>
+                                    <td class="py-3">Revoke consent for a single scope</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/consent/grant-all</td>
+                                    <td class="py-3">Grant consent for multiple scopes at once</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/consent/revoke-all</td>
+                                    <td class="py-3">Revoke consent for multiple scopes at once</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/consent/evaluate</td>
+                                    <td class="py-3">Evaluate whether consent is active for given scopes</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/consent/evaluate</td>
-                                    <td class="py-3">Evaluate whether consent is active for a subject + purpose</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/{"{"}id{"}"}/summary</td>
+                                    <td class="py-3">List all consent policies for a subject</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/consent/status</td>
-                                    <td class="py-3">Get full consent status for a subject across all purposes</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/{"{"}id{"}"}/history</td>
+                                    <td class="py-3">Get current consent state for a subject</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/{"{"}id{"}"}/export</td>
+                                    <td class="py-3">Export all subject data (GDPR Article 20)</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-red-900/40 text-red-400 px-2 py-0.5 rounded text-xs font-mono">DELETE</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/subjects/{"{"}id{"}"}</td>
+                                    <td class="py-3">Erase all subject data (GDPR Article 17)</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Admin API -->
+                <!-- Catalogue API -->
                 <div class="mb-12">
                     <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-cyan-500"></span>
-                        Admin API
+                        Catalogue API
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
@@ -146,39 +171,85 @@
                             <tbody class="text-gray-300">
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/admin/fields</td>
-                                    <td class="py-3">List all registered sensitive fields</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/catalogue/fields</td>
+                                    <td class="py-3">List all registered fields</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/admin/fields</td>
-                                    <td class="py-3">Register a new sensitive field</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/catalogue/fields</td>
+                                    <td class="py-3">Register a sensitive field (upsert)</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
-                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/admin/purposes</td>
-                                    <td class="py-3">List all registered consent purposes</td>
-                                </tr>
-                                <tr class="border-b border-gray-800/50">
-                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/admin/purposes</td>
-                                    <td class="py-3">Register a new consent purpose</td>
+                                    <td class="py-3 pr-4"><span class="bg-red-900/40 text-red-400 px-2 py-0.5 rounded text-xs font-mono">DELETE</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/catalogue/fields/{"{"}entity{"}"}/{"{"}field{"}"}</td>
+                                    <td class="py-3">Remove a registered field</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/admin/categories</td>
-                                    <td class="py-3">Create a consent category and link fields</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/catalogue/fields/categories</td>
+                                    <td class="py-3">Assign a category to a field</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Auth API -->
+                <!-- Legal API -->
                 <div class="mb-12">
                     <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-purple-500"></span>
-                        Authentication
+                        Legal API
+                    </h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-gray-400">
+                                    <th class="py-3 pr-4 font-medium">Method</th>
+                                    <th class="py-3 pr-4 font-medium">Endpoint</th>
+                                    <th class="py-3 font-medium">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-300">
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/purposes</td>
+                                    <td class="py-3">List all consent purposes</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/purposes</td>
+                                    <td class="py-3">Register a consent purpose (upsert)</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/purposes/policies</td>
+                                    <td class="py-3">Add a policy to a purpose</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/regulations</td>
+                                    <td class="py-3">List all regulations</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/regulations</td>
+                                    <td class="py-3">Register a regulation (upsert)</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/legal/purposes/regulations</td>
+                                    <td class="py-3">Link a purpose to a regulation</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Platform API -->
+                <div class="mb-12">
+                    <h3 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                        Platform API
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
@@ -192,13 +263,33 @@
                             <tbody class="text-gray-300">
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/auth/login</td>
-                                    <td class="py-3">Authenticate and receive an API token</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/tenants</td>
+                                    <td class="py-3">Create a new tenant</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/tenants</td>
+                                    <td class="py-3">List all tenants</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-yellow-900/40 text-yellow-400 px-2 py-0.5 rounded text-xs font-mono">PUT</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/tenants/{"{"}id{"}"}/plan</td>
+                                    <td class="py-3">Update a tenant's plan</td>
                                 </tr>
                                 <tr class="border-b border-gray-800/50">
                                     <td class="py-3 pr-4"><span class="bg-green-900/40 text-green-400 px-2 py-0.5 rounded text-xs font-mono">POST</span></td>
-                                    <td class="py-3 pr-4 font-mono text-sm">/auth/refresh</td>
-                                    <td class="py-3">Refresh an expired access token</td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/api-keys</td>
+                                    <td class="py-3">Create an API key for a tenant</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded text-xs font-mono">GET</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/api-keys</td>
+                                    <td class="py-3">List API keys for a tenant</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-3 pr-4"><span class="bg-red-900/40 text-red-400 px-2 py-0.5 rounded text-xs font-mono">DELETE</span></td>
+                                    <td class="py-3 pr-4 font-mono text-sm">/platform/api-keys/{"{"}prefix{"}"}</td>
+                                    <td class="py-3">Revoke an API key</td>
                                 </tr>
                             </tbody>
                         </table>
