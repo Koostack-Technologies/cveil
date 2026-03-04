@@ -1,0 +1,120 @@
+{#include base.html}
+
+{#title}{title}{/title}
+
+{#head}
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css" />
+<style>
+    /* Override Swagger UI background for dark theme consistency */
+    .swagger-ui { background: #fff; border-radius: 8px; margin-top: 0; }
+    .swagger-ui .topbar { display: none; }
+    #auth-gate { max-width: 480px; margin: 80px auto; }
+    #auth-gate input {
+        background: #172136; border: 1px solid #334155; color: #f8fafc;
+        padding: 10px 14px; border-radius: 6px; width: 100%;
+        font-family: 'Fira Code', monospace; font-size: 14px;
+    }
+    #auth-gate input:focus { outline: none; border-color: #14b8a6; }
+    #auth-gate button {
+        background: #14b8a6; color: #042f2e; font-weight: 600;
+        padding: 10px 24px; border-radius: 6px; border: none; cursor: pointer;
+        width: 100%; margin-top: 12px; font-size: 14px;
+    }
+    #auth-gate button:hover { background: #0d9488; }
+    #auth-error { color: #f87171; font-size: 13px; margin-top: 8px; display: none; }
+</style>
+{/head}
+
+{#content}
+<main class="relative z-10 flex-1">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {#if requiresAuth}
+        <!-- Auth gate: shown before spec is loaded for platform docs -->
+        <div id="auth-gate">
+            <h2 class="text-xl font-bold text-white mb-2">Platform API Documentation</h2>
+            <p class="text-gray-400 text-sm mb-6">
+                Enter your super-admin API key or bootstrap key to view platform endpoints.
+            </p>
+            <input id="api-key-input" type="password" placeholder="Bearer token or bootstrap key"
+                   autocomplete="off" spellcheck="false" />
+            <button onclick="loadPlatformDocs()">Authenticate &amp; Load Docs</button>
+            <p id="auth-error"></p>
+        </div>
+        {/if}
+
+        <div id="swagger-ui" {#if requiresAuth}style="display:none"{/if}></div>
+    </div>
+</main>
+
+<script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
+<script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js"></script>
+<script>
+    var specUrl = '{specUrl}';
+    var requiresAuth = {requiresAuth};
+
+    function initSwaggerUI(extraConfig) {
+        var config = Object.assign({
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            docExpansion: 'list',
+            filter: true,
+            operationsSorter: 'alpha',
+            tagsSorter: 'alpha',
+            displayRequestDuration: true,
+            presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+            layout: 'StandaloneLayout'
+        }, extraConfig || {});
+        SwaggerUIBundle(config);
+    }
+
+    if (!requiresAuth) {
+        // Tenant docs: load spec directly (public)
+        initSwaggerUI({ url: specUrl });
+    }
+
+    function loadPlatformDocs() {
+        var key = document.getElementById('api-key-input').value.trim();
+        if (!key) return;
+
+        var errEl = document.getElementById('auth-error');
+        errEl.style.display = 'none';
+
+        // Fetch the protected spec with the provided key
+        fetch(specUrl, {
+            headers: { 'Authorization': 'Bearer ' + key }
+        })
+        .then(function(resp) {
+            if (!resp.ok) throw new Error(resp.status === 401 || resp.status === 403
+                ? 'Invalid or insufficient API key.'
+                : 'Failed to load spec (HTTP ' + resp.status + ').');
+            return resp.json();
+        })
+        .then(function(spec) {
+            document.getElementById('auth-gate').style.display = 'none';
+            document.getElementById('swagger-ui').style.display = 'block';
+            initSwaggerUI({
+                spec: spec,
+                requestInterceptor: function(req) {
+                    req.headers['Authorization'] = 'Bearer ' + key;
+                    return req;
+                }
+            });
+        })
+        .catch(function(err) {
+            errEl.textContent = err.message;
+            errEl.style.display = 'block';
+        });
+    }
+
+    // Allow Enter key to submit
+    var input = document.getElementById('api-key-input');
+    if (input) {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') loadPlatformDocs();
+        });
+    }
+</script>
+{/content}
+
+{/include}

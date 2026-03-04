@@ -622,6 +622,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      *       built-in endpoints (used by Kubernetes liveness/readiness
      *       probes)</li>
      *   <li>{@code api/v1/health} — application-level health endpoint</li>
+     *   <li>{@code api/v1/docs}, {@code api/v1/docs/openapi.json} — tenant
+     *       API documentation (Swagger UI and OpenAPI spec)</li>
+     *   <li>{@code api/v1/platform/docs} — platform docs Swagger UI page
+     *       (the spec endpoint at {@code api/v1/platform/docs/openapi.json}
+     *       is <em>not</em> public and requires super-admin auth)</li>
      * </ul>
      *
      * @param path the request URI path (without leading slash)
@@ -633,6 +638,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         return (
             normalized.startsWith("q/health") ||
             normalized.startsWith("api/v1/health") ||
+            // Tenant API docs (Swagger UI + OpenAPI spec)
+            normalized.startsWith("api/v1/docs/") ||
+            normalized.equals("api/v1/docs") ||
+            // Platform docs Swagger UI page only (spec endpoint is NOT public)
+            normalized.equals("api/v1/platform/docs") ||
+            normalized.equals("api/v1/platform/docs/") ||
             // Site pages (public, unauthenticated)
             normalized.isEmpty() ||
             normalized.equals("docs") || normalized.equals("docs/") ||

@@ -33,20 +33,16 @@ quarkus:
   # ---------------------------------------------------------------------------
   # OpenAPI & Swagger UI
   # ---------------------------------------------------------------------------
+  # The built-in Swagger UI at /q/swagger-ui is disabled in favor of the
+  # split docs served by TenantDocsResource (/api/v1/docs) and
+  # PlatformDocsResource (/api/v1/platform/docs).  The /q/openapi spec
+  # endpoint is kept so that OpenApiSplitService can read the full model.
   smallrye-openapi:
-    path: /q/openapi # OpenAPI spec endpoint (YAML/JSON)
+    path: /q/openapi # OpenAPI spec endpoint (YAML/JSON) — used by split service
     info-title: Operio Consent Management API
     info-version: 1.0.0
   swagger-ui:
-    always-include: true # Ship Swagger UI in production builds
-    path: /q/swagger-ui # Swagger UI base path
-    theme: flattop # Clean visual theme
-    doc-expansion: list # Expand operations to summary level
-    deep-linking: true # Enable deep-link anchors per operation
-    display-request-duration: true # Show request timing in "Try it out"
-    filter: true # Enable the search/filter bar
-    operations-sorter: alpha # Alphabetical ordering within tags
-    tags-sorter: alpha # Alphabetical tag ordering
+    always-include: false # Disabled — use /api/v1/docs and /api/v1/platform/docs instead
 
 # -----------------------------------------------------------------------------
 # Operio SDK configuration — read by OperioProducers CDI bean
