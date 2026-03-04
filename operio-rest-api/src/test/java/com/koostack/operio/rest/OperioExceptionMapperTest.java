@@ -38,6 +38,7 @@ import org.slf4j.MDC;
  *   <li>{@link OperioServiceException}       → 503 Service Unavailable</li>
  *   <li>{@link OperioException}              → 500 Internal Server Error (catch-all)</li>
  *   <li>{@link IllegalArgumentException}     → 400 Bad Request</li>
+ *   <li>{@link IllegalStateException}        → 409 Conflict</li>
  *   <li>{@link UnsupportedOperationException} → 501 Not Implemented</li>
  *   <li>Generic {@link Exception}            → 500 Internal Server Error</li>
  * </ul>
@@ -543,6 +544,59 @@ class OperioExceptionMapperTest {
             try (Response response = mapper.toResponse(ex)) {
                 ErrorResponse error = extractError(response);
                 assertNull(error.retryAfter());
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // IllegalStateException → 409 Conflict
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("IllegalStateException → 409")
+    class IllegalState {
+
+        @Test
+        @DisplayName("maps to 409 Conflict")
+        void statusCode409() {
+            IllegalStateException ex = new IllegalStateException(
+                "Cannot remove entity 'users' — it still has fields assigned."
+            );
+            try (Response response = mapper.toResponse(ex)) {
+                assertEquals(409, response.getStatus());
+            }
+        }
+
+        @Test
+        @DisplayName("error code is 'conflict'")
+        void errorCodeConflict() {
+            IllegalStateException ex = new IllegalStateException(
+                "Resource still referenced"
+            );
+            try (Response response = mapper.toResponse(ex)) {
+                ErrorResponse error = extractError(response);
+                assertEquals("conflict", error.error());
+            }
+        }
+
+        @Test
+        @DisplayName("message preserves exception message")
+        void messagePreserved() {
+            String msg = "Cannot remove category 'PII' — it is still assigned to fields.";
+            IllegalStateException ex = new IllegalStateException(msg);
+            try (Response response = mapper.toResponse(ex)) {
+                ErrorResponse error = extractError(response);
+                assertEquals(msg, error.message());
+            }
+        }
+
+        @Test
+        @DisplayName("retryable is false for conflict errors")
+        void notRetryable() {
+            IllegalStateException ex = new IllegalStateException("Conflict");
+            try (Response response = mapper.toResponse(ex)) {
+                ErrorResponse error = extractError(response);
+                assertFalse(error.retryable());
             }
         }
     }

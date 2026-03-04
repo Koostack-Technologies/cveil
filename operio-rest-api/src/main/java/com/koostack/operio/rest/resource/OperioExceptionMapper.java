@@ -31,6 +31,7 @@ import org.slf4j.MDC;
  *   <li>OperioConfigurationException -> 500 Internal Server Error</li>
  *   <li>OperioServiceException       -> 503 Service Unavailable</li>
  *   <li>IllegalArgumentException     -> 400 Bad Request</li>
+ *   <li>IllegalStateException        -> 409 Conflict</li>
  *   <li>UnsupportedOperationException -> 501 Not Implemented</li>
  *   <li>All other exceptions         -> 500 Internal Server Error</li>
  * </ul>
@@ -109,6 +110,9 @@ public class OperioExceptionMapper implements ExceptionMapper<Exception> {
         }
         if (exception instanceof IllegalArgumentException e) {
             return mapIllegalArgument(e);
+        }
+        if (exception instanceof IllegalStateException e) {
+            return mapIllegalState(e);
         }
         if (exception instanceof UnsupportedOperationException e) {
             return mapUnsupported(e);
@@ -245,6 +249,14 @@ public class OperioExceptionMapper implements ExceptionMapper<Exception> {
         return Response.status(Response.Status.BAD_REQUEST)
             .type(MediaType.APPLICATION_JSON)
             .entity(ErrorResponse.of("validation_error", e.getMessage()))
+            .build();
+    }
+
+    private Response mapIllegalState(IllegalStateException e) {
+        LOG.warn("Conflict: {}", e.getMessage());
+        return Response.status(Response.Status.CONFLICT)
+            .type(MediaType.APPLICATION_JSON)
+            .entity(ErrorResponse.of("conflict", e.getMessage()))
             .build();
     }
 

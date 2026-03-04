@@ -25,9 +25,10 @@ import com.koostack.operio.plugin.consent.jooq.generated.enums.PolicyType;
  * Stream projection handler that materializes consent domain events
  * into the consent admin relational schema.
  *
- * <p>Handles events for all 5 aggregates: Field, Purpose, Regulation,
- * SubjectConsent, and DSAR. All writes are idempotent (upsert or delete)
- * and routed to the correct per-tenant schema via {@link TenantContext}.
+ * <p>Handles events for all 8 aggregates: Entity, Category, Field, Purpose,
+ * Regulation, Jurisdiction, SubjectConsent, and DSAR. All writes are
+ * idempotent (upsert or delete) and routed to the correct per-tenant
+ * schema via {@link TenantContext}.
  */
 public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
@@ -70,6 +71,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
     private void dispatch(String eventType, JsonNode node) {
         switch (eventType) {
+            // -- Entity Aggregate --
+            case ConsentEventTypes.ENTITY_REGISTERED -> handleEntityRegistered(node);
+            case ConsentEventTypes.ENTITY_UPDATED -> handleEntityUpdated(node);
+            case ConsentEventTypes.ENTITY_REMOVED -> handleEntityRemoved(node);
+
+            // -- Category Aggregate --
+            case ConsentEventTypes.CATEGORY_REGISTERED -> handleCategoryRegistered(node);
+            case ConsentEventTypes.CATEGORY_UPDATED -> handleCategoryUpdated(node);
+            case ConsentEventTypes.CATEGORY_REMOVED -> handleCategoryRemoved(node);
+
             // -- Field Aggregate --
             case ConsentEventTypes.FIELD_REGISTERED -> handleFieldRegistered(node);
             case ConsentEventTypes.FIELD_UPDATED -> handleFieldUpdated(node);
@@ -93,6 +104,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             case ConsentEventTypes.REGULATION_JURISDICTION_ADDED -> handleRegulationJurisdictionAdded(node);
             case ConsentEventTypes.REGULATION_JURISDICTION_REMOVED -> handleRegulationJurisdictionRemoved(node);
 
+            // -- Jurisdiction Aggregate --
+            case ConsentEventTypes.JURISDICTION_REGISTERED -> handleJurisdictionRegistered(node);
+            case ConsentEventTypes.JURISDICTION_UPDATED -> handleJurisdictionUpdated(node);
+            case ConsentEventTypes.JURISDICTION_REMOVED -> handleJurisdictionRemoved(node);
+
             // -- SubjectConsent Aggregate --
             case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGranted(node);
             case ConsentEventTypes.CONSENT_REVOKED -> handleConsentRevoked(node);
@@ -104,6 +120,133 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
             default -> log.debug("Ignoring unhandled event type: {}", eventType);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Entity Aggregate
+    // -----------------------------------------------------------------------
+
+    private void handleEntityRegistered(JsonNode node) {
+        String entityName = node.get("entityName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        dsl.insertInto(ENTITY)
+            .set(ENTITY.ENTITY_NAME, entityName)
+            .set(ENTITY.DESCRIPTION, description)
+            .set(ENTITY.CREATED_AT, now)
+            .set(ENTITY.UPDATED_AT, now)
+            .onConflict(ENTITY.ENTITY_NAME)
+            .doUpdate()
+            .set(ENTITY.DESCRIPTION, description)
+            .set(ENTITY.UPDATED_AT, now)
+            .execute();
+    }
+
+    private void handleEntityUpdated(JsonNode node) {
+        handleEntityRegistered(node);
+    }
+
+    private void handleEntityRemoved(JsonNode node) {
+        String entityName = node.get("entityName").asText();
+
+        Long entityId = resolveEntityId(entityName);
+        if (entityId != null) {
+            // Remove field_category links for all fields of this entity
+            dsl.deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_ID.in(
+                    dsl.select(FIELD.FIELD_ID).from(FIELD)
+                        .where(FIELD.ENTITY_ID.eq(entityId))
+                ))
+                .execute();
+            dsl.deleteFrom(FIELD)
+                .where(FIELD.ENTITY_ID.eq(entityId))
+                .execute();
+        }
+
+        dsl.deleteFrom(ENTITY)
+            .where(ENTITY.ENTITY_NAME.eq(entityName))
+            .execute();
+    }
+
+    // -----------------------------------------------------------------------
+    // Category Aggregate
+    // -----------------------------------------------------------------------
+
+    private void handleCategoryRegistered(JsonNode node) {
+        String categoryName = node.get("categoryName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        dsl.insertInto(CATEGORY)
+            .set(CATEGORY.CATEGORY_NAME, categoryName)
+            .set(CATEGORY.DESCRIPTION, description)
+            .set(CATEGORY.CREATED_AT, now)
+            .set(CATEGORY.UPDATED_AT, now)
+            .onConflict(CATEGORY.CATEGORY_NAME)
+            .doUpdate()
+            .set(CATEGORY.DESCRIPTION, description)
+            .set(CATEGORY.UPDATED_AT, now)
+            .execute();
+    }
+
+    private void handleCategoryUpdated(JsonNode node) {
+        handleCategoryRegistered(node);
+    }
+
+    private void handleCategoryRemoved(JsonNode node) {
+        String categoryName = node.get("categoryName").asText();
+
+        Long categoryId = resolveCategoryId(categoryName);
+        if (categoryId != null) {
+            dsl.deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .execute();
+        }
+
+        dsl.deleteFrom(CATEGORY)
+            .where(CATEGORY.CATEGORY_NAME.eq(categoryName))
+            .execute();
+    }
+
+    // -----------------------------------------------------------------------
+    // Jurisdiction Aggregate
+    // -----------------------------------------------------------------------
+
+    private void handleJurisdictionRegistered(JsonNode node) {
+        String jurisdictionName = node.get("jurisdictionName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        dsl.insertInto(JURISDICTION)
+            .set(JURISDICTION.JURISDICTION_NAME, jurisdictionName)
+            .set(JURISDICTION.DESCRIPTION, description)
+            .set(JURISDICTION.CREATED_AT, now)
+            .set(JURISDICTION.UPDATED_AT, now)
+            .onConflict(JURISDICTION.JURISDICTION_NAME)
+            .doUpdate()
+            .set(JURISDICTION.DESCRIPTION, description)
+            .set(JURISDICTION.UPDATED_AT, now)
+            .execute();
+    }
+
+    private void handleJurisdictionUpdated(JsonNode node) {
+        handleJurisdictionRegistered(node);
+    }
+
+    private void handleJurisdictionRemoved(JsonNode node) {
+        String jurisdictionName = node.get("jurisdictionName").asText();
+
+        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
+        if (jurisdictionId != null) {
+            dsl.deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.JURISDICTION_ID.eq(jurisdictionId))
+                .execute();
+        }
+
+        dsl.deleteFrom(JURISDICTION)
+            .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
+            .execute();
     }
 
     // -----------------------------------------------------------------------
