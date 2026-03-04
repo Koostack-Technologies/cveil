@@ -4,15 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.smallrye.openapi.api.OpenApiDocument;
-import io.smallrye.openapi.runtime.io.Format;
-import io.smallrye.openapi.runtime.io.OpenApiSerializer;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +27,8 @@ import org.slf4j.LoggerFactory;
  * else is a tenant endpoint. Unused tags and the docs endpoints themselves
  * are stripped from each filtered spec.
  *
- * <p>Both specs are computed lazily on first access and cached for the
+ * <p>Both specs are computed lazily on first access by fetching the full
+ * spec from the built-in {@code /q/openapi} endpoint and cached for the
  * lifetime of the application.
  */
 @ApplicationScoped
@@ -37,6 +39,12 @@ public class OpenApiSplitService {
     private static final String PLATFORM_PATH_PREFIX = "/api/v1/platform";
     private static final String DOCS_PATH_PREFIX = "/api/v1/docs";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+    int httpPort;
+
+    @ConfigProperty(name = "quarkus.smallrye-openapi.path", defaultValue = "/q/openapi")
+    String openApiPath;
 
     private volatile String tenantSpecJson;
     private volatile String platformSpecJson;
@@ -62,8 +70,7 @@ public class OpenApiSplitService {
             return;
         }
         try {
-            OpenAPI full = OpenApiDocument.INSTANCE.get();
-            String fullJson = OpenApiSerializer.serialize(full, Format.JSON);
+            String fullJson = fetchOpenApiSpec();
             ObjectNode fullTree = (ObjectNode) MAPPER.readTree(fullJson);
 
             tenantSpecJson = buildFilteredSpec(fullTree, false);
@@ -72,6 +79,23 @@ public class OpenApiSplitService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to split OpenAPI spec", e);
         }
+    }
+
+    /**
+     * Fetches the full OpenAPI spec from the built-in SmallRye endpoint.
+     * Called lazily on first request, so the HTTP server is guaranteed to
+     * be running.
+     */
+    private String fetchOpenApiSpec() throws Exception {
+        URI uri = URI.create("http://localhost:" + httpPort + openApiPath + "?format=json");
+        HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
+        HttpResponse<String> response = HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            throw new IllegalStateException(
+                "Failed to fetch OpenAPI spec from " + uri + " — HTTP " + response.statusCode());
+        }
+        return response.body();
     }
 
     private String buildFilteredSpec(ObjectNode fullTree, boolean platformOnly)
