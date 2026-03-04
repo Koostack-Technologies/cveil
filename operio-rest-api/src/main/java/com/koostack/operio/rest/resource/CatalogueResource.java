@@ -1,11 +1,17 @@
 package com.koostack.operio.rest.resource;
 
+import com.koostack.operio.core.models.CategoryView;
+import com.koostack.operio.core.models.EntityView;
 import com.koostack.operio.core.models.FieldView;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.RegisterEntityRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
+import com.koostack.operio.rest.dto.AdminDtos.UpdateCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.UpdateEntityRequest;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.interceptor.TenantScoped;
@@ -134,5 +140,179 @@ public class CatalogueResource {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.unassignFieldCategory(fieldName, entityName, categoryName);
         return Response.ok(MessageResponse.of("Category unassigned")).build();
+    }
+
+    // -------------------------------------------------------------------
+    // Entities (standalone CRUD)
+    // -------------------------------------------------------------------
+
+    @GET
+    @Path("/entities")
+    @Operation(operationId = "listEntities", summary = "List all entities")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "List of entities",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = EntityView.class))),
+    })
+    public Response listEntities(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<EntityView> entities = tenantService.listEntities();
+        return Response.ok(entities).build();
+    }
+
+    @GET
+    @Path("/entities/{entityName}")
+    @Operation(operationId = "getEntity", summary = "Get a single entity")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Entity found",
+            content = @Content(schema = @Schema(implementation = EntityView.class))),
+        @APIResponse(responseCode = "404", description = "Entity not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getEntity(@Context SecurityContext sc,
+                              @PathParam("entityName") String entityName) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        return tenantService.getEntity(entityName)
+            .map(e -> Response.ok(e).build())
+            .orElse(Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Entity not found: " + entityName))
+                .build());
+    }
+
+    @POST
+    @Path("/entities")
+    @Operation(operationId = "registerEntity", summary = "Register an entity (upsert)")
+    @APIResponses({
+        @APIResponse(responseCode = "201", description = "Entity registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response registerEntity(@Context SecurityContext sc,
+                                   @Valid RegisterEntityRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerEntity(req.entityName(), req.description());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Entity registered: " + req.entityName()))
+            .build();
+    }
+
+    @PUT
+    @Path("/entities/{entityName}")
+    @Operation(operationId = "updateEntity", summary = "Update an entity's description")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Entity updated",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response updateEntity(@Context SecurityContext sc,
+                                 @PathParam("entityName") String entityName,
+                                 @Valid UpdateEntityRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.updateEntity(entityName, req.description());
+        return Response.ok(MessageResponse.of("Entity updated: " + entityName)).build();
+    }
+
+    @DELETE
+    @Path("/entities/{entityName}")
+    @Operation(operationId = "removeEntity", summary = "Remove an entity (fails if fields still reference it)")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Entity removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "409", description = "Entity still referenced by fields",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removeEntity(@Context SecurityContext sc,
+                                 @PathParam("entityName") String entityName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeEntity(entityName);
+        return Response.ok(MessageResponse.of("Entity removed")).build();
+    }
+
+    // -------------------------------------------------------------------
+    // Categories (standalone CRUD)
+    // -------------------------------------------------------------------
+
+    @GET
+    @Path("/categories")
+    @Operation(operationId = "listCategories", summary = "List all categories")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "List of categories",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = CategoryView.class))),
+    })
+    public Response listCategories(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<CategoryView> categories = tenantService.listCategories();
+        return Response.ok(categories).build();
+    }
+
+    @GET
+    @Path("/categories/{categoryName}")
+    @Operation(operationId = "getCategory", summary = "Get a single category")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Category found",
+            content = @Content(schema = @Schema(implementation = CategoryView.class))),
+        @APIResponse(responseCode = "404", description = "Category not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getCategory(@Context SecurityContext sc,
+                                @PathParam("categoryName") String categoryName) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        return tenantService.getCategory(categoryName)
+            .map(c -> Response.ok(c).build())
+            .orElse(Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Category not found: " + categoryName))
+                .build());
+    }
+
+    @POST
+    @Path("/categories")
+    @Operation(operationId = "registerCategory", summary = "Register a category (upsert)")
+    @APIResponses({
+        @APIResponse(responseCode = "201", description = "Category registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response registerCategory(@Context SecurityContext sc,
+                                     @Valid RegisterCategoryRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerCategory(req.categoryName(), req.description());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Category registered: " + req.categoryName()))
+            .build();
+    }
+
+    @PUT
+    @Path("/categories/{categoryName}")
+    @Operation(operationId = "updateCategory", summary = "Update a category's description")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Category updated",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response updateCategory(@Context SecurityContext sc,
+                                   @PathParam("categoryName") String categoryName,
+                                   @Valid UpdateCategoryRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.updateCategory(categoryName, req.description());
+        return Response.ok(MessageResponse.of("Category updated: " + categoryName)).build();
+    }
+
+    @DELETE
+    @Path("/categories/{categoryName}")
+    @Operation(operationId = "removeCategory", summary = "Remove a category (fails if still referenced)")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Category removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "409", description = "Category still referenced by fields",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removeCategory(@Context SecurityContext sc,
+                                   @PathParam("categoryName") String categoryName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeCategory(categoryName);
+        return Response.ok(MessageResponse.of("Category removed")).build();
     }
 }

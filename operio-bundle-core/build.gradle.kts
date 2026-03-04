@@ -9,7 +9,7 @@ dependencies {
 
     // The plugins this bundle wires
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
-    implementation(project(":plugins:operio-consent-decision-redis"))
+    implementation(project(":tenant:operio-consent-decision-projection-redis"))
     implementation(project(":sdk:operio-discovery-sensitive-annotation"))
 
     // Transitive dependencies needed for config type resolution

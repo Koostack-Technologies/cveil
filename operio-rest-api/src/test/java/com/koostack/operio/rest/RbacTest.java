@@ -33,7 +33,7 @@ import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.resource.CatalogueResource;
 import jakarta.enterprise.inject.Instance;
 import com.koostack.operio.rest.resource.ConsentResource;
-import com.koostack.operio.rest.resource.LegalResource;
+import com.koostack.operio.rest.resource.GovernanceResource;
 import com.koostack.operio.rest.resource.PlatformResource;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -60,7 +60,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  *       consent:write for grant/revoke/batch operations</li>
  *   <li>{@link CatalogueResource} — admin:read for listing fields,
  *       admin:write for register/remove/category endpoints</li>
- *   <li>{@link LegalResource} — admin:read for listing purposes/regulations,
+ *   <li>{@link GovernanceResource} — admin:read for listing purposes/regulations,
  *       admin:write for register/link endpoints</li>
  *   <li>{@link PlatformResource} — super-admin requirement for all endpoints</li>
  * </ul>
@@ -1275,20 +1275,20 @@ class RbacTest {
     }
 
     // -------------------------------------------------------------------
-    // LegalResource RBAC tests
+    // GovernanceResource RBAC tests
     // -------------------------------------------------------------------
 
     @Nested
-    @DisplayName("LegalResource RBAC")
-    class LegalResourceRbac {
+    @DisplayName("GovernanceResource RBAC")
+    class GovernanceResourceRbac {
 
-        private LegalResource resource;
+        private GovernanceResource resource;
         private TenantService tenantService;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
-            resource = new LegalResource();
+            resource = new GovernanceResource();
             tenantService = mock(TenantService.class);
 
             when(tenantService.listPurposes()).thenReturn(
@@ -1298,7 +1298,7 @@ class RbacTest {
                 Collections.emptyList()
             );
 
-            var field = LegalResource.class.getDeclaredField("tenantService");
+            var field = GovernanceResource.class.getDeclaredField("tenantService");
             field.setAccessible(true);
             field.set(resource, tenantService);
         }

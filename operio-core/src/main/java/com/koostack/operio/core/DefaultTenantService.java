@@ -2,15 +2,18 @@ package com.koostack.operio.core;
 
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.models.*;
+import com.koostack.operio.core.models.ConsentGraphModels.ConsentGraph;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
+import com.koostack.operio.core.tenant.consent.ConsentGraphQueryService;
 import com.koostack.operio.core.tenant.consent.events.FieldSnapshot;
 import com.koostack.operio.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.operio.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -137,6 +140,60 @@ public class DefaultTenantService extends Operio implements TenantService {
             }
         }
         return new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
+    }
+
+    // -----------------------------------------------------------------------
+    // Entity Aggregate operations
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerEntity(String entityName, String description) {
+        commandService().registerEntityCommand(entityName, description);
+    }
+
+    @Override
+    public void updateEntity(String entityName, String description) {
+        commandService().updateEntityCommand(entityName, description);
+    }
+
+    @Override
+    public void removeEntity(String entityName) {
+        boolean hasFields = listFields().stream()
+            .anyMatch(f -> f.entity() != null
+                && entityName.equals(f.entity().entityName()));
+        if (hasFields) {
+            throw new IllegalStateException(
+                "Cannot remove entity '" + entityName
+                + "' — it still has fields assigned. Remove them first.");
+        }
+        commandService().removeEntityCommand(entityName);
+    }
+
+    // -----------------------------------------------------------------------
+    // Category Aggregate operations
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerCategory(String categoryName, String description) {
+        commandService().registerCategoryCommand(categoryName, description);
+    }
+
+    @Override
+    public void updateCategory(String categoryName, String description) {
+        commandService().updateCategoryCommand(categoryName, description);
+    }
+
+    @Override
+    public void removeCategory(String categoryName) {
+        boolean hasAssignments = listFields().stream()
+            .anyMatch(f -> f.categories().stream()
+                .anyMatch(c -> categoryName.equals(c.categoryName())));
+        if (hasAssignments) {
+            throw new IllegalStateException(
+                "Cannot remove category '" + categoryName
+                + "' — it is still assigned to fields. Unassign it first.");
+        }
+        commandService().removeCategoryCommand(categoryName);
     }
 
     // -----------------------------------------------------------------------
@@ -317,6 +374,33 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     // -----------------------------------------------------------------------
+    // Jurisdiction Aggregate operations
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerJurisdiction(String jurisdictionName, String description) {
+        commandService().registerJurisdictionCommand(jurisdictionName, description);
+    }
+
+    @Override
+    public void updateJurisdiction(String jurisdictionName, String description) {
+        commandService().updateJurisdictionCommand(jurisdictionName, description);
+    }
+
+    @Override
+    public void removeJurisdiction(String jurisdictionName) {
+        boolean hasAssignments = listRegulations().stream()
+            .anyMatch(r -> r.activeJurisdictions().stream()
+                .anyMatch(j -> jurisdictionName.equals(j.jurisdictionName())));
+        if (hasAssignments) {
+            throw new IllegalStateException(
+                "Cannot remove jurisdiction '" + jurisdictionName
+                + "' — it is still assigned to regulations. Remove it first.");
+        }
+        commandService().removeJurisdictionCommand(jurisdictionName);
+    }
+
+    // -----------------------------------------------------------------------
     // Regulation Aggregate operations
     // -----------------------------------------------------------------------
 
@@ -382,6 +466,26 @@ public class DefaultTenantService extends Operio implements TenantService {
     // -----------------------------------------------------------------------
 
     @Override
+    public List<EntityView> listEntities() {
+        return queryService().listEntities();
+    }
+
+    @Override
+    public Optional<EntityView> getEntity(String entityName) {
+        return queryService().getEntity(entityName);
+    }
+
+    @Override
+    public List<CategoryView> listCategories() {
+        return queryService().listCategories();
+    }
+
+    @Override
+    public Optional<CategoryView> getCategory(String categoryName) {
+        return queryService().getCategory(categoryName);
+    }
+
+    @Override
     public List<FieldView> listFields() {
         return queryService().listFields();
     }
@@ -412,6 +516,16 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
+    public List<JurisdictionView> listJurisdictions() {
+        return queryService().listJurisdictions();
+    }
+
+    @Override
+    public Optional<JurisdictionView> getJurisdiction(String jurisdictionName) {
+        return queryService().getJurisdiction(jurisdictionName);
+    }
+
+    @Override
     public SubjectConsentView getSubjectConsent(String subjectId) {
         return queryService().getSubjectConsent(subjectId);
     }
@@ -428,6 +542,17 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public ConsentResponse evaluateConsent(String subject, Set<ConsentScope> scopes) {
         return consentService().evaluateConsent(subject, scopes);
+    }
+
+    @Override
+    public ConsentGraph getConsentGraph(String cursor, int limit,
+                                        String rootType, String rootName,
+                                        Integer depth) {
+        ConsentGraphQueryService<?> graphService = consentGraphService();
+        if (graphService == null) {
+            throw new UnsupportedOperationException("Consent graph not available");
+        }
+        return graphService.getConsentGraph(cursor, limit, rootType, rootName, depth);
     }
 
     // -----------------------------------------------------------------------

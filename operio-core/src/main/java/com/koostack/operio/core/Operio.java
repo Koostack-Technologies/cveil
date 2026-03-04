@@ -47,6 +47,7 @@ public abstract class Operio implements OperioService {
 
     // -- Read-path plugins ----------------------------------------------------
     private final ConsentDecisionService<?> consentService;
+    private final com.koostack.operio.core.tenant.consent.ConsentGraphQueryService<?> consentGraphService;
     private final IdentityResolver<?> identityResolver;
     private final AuditLogger<?> auditLogger;
     private final MaskingStrategy<?> maskingStrategy;
@@ -70,6 +71,7 @@ public abstract class Operio implements OperioService {
         this.appName =
             builder.appName != null ? builder.appName : DEFAULT_APP_NAME;
         this.consentService = builder.consentService;
+        this.consentGraphService = builder.consentGraphService;
         this.identityResolver = builder.identityResolver;
         this.auditLogger = builder.auditLogger;
         this.maskingStrategy = builder.maskingStrategy;
@@ -159,6 +161,14 @@ public abstract class Operio implements OperioService {
      */
     public ConsentDecisionService<?> consentService() {
         return consentService;
+    }
+
+    /**
+     * Returns the configured {@link com.koostack.operio.core.tenant.consent.ConsentGraphQueryService},
+     * or {@code null} if none was registered.
+     */
+    public com.koostack.operio.core.tenant.consent.ConsentGraphQueryService<?> consentGraphService() {
+        return consentGraphService;
     }
 
     /**
@@ -280,6 +290,7 @@ public abstract class Operio implements OperioService {
 
         // -- Read-path --------------------------------------------------------
         private ConsentDecisionService<?> consentService;
+        private com.koostack.operio.core.tenant.consent.ConsentGraphQueryService<?> consentGraphService;
         private IdentityResolver<?> identityResolver;
         private AuditLogger auditLogger;
         private MaskingStrategy<?> maskingStrategy;
@@ -422,6 +433,16 @@ public abstract class Operio implements OperioService {
          */
         public Builder withConsentProvider(ConsentDecisionService<?> service) {
             this.consentService = service;
+            return this;
+        }
+
+        /**
+         * Registers a pre-built {@link com.koostack.operio.core.tenant.consent.ConsentGraphQueryService}
+         * instance for graph-based consent queries.
+         */
+        public Builder withConsentGraphProvider(
+                com.koostack.operio.core.tenant.consent.ConsentGraphQueryService<?> service) {
+            this.consentGraphService = service;
             return this;
         }
 

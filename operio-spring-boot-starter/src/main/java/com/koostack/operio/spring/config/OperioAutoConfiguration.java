@@ -153,11 +153,18 @@ public class OperioAutoConfiguration {
                     .getConstructor(String.class, String.class)
                     .newInstance(db.getUrl(), db.getDialect());
 
-                // Build RedisConsentDecisionServiceConfig
-                Class<?> redisConfigClass = Class.forName(
-                    "com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig"
-                );
+                // Build Redis config (try new ConsentGraphRedisConfig first, fall back to legacy)
                 Object redisConfig;
+                Class<?> redisConfigClass;
+                try {
+                    redisConfigClass = Class.forName(
+                        "com.koostack.operio.plugin.redis.common.ConsentGraphRedisConfig"
+                    );
+                } catch (ClassNotFoundException ignored) {
+                    redisConfigClass = Class.forName(
+                        "com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig"
+                    );
+                }
                 if (
                     redis.getPassword() != null &&
                     !redis.getPassword().isBlank()
@@ -179,15 +186,18 @@ public class OperioAutoConfiguration {
                 Class<?> bundleClass = Class.forName(
                     "com.koostack.operio.bundle.core.CoreConsentBundle"
                 );
+                // Constructor parameter is RedisPluginConfig (interface), not the concrete class
+                Class<?> redisPluginConfigClass = Class.forName(
+                    "com.koostack.operio.plugin.redis.common.RedisPluginConfig"
+                );
 
                 if (
                     props.getAppName() != null && !props.getAppName().isBlank()
                 ) {
-                    // CoreConsentBundle(String, JooqConsentAdminServiceConfig, RedisConsentDecisionServiceConfig)
                     var ctor = bundleClass.getConstructor(
                         String.class,
                         jooqConfigClass,
-                        redisConfigClass
+                        redisPluginConfigClass
                     );
                     return (PluginBundle) ctor.newInstance(
                         props.getAppName(),
@@ -196,10 +206,9 @@ public class OperioAutoConfiguration {
                     );
                 }
 
-                // CoreConsentBundle(JooqConsentAdminServiceConfig, RedisConsentDecisionServiceConfig)
                 var ctor = bundleClass.getConstructor(
                     jooqConfigClass,
-                    redisConfigClass
+                    redisPluginConfigClass
                 );
                 return (PluginBundle) ctor.newInstance(jooqConfig, redisConfig);
             } catch (ClassNotFoundException e) {

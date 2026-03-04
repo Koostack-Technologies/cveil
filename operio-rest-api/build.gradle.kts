@@ -54,15 +54,13 @@ dependencies {
     implementation(project(":platform:operio-platform-keycloak"))
     implementation(project(":tenant:operio-authz-keycloak"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
-    implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
     implementation(project(":common:operio-jooq"))
     implementation(project(":common:operio-redis"))
     implementation(project(":tenant:operio-consent-admin-projection-jooq"))       // Admin schema projection handler
-    implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Decision cache projection handler
+    implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Graph projection handler + query service
     implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer
     implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
     implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
-    implementation(project(":tenant:operio-consent-admin-projection-redis"))    // Redis admin projection
 
     // -- Platform CQRS modules ------------------------------------------------
     implementation(project(":platform:operio-platform-event-jooq"))              // JooqPlatformEventService

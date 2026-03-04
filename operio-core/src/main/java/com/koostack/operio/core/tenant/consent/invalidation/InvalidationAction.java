@@ -28,7 +28,7 @@ public enum InvalidationAction {
     /** Entire entity deleted — clients flush all fields belonging to this entity. */
     ENTITY_REMOVED,
 
-    // Admin projection invalidation actions
+    // Admin / graph projection invalidation actions
     /** Field aggregate mutated (registered, updated, removed, category assigned/unassigned). */
     FIELD_CHANGED,
     /** Purpose aggregate mutated (registered, removed, regulation linked/unlinked, policy added/removed). */
@@ -36,5 +36,15 @@ public enum InvalidationAction {
     /** Regulation aggregate mutated (registered, removed, jurisdiction added/removed). */
     REGULATION_CHANGED,
     /** Subject consent ledger entry changed (granted, revoked, expired, all revoked). */
-    CONSENT_ENTRY_CHANGED
+    CONSENT_ENTRY_CHANGED,
+
+    // Graph node-type–specific invalidation actions
+    /** Entity node created or orphaned (field registration creates entity implicitly). */
+    ENTITY_CHANGED,
+    /** Jurisdiction node created/removed (regulation↔jurisdiction edge mutation). */
+    JURISDICTION_CHANGED,
+    /** Policy node created/removed (purpose↔policy edge mutation). */
+    POLICY_CHANGED,
+    /** Subject node created (first consent grant materializes the subject). */
+    SUBJECT_CHANGED
 }

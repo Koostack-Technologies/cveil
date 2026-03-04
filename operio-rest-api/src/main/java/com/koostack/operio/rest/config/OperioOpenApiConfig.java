@@ -29,7 +29,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  *
  * @see com.koostack.operio.rest.resource.ConsentResource
  * @see com.koostack.operio.rest.resource.CatalogueResource
- * @see com.koostack.operio.rest.resource.LegalResource
+ * @see com.koostack.operio.rest.resource.GovernanceResource
  * @see com.koostack.operio.rest.resource.PlatformResource
  * @see com.koostack.operio.rest.resource.HealthResource
  */
@@ -64,8 +64,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
                 "and entities. Requires admin:read or admin:write roles."
         ),
         @Tag(
-            name = OperioOpenApiConfig.TAG_LEGAL,
-            description = "Legal framework: manage purposes, regulations, " +
+            name = OperioOpenApiConfig.TAG_GOVERNANCE,
+            description = "Governance framework: manage purposes, regulations, " +
                 "jurisdictions, and their relationships. Requires " +
                 "admin:read or admin:write roles."
         ),
@@ -116,8 +116,12 @@ public class OperioOpenApiConfig {
     /** Tag for data catalogue endpoints (fields, categories, entities). */
     public static final String TAG_CATALOGUE = "Catalogue";
 
-    /** Tag for legal framework endpoints (purposes, regulations, jurisdictions). */
-    public static final String TAG_LEGAL = "Legal";
+    /** Tag for governance framework endpoints (purposes, regulations, jurisdictions). */
+    public static final String TAG_GOVERNANCE = "Governance";
+
+    /** @deprecated Use {@link #TAG_GOVERNANCE} instead. Kept for backward compatibility. */
+    @Deprecated
+    public static final String TAG_LEGAL = TAG_GOVERNANCE;
 
     /** Tag for platform administration endpoints. */
     public static final String TAG_PLATFORM = "Platform";

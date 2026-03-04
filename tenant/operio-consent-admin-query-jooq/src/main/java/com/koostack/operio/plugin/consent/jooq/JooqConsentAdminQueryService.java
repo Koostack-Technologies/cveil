@@ -46,6 +46,7 @@ public class JooqConsentAdminQueryService
     private FieldCategoryRepository fieldCategoryRepository;
     private PurposeRepository purposeRepository;
     private RegulationRepository regulationRepository;
+    private JurisdictionRepository jurisdictionRepository;
     private PolicyRepository policyRepository;
     private ConsentLedgerRepository consentLedgerRepository;
 
@@ -101,8 +102,47 @@ public class JooqConsentAdminQueryService
         this.fieldCategoryRepository = new FieldCategoryRepository(dsl);
         this.purposeRepository = new PurposeRepository(dsl);
         this.regulationRepository = new RegulationRepository(dsl);
+        this.jurisdictionRepository = new JurisdictionRepository(dsl);
         this.policyRepository = new PolicyRepository(dsl);
         this.consentLedgerRepository = new ConsentLedgerRepository(dsl);
+    }
+
+    // -----------------------------------------------------------------------
+    // Entity Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<EntityView> listEntities() {
+        getDsl();
+        return entityRepository.findAll().stream()
+            .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()))
+            .toList();
+    }
+
+    @Override
+    public Optional<EntityView> getEntity(String entityName) {
+        getDsl();
+        return entityRepository.findByName(entityName)
+            .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()));
+    }
+
+    // -----------------------------------------------------------------------
+    // Category Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<CategoryView> listCategories() {
+        getDsl();
+        return categoryRepository.findAll().stream()
+            .map(c -> new CategoryView(c.getCategoryId(), c.getCategoryName(), c.getDescription()))
+            .toList();
+    }
+
+    @Override
+    public Optional<CategoryView> getCategory(String categoryName) {
+        getDsl();
+        return categoryRepository.findByName(categoryName)
+            .map(c -> new CategoryView(c.getCategoryId(), c.getCategoryName(), c.getDescription()));
     }
 
     // -----------------------------------------------------------------------
@@ -279,6 +319,27 @@ public class JooqConsentAdminQueryService
     }
 
     // -----------------------------------------------------------------------
+    // Jurisdiction Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<JurisdictionView> listJurisdictions() {
+        getDsl();
+        return jurisdictionRepository.findAll().stream()
+            .map(j -> new JurisdictionView(
+                j.getJurisdictionId(), j.getJurisdictionName(), j.getDescription()))
+            .toList();
+    }
+
+    @Override
+    public Optional<JurisdictionView> getJurisdiction(String jurisdictionName) {
+        getDsl();
+        return jurisdictionRepository.findByName(jurisdictionName)
+            .map(j -> new JurisdictionView(
+                j.getJurisdictionId(), j.getJurisdictionName(), j.getDescription()));
+    }
+
+    // -----------------------------------------------------------------------
     // SubjectConsent Queries
     // -----------------------------------------------------------------------
 
@@ -394,6 +455,7 @@ public class JooqConsentAdminQueryService
     public PurposeRepository purposeRepository() { return purposeRepository; }
     public PolicyRepository policyRepository() { return policyRepository; }
     public ConsentLedgerRepository consentLedgerRepository() { return consentLedgerRepository; }
+    public JurisdictionRepository jurisdictionRepository() { return jurisdictionRepository; }
 
     // -----------------------------------------------------------------------
     // Helpers

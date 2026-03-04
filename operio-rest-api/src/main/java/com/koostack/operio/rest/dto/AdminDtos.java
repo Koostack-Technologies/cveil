@@ -19,6 +19,34 @@ public final class AdminDtos {
     private AdminDtos() {}
 
     // ===================================================================
+    // Entity
+    // ===================================================================
+
+    public record RegisterEntityRequest(
+        @NotBlank(message = "entityName must not be blank")
+        @Size(max = 255) String entityName,
+        @Size(max = 1000) String description
+    ) {}
+
+    public record UpdateEntityRequest(
+        @Size(max = 1000) String description
+    ) {}
+
+    // ===================================================================
+    // Category
+    // ===================================================================
+
+    public record RegisterCategoryRequest(
+        @NotBlank(message = "categoryName must not be blank")
+        @Size(max = 255) String categoryName,
+        @Size(max = 1000) String description
+    ) {}
+
+    public record UpdateCategoryRequest(
+        @Size(max = 1000) String description
+    ) {}
+
+    // ===================================================================
     // Field
     // ===================================================================
 
@@ -83,6 +111,20 @@ public final class AdminDtos {
         @Size(max = 255) String regulationName,
         @NotBlank(message = "jurisdictionName must not be blank")
         @Size(max = 255) String jurisdictionName
+    ) {}
+
+    // ===================================================================
+    // Jurisdiction
+    // ===================================================================
+
+    public record RegisterJurisdictionRequest(
+        @NotBlank(message = "jurisdictionName must not be blank")
+        @Size(max = 255) String jurisdictionName,
+        @Size(max = 1000) String description
+    ) {}
+
+    public record UpdateJurisdictionRequest(
+        @Size(max = 1000) String description
     ) {}
 
     // ===================================================================

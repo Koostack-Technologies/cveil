@@ -4,8 +4,21 @@ import com.koostack.operio.core.models.*;
 import com.koostack.operio.core.spi.Plugin;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface ConsentAdminQueryService<T> extends Plugin<T> {
+
+    // -- Entity Queries -------------------------------------------------------
+
+    List<EntityView> listEntities();
+
+    Optional<EntityView> getEntity(String entityName);
+
+    // -- Category Queries -----------------------------------------------------
+
+    List<CategoryView> listCategories();
+
+    Optional<CategoryView> getCategory(String categoryName);
 
     // -- Field Aggregate Queries ----------------------------------------------
 
@@ -24,6 +37,12 @@ public interface ConsentAdminQueryService<T> extends Plugin<T> {
     List<RegulationView> listRegulations();
 
     RegulationView getRegulation(String regulationName);
+
+    // -- Jurisdiction Queries -------------------------------------------------
+
+    List<JurisdictionView> listJurisdictions();
+
+    Optional<JurisdictionView> getJurisdiction(String jurisdictionName);
 
     // -- SubjectConsent Queries -----------------------------------------------
 

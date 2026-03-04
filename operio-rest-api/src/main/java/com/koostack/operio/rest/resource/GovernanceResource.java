@@ -1,5 +1,6 @@
 package com.koostack.operio.rest.resource;
 
+import com.koostack.operio.core.models.JurisdictionView;
 import com.koostack.operio.core.models.PurposeView;
 import com.koostack.operio.core.models.RegulationView;
 import com.koostack.operio.core.TenantService;
@@ -8,9 +9,11 @@ import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.AddJurisdictionRequest;
 import com.koostack.operio.rest.dto.AdminDtos.AddPurposePolicyRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
+import com.koostack.operio.rest.dto.AdminDtos.RegisterJurisdictionRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RemovePurposePolicyRequest;
+import com.koostack.operio.rest.dto.AdminDtos.UpdateJurisdictionRequest;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.interceptor.TenantScoped;
@@ -34,18 +37,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * JAX-RS resource for legal framework administration: managing purposes,
+ * JAX-RS resource for governance framework administration: managing purposes,
  * regulations, jurisdictions, and their relationships.
  */
-@Path("/api/v1/legal")
+@Path("/api/v1/governance")
 @TenantScoped
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Tag(ref = OperioOpenApiConfig.TAG_LEGAL)
+@Tag(ref = OperioOpenApiConfig.TAG_GOVERNANCE)
 @SecurityRequirement(name = OperioOpenApiConfig.SECURITY_SCHEME)
-public class LegalResource {
+public class GovernanceResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LegalResource.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GovernanceResource.class);
 
     @Inject
     TenantService tenantService;
@@ -286,18 +289,105 @@ public class LegalResource {
 
     @DELETE
     @Path("/regulations/{regulationName}/jurisdictions/{jurisdictionName}")
-    @Operation(operationId = "removeJurisdiction", summary = "Remove a jurisdiction from a regulation")
+    @Operation(operationId = "removeRegulationJurisdiction", summary = "Remove a jurisdiction from a regulation")
     @APIResponses({
         @APIResponse(responseCode = "200", description = "Jurisdiction removed",
             content = @Content(schema = @Schema(implementation = MessageResponse.class))),
         @APIResponse(responseCode = "403", description = "Missing role",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
-    public Response removeJurisdiction(@Context SecurityContext sc,
+    public Response removeRegulationJurisdiction(@Context SecurityContext sc,
                                        @PathParam("regulationName") String regulationName,
                                        @PathParam("jurisdictionName") String jurisdictionName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.removeRegulationJurisdiction(regulationName, jurisdictionName);
+        return Response.ok(MessageResponse.of("Jurisdiction removed from regulation")).build();
+    }
+
+    // -------------------------------------------------------------------
+    // Jurisdictions (standalone CRUD)
+    // -------------------------------------------------------------------
+
+    @GET
+    @Path("/jurisdictions")
+    @Operation(operationId = "listJurisdictions", summary = "List all jurisdictions")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "List of jurisdictions",
+            content = @Content(schema = @Schema(type = SchemaType.ARRAY, implementation = JurisdictionView.class))),
+    })
+    public Response listJurisdictions(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<JurisdictionView> jurisdictions = tenantService.listJurisdictions();
+        return Response.ok(jurisdictions).build();
+    }
+
+    @GET
+    @Path("/jurisdictions/{jurisdictionName}")
+    @Operation(operationId = "getJurisdiction", summary = "Get a single jurisdiction")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Jurisdiction found",
+            content = @Content(schema = @Schema(implementation = JurisdictionView.class))),
+        @APIResponse(responseCode = "404", description = "Jurisdiction not found",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getJurisdiction(@Context SecurityContext sc,
+                                    @PathParam("jurisdictionName") String jurisdictionName) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        return tenantService.getJurisdiction(jurisdictionName)
+            .map(j -> Response.ok(j).build())
+            .orElse(Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Jurisdiction not found: " + jurisdictionName))
+                .build());
+    }
+
+    @POST
+    @Path("/jurisdictions")
+    @Operation(operationId = "registerJurisdiction", summary = "Register a jurisdiction (upsert)")
+    @APIResponses({
+        @APIResponse(responseCode = "201", description = "Jurisdiction registered",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response registerJurisdiction(@Context SecurityContext sc,
+                                         @Valid RegisterJurisdictionRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerJurisdiction(req.jurisdictionName(), req.description());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Jurisdiction registered: " + req.jurisdictionName()))
+            .build();
+    }
+
+    @PUT
+    @Path("/jurisdictions/{jurisdictionName}")
+    @Operation(operationId = "updateJurisdiction", summary = "Update a jurisdiction description")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Jurisdiction updated",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response updateJurisdiction(@Context SecurityContext sc,
+                                       @PathParam("jurisdictionName") String jurisdictionName,
+                                       @Valid UpdateJurisdictionRequest req) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.updateJurisdiction(jurisdictionName, req.description());
+        return Response.ok(MessageResponse.of("Jurisdiction updated: " + jurisdictionName)).build();
+    }
+
+    @DELETE
+    @Path("/jurisdictions/{jurisdictionName}")
+    @Operation(operationId = "removeJurisdiction", summary = "Remove a jurisdiction (fails if still referenced)")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Jurisdiction removed",
+            content = @Content(schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "409", description = "Jurisdiction still referenced",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removeJurisdiction(@Context SecurityContext sc,
+                                       @PathParam("jurisdictionName") String jurisdictionName) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeJurisdiction(jurisdictionName);
         return Response.ok(MessageResponse.of("Jurisdiction removed")).build();
     }
 }

@@ -6,7 +6,7 @@ import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.resource.CatalogueResource;
 import com.koostack.operio.rest.resource.ConsentResource;
 import com.koostack.operio.rest.resource.HealthResource;
-import com.koostack.operio.rest.resource.LegalResource;
+import com.koostack.operio.rest.resource.GovernanceResource;
 import com.koostack.operio.rest.resource.PlatformResource;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -117,7 +117,7 @@ class OpenApiAnnotationTest {
                 .collect(Collectors.toSet());
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CONSENT));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CATALOGUE));
-            assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_LEGAL));
+            assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_GOVERNANCE));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_ADMIN));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_PLATFORM));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_HEALTH));
@@ -197,13 +197,13 @@ class OpenApiAnnotationTest {
         void tagConstantsAreValid() {
             assertNotNull(OperioOpenApiConfig.TAG_CONSENT);
             assertNotNull(OperioOpenApiConfig.TAG_CATALOGUE);
-            assertNotNull(OperioOpenApiConfig.TAG_LEGAL);
+            assertNotNull(OperioOpenApiConfig.TAG_GOVERNANCE);
             assertNotNull(OperioOpenApiConfig.TAG_ADMIN);
             assertNotNull(OperioOpenApiConfig.TAG_PLATFORM);
             assertNotNull(OperioOpenApiConfig.TAG_HEALTH);
             assertFalse(OperioOpenApiConfig.TAG_CONSENT.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_CATALOGUE.isBlank());
-            assertFalse(OperioOpenApiConfig.TAG_LEGAL.isBlank());
+            assertFalse(OperioOpenApiConfig.TAG_GOVERNANCE.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_ADMIN.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_PLATFORM.isBlank());
             assertFalse(OperioOpenApiConfig.TAG_HEALTH.isBlank());
@@ -382,13 +382,13 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("catalogue endpoints have 5 distinct operation IDs")
+        @DisplayName("catalogue endpoints have 15 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(CatalogueResource.class);
             assertEquals(
-                5,
+                15,
                 opCount,
-                "CatalogueResource should have 5 @Operation methods"
+                "CatalogueResource should have 15 @Operation methods"
             );
         }
 
@@ -406,64 +406,64 @@ class OpenApiAnnotationTest {
     }
 
     // ===================================================================
-    // LegalResource annotations
+    // GovernanceResource annotations
     // ===================================================================
 
     @Nested
-    @DisplayName("LegalResource")
-    class LegalResourceTests {
+    @DisplayName("GovernanceResource")
+    class GovernanceResourceTests {
 
         @Test
         @DisplayName("class has @Tag referencing Legal")
         void hasTag() {
-            Tag tag = LegalResource.class.getAnnotation(Tag.class);
-            assertNotNull(tag, "LegalResource must have @Tag");
-            assertEquals(OperioOpenApiConfig.TAG_LEGAL, tag.ref());
+            Tag tag = GovernanceResource.class.getAnnotation(Tag.class);
+            assertNotNull(tag, "GovernanceResource must have @Tag");
+            assertEquals(OperioOpenApiConfig.TAG_GOVERNANCE, tag.ref());
         }
 
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = LegalResource.class.getAnnotation(
+            SecurityRequirement sr = GovernanceResource.class.getAnnotation(
                 SecurityRequirement.class
             );
-            assertNotNull(sr, "LegalResource must have @SecurityRequirement");
+            assertNotNull(sr, "GovernanceResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
 
         @Test
         @DisplayName("all public endpoint methods have @Operation")
         void allMethodsHaveOperation() {
-            assertAllEndpointMethodsHaveOperation(LegalResource.class);
+            assertAllEndpointMethodsHaveOperation(GovernanceResource.class);
         }
 
         @Test
         @DisplayName("all public endpoint methods have @APIResponses")
         void allMethodsHaveApiResponses() {
-            assertAllEndpointMethodsHaveApiResponses(LegalResource.class);
+            assertAllEndpointMethodsHaveApiResponses(GovernanceResource.class);
         }
 
         @Test
-        @DisplayName("legal endpoints have 14 distinct operation IDs")
+        @DisplayName("governance endpoints have 19 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
-            long opCount = countOperationAnnotatedMethods(LegalResource.class);
+            long opCount = countOperationAnnotatedMethods(GovernanceResource.class);
             assertEquals(
-                14,
+                19,
                 opCount,
-                "LegalResource should have 14 @Operation methods"
+                "GovernanceResource should have 19 @Operation methods"
             );
         }
 
         @Test
         @DisplayName("all operation IDs are unique")
         void operationIdsAreUnique() {
-            assertOperationIdsAreUnique(LegalResource.class);
+            assertOperationIdsAreUnique(GovernanceResource.class);
         }
 
         @Test
         @DisplayName("every @Operation has a non-blank summary")
         void operationsHaveSummaries() {
-            assertAllOperationsHaveSummaries(LegalResource.class);
+            assertAllOperationsHaveSummaries(GovernanceResource.class);
         }
     }
 
@@ -660,7 +660,7 @@ class OpenApiAnnotationTest {
             for (Class<?> clazz : new Class<?>[] {
                 ConsentResource.class,
                 CatalogueResource.class,
-                LegalResource.class,
+                GovernanceResource.class,
                 PlatformResource.class,
                 HealthResource.class,
             }) {
@@ -679,11 +679,11 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 9 consent + 5 catalogue + 14 legal + 8 platform + 1 health = 37
+            // 9 consent + 15 catalogue + 19 governance + 8 platform + 1 health = 52
             assertEquals(
-                37,
+                52,
                 allIds.size(),
-                "Expected 37 globally unique operationIds"
+                "Expected 52 globally unique operationIds"
             );
         }
 
@@ -699,7 +699,7 @@ class OpenApiAnnotationTest {
                 CatalogueResource.class.getAnnotation(SecurityRequirement.class)
             );
             assertNotNull(
-                LegalResource.class.getAnnotation(SecurityRequirement.class)
+                GovernanceResource.class.getAnnotation(SecurityRequirement.class)
             );
             assertNotNull(
                 PlatformResource.class.getAnnotation(SecurityRequirement.class)
@@ -714,7 +714,7 @@ class OpenApiAnnotationTest {
         void allResourcesHaveTag() {
             assertNotNull(ConsentResource.class.getAnnotation(Tag.class));
             assertNotNull(CatalogueResource.class.getAnnotation(Tag.class));
-            assertNotNull(LegalResource.class.getAnnotation(Tag.class));
+            assertNotNull(GovernanceResource.class.getAnnotation(Tag.class));
             assertNotNull(PlatformResource.class.getAnnotation(Tag.class));
             assertNotNull(HealthResource.class.getAnnotation(Tag.class));
         }

@@ -3,8 +3,7 @@ package com.koostack.operio.bundle.core;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
-import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionService;
-import com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig;
+import com.koostack.operio.tenant.consent.projection.decision.ConsentDecisionQueryServiceRedis;
 import com.koostack.operio.plugin.discovery.sensitive.annotation.AnnotationDiscoveryConfig;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 
@@ -66,7 +65,7 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
  * var jooqConfig = new JooqConsentAdminServiceConfig(
  *     "jdbc:postgresql://localhost:5432/operio", "POSTGRES"
  * );
- * var redisConfig = new RedisConsentDecisionServiceConfig("localhost", 6379);
+ * var redisConfig = new ConsentGraphRedisConfig("localhost", 6379);
  *
  * Operio operio = Operio.builder()
  *     .withBundle(new CoreConsentBundle(jooqConfig, redisConfig))
@@ -78,7 +77,7 @@ import com.koostack.operio.plugin.redis.common.JedisProvider;
  * var jooqConfig = new JooqConsentAdminServiceConfig(
  *     "jdbc:postgresql://localhost:5432/operio", "POSTGRES"
  * );
- * var redisConfig = new RedisConsentDecisionServiceConfig("localhost", 6379);
+ * var redisConfig = new ConsentGraphRedisConfig("localhost", 6379);
  * var discoveryConfig = AnnotationDiscoveryConfig.of(
  *     User.class, Patient.class, Order.class
  * );
@@ -104,7 +103,7 @@ public class CoreConsentBundle implements PluginBundle {
 
     /** Returns the jOOQ config for the command/query service wiring. */
     public JooqConsentAdminServiceConfig jooqConfig() { return jooqConfig; }
-    private final RedisConsentDecisionServiceConfig redisConfig;
+    private final com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig;
     private final JedisProvider jedisProvider;
     private final AnnotationDiscoveryConfig discoveryConfig;
 
@@ -121,7 +120,7 @@ public class CoreConsentBundle implements PluginBundle {
      */
     public CoreConsentBundle(
         JooqConsentAdminServiceConfig jooqConfig,
-        RedisConsentDecisionServiceConfig redisConfig
+        com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig
     ) {
         this(null, jooqConfig, redisConfig, (JedisProvider) null, null);
     }
@@ -137,7 +136,7 @@ public class CoreConsentBundle implements PluginBundle {
      */
     public CoreConsentBundle(
         JooqConsentAdminServiceConfig jooqConfig,
-        RedisConsentDecisionServiceConfig redisConfig,
+        com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig,
         AnnotationDiscoveryConfig discoveryConfig
     ) {
         this(
@@ -161,7 +160,7 @@ public class CoreConsentBundle implements PluginBundle {
     public CoreConsentBundle(
         String appName,
         JooqConsentAdminServiceConfig jooqConfig,
-        RedisConsentDecisionServiceConfig redisConfig
+        com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig
     ) {
         this(appName, jooqConfig, redisConfig, (JedisProvider) null, null);
     }
@@ -192,7 +191,7 @@ public class CoreConsentBundle implements PluginBundle {
     public CoreConsentBundle(
         String appName,
         JooqConsentAdminServiceConfig jooqConfig,
-        RedisConsentDecisionServiceConfig redisConfig,
+        com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig,
         AnnotationDiscoveryConfig discoveryConfig
     ) {
         this(
@@ -263,7 +262,7 @@ public class CoreConsentBundle implements PluginBundle {
     private CoreConsentBundle(
         String appName,
         JooqConsentAdminServiceConfig jooqConfig,
-        RedisConsentDecisionServiceConfig redisConfig,
+        com.koostack.operio.plugin.redis.common.RedisPluginConfig redisConfig,
         JedisProvider jedisProvider,
         AnnotationDiscoveryConfig discoveryConfig
     ) {
@@ -294,20 +293,22 @@ public class CoreConsentBundle implements PluginBundle {
             // as the current tenant's ACL user, which Redis restricts to
             // that tenant's key pattern.
 
-            // Read-path: Redis evaluation — using the per-tenant provider
-            RedisConsentDecisionService decisionService =
-                new RedisConsentDecisionService();
-            decisionService.configure(jedisProvider);
-            builder.withConsentProvider(decisionService);
-        } else {
+            // Read-path: graph-based Redis evaluation
+            ConsentDecisionQueryServiceRedis graphService =
+                new ConsentDecisionQueryServiceRedis();
+            graphService.configure(jedisProvider);
+            builder.withConsentProvider(graphService);
+            builder.withConsentGraphProvider(graphService);
+        } else if (redisConfig != null) {
             // --- Legacy shared-connection path --------------------------------
             // No JedisProvider supplied — fall back to creating a shared
-            // JedisPooled from the RedisConsentDecisionServiceConfig.
-            // This is the backward-compatible path for single-tenant
-            // deployments, embedded mode, and tests.
-
-            // Read-path: Redis evaluation (single-MGET)
-            builder.withConsentProvider("redis", redisConfig);
+            // JedisPooled from the config.
+            ConsentDecisionQueryServiceRedis graphService =
+                new ConsentDecisionQueryServiceRedis();
+            graphService.configure(new com.koostack.operio.plugin.redis.common.ConsentGraphRedisConfig(
+                redisConfig.host(), redisConfig.port(), redisConfig.password()));
+            builder.withConsentProvider(graphService);
+            builder.withConsentGraphProvider(graphService);
         }
 
         // Optional: annotation-based discovery

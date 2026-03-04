@@ -1,8 +1,10 @@
 package com.koostack.operio.core;
 
 import com.koostack.operio.core.models.*;
+import com.koostack.operio.core.models.ConsentGraphModels.ConsentGraph;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,6 +35,26 @@ public interface TenantService extends OperioService {
 
     BatchConsentResult revokeAllConsent(
         String subject, List<BatchConsentEntry> entries);
+
+    // -----------------------------------------------------------------------
+    // Entity Aggregate operations
+    // -----------------------------------------------------------------------
+
+    void registerEntity(String entityName, String description);
+
+    void updateEntity(String entityName, String description);
+
+    void removeEntity(String entityName);
+
+    // -----------------------------------------------------------------------
+    // Category Aggregate operations
+    // -----------------------------------------------------------------------
+
+    void registerCategory(String categoryName, String description);
+
+    void updateCategory(String categoryName, String description);
+
+    void removeCategory(String categoryName);
 
     // -----------------------------------------------------------------------
     // Field Aggregate operations
@@ -76,6 +98,16 @@ public interface TenantService extends OperioService {
                              String categoryName);
 
     // -----------------------------------------------------------------------
+    // Jurisdiction Aggregate operations
+    // -----------------------------------------------------------------------
+
+    void registerJurisdiction(String jurisdictionName, String description);
+
+    void updateJurisdiction(String jurisdictionName, String description);
+
+    void removeJurisdiction(String jurisdictionName);
+
+    // -----------------------------------------------------------------------
     // Regulation Aggregate operations
     // -----------------------------------------------------------------------
 
@@ -96,6 +128,14 @@ public interface TenantService extends OperioService {
     // Aggregate queries
     // -----------------------------------------------------------------------
 
+    List<EntityView> listEntities();
+
+    Optional<EntityView> getEntity(String entityName);
+
+    List<CategoryView> listCategories();
+
+    Optional<CategoryView> getCategory(String categoryName);
+
     List<FieldView> listFields();
 
     FieldView getField(String fieldName, String entityName);
@@ -107,6 +147,10 @@ public interface TenantService extends OperioService {
     List<RegulationView> listRegulations();
 
     RegulationView getRegulation(String regulationName);
+
+    List<JurisdictionView> listJurisdictions();
+
+    Optional<JurisdictionView> getJurisdiction(String jurisdictionName);
 
     SubjectConsentView getSubjectConsent(String subjectId);
 
@@ -152,6 +196,29 @@ public interface TenantService extends OperioService {
      */
     default long deleteCachedKeysForSubject(String subject) {
         return 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Consent graph
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns a paginated view of the consent graph. Supports full-graph
+     * pagination and BFS subgraph queries. Requires a graph-capable backend
+     * (Redis graph projection).
+     *
+     * @param cursor   opaque cursor for pagination, or {@code null} for first page
+     * @param limit    max nodes per page
+     * @param rootType optional root node type for subgraph BFS
+     * @param rootName optional root node name for subgraph BFS
+     * @param depth    optional BFS depth limit (ignored if no root specified)
+     * @return the consent graph page
+     * @throws UnsupportedOperationException if the backend does not support graph queries
+     */
+    default ConsentGraph getConsentGraph(String cursor, int limit,
+                                         String rootType, String rootName,
+                                         Integer depth) {
+        throw new UnsupportedOperationException("Consent graph not available");
     }
 
     // -----------------------------------------------------------------------

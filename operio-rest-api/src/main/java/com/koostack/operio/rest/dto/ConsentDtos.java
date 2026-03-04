@@ -204,16 +204,11 @@ public final class ConsentDtos {
     // ===================================================================
 
     /**
-     * Request body for {@code POST /api/v1/subjects/consent/evaluate}.
+     * Request body for {@code POST /api/v1/subjects/{subjectId}/evaluate}.
      *
-     * @param subject the data subject identifier to evaluate consent for
      * @param scopes  the set of consent scopes to evaluate
      */
     public record EvaluateRequest(
-        @NotBlank(message = "subject must not be blank") @Size(
-            max = 512,
-            message = "subject must not exceed 512 characters"
-        ) String subject,
         @NotNull(message = "scopes must not be null") @NotEmpty(
             message = "scopes must not be empty"
         ) @Size(

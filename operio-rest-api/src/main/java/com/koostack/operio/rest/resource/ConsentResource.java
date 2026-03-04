@@ -378,7 +378,7 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @POST
-    @Path("/consent/evaluate")
+    @Path("/{subjectId}/evaluate")
     @Operation(
         operationId = "evaluateConsent",
         summary = "Evaluate consent for a subject against a set of scopes",
@@ -423,13 +423,14 @@ public class ConsentResource {
     )
     public Response evaluate(
         @Context SecurityContext securityContext,
+        @PathParam("subjectId") String subjectId,
         @Valid EvaluateRequest request
     ) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
         LOG.debug(
-            "POST /subjects/consent/evaluate - subject={}, scopeCount={}",
-            request.subject(),
+            "POST /subjects/{}/evaluate - scopeCount={}",
+            subjectId,
             request.scopes() != null ? request.scopes().size() : 0
         );
 
@@ -440,7 +441,7 @@ public class ConsentResource {
             .collect(Collectors.toSet());
 
         ConsentResponse response = tenantService.evaluateConsent(
-            request.subject(), coreScopes
+            subjectId, coreScopes
         );
 
         return Response.ok(EvaluateResponse.fromModel(response)).build();

@@ -9,6 +9,22 @@ import java.time.Instant;
 
 public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
+    // -- Entity Aggregate -----------------------------------------------------
+
+    void registerEntityCommand(String entityName, String description);
+
+    void updateEntityCommand(String entityName, String description);
+
+    void removeEntityCommand(String entityName);
+
+    // -- Category Aggregate ---------------------------------------------------
+
+    void registerCategoryCommand(String categoryName, String description);
+
+    void updateCategoryCommand(String categoryName, String description);
+
+    void removeCategoryCommand(String categoryName);
+
     // -- Field Aggregate ------------------------------------------------------
 
     void registerFieldCommand(String fieldName, String entityName,
@@ -67,6 +83,14 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
     void removeRegulationJurisdictionCommand(String regulationName,
                                              String jurisdictionName,
                                              RegulationSnapshot snapshot);
+
+    // -- Jurisdiction Aggregate -----------------------------------------------
+
+    void registerJurisdictionCommand(String jurisdictionName, String description);
+
+    void updateJurisdictionCommand(String jurisdictionName, String description);
+
+    void removeJurisdictionCommand(String jurisdictionName);
 
     // -- SubjectConsent Aggregate ---------------------------------------------
 

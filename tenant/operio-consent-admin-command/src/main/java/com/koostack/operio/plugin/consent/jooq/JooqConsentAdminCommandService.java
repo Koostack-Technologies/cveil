@@ -66,6 +66,74 @@ public class JooqConsentAdminCommandService
     }
 
     // -----------------------------------------------------------------------
+    // Entity Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerEntityCommand(String entityName, String description) {
+        Objects.requireNonNull(entityName, "entityName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = EntityAggregate.deriveId(entityName);
+        var payload = new EntityRegisteredEvent(entityName, description);
+        publishEvent(tenantId, ConsentEventTypes.ENTITY_REGISTERED,
+            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void updateEntityCommand(String entityName, String description) {
+        Objects.requireNonNull(entityName, "entityName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = EntityAggregate.deriveId(entityName);
+        var payload = new EntityUpdatedEvent(entityName, description);
+        publishEvent(tenantId, ConsentEventTypes.ENTITY_UPDATED,
+            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeEntityCommand(String entityName) {
+        Objects.requireNonNull(entityName, "entityName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = EntityAggregate.deriveId(entityName);
+        var payload = new EntityRemovedEvent(entityName);
+        publishEvent(tenantId, ConsentEventTypes.ENTITY_REMOVED,
+            EntityAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
+    // Category Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerCategoryCommand(String categoryName, String description) {
+        Objects.requireNonNull(categoryName, "categoryName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        var payload = new CategoryRegisteredEvent(categoryName, description);
+        publishEvent(tenantId, ConsentEventTypes.CATEGORY_REGISTERED,
+            CategoryAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void updateCategoryCommand(String categoryName, String description) {
+        Objects.requireNonNull(categoryName, "categoryName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        var payload = new CategoryUpdatedEvent(categoryName, description);
+        publishEvent(tenantId, ConsentEventTypes.CATEGORY_UPDATED,
+            CategoryAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeCategoryCommand(String categoryName) {
+        Objects.requireNonNull(categoryName, "categoryName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = CategoryAggregate.deriveId(categoryName);
+        var payload = new CategoryRemovedEvent(categoryName);
+        publishEvent(tenantId, ConsentEventTypes.CATEGORY_REMOVED,
+            CategoryAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
     // Field Aggregate
     // -----------------------------------------------------------------------
 
@@ -285,6 +353,40 @@ public class JooqConsentAdminCommandService
     }
 
     // -----------------------------------------------------------------------
+    // Jurisdiction Aggregate
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerJurisdictionCommand(String jurisdictionName, String description) {
+        Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = JurisdictionAggregate.deriveId(jurisdictionName);
+        var payload = new JurisdictionRegisteredEvent(jurisdictionName, description);
+        publishEvent(tenantId, ConsentEventTypes.JURISDICTION_REGISTERED,
+            JurisdictionAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void updateJurisdictionCommand(String jurisdictionName, String description) {
+        Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = JurisdictionAggregate.deriveId(jurisdictionName);
+        var payload = new JurisdictionUpdatedEvent(jurisdictionName, description);
+        publishEvent(tenantId, ConsentEventTypes.JURISDICTION_UPDATED,
+            JurisdictionAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeJurisdictionCommand(String jurisdictionName) {
+        Objects.requireNonNull(jurisdictionName, "jurisdictionName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = JurisdictionAggregate.deriveId(jurisdictionName);
+        var payload = new JurisdictionRemovedEvent(jurisdictionName);
+        publishEvent(tenantId, ConsentEventTypes.JURISDICTION_REMOVED,
+            JurisdictionAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
     // SubjectConsent Aggregate
     // -----------------------------------------------------------------------
 
@@ -391,6 +493,22 @@ public class JooqConsentAdminCommandService
     // -----------------------------------------------------------------------
 
     private void registerEventTypes() {
+        // Entity Aggregate
+        register(ConsentEventTypes.ENTITY_REGISTERED,
+            "Entity Registered", EntityRegisteredEvent.class);
+        register(ConsentEventTypes.ENTITY_UPDATED,
+            "Entity Updated", EntityUpdatedEvent.class);
+        register(ConsentEventTypes.ENTITY_REMOVED,
+            "Entity Removed", EntityRemovedEvent.class);
+
+        // Category Aggregate
+        register(ConsentEventTypes.CATEGORY_REGISTERED,
+            "Category Registered", CategoryRegisteredEvent.class);
+        register(ConsentEventTypes.CATEGORY_UPDATED,
+            "Category Updated", CategoryUpdatedEvent.class);
+        register(ConsentEventTypes.CATEGORY_REMOVED,
+            "Category Removed", CategoryRemovedEvent.class);
+
         // Field Aggregate
         register(ConsentEventTypes.FIELD_REGISTERED,
             "Field Registered", FieldRegisteredEvent.class);
@@ -430,6 +548,14 @@ public class JooqConsentAdminCommandService
             "Regulation Jurisdiction Added", RegulationJurisdictionAddedEvent.class);
         register(ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
             "Regulation Jurisdiction Removed", RegulationJurisdictionRemovedEvent.class);
+
+        // Jurisdiction Aggregate
+        register(ConsentEventTypes.JURISDICTION_REGISTERED,
+            "Jurisdiction Registered", JurisdictionRegisteredEvent.class);
+        register(ConsentEventTypes.JURISDICTION_UPDATED,
+            "Jurisdiction Updated", JurisdictionUpdatedEvent.class);
+        register(ConsentEventTypes.JURISDICTION_REMOVED,
+            "Jurisdiction Removed", JurisdictionRemovedEvent.class);
 
         // SubjectConsent Aggregate
         register(ConsentEventTypes.CONSENT_GRANTED,

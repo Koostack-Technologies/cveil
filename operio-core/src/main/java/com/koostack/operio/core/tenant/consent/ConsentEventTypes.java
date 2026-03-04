@@ -4,6 +4,16 @@ public final class ConsentEventTypes {
 
     private ConsentEventTypes() {}
 
+    // -- EntityAggregate ------------------------------------------------------
+    public static final String ENTITY_REGISTERED = "consent.entity.registered";
+    public static final String ENTITY_UPDATED = "consent.entity.updated";
+    public static final String ENTITY_REMOVED = "consent.entity.removed";
+
+    // -- CategoryAggregate ----------------------------------------------------
+    public static final String CATEGORY_REGISTERED = "consent.category.registered";
+    public static final String CATEGORY_UPDATED = "consent.category.updated";
+    public static final String CATEGORY_REMOVED = "consent.category.removed";
+
     // -- FieldAggregate -------------------------------------------------------
     public static final String FIELD_REGISTERED = "consent.field.registered";
     public static final String FIELD_UPDATED = "consent.field.updated";
@@ -26,6 +36,11 @@ public final class ConsentEventTypes {
     public static final String REGULATION_REMOVED = "consent.regulation.removed";
     public static final String REGULATION_JURISDICTION_ADDED = "consent.regulation.jurisdiction-added";
     public static final String REGULATION_JURISDICTION_REMOVED = "consent.regulation.jurisdiction-removed";
+
+    // -- JurisdictionAggregate ------------------------------------------------
+    public static final String JURISDICTION_REGISTERED = "consent.jurisdiction.registered";
+    public static final String JURISDICTION_UPDATED = "consent.jurisdiction.updated";
+    public static final String JURISDICTION_REMOVED = "consent.jurisdiction.removed";
 
     // -- SubjectConsentAggregate ----------------------------------------------
     public static final String CONSENT_GRANTED = "consent.subject.granted";
