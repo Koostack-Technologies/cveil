@@ -506,7 +506,7 @@ class RbacTest {
         }
 
         private EvaluateRequest testEvaluateRequest() {
-            return new EvaluateRequest("subject-1", Set.of(testScope()));
+            return new EvaluateRequest(Set.of(testScope()));
         }
 
         // -- grant() --
@@ -739,6 +739,7 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
                 Response response = resource.evaluate(
                     ctx,
+                    "subject-1",
                     testEvaluateRequest()
                 );
                 assertEquals(200, response.getStatus());
@@ -750,6 +751,7 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 Response response = resource.evaluate(
                     ctx,
+                    "subject-1",
                     testEvaluateRequest()
                 );
                 assertEquals(200, response.getStatus());
@@ -760,7 +762,7 @@ class RbacTest {
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, testEvaluateRequest())
+                    resource.evaluate(ctx, "subject-1", testEvaluateRequest())
                 );
             }
 
@@ -769,7 +771,7 @@ class RbacTest {
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
                 assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, testEvaluateRequest())
+                    resource.evaluate(ctx, "subject-1", testEvaluateRequest())
                 );
             }
 
@@ -779,6 +781,7 @@ class RbacTest {
                 assertThrows(OperioAuthException.class, () ->
                     resource.evaluate(
                         emptySecurityContext(),
+                        "subject-1",
                         testEvaluateRequest()
                     )
                 );
@@ -788,7 +791,7 @@ class RbacTest {
             @DisplayName("null context → 403")
             void nullContextDenied() {
                 assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(null, testEvaluateRequest())
+                    resource.evaluate(null, "subject-1", testEvaluateRequest())
                 );
             }
         }
@@ -947,7 +950,7 @@ class RbacTest {
                     resource.revokeAll(ctx, testBatchRevokeRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, testEvaluateRequest())
+                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
                     resource.subjectSummary(ctx, "subj-1")
@@ -965,7 +968,7 @@ class RbacTest {
                     resource.grant(ctx, testGrantRequest())
                 );
                 assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, testEvaluateRequest())
+                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
                 );
             }
 
@@ -990,7 +993,7 @@ class RbacTest {
                 );
                 // Read endpoints
                 assertDoesNotThrow(() ->
-                    resource.evaluate(ctx, testEvaluateRequest())
+                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
                 );
                 assertDoesNotThrow(() ->
                     resource.subjectSummary(ctx, "subj-1")

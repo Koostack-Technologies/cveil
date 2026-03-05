@@ -457,15 +457,14 @@ class DtoMappingTest {
     class EvaluateTests {
 
         @Test
-        @DisplayName("EvaluateRequest holds subject and scopes")
+        @DisplayName("EvaluateRequest holds scopes")
         void evaluateRequest() {
             Set<ConsentScopeDto> scopes = Set.of(
                 new ConsentScopeDto("PII", "email", "User", null),
                 new ConsentScopeDto("PII", "phone", "User", null)
             );
-            EvaluateRequest req = new EvaluateRequest("user-300", scopes);
+            EvaluateRequest req = new EvaluateRequest(scopes);
 
-            assertEquals("user-300", req.subject());
             assertEquals(2, req.scopes().size());
         }
 

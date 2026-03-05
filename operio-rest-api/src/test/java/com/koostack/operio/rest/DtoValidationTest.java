@@ -391,28 +391,18 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new EvaluateRequest("user-1", Set.of(validScope()));
+            var req = new EvaluateRequest(Set.of(validScope()));
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
-        void nullSubject_violation() {
-            assertFalse(validator.validate(new EvaluateRequest(null, Set.of(validScope()))).isEmpty());
-        }
-
-        @Test
-        void blankSubject_violation() {
-            assertFalse(validator.validate(new EvaluateRequest("", Set.of(validScope()))).isEmpty());
-        }
-
-        @Test
         void nullScopes_violation() {
-            assertFalse(validator.validate(new EvaluateRequest("user-1", null)).isEmpty());
+            assertFalse(validator.validate(new EvaluateRequest(null)).isEmpty());
         }
 
         @Test
         void emptyScopes_violation() {
-            var req = new EvaluateRequest("user-1", Set.of());
+            var req = new EvaluateRequest(Set.of());
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
         }
@@ -420,17 +410,15 @@ class DtoValidationTest {
         @Test
         void invalidNestedScope_cascades() {
             var badScope = new ConsentScopeDto("", "", null, null);
-            var req = new EvaluateRequest("user-1", Set.of(badScope));
+            var req = new EvaluateRequest(Set.of(badScope));
             assertFalse(validator.validate(req).isEmpty());
         }
 
         @Test
         void multipleViolations_allReported() {
-            // null subject + null scopes = at least 2 violations
-            var req = new EvaluateRequest(null, null);
+            var req = new EvaluateRequest(null);
             var violations = validator.validate(req);
-            assertTrue(violations.size() >= 2,
-                "Expected at least 2 violations but got " + violations.size());
+            assertFalse(violations.isEmpty());
         }
     }
 
@@ -942,7 +930,7 @@ class DtoValidationTest {
         void evaluateRequestDeeplyCascaded_reportsNestedPath() {
             // Valid subject but one scope has null category
             var badScope = new ConsentScopeDto(null, "email", null, null);
-            var req = new EvaluateRequest("user-1", Set.of(badScope));
+            var req = new EvaluateRequest(Set.of(badScope));
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
             // The property path should reference the nested field
