@@ -19,6 +19,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.awaitility.Awaitility;
+import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.resps.StreamEntry;
 
@@ -51,12 +52,16 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String jdbcUrl;
     private final String dbUsername;
     private final String dbPassword;
+    private final String redisHost;
+    private final int redisPort;
 
     public IntegrationTestSupport(OperioConfig config) {
         var redis = config.redis().orElseThrow(
             () -> new IllegalStateException("Redis config is required for integration tests")
         );
         this.jedis = new JedisPooled(redis.host(), redis.port());
+        this.redisHost = redis.host();
+        this.redisPort = redis.port();
 
         var db = config.db().orElseThrow(
             () -> new IllegalStateException("DB config is required for integration tests")
@@ -230,6 +235,11 @@ public class IntegrationTestSupport implements AutoCloseable {
     /** Returns the raw Jedis client for custom operations. */
     public JedisPooled jedis() {
         return jedis;
+    }
+
+    /** Creates a new blocking Jedis connection (caller must close). Needed for Pub/Sub. */
+    public Jedis newJedisConnection() {
+        return new Jedis(redisHost, redisPort);
     }
 
     /** Reads all fields from a graph node hash. */

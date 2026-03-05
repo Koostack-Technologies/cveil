@@ -372,6 +372,44 @@ class CreateTenantPipelineIT {
                     }
                 });
         }
+
+        @Test
+        @Order(4)
+        @DisplayName("All expected consent tables exist in tenant schema")
+        void consentTablesExist() {
+            await().atMost(ASYNC_TIMEOUT).pollInterval(POLL_INTERVAL)
+                .untilAsserted(() -> {
+                    try (Connection conn = getDbConnection();
+                         Statement stmt = conn.createStatement()) {
+                        ResultSet rs = stmt.executeQuery(
+                            "SELECT table_name FROM information_schema.tables " +
+                            "WHERE table_schema = 't_" + TENANT_ID + "' " +
+                            "AND table_name NOT LIKE 'flyway%' " +
+                            "ORDER BY table_name");
+                        java.util.List<String> tables = new java.util.ArrayList<>();
+                        while (rs.next()) {
+                            tables.add(rs.getString("table_name"));
+                        }
+                        // Core consent tables provisioned by V1 migration
+                        assertThat(tables)
+                            .as("Tenant schema should contain all consent tables")
+                            .contains(
+                                "category",
+                                "consent_ledger",
+                                "entity",
+                                "field",
+                                "field_category",
+                                "jurisdiction",
+                                "policy",
+                                "purpose",
+                                "purpose_regulation",
+                                "regulation",
+                                "regulation_jurisdiction",
+                                "subject"
+                            );
+                    }
+                });
+        }
     }
 
     // =======================================================================

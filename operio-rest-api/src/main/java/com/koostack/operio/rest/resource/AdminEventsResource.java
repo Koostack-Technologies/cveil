@@ -28,16 +28,17 @@ import org.slf4j.LoggerFactory;
 import java.util.UUID;
 
 /**
- * SSE endpoint that streams admin cache invalidation signals to connected
- * clients.
+ * SSE publisher that reads cache invalidation messages from Redis Pub/Sub
+ * and publishes them to connected clients via Server-Sent Events.
  *
  * <p>When an admin aggregate (Field, Purpose, Regulation, SubjectConsent)
- * is modified, the Redis admin projection publishes an invalidation message
- * to the {@code operio:consent-admin-invalidation:{tenantId}} Pub/Sub
- * channel. This endpoint bridges those signals to clients via Server-Sent
- * Events.
+ * is modified, the Redis projection publishes an invalidation message
+ * to the {@code operio:consent-cache-invalidation:{tenantId}} Pub/Sub
+ * channel. This endpoint reads from that channel and pushes each message
+ * to all subscribed SSE clients for the matching tenant.
  *
- * <p>Clients can use these signals to refresh their local caches or UI.
+ * <p>Clients subscribe to this endpoint to receive real-time signals
+ * for refreshing their local caches or UI.
  */
 @Path("/api/v1/events")
 @TenantScoped
@@ -60,7 +61,7 @@ public class AdminEventsResource {
         Roles.requireRole(sc, Roles.ADMIN_READ);
 
         if (adminSubscriptionManager == null) {
-            log.warn("SSE admin events requested but subscription manager not available");
+            log.warn("SSE invalidation requested but Redis Pub/Sub publisher not available");
             return Multi.createFrom().empty();
         }
 

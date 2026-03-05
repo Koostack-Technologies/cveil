@@ -639,16 +639,18 @@ public class OperioProducers {
             LOG.warn("Operio REST API: admin projection handler NOT wired — consent DB config missing");
         }
 
-        // Admin invalidation subscriber + SubscriptionManager for SSE
+        // SSE publisher: reads from Redis Pub/Sub and publishes to SSE clients.
+        // Channel prefix must match RedisInvalidationPublisher so that
+        // mutations flow through Redis → SSE → client.
         ObjectMapper adminRedisMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         try {
             RedisInvalidationSubscriber adminSubscriber =
                 new RedisInvalidationSubscriber(adminRedisPool, adminRedisMapper,
-                    "operio:consent-admin-invalidation:");
+                    "operio:consent-cache-invalidation:");
             this.adminSubscriptionManager = new SubscriptionManager(adminSubscriber);
-            LOG.info("Operio REST API: admin SubscriptionManager wired for SSE");
+            LOG.info("Operio REST API: SSE publisher wired (channel=consent-cache-invalidation)");
         } catch (Exception e) {
-            LOG.warn("Operio REST API: admin SubscriptionManager NOT wired — Redis subscriber init failed", e);
+            LOG.warn("Operio REST API: SSE publisher NOT wired — Redis Pub/Sub init failed", e);
         }
 
         this.tenantStreamConsumer = consumer;
