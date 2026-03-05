@@ -688,19 +688,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
     private void handleSubjectRegistered(JsonNode node) {
         String subjectName = node.get("subjectName").asText();
-        String dsarKey = node.get("dsarKey").asText();
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         dsl.insertInto(SUBJECT)
             .set(SUBJECT.SUBJECT_NAME, subjectName)
-            .set(SUBJECT.DSAR_KEY, dsarKey)
             .set(SUBJECT.DESCRIPTION, description)
             .set(SUBJECT.CREATED_AT, now)
             .set(SUBJECT.UPDATED_AT, now)
             .onConflict(SUBJECT.SUBJECT_NAME)
             .doUpdate()
-            .set(SUBJECT.DSAR_KEY, dsarKey)
             .set(SUBJECT.DESCRIPTION, description)
             .set(SUBJECT.UPDATED_AT, now)
             .execute();

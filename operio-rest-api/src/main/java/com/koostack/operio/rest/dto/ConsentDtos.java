@@ -404,8 +404,8 @@ public final class ConsentDtos {
         ) long cachedKeysDeleted,
         @Schema(
             description = "Status of the deletion operation",
-            enumeration = { "SUCCESS", "PARTIAL_FAILURE" },
-            example = "SUCCESS"
+            enumeration = { "PENDING_SHRED", "PARTIAL_FAILURE" },
+            example = "PENDING_SHRED"
         ) String status,
         @Schema(
             description = "Timestamp when the deletion was completed",

@@ -1,0 +1,10 @@
+plugins {
+    id("buildlogic.java-library-conventions")
+    id("buildlogic.maven-publish")
+}
+
+dependencies {
+    api(project(":operio-core"))
+    api(project(":tenant:operio-consent-admin-jooq-common"))
+    implementation(project(":common:operio-jooq"))
+}

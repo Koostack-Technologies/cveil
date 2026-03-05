@@ -2,6 +2,8 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.consent.SubjectDsarService;
+import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,6 +39,9 @@ public class OutboxPoller {
     private final int batchSize;
     private final long pollIntervalMs;
 
+    private volatile SubjectDsarService<?> subjectDsarService;
+    private volatile String encryptionKey;
+
     private ScheduledExecutorService scheduler;
     private ExecutorService workers;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -57,6 +63,15 @@ public class OutboxPoller {
         this.tenantDiscovery = tenantDiscovery;
         this.batchSize = batchSize;
         this.pollIntervalMs = pollIntervalMs;
+    }
+
+    /**
+     * Injects the DSAR key repository and admin encryption key used to
+     * decrypt per-subject DSAR keys for shreddable event payloads.
+     */
+    public void setSubjectDsarService(SubjectDsarService<?> service, String encryptionKey) {
+        this.subjectDsarService = service;
+        this.encryptionKey = encryptionKey;
     }
 
     public void start(int workerCount) {
@@ -136,6 +151,27 @@ public class OutboxPoller {
                 }
 
                 for (var record : batch) {
+                    String payload = record.getPayload();
+
+                    // Digital shredder: decrypt shreddable payloads before Redis publish
+                    if (Boolean.TRUE.equals(record.getShreddable())
+                            && subjectDsarService != null && encryptionKey != null) {
+                        UUID dsarId = record.getDsarId();
+                        var encryptedKey = dsarId != null
+                            ? subjectDsarService.findKeyByDsarId(dsarId)
+                            : java.util.Optional.<String>empty();
+                        if (encryptedKey.isEmpty()) {
+                            // Key deleted — subject has been shredded (right to be forgotten).
+                            // Do NOT publish to Redis — projections cannot handle a missing
+                            // payload and would NPE.  Mark as published so the row isn't retried.
+                            log.info("Skipping shredded event {} (dsar_id={})", record.getEventId(), dsarId);
+                            continue;
+                        } else {
+                            String rawKey = FieldEncryptor.decrypt(encryptedKey.get(), this.encryptionKey);
+                            payload = FieldEncryptor.decrypt(payload, rawKey);
+                        }
+                    }
+
                     Map<String, String> fields = new HashMap<>();
                     fields.put(TenantEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
                     fields.put(TenantEvent.FIELD_TENANT_ID, tenantId);
@@ -143,8 +179,8 @@ public class OutboxPoller {
                     fields.put(TenantEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
                     fields.put(TenantEvent.FIELD_EVENT_TYPE, record.getEventType());
                     fields.put(TenantEvent.FIELD_VERSION, String.valueOf(record.getVersion()));
-                    if (record.getPayload() != null) {
-                        fields.put(TenantEvent.FIELD_PAYLOAD, record.getPayload());
+                    if (payload != null) {
+                        fields.put(TenantEvent.FIELD_PAYLOAD, payload);
                     }
                     redisPublisher.publishRaw(fields);
                 }

@@ -117,7 +117,9 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
             case ConsentEventTypes.CONSENT_EXPIRED -> handleConsentLedgerEntry(tenantId, node);
             case ConsentEventTypes.CONSENT_ALL_REVOKED -> handleConsentAllRevoked(tenantId, node);
 
-            // DSAR intentionally excluded
+            // -- DSAR --
+            case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> handleSubjectAuditDeleted(tenantId, node);
+
             default -> log.trace("Ignoring event type: {}", eventType);
         }
     }
@@ -320,6 +322,15 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
 
     private void handleSubjectRemoved(String tenantId, JsonNode node) {
         String subjectName = requiredText(node, "subjectName");
+        repository.removeSubjectConsent(subjectName);
+        publishInvalidation(tenantId, InvalidationAction.SUBJECT_CHANGED, null, null, null, null);
+    }
+
+    // ── DSAR ───────────────────────────────────────────────────────────────
+
+    private void handleSubjectAuditDeleted(String tenantId, JsonNode node) {
+        String subjectId = requiredText(node, "subjectId");
+        repository.removeSubjectConsent(subjectId);
         publishInvalidation(tenantId, InvalidationAction.SUBJECT_CHANGED, null, null, null, null);
     }
 

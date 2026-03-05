@@ -11,6 +11,7 @@ dependencies {
     api(project(":operio-core"))
     implementation(project(":common:operio-jooq"))
     implementation(project(":common:operio-redis"))
+    implementation(project(":platform:operio-platform-jooq"))
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
 

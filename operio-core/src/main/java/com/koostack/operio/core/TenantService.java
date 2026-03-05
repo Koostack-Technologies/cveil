@@ -30,6 +30,23 @@ public interface TenantService extends OperioService {
 
     void removeSubject(String subjectName);
 
+    /**
+     * Cryptographically shreds a subject by deleting their per-subject DSAR
+     * encryption key.  All shreddable event payloads for this subject become
+     * permanently unreadable.  GDPR Article 17 — right to be forgotten.
+     */
+    void shredSubject(String subjectName);
+
+    /**
+     * Returns {@code true} if all events encrypted with the subject's DSAR
+     * key have been published by the outbox poller.  This is the safety
+     * check before calling {@link #shredSubject(String)}.
+     *
+     * @param subjectName the data subject identifier
+     * @return {@code true} if zero unpublished events remain
+     */
+    boolean allEventsPublishedForSubject(String subjectName);
+
     List<SubjectView> listSubjects();
 
     Optional<SubjectView> getSubject(String subjectName);
@@ -193,6 +210,28 @@ public interface TenantService extends OperioService {
     // -----------------------------------------------------------------------
 
     void deleteSubjectAudit(String subject, String deletionRequestId);
+
+    /**
+     * Orchestrates complete subject erasure (GDPR Article 17).
+     *
+     * <p>Executes the following steps in order, each wrapped in its own
+     * try/catch so that a failure in one step does not prevent the others:
+     * <ol>
+     *   <li>Count and revoke all consent entries</li>
+     *   <li>Delete cached consent-decision keys</li>
+     *   <li>Remove the subject entity</li>
+     *   <li>Log the DSAR audit event (deletes ledger + writes audit log)</li>
+     * </ol>
+     *
+     * <p>The DSAR encryption key is <em>not</em> deleted inline — callers
+     * must invoke the shred endpoint separately after confirming the outbox
+     * has flushed all pending events for this subject.
+     *
+     * @param subjectId the data subject identifier
+     * @param requestId unique DSAR request identifier for audit trail
+     * @return an {@link ErasureReceipt} summarising the operation
+     */
+    ErasureReceipt eraseSubject(String subjectId, String requestId);
 
     /**
      * Returns the number of cached consent-decision keys for the given subject.

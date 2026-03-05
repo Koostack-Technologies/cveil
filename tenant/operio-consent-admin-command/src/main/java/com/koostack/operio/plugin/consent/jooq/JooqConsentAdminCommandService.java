@@ -391,13 +391,12 @@ public class JooqConsentAdminCommandService
     // -----------------------------------------------------------------------
 
     @Override
-    public void registerSubjectCommand(String subjectName, String dsarKey,
+    public void registerSubjectCommand(String subjectName,
                                        String description) {
         Objects.requireNonNull(subjectName, "subjectName must not be null");
-        Objects.requireNonNull(dsarKey, "dsarKey must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = SubjectAggregate.deriveId(subjectName);
-        var payload = new SubjectRegisteredEvent(subjectName, dsarKey, description);
+        var payload = new SubjectRegisteredEvent(subjectName, description);
         publishEvent(tenantId, ConsentEventTypes.SUBJECT_REGISTERED,
             SubjectAggregate.AGGREGATE_TYPE, aggregateId, payload);
     }

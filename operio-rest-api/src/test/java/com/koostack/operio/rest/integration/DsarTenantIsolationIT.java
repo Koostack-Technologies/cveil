@@ -283,7 +283,7 @@ class DsarTenantIsolationIT {
             subject,
             confirmToken
         );
-        assertThat(receipt.status()).isEqualTo("SUCCESS");
+        assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
 
         // Tenant A export should be empty
         SubjectDataExport exportA = exportSubject(KEY_TENANT_A, subject);
@@ -323,7 +323,7 @@ class DsarTenantIsolationIT {
 
         // Receipt should be valid and scoped to tenant A
         assertThat(receipt.subject()).isEqualTo(subject);
-        assertThat(receipt.status()).isEqualTo("SUCCESS");
+        assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
         assertThat(receipt.deletionRequestId()).isNotEmpty();
         assertThat(receipt.completedAt()).isNotNull();
     }

@@ -7,6 +7,7 @@ import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
 import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
 import com.koostack.operio.core.tenant.consent.ConsentGraphQueryService;
+import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.core.tenant.consent.events.FieldSnapshot;
 import com.koostack.operio.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.operio.core.tenant.consent.events.RegulationSnapshot;
@@ -43,6 +44,7 @@ public class DefaultTenantService extends Operio implements TenantService {
     private com.koostack.operio.core.metrics.MetricPublisherService<?> platformMetricPublisher;
     private com.koostack.operio.core.metrics.MetricPublisherService<?> tenantMetricPublisher;
     private UnaryOperator<String> keyEncryptor = UnaryOperator.identity();
+    private SubjectDsarService<?> subjectDsarService;
 
     public DefaultTenantService(
         Builder builder,
@@ -66,15 +68,25 @@ public class DefaultTenantService extends Operio implements TenantService {
         this.keyEncryptor = keyEncryptor != null ? keyEncryptor : UnaryOperator.identity();
     }
 
+    public void setSubjectDsarService(SubjectDsarService<?> subjectDsarService) {
+        this.subjectDsarService = subjectDsarService;
+    }
+
     // -----------------------------------------------------------------------
     // Subject Aggregate operations — key generation + delegation
     // -----------------------------------------------------------------------
 
     @Override
     public void registerSubject(String subjectName, String description) {
+        requireDsarService();
+        // Generate per-subject DSAR key and persist to subject_dsar synchronously
+        // BEFORE publishing the event — the EventService needs this key to encrypt
+        // the shreddable payload.
         String rawKey = generateDsarKey();
         String encryptedKey = keyEncryptor.apply(rawKey);
-        commandService().registerSubjectCommand(subjectName, encryptedKey, description);
+        java.util.UUID dsarId = SubjectDsarService.deriveDsarId(subjectName);
+        subjectDsarService.saveKey(dsarId, encryptedKey);
+        commandService().registerSubjectCommand(subjectName, description);
     }
 
     @Override
@@ -85,6 +97,20 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public void removeSubject(String subjectName) {
         commandService().removeSubjectCommand(subjectName);
+    }
+
+    @Override
+    public void shredSubject(String subjectName) {
+        requireDsarService();
+        java.util.UUID dsarId = SubjectDsarService.deriveDsarId(subjectName);
+        subjectDsarService.deleteKey(dsarId);
+    }
+
+    @Override
+    public boolean allEventsPublishedForSubject(String subjectName) {
+        requireDsarService();
+        java.util.UUID dsarId = SubjectDsarService.deriveDsarId(subjectName);
+        return subjectDsarService.allEventsPublished(dsarId);
     }
 
     @Override
@@ -105,6 +131,15 @@ public class DefaultTenantService extends Operio implements TenantService {
             return Base64.getEncoder().encodeToString(keyBytes);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to generate AES-256 DSAR key", e);
+        }
+    }
+
+    private void requireDsarService() {
+        if (subjectDsarService == null) {
+            throw new OperioConfigurationException(
+                "SubjectDsarService is not configured — cannot perform DSAR key operations. "
+                + "Ensure a SubjectDsarService plugin is registered."
+            );
         }
     }
 
@@ -668,6 +703,55 @@ public class DefaultTenantService extends Operio implements TenantService {
             subject, deletionRequestId,
             RequestContext.actor(), RequestContext.ipAddress(),
             RequestContext.userAgent()
+        );
+    }
+
+    @Override
+    public ErasureReceipt eraseSubject(String subjectId, String requestId) {
+        long ledgerEntriesRevoked = 0;
+        long cachedKeysDeleted = 0;
+        String status = "PENDING_SHRED";
+
+        // Step 1: Count consent entries and bulk-revoke
+        try {
+            ledgerEntriesRevoked = countSubjectConsentEntries(subjectId);
+            revokeAllConsent(subjectId);
+        } catch (Exception e) {
+            LOG.log(java.util.logging.Level.SEVERE,
+                "eraseSubject: failed to revoke consent for " + subjectId, e);
+            status = "PARTIAL_FAILURE";
+        }
+
+        // Step 2: Delete cached consent-decision keys
+        try {
+            cachedKeysDeleted = deleteCachedKeysForSubject(subjectId);
+        } catch (Exception e) {
+            LOG.log(java.util.logging.Level.SEVERE,
+                "eraseSubject: failed to delete cached keys for " + subjectId, e);
+            status = "PARTIAL_FAILURE";
+        }
+
+        // Step 3: Remove subject entity
+        try {
+            removeSubject(subjectId);
+        } catch (Exception e) {
+            LOG.log(java.util.logging.Level.SEVERE,
+                "eraseSubject: failed to remove subject " + subjectId, e);
+            status = "PARTIAL_FAILURE";
+        }
+
+        // Step 4: Log DSAR audit event (deletes ledger + writes audit log)
+        try {
+            deleteSubjectAudit(subjectId, requestId);
+        } catch (Exception e) {
+            LOG.log(java.util.logging.Level.SEVERE,
+                "eraseSubject: failed to log DSAR audit for " + subjectId, e);
+            status = "PARTIAL_FAILURE";
+        }
+
+        return new ErasureReceipt(
+            subjectId, requestId, ledgerEntriesRevoked, cachedKeysDeleted,
+            status, Instant.now()
         );
     }
 

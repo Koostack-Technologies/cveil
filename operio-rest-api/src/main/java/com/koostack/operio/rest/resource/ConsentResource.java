@@ -8,6 +8,7 @@ import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.models.SubjectView;
 
 import com.koostack.operio.core.TenantService;
+import com.koostack.operio.core.models.ErasureReceipt;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -768,83 +769,20 @@ public class ConsentResource {
         );
 
         String requestId = UUID.randomUUID().toString();
-        long ledgerEntriesRevoked = 0;
-        long cachedKeysDeleted = 0;
-        String status = "SUCCESS";
-        Instant completedAt = Instant.now();
 
         try {
+            ErasureReceipt receipt = tenantService.eraseSubject(subjectId, requestId);
 
-            // Step 1: Count consent entries BEFORE deletion, then bulk revoke
-            try {
-                ledgerEntriesRevoked = tenantService.countSubjectConsentEntries(
-                    subjectId
-                );
-                tenantService.revokeAllConsent(subjectId);
-                LOG.info(
-                    "Revoked {} consent ledger entries for subject: {}",
-                    ledgerEntriesRevoked,
-                    subjectId
-                );
-            } catch (Exception e) {
-                LOG.error(
-                    "Failed to revoke consent for subject: {}",
-                    subjectId,
-                    e
-                );
-                status = "PARTIAL_FAILURE";
-            }
-
-            // Step 2: Delete cached keys from Redis (if applicable)
-            try {
-                cachedKeysDeleted = tenantService.deleteCachedKeysForSubject(
-                    subjectId
-                );
-                if (cachedKeysDeleted > 0) {
-                    LOG.info(
-                        "Deleted {} cached keys for subject: {}",
-                        cachedKeysDeleted,
-                        subjectId
-                    );
-                }
-            } catch (Exception e) {
-                LOG.error(
-                    "Failed to delete cached keys for subject: {}",
-                    subjectId,
-                    e
-                );
-                status = "PARTIAL_FAILURE";
-            }
-
-            // Step 3: Log the erasure via DSAR aggregate event
-            try {
-                tenantService.deleteSubjectAudit(subjectId, requestId);
-                LOG.info(
-                    "DSAR audit logged for subject: {}, requestId: {}",
-                    subjectId,
-                    requestId
-                );
-            } catch (Exception e) {
-                LOG.error(
-                    "Failed to log DSAR audit for subject: {}",
-                    subjectId,
-                    e
-                );
-                status = "PARTIAL_FAILURE";
-            }
-
-            completedAt = Instant.now();
-
-            DsarDeletionReceipt receipt = new DsarDeletionReceipt(
-                subjectId,
-                requestId,
-                ledgerEntriesRevoked,
-                cachedKeysDeleted,
-                status,
-                completedAt
+            DsarDeletionReceipt dto = new DsarDeletionReceipt(
+                receipt.subjectId(),
+                receipt.requestId(),
+                receipt.ledgerEntriesRevoked(),
+                receipt.cachedKeysDeleted(),
+                receipt.status(),
+                receipt.completedAt()
             );
 
-            return Response.ok(receipt).build();
+            return Response.ok(dto).build();
         } catch (Exception e) {
             LOG.error(
                 "Unexpected error during DSAR erasure for subject: {}",
@@ -962,5 +900,44 @@ public class ConsentResource {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.removeSubject(name);
         return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
+    }
+
+    @DELETE
+    @Path("/{name}/dsar-key")
+    @Operation(
+        operationId = "shredSubject",
+        summary = "Shred a subject's DSAR encryption key (GDPR Article 17)",
+        description = "Deletes the per-subject encryption key, rendering all shreddable event "
+            + "payloads for this subject permanently unreadable. This is a destructive, "
+            + "irreversible operation. Returns 409 Conflict if events are still pending "
+            + "outbox processing — retry after the outbox has flushed."
+    )
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "DSAR key deleted — events permanently shredded",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "409", description = "Events still pending outbox processing",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response shredSubject(
+        @Context SecurityContext sc,
+        @Parameter(description = "Subject name", required = true)
+        @PathParam("name") String name
+    ) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+
+        if (!tenantService.allEventsPublishedForSubject(name)) {
+            return Response.status(Response.Status.CONFLICT)
+                .entity(ErrorResponse.of(
+                    "EVENTS_PENDING",
+                    "Events for subject '" + name + "' are still pending outbox processing. "
+                        + "Retry after the outbox has flushed."
+                ))
+                .build();
+        }
+
+        tenantService.shredSubject(name);
+        return Response.ok(MessageResponse.of("DSAR key shredded for subject: " + name)).build();
     }
 }

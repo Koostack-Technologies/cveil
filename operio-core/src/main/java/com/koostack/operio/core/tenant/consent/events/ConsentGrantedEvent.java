@@ -3,6 +3,7 @@ package com.koostack.operio.core.tenant.consent.events;
 import java.time.Instant;
 
 import com.koostack.operio.core.event.DomainEvent;
+import com.koostack.operio.core.event.Shreddable;
 
 public record ConsentGrantedEvent(
         String subjectId,
@@ -16,4 +17,8 @@ public record ConsentGrantedEvent(
         String ipAddress,
         String userAgent,
         Instant expiresAt
-) implements DomainEvent {}
+) implements DomainEvent, Shreddable {
+
+    @Override
+    public String subjectIdentifier() { return subjectId; }
+}

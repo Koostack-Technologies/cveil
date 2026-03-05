@@ -2,6 +2,7 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.koostack.operio.core.event.Shreddable;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.TenantEvent;
@@ -11,7 +12,9 @@ import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
+import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import org.jooq.DSLContext;
@@ -46,6 +49,8 @@ public class JooqTenantEventService
     private EventTypeCache eventTypeCache;
     private RedisEventPublisher redisPublisher;
     private OutboxPoller outboxPoller;
+    private volatile SubjectDsarService<?> subjectDsarService;
+    private volatile String encryptionKey;
 
     private final LinkedBlockingQueue<AggregateSnapshotTrigger> snapshotQueue = new LinkedBlockingQueue<>();
     private SnapshotWorker snapshotWorker;
@@ -130,6 +135,19 @@ public class JooqTenantEventService
         }
     }
 
+    /**
+     * Injects the DSAR key repository and the admin encryption key used to
+     * decrypt per-subject DSAR keys at publish time (digital shredder).
+     * Forwards the same references to the OutboxPoller for decryption.
+     */
+    public void setSubjectDsarService(SubjectDsarService<?> service, String encryptionKey) {
+        this.subjectDsarService = service;
+        this.encryptionKey = encryptionKey;
+        if (this.outboxPoller != null) {
+            this.outboxPoller.setSubjectDsarService(service, encryptionKey);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // TenantEventService
     // -----------------------------------------------------------------------
@@ -151,6 +169,32 @@ public class JooqTenantEventService
                 String aggregateId = input.key().aggregateId().toString();
                 String serializedPayload = objectMapper.writeValueAsString(input.payload());
 
+                // Digital shredder: encrypt payload if the event is Shreddable
+                boolean shreddable = false;
+                UUID dsarId = null;
+                if (input.payload() instanceof Shreddable s
+                        && subjectDsarService != null && encryptionKey != null) {
+                    String subjectId = s.subjectIdentifier();
+                    if (subjectId == null || subjectId.isBlank()) {
+                        throw new OperioServiceException(
+                            "Shreddable event " + input.eventType()
+                                + " returned null/blank subjectIdentifier() — cannot encrypt");
+                    }
+                    dsarId = SubjectDsarService.deriveDsarId(subjectId);
+                    final UUID lookupId = dsarId;
+                    String encryptedDsarKey = subjectDsarService.findKeyByDsarId(dsarId)
+                        .orElseThrow(() -> new OperioServiceException(
+                            "No DSAR key found for dsar_id=" + lookupId
+                                + " — cannot encrypt shreddable event " + input.eventType()));
+                    String rawDsarKey = FieldEncryptor.decrypt(encryptedDsarKey, encryptionKey);
+                    serializedPayload = FieldEncryptor.encrypt(serializedPayload, rawDsarKey);
+                    shreddable = true;
+                }
+
+                final boolean isShreddable = shreddable;
+                final UUID eventDsarId = dsarId;
+                final String payload = serializedPayload;
+
                 dslContext.transaction(txConfig -> {
                     DSLContext txDsl = txConfig.dsl();
                     EventRepository txRepo = new EventRepository(txDsl);
@@ -164,13 +208,13 @@ public class JooqTenantEventService
                         input.eventType(),
                         java.time.Instant.now(),
                         version,
-                        serializedPayload
+                        payload
                     );
 
-                    long eventId = txRepo.insert(event);
+                    long eventId = txRepo.insert(event, isShreddable, eventDsarId);
                     log.debug(
-                        "Published event {} for {}/{}",
-                        eventId, aggregateType, aggregateId
+                        "Published event {} for {}/{} (shreddable={})",
+                        eventId, aggregateType, aggregateId, isShreddable
                     );
                 });
             } catch (OperioServiceException e) {

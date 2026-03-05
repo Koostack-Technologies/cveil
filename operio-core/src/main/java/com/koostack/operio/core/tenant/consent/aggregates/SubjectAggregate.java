@@ -6,13 +6,13 @@ import java.util.UUID;
 
 /**
  * Aggregate representing a data subject (e.g. a user, customer, or account).
- * Keyed by subject name. Owns the per-subject DSAR encryption key.
+ * Keyed by subject name. The per-subject DSAR encryption key is managed
+ * separately in the {@code subject_dsar} table.
  */
 public record SubjectAggregate(
     String tenantId,
     UUID aggregateId,
     String subjectName,
-    String dsarKey,
     String description,
     Long version
 ) implements AggregateRoot {

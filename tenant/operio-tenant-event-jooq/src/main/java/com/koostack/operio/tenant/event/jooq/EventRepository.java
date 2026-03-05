@@ -40,6 +40,14 @@ public class EventRepository {
      * Inserts a new event into the event store and returns its generated id.
      */
     public long insert(TenantEvent event) {
+        return insert(event, false, null);
+    }
+
+    /**
+     * Inserts a new event, optionally marking it as shreddable with a
+     * {@code dsar_id} linking to the subject's encryption key.
+     */
+    public long insert(TenantEvent event, boolean shreddable, UUID dsarId) {
         return dsl.insertInto(EVENT)
             .set(EVENT.TENANT_ID, event.tenantId())
             .set(EVENT.AGGREGATE_ID, event.aggregateId() != null ? event.aggregateId().toString() : "")
@@ -52,6 +60,8 @@ public class EventRepository {
             )
             .set(EVENT.VERSION, event.version())
             .set(EVENT.PAYLOAD, event.payload())
+            .set(EVENT.SHREDDABLE, shreddable)
+            .set(EVENT.DSAR_ID, dsarId)
             .returningResult(EVENT.EVENT_ID)
             .fetchOne()
             .get(EVENT.EVENT_ID);

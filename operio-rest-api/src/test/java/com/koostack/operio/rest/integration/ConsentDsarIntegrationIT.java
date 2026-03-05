@@ -185,7 +185,7 @@ class ConsentDsarIntegrationIT {
 
         // Verify deletion succeeded
         assertThat(receipt.subject()).isEqualTo(subject);
-        assertThat(receipt.status()).isEqualTo("SUCCESS");
+        assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
 
         // Verify all data is gone
         SubjectDataExport afterDelete = exportSubject(subject);
@@ -209,11 +209,11 @@ class ConsentDsarIntegrationIT {
         // Delete first time
         String confirmToken = "DELETE_" + subject;
         DsarDeletionReceipt receipt1 = deleteSubject(subject, confirmToken);
-        assertThat(receipt1.status()).isEqualTo("SUCCESS");
+        assertThat(receipt1.status()).isEqualTo("PENDING_SHRED");
 
         // Delete second time (should still succeed)
         DsarDeletionReceipt receipt2 = deleteSubject(subject, confirmToken);
-        assertThat(receipt2.status()).isEqualTo("SUCCESS");
+        assertThat(receipt2.status()).isEqualTo("PENDING_SHRED");
 
         // Verify still empty
         SubjectDataExport export = exportSubject(subject);
@@ -245,10 +245,9 @@ class ConsentDsarIntegrationIT {
         DsarDeletionReceipt receipt = deleteSubject(subject, confirmToken);
 
         // Verify receipt has correct counts
-        assertThat(receipt.status()).isEqualTo("SUCCESS");
+        assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
         assertThat(receipt.deletionRequestId()).isNotEmpty();
         assertThat(receipt.completedAt()).isNotNull();
-        // ledgerEntriesRevoked should reflect the 3 grants we just created
         assertThat(receipt.ledgerEntriesRevoked()).isEqualTo(3);
         assertThat(receipt.cachedKeysDeleted()).isGreaterThanOrEqualTo(0);
     }
