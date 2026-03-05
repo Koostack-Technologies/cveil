@@ -2,7 +2,7 @@
 -- V1: Consent Administration Schema (Clean Reset)
 -- ============================================================================
 -- Operio Consent Admin schema with aggregate-boundary-aligned tables.
--- Aggregates: Field, Purpose, Regulation, SubjectConsent, DSAR.
+-- Aggregates: Field, Purpose, Regulation, Subject, SubjectConsent, DSAR.
 -- Uses standard SQL; tested against PostgreSQL and H2.
 -- ============================================================================
 
@@ -142,27 +142,39 @@ CREATE TABLE policy (
 );
 
 -- ============================================================================
--- 4. SubjectConsent Aggregate (consent_ledger)
+-- 4. Subject Aggregate (subject)
+-- ============================================================================
+CREATE TABLE subject (
+    subject_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    subject_name  VARCHAR(255)  NOT NULL UNIQUE,
+    dsar_key      VARCHAR(512)  NOT NULL,
+    description   VARCHAR(1000),
+    created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by    VARCHAR(255),
+    updated_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by    VARCHAR(255)
+);
+
+-- ============================================================================
+-- 5. SubjectConsent Aggregate (consent_ledger — append-only historical record)
 -- ============================================================================
 CREATE TABLE consent_ledger (
     consent_ledger_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     policy_id         BIGINT NOT NULL REFERENCES policy(policy_id),
-    subject_id        VARCHAR(255) NOT NULL,
+    subject_id        VARCHAR(255) NOT NULL REFERENCES subject(subject_name),
     action            consent_action NOT NULL,
     actor             VARCHAR(255),
     ip_address        VARCHAR(45),
     user_agent        VARCHAR(1000),
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at        TIMESTAMP,
-    UNIQUE (subject_id, policy_id)
+    expires_at        TIMESTAMP
 );
 
 CREATE INDEX idx_ledger_subject ON consent_ledger(subject_id);
-CREATE INDEX idx_ledger_subject_policy ON consent_ledger(subject_id, policy_id);
+CREATE INDEX idx_ledger_subject_policy_ts ON consent_ledger(subject_id, policy_id, created_at DESC);
 
 -- ============================================================================
--- 5. DSAR Aggregate (dsar_audit_log)
+-- 6. DSAR Aggregate (dsar_audit_log)
 -- ============================================================================
 CREATE TABLE dsar_audit_log (
     dsar_id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

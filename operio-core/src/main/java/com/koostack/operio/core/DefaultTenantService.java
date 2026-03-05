@@ -12,10 +12,13 @@ import com.koostack.operio.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.operio.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.logging.Logger;
+import javax.crypto.KeyGenerator;
 
 /**
  * Default {@link TenantService} implementation that composes command and
@@ -39,6 +42,7 @@ public class DefaultTenantService extends Operio implements TenantService {
     private final ConsentAdminQueryService<?> queryService;
     private com.koostack.operio.core.metrics.MetricPublisherService<?> platformMetricPublisher;
     private com.koostack.operio.core.metrics.MetricPublisherService<?> tenantMetricPublisher;
+    private UnaryOperator<String> keyEncryptor = UnaryOperator.identity();
 
     public DefaultTenantService(
         Builder builder,
@@ -56,6 +60,52 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     public void setTenantMetricPublisher(com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
         this.tenantMetricPublisher = publisher;
+    }
+
+    public void setKeyEncryptor(UnaryOperator<String> keyEncryptor) {
+        this.keyEncryptor = keyEncryptor != null ? keyEncryptor : UnaryOperator.identity();
+    }
+
+    // -----------------------------------------------------------------------
+    // Subject Aggregate operations — key generation + delegation
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerSubject(String subjectName, String description) {
+        String rawKey = generateDsarKey();
+        String encryptedKey = keyEncryptor.apply(rawKey);
+        commandService().registerSubjectCommand(subjectName, encryptedKey, description);
+    }
+
+    @Override
+    public void updateSubject(String subjectName, String description) {
+        commandService().updateSubjectCommand(subjectName, description);
+    }
+
+    @Override
+    public void removeSubject(String subjectName) {
+        commandService().removeSubjectCommand(subjectName);
+    }
+
+    @Override
+    public List<SubjectView> listSubjects() {
+        return queryService().listSubjects();
+    }
+
+    @Override
+    public Optional<SubjectView> getSubject(String subjectName) {
+        return queryService().getSubject(subjectName);
+    }
+
+    private String generateDsarKey() {
+        try {
+            KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+            keyGen.init(256);
+            byte[] keyBytes = keyGen.generateKey().getEncoded();
+            return Base64.getEncoder().encodeToString(keyBytes);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to generate AES-256 DSAR key", e);
+        }
     }
 
     // -----------------------------------------------------------------------

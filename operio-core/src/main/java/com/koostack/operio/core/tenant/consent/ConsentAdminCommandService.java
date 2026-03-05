@@ -92,6 +92,15 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
     void removeJurisdictionCommand(String jurisdictionName);
 
+    // -- Subject Aggregate ----------------------------------------------------
+
+    void registerSubjectCommand(String subjectName, String dsarKey,
+                                String description);
+
+    void updateSubjectCommand(String subjectName, String description);
+
+    void removeSubjectCommand(String subjectName);
+
     // -- SubjectConsent Aggregate ---------------------------------------------
 
     void grantConsentCommand(String subjectId, long policyId,

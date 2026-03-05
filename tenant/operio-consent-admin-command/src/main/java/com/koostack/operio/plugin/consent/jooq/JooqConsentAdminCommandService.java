@@ -387,6 +387,42 @@ public class JooqConsentAdminCommandService
     }
 
     // -----------------------------------------------------------------------
+    // Subject Aggregate (entity lifecycle)
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void registerSubjectCommand(String subjectName, String dsarKey,
+                                       String description) {
+        Objects.requireNonNull(subjectName, "subjectName must not be null");
+        Objects.requireNonNull(dsarKey, "dsarKey must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectAggregate.deriveId(subjectName);
+        var payload = new SubjectRegisteredEvent(subjectName, dsarKey, description);
+        publishEvent(tenantId, ConsentEventTypes.SUBJECT_REGISTERED,
+            SubjectAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void updateSubjectCommand(String subjectName, String description) {
+        Objects.requireNonNull(subjectName, "subjectName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectAggregate.deriveId(subjectName);
+        var payload = new SubjectUpdatedEvent(subjectName, description);
+        publishEvent(tenantId, ConsentEventTypes.SUBJECT_UPDATED,
+            SubjectAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    @Override
+    public void removeSubjectCommand(String subjectName) {
+        Objects.requireNonNull(subjectName, "subjectName must not be null");
+        String tenantId = TenantContext.require();
+        UUID aggregateId = SubjectAggregate.deriveId(subjectName);
+        var payload = new SubjectRemovedEvent(subjectName);
+        publishEvent(tenantId, ConsentEventTypes.SUBJECT_REMOVED,
+            SubjectAggregate.AGGREGATE_TYPE, aggregateId, payload);
+    }
+
+    // -----------------------------------------------------------------------
     // SubjectConsent Aggregate
     // -----------------------------------------------------------------------
 
@@ -566,6 +602,14 @@ public class JooqConsentAdminCommandService
             "Consent Expired", ConsentExpiredEvent.class);
         register(ConsentEventTypes.CONSENT_ALL_REVOKED,
             "All Consent Revoked", ConsentAllRevokedEvent.class);
+
+        // Subject Aggregate (entity lifecycle)
+        register(ConsentEventTypes.SUBJECT_REGISTERED,
+            "Subject Registered", SubjectRegisteredEvent.class);
+        register(ConsentEventTypes.SUBJECT_UPDATED,
+            "Subject Updated", SubjectUpdatedEvent.class);
+        register(ConsentEventTypes.SUBJECT_REMOVED,
+            "Subject Removed", SubjectRemovedEvent.class);
 
         // DSAR Aggregate
         register(ConsentEventTypes.SUBJECT_AUDIT_DELETED,

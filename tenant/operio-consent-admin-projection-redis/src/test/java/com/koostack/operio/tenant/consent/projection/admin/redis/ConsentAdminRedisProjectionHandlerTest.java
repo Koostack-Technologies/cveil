@@ -283,7 +283,7 @@ class ConsentAdminRedisProjectionHandlerTest {
                             1L, "sub-1", 42L, "marketing", "FIELD",
                             "email", "user", null, "GRANT", "admin",
                             null, null, java.time.Instant.now(),
-                            java.time.Instant.now(), null)));
+                            null)));
             when(repository.getSubjectConsent("sub-1")).thenReturn(existing);
 
             Map<String, String> fields = eventFields(

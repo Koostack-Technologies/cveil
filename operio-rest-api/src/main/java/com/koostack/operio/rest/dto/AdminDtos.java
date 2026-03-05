@@ -153,4 +153,18 @@ public final class AdminDtos {
         @Size(max = 50) String onGranted,
         @Size(max = 50) String onDenied
     ) {}
+
+    // ===================================================================
+    // Subject
+    // ===================================================================
+
+    public record RegisterSubjectRequest(
+        @NotBlank(message = "subjectName must not be blank")
+        @Size(max = 255) String subjectName,
+        @Size(max = 1000) String description
+    ) {}
+
+    public record UpdateSubjectRequest(
+        @Size(max = 1000) String description
+    ) {}
 }

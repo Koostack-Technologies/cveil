@@ -5,6 +5,7 @@ import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.SubjectConsentView;
+import com.koostack.operio.core.models.SubjectView;
 
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.models.TenantContext;
@@ -22,6 +23,8 @@ import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
+import com.koostack.operio.rest.dto.AdminDtos.RegisterSubjectRequest;
+import com.koostack.operio.rest.dto.AdminDtos.UpdateSubjectRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
@@ -30,6 +33,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -666,7 +670,7 @@ public class ConsentResource {
     }
 
     @DELETE
-    @Path("/{id}")
+    @Path("/{id}/audit")
     @Operation(
         operationId = "deleteSubjectData",
         summary = "Erase all data for a subject (GDPR Article 17)",
@@ -855,5 +859,108 @@ public class ConsentResource {
                 )
                 .build();
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Subject entity CRUD -- require admin:read / admin:write
+    // -------------------------------------------------------------------
+
+    @GET
+    @Operation(operationId = "listSubjects", summary = "List all registered subjects")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Subjects returned",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(type = SchemaType.ARRAY,
+                    implementation = SubjectView.class))),
+    })
+    public Response listSubjects(@Context SecurityContext sc) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        List<SubjectView> subjects = tenantService.listSubjects();
+        return Response.ok(subjects).build();
+    }
+
+    @GET
+    @Path("/{name}")
+    @Operation(operationId = "getSubject", summary = "Get a single registered subject")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Subject found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = SubjectView.class))),
+        @APIResponse(responseCode = "404", description = "Subject not found",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getSubject(
+        @Context SecurityContext sc,
+        @Parameter(description = "Subject name", required = true)
+        @PathParam("name") String name
+    ) {
+        Roles.requireRole(sc, Roles.ADMIN_READ);
+        return tenantService.getSubject(name)
+            .map(s -> Response.ok(s).build())
+            .orElse(Response.status(Response.Status.NOT_FOUND)
+                .entity(ErrorResponse.of("NOT_FOUND", "Subject not found: " + name))
+                .build());
+    }
+
+    @POST
+    @Operation(operationId = "registerSubject", summary = "Register a new subject")
+    @APIResponses({
+        @APIResponse(responseCode = "201", description = "Subject registered",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "400", description = "Validation error",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response registerSubject(
+        @Context SecurityContext sc,
+        @Valid RegisterSubjectRequest req
+    ) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.registerSubject(req.subjectName(), req.description());
+        return Response.status(Response.Status.CREATED)
+            .entity(MessageResponse.of("Subject registered: " + req.subjectName()))
+            .build();
+    }
+
+    @PUT
+    @Path("/{name}")
+    @Operation(operationId = "updateSubject", summary = "Update a subject's description")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Subject updated",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = MessageResponse.class))),
+    })
+    public Response updateSubject(
+        @Context SecurityContext sc,
+        @Parameter(description = "Subject name", required = true)
+        @PathParam("name") String name,
+        @Valid UpdateSubjectRequest req
+    ) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.updateSubject(name, req.description());
+        return Response.ok(MessageResponse.of("Subject updated: " + name)).build();
+    }
+
+    @DELETE
+    @Path("/{name}")
+    @Operation(operationId = "removeSubject", summary = "Remove a registered subject")
+    @APIResponses({
+        @APIResponse(responseCode = "200", description = "Subject removed",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(responseCode = "409", description = "Subject still referenced by consent entries",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response removeSubject(
+        @Context SecurityContext sc,
+        @Parameter(description = "Subject name", required = true)
+        @PathParam("name") String name
+    ) {
+        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        tenantService.removeSubject(name);
+        return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
     }
 }

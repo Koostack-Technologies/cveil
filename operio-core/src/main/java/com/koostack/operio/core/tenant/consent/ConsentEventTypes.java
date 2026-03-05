@@ -48,6 +48,11 @@ public final class ConsentEventTypes {
     public static final String CONSENT_EXPIRED = "consent.subject.expired";
     public static final String CONSENT_ALL_REVOKED = "consent.subject.all-revoked";
 
+    // -- SubjectAggregate (entity lifecycle) -----------------------------------
+    public static final String SUBJECT_REGISTERED = "consent.subject-entity.registered";
+    public static final String SUBJECT_UPDATED    = "consent.subject-entity.updated";
+    public static final String SUBJECT_REMOVED    = "consent.subject-entity.removed";
+
     // -- DsarAggregate --------------------------------------------------------
     public static final String SUBJECT_AUDIT_DELETED = "consent.dsar.audit-deleted";
 }

@@ -106,6 +106,11 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
             case ConsentEventTypes.REGULATION_JURISDICTION_ADDED -> handleRegulationJurisdictionAdded(tenantId, node);
             case ConsentEventTypes.REGULATION_JURISDICTION_REMOVED -> handleRegulationJurisdictionRemoved(tenantId, node);
 
+            // -- Subject Aggregate (entity lifecycle) --
+            case ConsentEventTypes.SUBJECT_REGISTERED -> handleSubjectRegistered(tenantId, node);
+            case ConsentEventTypes.SUBJECT_UPDATED -> handleSubjectUpdated(tenantId, node);
+            case ConsentEventTypes.SUBJECT_REMOVED -> handleSubjectRemoved(tenantId, node);
+
             // -- SubjectConsent Aggregate --
             case ConsentEventTypes.CONSENT_GRANTED -> handleConsentLedgerEntry(tenantId, node);
             case ConsentEventTypes.CONSENT_REVOKED -> handleConsentLedgerEntry(tenantId, node);
@@ -301,6 +306,23 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
         publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
+    // ── Subject Aggregate ────────────────────────────────────────────────────
+
+    private void handleSubjectRegistered(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+        publishInvalidation(tenantId, InvalidationAction.SUBJECT_CHANGED, null, null, null, null);
+    }
+
+    private void handleSubjectUpdated(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+        publishInvalidation(tenantId, InvalidationAction.SUBJECT_CHANGED, null, null, null, null);
+    }
+
+    private void handleSubjectRemoved(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+        publishInvalidation(tenantId, InvalidationAction.SUBJECT_CHANGED, null, null, null, null);
+    }
+
     // ── SubjectConsent Aggregate ───────────────────────────────────────────
 
     private void handleConsentLedgerEntry(String tenantId, JsonNode node) {
@@ -328,7 +350,7 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
                 0L, subjectId, policyId, purposeName, policyType,
                 fieldName, entityName, categoryName,
                 action, actor, ipAddress, userAgent,
-                now, now, expiresAt));
+                now, expiresAt));
 
         repository.saveSubjectConsent(new SubjectConsentView(subjectId, List.copyOf(entries)));
         publishInvalidation(tenantId, InvalidationAction.CONSENT_ENTRY_CHANGED, null, null, null, null);
@@ -352,7 +374,7 @@ public class ConsentAdminRedisProjectionHandler implements StreamEventHandler {
                             e.purposeName(), e.policyType(), e.fieldName(),
                             e.entityName(), e.categoryName(),
                             "REVOKE", actor, ipAddress, userAgent,
-                            e.createdAt(), now, null))
+                            e.createdAt(), null))
                     .toList();
             repository.saveSubjectConsent(new SubjectConsentView(subjectId, updated));
         }

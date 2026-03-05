@@ -55,7 +55,7 @@ class JooqExpirationSweeperServiceTest {
             var expired = new ConsentLedgerEntryView(
                 1L, "alice", 100L, "marketing", "FIELD_LEVEL",
                 "email", "User", null, "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
+                null, null, Instant.now(), Instant.now().minusSeconds(3600)
             );
             when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired));
@@ -72,7 +72,7 @@ class JooqExpirationSweeperServiceTest {
             var expired = new ConsentLedgerEntryView(
                 2L, "bob", 200L, "analytics", "CATEGORY_LEVEL",
                 null, null, "PII", "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
+                null, null, Instant.now(), Instant.now().minusSeconds(3600)
             );
             when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired));
@@ -89,12 +89,12 @@ class JooqExpirationSweeperServiceTest {
             var expired1 = new ConsentLedgerEntryView(
                 1L, "alice", 100L, "marketing", "FIELD_LEVEL",
                 "email", "User", null, "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
+                null, null, Instant.now(), Instant.now().minusSeconds(3600)
             );
             var expired2 = new ConsentLedgerEntryView(
                 2L, "bob", 200L, "analytics", "CATEGORY_LEVEL",
                 null, null, "PII", "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(7200)
+                null, null, Instant.now(), Instant.now().minusSeconds(7200)
             );
             when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired1, expired2));
@@ -113,12 +113,12 @@ class JooqExpirationSweeperServiceTest {
             var expired1 = new ConsentLedgerEntryView(
                 1L, "alice", 100L, "marketing", "FIELD_LEVEL",
                 "email", "User", null, "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(3600)
+                null, null, Instant.now(), Instant.now().minusSeconds(3600)
             );
             var expired2 = new ConsentLedgerEntryView(
                 2L, "bob", 200L, "analytics", "FIELD_LEVEL",
                 "phone", "User", null, "GRANTED", "system",
-                null, null, Instant.now(), Instant.now(), Instant.now().minusSeconds(7200)
+                null, null, Instant.now(), Instant.now().minusSeconds(7200)
             );
             when(queryService.findExpiredGrants(any(Instant.class)))
                 .thenReturn(List.of(expired1, expired2));

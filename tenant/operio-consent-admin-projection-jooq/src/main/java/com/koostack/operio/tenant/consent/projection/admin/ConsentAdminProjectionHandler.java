@@ -109,6 +109,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             case ConsentEventTypes.JURISDICTION_UPDATED -> handleJurisdictionUpdated(node);
             case ConsentEventTypes.JURISDICTION_REMOVED -> handleJurisdictionRemoved(node);
 
+            // -- Subject Aggregate (entity lifecycle) --
+            case ConsentEventTypes.SUBJECT_REGISTERED -> handleSubjectRegistered(node);
+            case ConsentEventTypes.SUBJECT_UPDATED -> handleSubjectUpdated(node);
+            case ConsentEventTypes.SUBJECT_REMOVED -> handleSubjectRemoved(node);
+
             // -- SubjectConsent Aggregate --
             case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGranted(node);
             case ConsentEventTypes.CONSENT_REVOKED -> handleConsentRevoked(node);
@@ -678,22 +683,66 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     }
 
     // -----------------------------------------------------------------------
-    // SubjectConsent Aggregate (consent ledger — upsert per subject+policy)
+    // Subject Aggregate (entity lifecycle)
+    // -----------------------------------------------------------------------
+
+    private void handleSubjectRegistered(JsonNode node) {
+        String subjectName = node.get("subjectName").asText();
+        String dsarKey = node.get("dsarKey").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        dsl.insertInto(SUBJECT)
+            .set(SUBJECT.SUBJECT_NAME, subjectName)
+            .set(SUBJECT.DSAR_KEY, dsarKey)
+            .set(SUBJECT.DESCRIPTION, description)
+            .set(SUBJECT.CREATED_AT, now)
+            .set(SUBJECT.UPDATED_AT, now)
+            .onConflict(SUBJECT.SUBJECT_NAME)
+            .doUpdate()
+            .set(SUBJECT.DSAR_KEY, dsarKey)
+            .set(SUBJECT.DESCRIPTION, description)
+            .set(SUBJECT.UPDATED_AT, now)
+            .execute();
+    }
+
+    private void handleSubjectUpdated(JsonNode node) {
+        String subjectName = node.get("subjectName").asText();
+        String description = textOrNull(node, "description");
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        dsl.update(SUBJECT)
+            .set(SUBJECT.DESCRIPTION, description)
+            .set(SUBJECT.UPDATED_AT, now)
+            .where(SUBJECT.SUBJECT_NAME.eq(subjectName))
+            .execute();
+    }
+
+    private void handleSubjectRemoved(JsonNode node) {
+        String subjectName = node.get("subjectName").asText();
+
+        dsl.deleteFrom(SUBJECT)
+            .where(SUBJECT.SUBJECT_NAME.eq(subjectName))
+            .execute();
+    }
+
+    // -----------------------------------------------------------------------
+    // SubjectConsent Aggregate (consent ledger — append-only historical record)
     // -----------------------------------------------------------------------
 
     private void handleConsentGranted(JsonNode node) {
-        upsertConsentLedger(node, "GRANT");
+        insertConsentLedger(node, "GRANT");
     }
 
     private void handleConsentRevoked(JsonNode node) {
-        upsertConsentLedger(node, "REVOKE");
+        insertConsentLedger(node, "REVOKE");
     }
 
     private void handleConsentExpired(JsonNode node) {
-        upsertConsentLedger(node, "EXPIRE");
+        insertConsentLedger(node, "EXPIRE");
     }
 
-    private void upsertConsentLedger(JsonNode node, String action) {
+    private void insertConsentLedger(JsonNode node, String action) {
         String subjectId = node.get("subjectId").asText();
         long policyId = node.get("policyId").asLong();
         String actor = textOrNull(node, "actor");
@@ -711,15 +760,6 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
             .set(CONSENT_LEDGER.USER_AGENT, userAgent)
             .set(CONSENT_LEDGER.CREATED_AT, now)
-            .set(CONSENT_LEDGER.UPDATED_AT, now)
-            .set(CONSENT_LEDGER.EXPIRES_AT, expiresAt)
-            .onConflict(CONSENT_LEDGER.SUBJECT_ID, CONSENT_LEDGER.POLICY_ID)
-            .doUpdate()
-            .set(CONSENT_LEDGER.ACTION, consentAction)
-            .set(CONSENT_LEDGER.ACTOR, actor)
-            .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
-            .set(CONSENT_LEDGER.USER_AGENT, userAgent)
-            .set(CONSENT_LEDGER.UPDATED_AT, now)
             .set(CONSENT_LEDGER.EXPIRES_AT, expiresAt)
             .execute();
     }
@@ -731,16 +771,36 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String userAgent = textOrNull(node, "userAgent");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-        // Update all ledger entries for this subject to REVOKE
-        dsl.update(CONSENT_LEDGER)
-            .set(CONSENT_LEDGER.ACTION, ConsentAction.REVOKE)
-            .set(CONSENT_LEDGER.ACTOR, actor)
-            .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
-            .set(CONSENT_LEDGER.USER_AGENT, userAgent)
-            .set(CONSENT_LEDGER.UPDATED_AT, now)
-            .set(CONSENT_LEDGER.EXPIRES_AT, (LocalDateTime) null)
-            .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
-            .execute();
+        // Find currently-granted policies via latest entry per subject+policy
+        org.jooq.Field<Integer> rn = org.jooq.impl.DSL.rowNumber()
+            .over(org.jooq.impl.DSL.partitionBy(CONSENT_LEDGER.POLICY_ID)
+                .orderBy(CONSENT_LEDGER.CREATED_AT.desc()))
+            .as("rn");
+
+        var ranked = dsl.select(CONSENT_LEDGER.POLICY_ID, CONSENT_LEDGER.ACTION, rn)
+                .from(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
+                .asTable("ranked");
+
+        var latestGranted = dsl.select(ranked.field(CONSENT_LEDGER.POLICY_ID))
+            .from(ranked)
+            .where(ranked.field("rn", Integer.class).eq(1))
+            .and(ranked.field(CONSENT_LEDGER.ACTION).eq(ConsentAction.GRANT))
+            .fetchInto(Long.class);
+
+        // Fan out one REVOKE row per active grant
+        for (Long policyId : latestGranted) {
+            dsl.insertInto(CONSENT_LEDGER)
+                .set(CONSENT_LEDGER.POLICY_ID, policyId)
+                .set(CONSENT_LEDGER.SUBJECT_ID, subjectId)
+                .set(CONSENT_LEDGER.ACTION, ConsentAction.REVOKE)
+                .set(CONSENT_LEDGER.ACTOR, actor)
+                .set(CONSENT_LEDGER.IP_ADDRESS, ipAddress)
+                .set(CONSENT_LEDGER.USER_AGENT, userAgent)
+                .set(CONSENT_LEDGER.CREATED_AT, now)
+                .set(CONSENT_LEDGER.EXPIRES_AT, (LocalDateTime) null)
+                .execute();
+        }
     }
 
     // -----------------------------------------------------------------------

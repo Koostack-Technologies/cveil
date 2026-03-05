@@ -267,6 +267,19 @@ public class OperioProducers {
             commandService, effectiveQueryService
         );
 
+        // -- DSAR key encryptor (envelope encryption for per-subject keys) ----
+        if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
+            config.platformDb().ifPresent(platformDb -> {
+                String encKey = platformDb.encryptionKey()
+                    .filter(k -> !k.isBlank()).orElse(null);
+                if (encKey != null) {
+                    tenantService.setKeyEncryptor(
+                        raw -> com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor
+                            .encrypt(raw, encKey));
+                }
+            });
+        }
+
         LOG.info(
             "Operio REST API: initialized successfully (appName={})",
             tenantService.appName()

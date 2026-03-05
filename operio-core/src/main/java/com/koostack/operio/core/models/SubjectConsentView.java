@@ -21,7 +21,6 @@ public record SubjectConsentView(
         String ipAddress,
         String userAgent,
         Instant createdAt,
-        Instant updatedAt,
         Instant expiresAt
     ) {}
 }

@@ -135,6 +135,11 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
             case ConsentEventTypes.JURISDICTION_UPDATED -> handleJurisdictionUpdated(tenantId, node);
             case ConsentEventTypes.JURISDICTION_REMOVED -> handleJurisdictionRemoved(tenantId, node);
 
+            // -- Subject Aggregate (entity lifecycle) --
+            case ConsentEventTypes.SUBJECT_REGISTERED -> handleSubjectRegistered(tenantId, node);
+            case ConsentEventTypes.SUBJECT_UPDATED -> handleSubjectUpdated(tenantId, node);
+            case ConsentEventTypes.SUBJECT_REMOVED -> handleSubjectRemoved(tenantId, node);
+
             // -- SubjectConsent Aggregate --
             case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGranted(tenantId, node);
             case ConsentEventTypes.CONSENT_REVOKED -> handleConsentRevoked(tenantId, node);
@@ -491,6 +496,48 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String jurisdictionName = requiredText(node, "jurisdictionName");
         graph.removeNode("jurisdiction", jurisdictionName);
         publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+    }
+
+    // -----------------------------------------------------------------------
+    // Subject Aggregate (entity lifecycle)
+    // -----------------------------------------------------------------------
+
+    private void handleSubjectRegistered(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+        String description = textOrNull(node, "description");
+
+        Map<String, String> props = new HashMap<>();
+        props.put("name", subjectName);
+        if (description != null) props.put("desc", description);
+        ensureNode("subject", subjectName, props);
+
+        publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, subjectName,
+                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+    }
+
+    private void handleSubjectUpdated(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+        String description = textOrNull(node, "description");
+
+        Map<String, String> props = new HashMap<>();
+        props.put("name", subjectName);
+        if (description != null) props.put("desc", description);
+        graph.putNode("subject", subjectName, props);
+
+        publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, subjectName,
+                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+    }
+
+    private void handleSubjectRemoved(String tenantId, JsonNode node) {
+        String subjectName = requiredText(node, "subjectName");
+
+        graph.removeNode("subject", subjectName);
+
+        publishInvalidation(new CacheInvalidationMessage(
+                UUID.randomUUID().toString(), tenantId, subjectName,
+                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
     }
 
     // -----------------------------------------------------------------------

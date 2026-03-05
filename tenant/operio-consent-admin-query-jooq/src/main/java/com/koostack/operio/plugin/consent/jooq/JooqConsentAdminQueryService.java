@@ -49,6 +49,7 @@ public class JooqConsentAdminQueryService
     private JurisdictionRepository jurisdictionRepository;
     private PolicyRepository policyRepository;
     private ConsentLedgerRepository consentLedgerRepository;
+    private SubjectRepository subjectRepository;
 
     private DSLContext getDsl() {
         if (dsl == null) {
@@ -105,6 +106,7 @@ public class JooqConsentAdminQueryService
         this.jurisdictionRepository = new JurisdictionRepository(dsl);
         this.policyRepository = new PolicyRepository(dsl);
         this.consentLedgerRepository = new ConsentLedgerRepository(dsl);
+        this.subjectRepository = new SubjectRepository(dsl);
     }
 
     // -----------------------------------------------------------------------
@@ -340,6 +342,31 @@ public class JooqConsentAdminQueryService
     }
 
     // -----------------------------------------------------------------------
+    // Subject Queries
+    // -----------------------------------------------------------------------
+
+    @Override
+    public List<SubjectView> listSubjects() {
+        getDsl();
+        return subjectRepository.findAll().stream()
+            .map(s -> new SubjectView(
+                s.getSubjectId(), s.getSubjectName(), s.getDescription(),
+                toInstant(s.getCreatedAt()), s.getCreatedBy(),
+                toInstant(s.getUpdatedAt()), s.getUpdatedBy()))
+            .toList();
+    }
+
+    @Override
+    public Optional<SubjectView> getSubject(String subjectName) {
+        getDsl();
+        return subjectRepository.findByName(subjectName)
+            .map(s -> new SubjectView(
+                s.getSubjectId(), s.getSubjectName(), s.getDescription(),
+                toInstant(s.getCreatedAt()), s.getCreatedBy(),
+                toInstant(s.getUpdatedAt()), s.getUpdatedBy()));
+    }
+
+    // -----------------------------------------------------------------------
     // SubjectConsent Queries
     // -----------------------------------------------------------------------
 
@@ -363,7 +390,6 @@ public class JooqConsentAdminQueryService
                 r.get(CONSENT_LEDGER.IP_ADDRESS),
                 r.get(CONSENT_LEDGER.USER_AGENT),
                 toInstant(r.get(CONSENT_LEDGER.CREATED_AT)),
-                toInstant(r.get(CONSENT_LEDGER.UPDATED_AT)),
                 toInstant(r.get(CONSENT_LEDGER.EXPIRES_AT))
             ))
             .toList();
@@ -405,7 +431,6 @@ public class JooqConsentAdminQueryService
                 r.get(CONSENT_LEDGER.IP_ADDRESS),
                 r.get(CONSENT_LEDGER.USER_AGENT),
                 toInstant(r.get(CONSENT_LEDGER.CREATED_AT)),
-                toInstant(r.get(CONSENT_LEDGER.UPDATED_AT)),
                 toInstant(r.get(CONSENT_LEDGER.EXPIRES_AT))
             ))
             .toList();

@@ -44,6 +44,12 @@ public interface ConsentAdminQueryService<T> extends Plugin<T> {
 
     Optional<JurisdictionView> getJurisdiction(String jurisdictionName);
 
+    // -- Subject Queries ------------------------------------------------------
+
+    List<SubjectView> listSubjects();
+
+    Optional<SubjectView> getSubject(String subjectName);
+
     // -- SubjectConsent Queries -----------------------------------------------
 
     SubjectConsentView getSubjectConsent(String subjectId);

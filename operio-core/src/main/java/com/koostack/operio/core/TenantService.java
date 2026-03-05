@@ -21,6 +21,20 @@ import java.util.Set;
 public interface TenantService extends OperioService {
 
     // -----------------------------------------------------------------------
+    // Subject Aggregate operations
+    // -----------------------------------------------------------------------
+
+    void registerSubject(String subjectName, String description);
+
+    void updateSubject(String subjectName, String description);
+
+    void removeSubject(String subjectName);
+
+    List<SubjectView> listSubjects();
+
+    Optional<SubjectView> getSubject(String subjectName);
+
+    // -----------------------------------------------------------------------
     // Consent write operations
     // -----------------------------------------------------------------------
 
