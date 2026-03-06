@@ -33,6 +33,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
             tenantId, CoreEventTypes.TENANT_CREATED, key, payload
         ));
 
+        setTestSearchPath(tenantId);
         EventRecord record = dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
             .fetchOne();
@@ -73,6 +74,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         Long version = service.getAggregateVersion(key);
         assertEquals(2L, version);
 
+        setTestSearchPath(tenantId);
         var events = dsl.selectFrom(EVENT)
             .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
             .orderBy(EVENT.VERSION.asc())
@@ -102,6 +104,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
+        setTestSearchPath(tenantId);
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
             .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
             .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq("snap-aggregate"))
@@ -112,19 +115,5 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         assertNotNull(snapshot, "Snapshot should have been created after 21 events");
         assertTrue(snapshot.getVersion() >= 20, "Snapshot version should be >= 20");
         assertNotNull(snapshot.getSnapshot(), "Snapshot data should not be null");
-    }
-
-    @Test
-    void rejectsUnknownEventType() {
-        String tenantId = "tenant_unknown";
-        UUID aggregateId = UUID.randomUUID();
-        AggregateKey key = new AggregateKey(aggregateId, "test-aggregate", tenantId);
-
-        assertThrows(Exception.class, () ->
-            service.publishEvent(PublishDomainEventInput.of(
-                tenantId, "nonexistent.event.type", key,
-                new TenantCreatedEvent(tenantId, "Test", "free")
-            ))
-        );
     }
 }

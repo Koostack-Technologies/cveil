@@ -2,6 +2,7 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
+import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.conf.RenderNameCase;
@@ -96,6 +97,13 @@ abstract class TenantEventServiceTestBase {
         );
         dsl = DSL.using(dsl.configuration().derive(testSettings));
 
+        // Create the per-tenant schemas and run event store migrations.
+        // In production this is handled by TenantManager; tests must do it explicitly.
+        createTenantEventSchema(dsl, TEST_TENANT);
+
+        // Point the test DSL at the tenant schemas so assertions can find the tables.
+        dsl.execute("SET search_path TO t_" + TEST_TENANT + ", t_" + TEST_TENANT + "_event, public");
+
         testJedis = new JedisPooled(redis.getHost(), redis.getMappedPort(6379));
         startRedisConsumer();
     }
@@ -151,6 +159,28 @@ abstract class TenantEventServiceTestBase {
         }, "test-redis-consumer");
         consumerThread.setDaemon(true);
         consumerThread.start();
+    }
+
+    /**
+     * Creates the per-tenant schemas ({@code t_{tenantId}} and
+     * {@code t_{tenantId}_event}) and runs Flyway event-store migrations
+     * into the event schema. Mirrors what TenantManager does in production.
+     */
+    static void createTenantEventSchema(DSLContext adminDsl, String tenantId) {
+        String base = "t_" + tenantId;
+        String eventSchema = base + "_event";
+        adminDsl.execute("CREATE SCHEMA IF NOT EXISTS " + base);
+        adminDsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+        Flyway.configure()
+            .dataSource(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .locations("classpath:db/migration/tenant-event-postgresql")
+            .schemas(eventSchema)
+            .table("flyway_schema_history_tenant_event")
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
+            .load()
+            .migrate();
     }
 
     /**

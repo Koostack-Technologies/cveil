@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.event.jooq;
 
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
+import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.conf.RenderNameCase;
@@ -68,5 +69,42 @@ abstract class PlatformEventServiceTestBase {
             postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()
         );
         dsl = DSL.using(dsl.configuration().derive(testSettings));
+
+        // Create per-tenant schemas used by the test methods.
+        // In production, OperioProducers creates t_platform and TenantManager
+        // creates t_{tenantId}; tests must do this explicitly.
+        for (String tenant : List.of("tenant_publish", "tenant_multi", "tenant_snap")) {
+            createPlatformEventSchema(tenant);
+        }
+    }
+
+    /**
+     * Creates the per-tenant schemas and runs Flyway platform-event
+     * migrations. Mirrors what OperioProducers does in production.
+     */
+    static void createPlatformEventSchema(String tenantId) {
+        String base = "t_" + tenantId;
+        String eventSchema = base + "_event";
+        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + base);
+        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+        Flyway.configure()
+            .dataSource(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .locations("classpath:db/migration/platform-event-postgresql")
+            .schemas(eventSchema)
+            .table("flyway_schema_history_platform_event")
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
+            .load()
+            .migrate();
+    }
+
+    /**
+     * Sets the test DSL search_path to the given tenant's schemas so
+     * that assertion queries can find the event and snapshot tables.
+     */
+    static void setTestSearchPath(String tenantId) {
+        String base = "t_" + tenantId;
+        dsl.execute("SET search_path TO " + base + ", " + base + "_event, public");
     }
 }

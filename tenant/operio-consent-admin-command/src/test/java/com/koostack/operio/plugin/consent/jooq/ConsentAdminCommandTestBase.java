@@ -8,6 +8,7 @@ import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.jooq.DSLContext;
@@ -98,6 +99,30 @@ abstract class ConsentAdminCommandTestBase {
         eventService.configure(eventConfig);
 
         dsl = DSL.using(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        dsl = DSL.using(dsl.configuration().derive(
+            new org.jooq.conf.Settings()
+                .withRenderNameCase(org.jooq.conf.RenderNameCase.LOWER)
+                .withRenderSchema(false)
+        ));
+
+        // Create the per-tenant schemas and run event store migrations.
+        // In production this is handled by TenantManager; tests must do it explicitly.
+        String base = "t_" + TEST_TENANT;
+        String eventSchema = base + "_event";
+        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + base);
+        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+        Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .locations("classpath:db/migration/tenant-event-postgresql")
+            .schemas(eventSchema)
+            .table("flyway_schema_history_tenant_event")
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
+            .load()
+            .migrate();
+
+        // Point the test DSL at the tenant schemas so assertions can find the tables.
+        dsl.execute("SET search_path TO " + base + ", " + eventSchema + ", public");
 
         // -- Command service under test --
         commandService = new JooqConsentAdminCommandService();
