@@ -1,31 +1,30 @@
 package com.koostack.operio.rest.resource;
 
+import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
+import com.koostack.operio.core.models.ErasureReceipt;
 import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.models.SubjectView;
-
-import com.koostack.operio.core.TenantService;
-import com.koostack.operio.core.models.ErasureReceipt;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
+import com.koostack.operio.rest.dto.AdminDtos.RegisterSubjectRequest;
+import com.koostack.operio.rest.dto.AdminDtos.UpdateSubjectRequest;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchConsentResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchRevokeRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.DsarDeletionReceipt;
-import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterSubjectRequest;
-import com.koostack.operio.rest.dto.AdminDtos.UpdateSubjectRequest;
+import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
@@ -61,21 +60,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * JAX-RS resource for consent operations: grant, revoke, evaluate,
- * batch, subject summary, and audit history.
+ * JAX-RS resource for consent operations: grant, revoke, evaluate, batch, subject summary, and
+ * audit history.
  *
- * <p>All endpoints require authentication (enforced by ApiKeyAuthFilter)
- * and operate within a tenant scope (provided by the TenantScoped CDI
- * interceptor binding).
+ * <p>All endpoints require authentication (enforced by ApiKeyAuthFilter) and operate within a
+ * tenant scope (provided by the TenantScoped CDI interceptor binding).
  *
  * <h2>RBAC Enforcement</h2>
+ *
  * <ul>
- *   <li>Read-only endpoints (evaluate, subject summary, subject history)
- *       require the {@link Roles#CONSENT_READ consent:read} role.</li>
- *   <li>Mutating endpoints (grant, revoke, grant-batch, revoke-batch)
- *       require the {@link Roles#CONSENT_WRITE consent:write} role.</li>
- *   <li>The {@link Roles#SUPER_ADMIN super-admin} role bypasses all
- *       checks.</li>
+ *   <li>Read-only endpoints (evaluate, subject summary, subject history) require the {@link
+ *       Roles#CONSENT_READ consent:read} role.
+ *   <li>Mutating endpoints (grant, revoke, grant-batch, revoke-batch) require the {@link
+ *       Roles#CONSENT_WRITE consent:write} role.
+ *   <li>The {@link Roles#SUPER_ADMIN super-admin} role bypasses all checks.
  * </ul>
  *
  * @see Roles
@@ -88,15 +86,11 @@ import org.slf4j.LoggerFactory;
 @SecurityRequirement(name = OperioOpenApiConfig.SECURITY_SCHEME)
 public class ConsentResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        ConsentResource.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(ConsentResource.class);
 
-    @Inject
-    TenantService tenantService;
+    @Inject TenantService tenantService;
 
-    @Inject
-    OperioConfig operioConfig;
+    @Inject OperioConfig operioConfig;
 
     // -------------------------------------------------------------------
     // Mutating endpoints -- require consent:write
@@ -105,65 +99,52 @@ public class ConsentResource {
     @POST
     @Path("/consent/grant")
     @Operation(
-        operationId = "grantConsent",
-        summary = "Grant consent for a single scope",
-        description = "Records a consent grant for the specified subject and scope. " +
-            "Requires the consent:write role. If the consent already exists, " +
-            "this is an idempotent update (e.g. refreshing expiration)."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "grantConsent",
+            summary = "Grant consent for a single scope",
+            description =
+                    "Records a consent grant for the specified subject and scope. "
+                            + "Requires the consent:write role. If the consent already exists, "
+                            + "this is an idempotent update (e.g. refreshing expiration).")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Consent granted successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = MessageResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error (missing or invalid fields)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:write)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
-    public Response grant(
-        @Context SecurityContext securityContext,
-        @Valid GrantRequest request
-    ) {
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response grant(@Context SecurityContext securityContext, @Valid GrantRequest request) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /subjects/consent/grant - subject={}, scope={}",
-            request.subject(),
-            request.scope()
-        );
+                "POST /subjects/consent/grant - subject={}, scope={}",
+                request.subject(),
+                request.scope());
 
         tenantService.grantConsent(
-            request.subject(),
-            request.scope().toModel(),
-            request.expiresAt()
-        );
+                request.subject(), request.scope().toModel(), request.expiresAt());
 
         return Response.ok(MessageResponse.of("Consent granted")).build();
     }
@@ -171,63 +152,50 @@ public class ConsentResource {
     @POST
     @Path("/consent/revoke")
     @Operation(
-        operationId = "revokeConsent",
-        summary = "Revoke consent for a single scope",
-        description = "Records a consent revocation for the specified subject and scope. " +
-            "Requires the consent:write role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "revokeConsent",
+            summary = "Revoke consent for a single scope",
+            description =
+                    "Records a consent revocation for the specified subject and scope. "
+                            + "Requires the consent:write role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Consent revoked successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = MessageResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:write)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
-    public Response revoke(
-        @Context SecurityContext securityContext,
-        @Valid RevokeRequest request
-    ) {
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response revoke(@Context SecurityContext securityContext, @Valid RevokeRequest request) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /subjects/consent/revoke - subject={}, scope={}",
-            request.subject(),
-            request.scope()
-        );
+                "POST /subjects/consent/revoke - subject={}, scope={}",
+                request.subject(),
+                request.scope());
 
-        tenantService.revokeConsent(
-            request.subject(),
-            request.scope().toModel()
-        );
+        tenantService.revokeConsent(request.subject(), request.scope().toModel());
 
         return Response.ok(MessageResponse.of("Consent revoked")).build();
     }
@@ -235,72 +203,55 @@ public class ConsentResource {
     @POST
     @Path("/consent/grant-all")
     @Operation(
-        operationId = "grantAllConsent",
-        summary = "Grant consent for multiple scopes in a single request",
-        description = "Grants consent for the given subject across multiple scopes. " +
-            "Each grant is independently atomic -- partial success is possible. " +
-            "Requires the consent:write role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "grantAllConsent",
+            summary = "Grant consent for multiple scopes in a single request",
+            description =
+                    "Grants consent for the given subject across multiple scopes. "
+                            + "Each grant is independently atomic -- partial success is possible. "
+                            + "Requires the consent:write role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Batch result with succeeded/failed counts",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        implementation = BatchConsentResponse.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = BatchConsentResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:write)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response grantAll(
-        @Context SecurityContext securityContext,
-        @Valid BatchGrantRequest request
-    ) {
+            @Context SecurityContext securityContext, @Valid BatchGrantRequest request) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /subjects/consent/grant-all - subject={}, count={}",
-            request.subject(),
-            request.grants() != null ? request.grants().size() : 0
-        );
+                "POST /subjects/consent/grant-all - subject={}, count={}",
+                request.subject(),
+                request.grants() != null ? request.grants().size() : 0);
 
-        List<BatchConsentEntry> entries = request
-            .grants()
-            .stream()
-            .map(dto -> dto.toModel())
-            .toList();
+        List<BatchConsentEntry> entries =
+                request.grants().stream().map(dto -> dto.toModel()).toList();
 
-        BatchConsentResult result = tenantService.grantAllConsent(
-            request.subject(),
-            entries
-        );
+        BatchConsentResult result = tenantService.grantAllConsent(request.subject(), entries);
 
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
@@ -308,72 +259,55 @@ public class ConsentResource {
     @POST
     @Path("/consent/revoke-all")
     @Operation(
-        operationId = "revokeAllConsent",
-        summary = "Revoke consent for multiple scopes in a single request",
-        description = "Revokes consent for the given subject across multiple scopes. " +
-            "Each revocation is independently atomic -- partial success is possible. " +
-            "Requires the consent:write role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "revokeAllConsent",
+            summary = "Revoke consent for multiple scopes in a single request",
+            description =
+                    "Revokes consent for the given subject across multiple scopes. Each revocation"
+                        + " is independently atomic -- partial success is possible. Requires the"
+                        + " consent:write role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Batch result with succeeded/failed counts",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        implementation = BatchConsentResponse.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = BatchConsentResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:write)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response revokeAll(
-        @Context SecurityContext securityContext,
-        @Valid BatchRevokeRequest request
-    ) {
+            @Context SecurityContext securityContext, @Valid BatchRevokeRequest request) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         LOG.debug(
-            "POST /subjects/consent/revoke-all - subject={}, count={}",
-            request.subject(),
-            request.revokes() != null ? request.revokes().size() : 0
-        );
+                "POST /subjects/consent/revoke-all - subject={}, count={}",
+                request.subject(),
+                request.revokes() != null ? request.revokes().size() : 0);
 
-        List<BatchConsentEntry> entries = request
-            .revokes()
-            .stream()
-            .map(dto -> dto.toModel())
-            .toList();
+        List<BatchConsentEntry> entries =
+                request.revokes().stream().map(dto -> dto.toModel()).toList();
 
-        BatchConsentResult result = tenantService.revokeAllConsent(
-            request.subject(),
-            entries
-        );
+        BatchConsentResult result = tenantService.revokeAllConsent(request.subject(), entries);
 
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
@@ -385,69 +319,56 @@ public class ConsentResource {
     @POST
     @Path("/{subjectId}/evaluate")
     @Operation(
-        operationId = "evaluateConsent",
-        summary = "Evaluate consent for a subject against a set of scopes",
-        description = "Returns which scopes are granted, denied, with reasons and " +
-            "structured decision details. Requires the consent:read role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "evaluateConsent",
+            summary = "Evaluate consent for a subject against a set of scopes",
+            description =
+                    "Returns which scopes are granted, denied, with reasons and "
+                            + "structured decision details. Requires the consent:read role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Evaluation result with granted/denied sets and details",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = EvaluateResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = EvaluateResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:read)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response evaluate(
-        @Context SecurityContext securityContext,
-        @PathParam("subjectId") String subjectId,
-        @Valid EvaluateRequest request
-    ) {
+            @Context SecurityContext securityContext,
+            @PathParam("subjectId") String subjectId,
+            @Valid EvaluateRequest request) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
         LOG.debug(
-            "POST /subjects/{}/evaluate - scopeCount={}",
-            subjectId,
-            request.scopes() != null ? request.scopes().size() : 0
-        );
+                "POST /subjects/{}/evaluate - scopeCount={}",
+                subjectId,
+                request.scopes() != null ? request.scopes().size() : 0);
 
-        Set<ConsentScope> coreScopes = request
-            .scopes()
-            .stream()
-            .map(ConsentScopeDto::toModel)
-            .collect(Collectors.toSet());
+        Set<ConsentScope> coreScopes =
+                request.scopes().stream().map(ConsentScopeDto::toModel).collect(Collectors.toSet());
 
-        ConsentResponse response = tenantService.evaluateConsent(
-            subjectId, coreScopes
-        );
+        ConsentResponse response = tenantService.evaluateConsent(subjectId, coreScopes);
 
         return Response.ok(EvaluateResponse.fromModel(response)).build();
     }
@@ -455,50 +376,45 @@ public class ConsentResource {
     @GET
     @Path("/{id}/summary")
     @Operation(
-        operationId = "getSubjectSummary",
-        summary = "List all consent policies for a subject",
-        description = "Returns every active consent policy for the given data subject. " +
-            "Requires the consent:read role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "getSubjectSummary",
+            summary = "List all consent policies for a subject",
+            description =
+                    "Returns every active consent policy for the given data subject. "
+                            + "Requires the consent:read role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "List of consent policy summaries",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        type = SchemaType.ARRAY,
-                        implementation = SubjectConsentView.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                type = SchemaType.ARRAY,
+                                                implementation = SubjectConsentView.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:read)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response subjectSummary(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "The data subject identifier (e.g. user ID)",
-            required = true,
-            example = "user-12345"
-        ) @PathParam("id") String subjectId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "The data subject identifier (e.g. user ID)",
+                            required = true,
+                            example = "user-12345")
+                    @PathParam("id")
+                    String subjectId) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
         LOG.debug("GET /subjects/{}/summary", subjectId);
@@ -511,49 +427,43 @@ public class ConsentResource {
     @GET
     @Path("/{id}/history")
     @Operation(
-        operationId = "getSubjectHistory",
-        summary = "Get current consent state for a subject",
-        description = "Returns the current consent ledger state for the given data subject. " +
-            "The event stream serves as the historical record. Requires the consent:read role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "getSubjectHistory",
+            summary = "Get current consent state for a subject",
+            description =
+                    "Returns the current consent ledger state for the given data subject. The event"
+                            + " stream serves as the historical record. Requires the consent:read"
+                            + " role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Subject consent state",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        implementation = SubjectConsentView.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = SubjectConsentView.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (consent:read)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "429",
                 description = "Rate limit exceeded",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response subjectHistory(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "The data subject identifier (e.g. user ID)",
-            required = true,
-            example = "user-12345"
-        ) @PathParam("id") String subjectId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "The data subject identifier (e.g. user ID)",
+                            required = true,
+                            example = "user-12345")
+                    @PathParam("id")
+                    String subjectId) {
         Roles.requireRole(securityContext, Roles.CONSENT_READ);
 
         LOG.debug("GET /subjects/{}/history", subjectId);
@@ -571,71 +481,63 @@ public class ConsentResource {
     @GET
     @Path("/{id}/export")
     @Operation(
-        operationId = "exportSubjectData",
-        summary = "Export all data for a subject (GDPR Article 20)",
-        description = "Returns a complete export of all consent-related data held for a subject, " +
-            "including active policies, audit trail entries, and cached consent keys. " +
-            "Requires the consent:write role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "exportSubjectData",
+            summary = "Export all data for a subject (GDPR Article 20)",
+            description =
+                    "Returns a complete export of all consent-related data held for a subject,"
+                            + " including active policies, audit trail entries, and cached consent"
+                            + " keys. Requires the consent:write role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Data export successful",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = SubjectDataExport.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = SubjectDataExport.class))),
+        @APIResponse(
                 responseCode = "403",
-                description = "Missing required role (consent:write) or missing tenant context " +
-                    "when multi-tenant mode is enabled",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                description =
+                        "Missing required role (consent:write) or missing tenant context "
+                                + "when multi-tenant mode is enabled",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "500",
                 description = "Export failed",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response exportSubjectData(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "The data subject identifier",
-            required = true,
-            example = "user_123"
-        ) @PathParam("id") String subjectId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "The data subject identifier",
+                            required = true,
+                            example = "user_123")
+                    @PathParam("id")
+                    String subjectId) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         if (subjectId == null || subjectId.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                .entity(ErrorResponse.validation("subjectId must not be blank"))
-                .build();
+                    .entity(ErrorResponse.validation("subjectId must not be blank"))
+                    .build();
         }
 
         // Multi-tenant guard: if enabled, require an active TenantContext
         if (operioConfig.isMultiTenantEnabled()) {
             if (!TenantContext.isPresent()) {
-                LOG.warn(
-                    "DSAR export denied: TenantContext is required but not set"
-                );
+                LOG.warn("DSAR export denied: TenantContext is required but not set");
                 return Response.status(Response.Status.FORBIDDEN)
-                    .entity(
-                        ErrorResponse.of(
-                            "TENANT_CONTEXT_REQUIRED",
-                            "This operation requires an active tenant context"
-                        )
-                    )
-                    .build();
+                        .entity(
+                                ErrorResponse.of(
+                                        "TENANT_CONTEXT_REQUIRED",
+                                        "This operation requires an active tenant context"))
+                        .build();
             }
             LOG.debug("DSAR export scoped to tenant: {}", TenantContext.get());
         }
@@ -648,154 +550,129 @@ public class ConsentResource {
             // Count cached Redis keys for the subject (if applicable)
             long cachedKeyCount = tenantService.countCachedKeysForSubject(subjectId);
 
-            SubjectDataExport export = new SubjectDataExport(
-                subjectId,
-                consent,
-                cachedKeyCount,
-                Instant.now()
-            );
+            SubjectDataExport export =
+                    new SubjectDataExport(subjectId, consent, cachedKeyCount, Instant.now());
 
             LOG.info(
-                "Exported data for subject: {} ({} ledger entries)",
-                subjectId,
-                consent.entries().size()
-            );
+                    "Exported data for subject: {} ({} ledger entries)",
+                    subjectId,
+                    consent.entries().size());
 
             return Response.ok(export).build();
         } catch (Exception e) {
             LOG.error("Failed to export data for subject: {}", subjectId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                .entity(ErrorResponse.internal("Failed to export subject data"))
-                .build();
+                    .entity(ErrorResponse.internal("Failed to export subject data"))
+                    .build();
         }
     }
 
     @DELETE
     @Path("/{id}/audit")
     @Operation(
-        operationId = "deleteSubjectData",
-        summary = "Erase all data for a subject (GDPR Article 17)",
-        description = "Atomically removes all consent policies, cached keys, and audit entries " +
-            "for a subject. Logs the erasure in a separate DSAR audit table. " +
-            "Requires the consent:write role and a confirmation token (?confirm=DELETE_{id}). " +
-            "This operation is best-effort — if one store fails, others proceed."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "deleteSubjectData",
+            summary = "Erase all data for a subject (GDPR Article 17)",
+            description =
+                    "Atomically removes all consent policies, cached keys, and audit entries for a"
+                        + " subject. Logs the erasure in a separate DSAR audit table. Requires the"
+                        + " consent:write role and a confirmation token (?confirm=DELETE_{id})."
+                        + " This operation is best-effort — if one store fails, others proceed.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Deletion completed (check status for SUCCESS/PARTIAL_FAILURE)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = DsarDeletionReceipt.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = DsarDeletionReceipt.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Missing or invalid confirmation token",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
-                description = "Missing required role (consent:write) or missing tenant context " +
-                    "when multi-tenant mode is enabled",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                description =
+                        "Missing required role (consent:write) or missing tenant context "
+                                + "when multi-tenant mode is enabled",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "500",
                 description = "Deletion failed unexpectedly",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response deleteSubjectData(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "The data subject identifier",
-            required = true,
-            example = "user_123"
-        ) @PathParam("id") String subjectId,
-        @Parameter(
-            description = "Confirmation token in format 'DELETE_{id}' to prevent accidental deletion",
-            required = true,
-            example = "DELETE_user_123"
-        ) @QueryParam("confirm") String confirmToken
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "The data subject identifier",
+                            required = true,
+                            example = "user_123")
+                    @PathParam("id")
+                    String subjectId,
+            @Parameter(
+                            description =
+                                    "Confirmation token in format 'DELETE_{id}' to prevent"
+                                            + " accidental deletion",
+                            required = true,
+                            example = "DELETE_user_123")
+                    @QueryParam("confirm")
+                    String confirmToken) {
         Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
 
         // Validate confirmation token
         String expectedToken = "DELETE_" + subjectId;
         if (confirmToken == null || !confirmToken.equals(expectedToken)) {
             return Response.status(Response.Status.BAD_REQUEST)
-                .entity(
-                    ErrorResponse.validation(
-                        "Confirmation token invalid. Use ?confirm=" +
-                            expectedToken
-                    )
-                )
-                .build();
+                    .entity(
+                            ErrorResponse.validation(
+                                    "Confirmation token invalid. Use ?confirm=" + expectedToken))
+                    .build();
         }
 
         // Multi-tenant guard: if enabled, require an active TenantContext
         if (operioConfig.isMultiTenantEnabled()) {
             if (!TenantContext.isPresent()) {
-                LOG.warn(
-                    "DSAR delete denied: TenantContext is required but not set"
-                );
+                LOG.warn("DSAR delete denied: TenantContext is required but not set");
                 return Response.status(Response.Status.FORBIDDEN)
-                    .entity(
-                        ErrorResponse.of(
-                            "TENANT_CONTEXT_REQUIRED",
-                            "This operation requires an active tenant context"
-                        )
-                    )
-                    .build();
+                        .entity(
+                                ErrorResponse.of(
+                                        "TENANT_CONTEXT_REQUIRED",
+                                        "This operation requires an active tenant context"))
+                        .build();
             }
             LOG.debug("DSAR delete scoped to tenant: {}", TenantContext.get());
         }
 
-        LOG.debug(
-            "DELETE /subjects/{} (with valid confirmation)",
-            subjectId
-        );
+        LOG.debug("DELETE /subjects/{} (with valid confirmation)", subjectId);
 
         String requestId = UUID.randomUUID().toString();
 
         try {
             ErasureReceipt receipt = tenantService.eraseSubject(subjectId, requestId);
 
-            DsarDeletionReceipt dto = new DsarDeletionReceipt(
-                receipt.subjectId(),
-                receipt.requestId(),
-                receipt.ledgerEntriesRevoked(),
-                receipt.cachedKeysDeleted(),
-                receipt.status(),
-                receipt.completedAt()
-            );
+            DsarDeletionReceipt dto =
+                    new DsarDeletionReceipt(
+                            receipt.subjectId(),
+                            receipt.requestId(),
+                            receipt.ledgerEntriesRevoked(),
+                            receipt.cachedKeysDeleted(),
+                            receipt.status(),
+                            receipt.completedAt());
 
             return Response.ok(dto).build();
         } catch (Exception e) {
-            LOG.error(
-                "Unexpected error during DSAR erasure for subject: {}",
-                subjectId,
-                e
-            );
+            LOG.error("Unexpected error during DSAR erasure for subject: {}", subjectId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                .entity(
-                    ErrorResponse.internal(
-                        "Unexpected error during data erasure"
-                    )
-                )
-                .build();
+                    .entity(ErrorResponse.internal("Unexpected error during data erasure"))
+                    .build();
         }
     }
 
@@ -804,13 +681,21 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @GET
-    @Operation(operationId = "listSubjects", summary = "List all registered subjects",
-        description = "Returns all subjects registered in the current tenant.")
+    @Operation(
+            operationId = "listSubjects",
+            summary = "List all registered subjects",
+            description = "Returns all subjects registered in the current tenant.")
     @APIResponses({
-        @APIResponse(responseCode = "200", description = "Subjects returned",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(type = SchemaType.ARRAY,
-                    implementation = SubjectView.class))),
+        @APIResponse(
+                responseCode = "200",
+                description = "Subjects returned",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                type = SchemaType.ARRAY,
+                                                implementation = SubjectView.class))),
     })
     public Response listSubjects(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
@@ -820,66 +705,90 @@ public class ConsentResource {
 
     @GET
     @Path("/{name}")
-    @Operation(operationId = "getSubject", summary = "Get a single registered subject",
-        description = "Returns a single subject by name, or 404 if not found.")
+    @Operation(
+            operationId = "getSubject",
+            summary = "Get a single registered subject",
+            description = "Returns a single subject by name, or 404 if not found.")
     @APIResponses({
-        @APIResponse(responseCode = "200", description = "Subject found",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = SubjectView.class))),
-        @APIResponse(responseCode = "404", description = "Subject not found",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
+                responseCode = "200",
+                description = "Subject found",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = SubjectView.class))),
+        @APIResponse(
+                responseCode = "404",
+                description = "Subject not found",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response getSubject(
-        @Context SecurityContext sc,
-        @Parameter(description = "Subject name", required = true)
-        @PathParam("name") String name
-    ) {
+            @Context SecurityContext sc,
+            @Parameter(description = "Subject name", required = true) @PathParam("name")
+                    String name) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return tenantService.getSubject(name)
-            .map(s -> Response.ok(s).build())
-            .orElse(Response.status(Response.Status.NOT_FOUND)
-                .entity(ErrorResponse.of("NOT_FOUND", "Subject not found: " + name))
-                .build());
+        return tenantService
+                .getSubject(name)
+                .map(s -> Response.ok(s).build())
+                .orElse(
+                        Response.status(Response.Status.NOT_FOUND)
+                                .entity(ErrorResponse.of("NOT_FOUND", "Subject not found: " + name))
+                                .build());
     }
 
     @POST
-    @Operation(operationId = "registerSubject", summary = "Register a new subject",
-        description = "Creates a new data subject record in the current tenant.")
+    @Operation(
+            operationId = "registerSubject",
+            summary = "Register a new subject",
+            description = "Creates a new data subject record in the current tenant.")
     @APIResponses({
-        @APIResponse(responseCode = "201", description = "Subject registered",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class))),
-        @APIResponse(responseCode = "400", description = "Validation error",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
+                responseCode = "201",
+                description = "Subject registered",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
+                responseCode = "400",
+                description = "Validation error",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response registerSubject(
-        @Context SecurityContext sc,
-        @Valid RegisterSubjectRequest req
-    ) {
+            @Context SecurityContext sc, @Valid RegisterSubjectRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.registerSubject(req.subjectName(), req.description());
         return Response.status(Response.Status.CREATED)
-            .entity(MessageResponse.of("Subject registered: " + req.subjectName()))
-            .build();
+                .entity(MessageResponse.of("Subject registered: " + req.subjectName()))
+                .build();
     }
 
     @PUT
     @Path("/{name}")
-    @Operation(operationId = "updateSubject", summary = "Update a subject's description",
-        description = "Updates the description of an existing subject.")
+    @Operation(
+            operationId = "updateSubject",
+            summary = "Update a subject's description",
+            description = "Updates the description of an existing subject.")
     @APIResponses({
-        @APIResponse(responseCode = "200", description = "Subject updated",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
+                responseCode = "200",
+                description = "Subject updated",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
     })
     public Response updateSubject(
-        @Context SecurityContext sc,
-        @Parameter(description = "Subject name", required = true)
-        @PathParam("name") String name,
-        @Valid UpdateSubjectRequest req
-    ) {
+            @Context SecurityContext sc,
+            @Parameter(description = "Subject name", required = true) @PathParam("name")
+                    String name,
+            @Valid UpdateSubjectRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.updateSubject(name, req.description());
         return Response.ok(MessageResponse.of("Subject updated: " + name)).build();
@@ -887,21 +796,32 @@ public class ConsentResource {
 
     @DELETE
     @Path("/{name}")
-    @Operation(operationId = "removeSubject", summary = "Remove a registered subject",
-        description = "Removes a subject from the current tenant. Returns 409 if the subject still has active consent entries.")
+    @Operation(
+            operationId = "removeSubject",
+            summary = "Remove a registered subject",
+            description =
+                    "Removes a subject from the current tenant. Returns 409 if the subject still"
+                            + " has active consent entries.")
     @APIResponses({
-        @APIResponse(responseCode = "200", description = "Subject removed",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class))),
-        @APIResponse(responseCode = "409", description = "Subject still referenced by consent entries",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
+                responseCode = "200",
+                description = "Subject removed",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
+                responseCode = "409",
+                description = "Subject still referenced by consent entries",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response removeSubject(
-        @Context SecurityContext sc,
-        @Parameter(description = "Subject name", required = true)
-        @PathParam("name") String name
-    ) {
+            @Context SecurityContext sc,
+            @Parameter(description = "Subject name", required = true) @PathParam("name")
+                    String name) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         tenantService.removeSubject(name);
         return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
@@ -910,36 +830,45 @@ public class ConsentResource {
     @DELETE
     @Path("/{name}/dsar-key")
     @Operation(
-        operationId = "shredSubject",
-        summary = "Shred a subject's DSAR encryption key (GDPR Article 17)",
-        description = "Deletes the per-subject encryption key, rendering all shreddable event "
-            + "payloads for this subject permanently unreadable. This is a destructive, "
-            + "irreversible operation. Returns 409 Conflict if events are still pending "
-            + "outbox processing — retry after the outbox has flushed."
-    )
+            operationId = "shredSubject",
+            summary = "Shred a subject's DSAR encryption key (GDPR Article 17)",
+            description =
+                    "Deletes the per-subject encryption key, rendering all shreddable event"
+                        + " payloads for this subject permanently unreadable. This is a"
+                        + " destructive, irreversible operation. Returns 409 Conflict if events are"
+                        + " still pending outbox processing — retry after the outbox has flushed.")
     @APIResponses({
-        @APIResponse(responseCode = "200", description = "DSAR key deleted — events permanently shredded",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = MessageResponse.class))),
-        @APIResponse(responseCode = "409", description = "Events still pending outbox processing",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
+                responseCode = "200",
+                description = "DSAR key deleted — events permanently shredded",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
+                responseCode = "409",
+                description = "Events still pending outbox processing",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response shredSubject(
-        @Context SecurityContext sc,
-        @Parameter(description = "Subject name", required = true)
-        @PathParam("name") String name
-    ) {
+            @Context SecurityContext sc,
+            @Parameter(description = "Subject name", required = true) @PathParam("name")
+                    String name) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
 
         if (!tenantService.allEventsPublishedForSubject(name)) {
             return Response.status(Response.Status.CONFLICT)
-                .entity(ErrorResponse.of(
-                    "EVENTS_PENDING",
-                    "Events for subject '" + name + "' are still pending outbox processing. "
-                        + "Retry after the outbox has flushed."
-                ))
-                .build();
+                    .entity(
+                            ErrorResponse.of(
+                                    "EVENTS_PENDING",
+                                    "Events for subject '"
+                                            + name
+                                            + "' are still pending outbox processing. "
+                                            + "Retry after the outbox has flushed."))
+                    .build();
         }
 
         tenantService.shredSubject(name);

@@ -1,10 +1,10 @@
 package com.koostack.operio.plugin.platform.keycloak;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("KeycloakConfig")
 class KeycloakConfigTest {
@@ -20,10 +20,15 @@ class KeycloakConfigTest {
         @Test
         @DisplayName("accepts valid configuration with all fields")
         void validConfigAllFields() {
-            var config = new KeycloakConfig(
-                "http://localhost:8180", "master", "admin-cli",
-                "admin", "admin", "operio-backend", "secret"
-            );
+            var config =
+                    new KeycloakConfig(
+                            "http://localhost:8180",
+                            "master",
+                            "admin-cli",
+                            "admin",
+                            "admin",
+                            "operio-backend",
+                            "secret");
 
             assertEquals("http://localhost:8180", config.serverUrl());
             assertEquals("master", config.adminRealm());
@@ -37,10 +42,15 @@ class KeycloakConfigTest {
         @Test
         @DisplayName("allows null client secret (auto-generated during provisioning)")
         void allowsNullClientSecret() {
-            var config = new KeycloakConfig(
-                "http://localhost:8180", "master", "admin-cli",
-                "admin", "admin", "operio-backend", null
-            );
+            var config =
+                    new KeycloakConfig(
+                            "http://localhost:8180",
+                            "master",
+                            "admin-cli",
+                            "admin",
+                            "admin",
+                            "operio-backend",
+                            null);
 
             assertNull(config.operioClientSecret());
         }
@@ -48,28 +58,49 @@ class KeycloakConfigTest {
         @Test
         @DisplayName("rejects null server URL")
         void rejectsNullServerUrl() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakConfig(null, "master", "admin-cli",
-                    "admin", "admin", "operio-backend", null)
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            new KeycloakConfig(
+                                    null,
+                                    "master",
+                                    "admin-cli",
+                                    "admin",
+                                    "admin",
+                                    "operio-backend",
+                                    null));
         }
 
         @Test
         @DisplayName("rejects blank server URL")
         void rejectsBlankServerUrl() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakConfig("  ", "master", "admin-cli",
-                    "admin", "admin", "operio-backend", null)
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            new KeycloakConfig(
+                                    "  ",
+                                    "master",
+                                    "admin-cli",
+                                    "admin",
+                                    "admin",
+                                    "operio-backend",
+                                    null));
         }
 
         @Test
         @DisplayName("rejects empty server URL")
         void rejectsEmptyServerUrl() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakConfig("", "master", "admin-cli",
-                    "admin", "admin", "operio-backend", null)
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            new KeycloakConfig(
+                                    "",
+                                    "master",
+                                    "admin-cli",
+                                    "admin",
+                                    "admin",
+                                    "operio-backend",
+                                    null));
         }
     }
 

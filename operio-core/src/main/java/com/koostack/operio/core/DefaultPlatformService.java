@@ -9,22 +9,19 @@ import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.plan.PlanQueryService;
-
 import java.util.logging.Logger;
 
 /**
- * Default {@link PlatformService} implementation that delegates IAM
- * operations to the configured {@link IdpProvider} and tenant/billing
- * onboarding to {@link CoreCommandService} / {@link BillingCommandService}.
+ * Default {@link PlatformService} implementation that delegates IAM operations to the configured
+ * {@link IdpProvider} and tenant/billing onboarding to {@link CoreCommandService} / {@link
+ * BillingCommandService}.
  *
- * <p>All methods take an explicit {@code tenantId} — unlike
- * {@link DefaultTenantService} which uses {@code TenantContext}.
+ * <p>All methods take an explicit {@code tenantId} — unlike {@link DefaultTenantService} which uses
+ * {@code TenantContext}.
  */
 public class DefaultPlatformService implements PlatformService {
 
-    private static final Logger LOG = Logger.getLogger(
-        DefaultPlatformService.class.getName()
-    );
+    private static final Logger LOG = Logger.getLogger(DefaultPlatformService.class.getName());
 
     private final String appName;
     private final IdpProvider<?> idpProvider;
@@ -54,23 +51,26 @@ public class DefaultPlatformService implements PlatformService {
         this.tenantMetricPublisher = tenantMetricPublisher;
     }
 
-    /**
-     * Backward-compatible constructor for callers that only need IAM.
-     */
+    /** Backward-compatible constructor for callers that only need IAM. */
     public DefaultPlatformService(String appName, IdpProvider<?> idpProvider) {
         this(appName, idpProvider, null, null, null, null, null, null);
     }
 
-    /**
-     * Backward-compatible constructor without query services and metrics.
-     */
+    /** Backward-compatible constructor without query services and metrics. */
     public DefaultPlatformService(
             String appName,
             IdpProvider<?> idpProvider,
             CoreCommandService<?> coreCommandService,
             BillingCommandService<?> billingCommandService) {
-        this(appName, idpProvider, coreCommandService, billingCommandService,
-             null, null, null, null);
+        this(
+                appName,
+                idpProvider,
+                coreCommandService,
+                billingCommandService,
+                null,
+                null,
+                null,
+                null);
     }
 
     // -----------------------------------------------------------------------
@@ -91,8 +91,7 @@ public class DefaultPlatformService implements PlatformService {
     public void verifyReady() {
         if (idpProvider != null && !idpProvider.isReady()) {
             throw new OperioConfigurationException(
-                "PlatformService IdpProvider '" + idpProvider.getName() + "' is not ready"
-            );
+                    "PlatformService IdpProvider '" + idpProvider.getName() + "' is not ready");
         }
     }
 
@@ -125,7 +124,8 @@ public class DefaultPlatformService implements PlatformService {
     // -----------------------------------------------------------------------
 
     @Override
-    public void createTenant(String tenantId, String displayName, String plan, String billingEmail) {
+    public void createTenant(
+            String tenantId, String displayName, String plan, String billingEmail) {
         requireCoreCommand();
         requireBillingCommand();
 
@@ -133,8 +133,7 @@ public class DefaultPlatformService implements PlatformService {
         if (coreQueryService != null) {
             var existing = coreQueryService.getTenant(tenantId);
             if (existing != null) {
-                throw new OperioServiceException(
-                    "Tenant '" + tenantId + "' already exists");
+                throw new OperioServiceException("Tenant '" + tenantId + "' already exists");
             }
         }
 
@@ -142,12 +141,10 @@ public class DefaultPlatformService implements PlatformService {
         if (planQueryService != null) {
             var planInfo = planQueryService.getPlan(plan);
             if (planInfo == null) {
-                throw new OperioServiceException(
-                    "Plan '" + plan + "' does not exist");
+                throw new OperioServiceException("Plan '" + plan + "' does not exist");
             }
             if (!planInfo.isActive()) {
-                throw new OperioServiceException(
-                    "Plan '" + plan + "' is not active");
+                throw new OperioServiceException("Plan '" + plan + "' is not active");
             }
 
             // 3. Create tenant
@@ -159,10 +156,11 @@ public class DefaultPlatformService implements PlatformService {
             // 5. Create subscription using plan limits
             //    BillingCommandService uses int limits; safe for current plan values.
             billingCommandService.createSubscription(
-                tenantId, plan,
-                Math.toIntExact(planInfo.evalLimit()),
-                Math.toIntExact(planInfo.subjectLimit()),
-                planInfo.burstLimit());
+                    tenantId,
+                    plan,
+                    Math.toIntExact(planInfo.evalLimit()),
+                    Math.toIntExact(planInfo.subjectLimit()),
+                    planInfo.burstLimit());
         } else {
             // Fallback: no plan validation available
             coreCommandService.createTenant(tenantId, displayName, plan);
@@ -187,10 +185,11 @@ public class DefaultPlatformService implements PlatformService {
     }
 
     @Override
-    public void createSubscription(String tenantId, String planTier,
-                                   int evalLimit, int subjectLimit, int burstLimit) {
+    public void createSubscription(
+            String tenantId, String planTier, int evalLimit, int subjectLimit, int burstLimit) {
         requireBillingCommand();
-        billingCommandService.createSubscription(tenantId, planTier, evalLimit, subjectLimit, burstLimit);
+        billingCommandService.createSubscription(
+                tenantId, planTier, evalLimit, subjectLimit, burstLimit);
     }
 
     @Override
@@ -209,16 +208,14 @@ public class DefaultPlatformService implements PlatformService {
     private void requireCoreCommand() {
         if (coreCommandService == null) {
             throw new OperioConfigurationException(
-                "CoreCommandService is not configured — tenant onboarding is unavailable"
-            );
+                    "CoreCommandService is not configured — tenant onboarding is unavailable");
         }
     }
 
     private void requireBillingCommand() {
         if (billingCommandService == null) {
             throw new OperioConfigurationException(
-                "BillingCommandService is not configured — billing onboarding is unavailable"
-            );
+                    "BillingCommandService is not configured — billing onboarding is unavailable");
         }
     }
 }

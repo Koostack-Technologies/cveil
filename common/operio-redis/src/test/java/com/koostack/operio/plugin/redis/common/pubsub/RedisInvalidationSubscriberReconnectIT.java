@@ -1,9 +1,14 @@
 package com.koostack.operio.plugin.redis.common.pubsub;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -12,22 +17,15 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.JedisPooled;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.*;
-
 /**
- * Integration test for {@link RedisInvalidationSubscriber} reconnection using
- * Testcontainers + Toxiproxy.
+ * Integration test for {@link RedisInvalidationSubscriber} reconnection using Testcontainers +
+ * Toxiproxy.
  *
- * <p>Verifies that when the network link between subscriber and Redis is cut
- * and restored, the subscriber's exponential-backoff reconnection logic
- * re-subscribes all active channels and resumes message delivery.
+ * <p>Verifies that when the network link between subscriber and Redis is cut and restored, the
+ * subscriber's exponential-backoff reconnection logic re-subscribes all active channels and resumes
+ * message delivery.
  *
- * <p>Requires Docker.  Skipped automatically by Testcontainers if Docker is
- * unavailable.
+ * <p>Requires Docker. Skipped automatically by Testcontainers if Docker is unavailable.
  */
 @DisplayName("RedisInvalidationSubscriber — Reconnection (Toxiproxy)")
 @Timeout(value = 60, unit = TimeUnit.SECONDS)
@@ -40,8 +38,8 @@ class RedisInvalidationSubscriberReconnectIT {
     private static ToxiproxyContainer toxiproxy;
 
     private ToxiproxyContainer.ContainerProxy proxy;
-    private JedisPooled subscriberJedis;  // routed through Toxiproxy
-    private JedisPooled publisherJedis;   // direct to Redis (unaffected by proxy)
+    private JedisPooled subscriberJedis; // routed through Toxiproxy
+    private JedisPooled publisherJedis; // direct to Redis (unaffected by proxy)
     private RedisInvalidationSubscriber subscriber;
     private RedisInvalidationPublisher publisher;
 
@@ -49,14 +47,16 @@ class RedisInvalidationSubscriberReconnectIT {
     static void startContainers() {
         network = Network.newNetwork();
 
-        redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-                .withExposedPorts(6379)
-                .withNetwork(network)
-                .withNetworkAliases("redis")
-                .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1));
+        redis =
+                new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+                        .withExposedPorts(6379)
+                        .withNetwork(network)
+                        .withNetworkAliases("redis")
+                        .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1));
 
-        toxiproxy = new ToxiproxyContainer(DockerImageName.parse("ghcr.io/shopify/toxiproxy:2.12.0"))
-                .withNetwork(network);
+        toxiproxy =
+                new ToxiproxyContainer(DockerImageName.parse("ghcr.io/shopify/toxiproxy:2.12.0"))
+                        .withNetwork(network);
 
         redis.start();
         toxiproxy.start();
@@ -86,7 +86,10 @@ class RedisInvalidationSubscriberReconnectIT {
     void tearDown() {
         if (subscriber != null) subscriber.close();
         // Ensure proxy is enabled for next test
-        try { proxy.setConnectionCut(false); } catch (Exception ignored) {}
+        try {
+            proxy.setConnectionCut(false);
+        } catch (Exception ignored) {
+        }
     }
 
     @Test
@@ -162,7 +165,8 @@ class RedisInvalidationSubscriberReconnectIT {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static CacheInvalidationMessage msg(String id, String tenantId, InvalidationAction action) {
+    private static CacheInvalidationMessage msg(
+            String id, String tenantId, InvalidationAction action) {
         return new CacheInvalidationMessage(
                 id, tenantId, "subject", "Entity", "field", null, "purpose", action);
     }

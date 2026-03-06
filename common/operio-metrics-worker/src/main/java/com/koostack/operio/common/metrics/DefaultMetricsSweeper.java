@@ -2,12 +2,6 @@ package com.koostack.operio.common.metrics;
 
 import com.koostack.operio.core.metrics.MetricsSweeper;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.params.XTrimParams;
-
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
@@ -16,20 +10,24 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.params.XTrimParams;
 
 /**
- * Metrics sweeper that periodically deletes telemetry rows older than the
- * configured retention period and trims Redis metric streams.
+ * Metrics sweeper that periodically deletes telemetry rows older than the configured retention
+ * period and trims Redis metric streams.
  *
- * <p>Call {@link #sweep()} periodically (e.g. via a scheduled executor or cron)
- * to clean up stale data.
+ * <p>Call {@link #sweep()} periodically (e.g. via a scheduled executor or cron) to clean up stale
+ * data.
  */
 public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfig> {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultMetricsSweeper.class);
 
-    private static final String DELETE_SQL =
-        "DELETE FROM %s.telemetry WHERE time_bucket < ?";
+    private static final String DELETE_SQL = "DELETE FROM %s.telemetry WHERE time_bucket < ?";
 
     private static final long TRIM_MAX_LEN = 10_000;
 
@@ -64,11 +62,11 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
         this.platformSchemaName = config.platformSchemaName();
         this.tenantDiscovery = config.tenantDiscovery();
         if (config.redisConfig() != null) {
-            this.jedis = RedisClientFactory.createClient(
-                config.redisConfig().host(),
-                config.redisConfig().port(),
-                config.redisConfig().password()
-            );
+            this.jedis =
+                    RedisClientFactory.createClient(
+                            config.redisConfig().host(),
+                            config.redisConfig().port(),
+                            config.redisConfig().password());
         }
         LOG.info("RedisMetricsSweeper configured: retentionDays={}", retentionDays);
     }
@@ -120,12 +118,15 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
         }
         String sql = String.format(DELETE_SQL, schemaName);
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setTimestamp(1, Timestamp.from(cutoff));
             int deleted = ps.executeUpdate();
             if (deleted > 0) {
-                LOG.debug("Deleted {} rows from {}.telemetry older than {}",
-                    deleted, schemaName, cutoff);
+                LOG.debug(
+                        "Deleted {} rows from {}.telemetry older than {}",
+                        deleted,
+                        schemaName,
+                        cutoff);
             }
             return deleted;
         } catch (Exception e) {

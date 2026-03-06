@@ -18,14 +18,15 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.operio.rest.resource.CatalogueResource}
- * exercising entity, category, and field CRUD against real Postgres + Redis.
+ * Integration test for {@link com.koostack.operio.rest.resource.CatalogueResource} exercising
+ * entity, category, and field CRUD against real Postgres + Redis.
  *
  * <p>Every mutating operation is verified at three layers:
+ *
  * <ol>
- *   <li>REST API response (status code + body)</li>
- *   <li>Postgres — direct JDBC queries on the catalogue tables + event store</li>
- *   <li>Redis — admin projection cache + event stream</li>
+ *   <li>REST API response (status code + body)
+ *   <li>Postgres — direct JDBC queries on the catalogue tables + event store
+ *   <li>Redis — admin projection cache + event stream
  * </ol>
  */
 @QuarkusTest
@@ -34,8 +35,7 @@ import org.junit.jupiter.api.*;
 @TestClassOrder(ClassOrderer.OrderAnnotation.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CatalogueResourceIT {
-    private static final String BOOTSTRAP_KEY =
-        "test-bootstrap-key-for-integration-tests";
+    private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
     private static final String TENANT_ID = "catalogue_it_tenant";
 
@@ -43,8 +43,7 @@ class CatalogueResourceIT {
     private static volatile String readOnlyApiKey;
     private static volatile IntegrationTestSupport support;
 
-    @Inject
-    OperioConfig config;
+    @Inject OperioConfig config;
 
     // =======================================================================
     // 1. Setup & Auth
@@ -60,19 +59,20 @@ class CatalogueResourceIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "tenantId": "%s",
                       "displayName": "Catalogue IT Tenant",
                       "plan": "enterprise"
                     }
-                    """.formatted(TENANT_ID))
-                .when()
+                    """
+                                    .formatted(TENANT_ID))
+                    .when()
                     .post("/api/v1/platform/tenants")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("tenantId", equalTo(TENANT_ID));
         }
@@ -81,21 +81,24 @@ class CatalogueResourceIT {
         @Order(2)
         @DisplayName("Create full-access API key")
         void createApiKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "catalogue-it-admin",
                       "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
@@ -113,21 +116,24 @@ class CatalogueResourceIT {
         @Order(3)
         @DisplayName("Create read-only API key")
         void createReadOnlyKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "catalogue-it-reader",
                       "roles": ["admin:read"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
@@ -140,26 +146,22 @@ class CatalogueResourceIT {
         @Order(4)
         @DisplayName("Unauthenticated request → 401")
         void unauthenticatedRejected() {
-            given()
-                .when()
-                    .get("/api/v1/catalogue/fields")
-                .then()
-                    .statusCode(401);
+            given().when().get("/api/v1/catalogue/fields").then().statusCode(401);
         }
 
         @Test
         @Order(5)
         @DisplayName("Read-only key cannot create entity → 403")
         void readOnlyCannotWrite() {
-            given()
-                .header("Authorization", "Bearer " + readOnlyApiKey)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + readOnlyApiKey)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "Forbidden", "description": "should fail" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(403);
         }
     }
@@ -183,15 +185,15 @@ class CatalogueResourceIT {
         @Order(1)
         @DisplayName("Register entity: User")
         void registerUser() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "User", "description": "Application user" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString("User"));
 
@@ -207,11 +209,10 @@ class CatalogueResourceIT {
         @Order(2)
         @DisplayName("List entities includes User")
         void listEntities() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(1)))
                     .body("entityName", hasItem("User"));
@@ -221,11 +222,10 @@ class CatalogueResourceIT {
         @Order(3)
         @DisplayName("Get entity by name")
         void getEntity() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/entities/User")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("entityName", equalTo("User"))
                     .body("description", equalTo("Application user"));
@@ -235,22 +235,23 @@ class CatalogueResourceIT {
         @Order(4)
         @DisplayName("Update entity description")
         void updateEntity() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "description": "Updated user entity" }
                     """)
-                .when()
+                    .when()
                     .put("/api/v1/catalogue/entities/User")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify: description updated (eventually consistent)
             support.awaitQueryValue(
-                "SELECT description FROM entity WHERE entity_name = ?",
-                "description", "Updated user entity", "User"
-            );
+                    "SELECT description FROM entity WHERE entity_name = ?",
+                    "description",
+                    "Updated user entity",
+                    "User");
 
             // Event verify
             var events = support.queryEvents("consent-entity", "consent.entity.updated");
@@ -261,15 +262,15 @@ class CatalogueResourceIT {
         @Order(5)
         @DisplayName("Register second entity: Patient")
         void registerPatient() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "Patient", "description": "Medical patient" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("entity", "entity_name", "Patient");
@@ -279,11 +280,10 @@ class CatalogueResourceIT {
         @Order(6)
         @DisplayName("Delete entity: Patient")
         void deletePatient() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/entities/Patient")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify: row removed
@@ -298,11 +298,10 @@ class CatalogueResourceIT {
         @Order(7)
         @DisplayName("Get deleted entity → 404")
         void getDeletedEntity() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/entities/Patient")
-                .then()
+                    .then()
                     .statusCode(404);
         }
 
@@ -311,11 +310,10 @@ class CatalogueResourceIT {
         @DisplayName("Delete non-existent entity → idempotent 200")
         void deleteNonExistent() {
             // Event-sourced: delete of non-existent entity is a no-op (idempotent)
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/entities/NonExistent")
-                .then()
+                    .then()
                     .statusCode(200);
         }
 
@@ -323,15 +321,15 @@ class CatalogueResourceIT {
         @Order(9)
         @DisplayName("Register entity with blank name → 400")
         void registerBlankName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "", "description": "blank" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -339,22 +337,23 @@ class CatalogueResourceIT {
         @Order(10)
         @DisplayName("Re-register entity upserts description")
         void upsertEntity() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "User", "description": "Upserted user" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(201);
 
             // DB verify: only one User row with updated description (eventually consistent)
             support.awaitQueryValue(
-                "SELECT description FROM entity WHERE entity_name = ?",
-                "description", "Upserted user", "User"
-            );
+                    "SELECT description FROM entity WHERE entity_name = ?",
+                    "description",
+                    "Upserted user",
+                    "User");
         }
     }
 
@@ -377,15 +376,15 @@ class CatalogueResourceIT {
         @Order(1)
         @DisplayName("Register category: PII")
         void registerPii() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "categoryName": "PII", "description": "Personal identifiable info" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString("PII"));
 
@@ -401,15 +400,15 @@ class CatalogueResourceIT {
         @Order(2)
         @DisplayName("Register category: HEALTH")
         void registerHealth() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "categoryName": "HEALTH", "description": "Health data" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("category", "category_name", "HEALTH");
@@ -419,11 +418,10 @@ class CatalogueResourceIT {
         @Order(3)
         @DisplayName("List categories includes PII and HEALTH")
         void listCategories() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(2)))
                     .body("categoryName", hasItems("PII", "HEALTH"));
@@ -433,11 +431,10 @@ class CatalogueResourceIT {
         @Order(4)
         @DisplayName("Get category by name")
         void getCategory() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/categories/PII")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("categoryName", equalTo("PII"))
                     .body("description", equalTo("Personal identifiable info"));
@@ -447,22 +444,23 @@ class CatalogueResourceIT {
         @Order(5)
         @DisplayName("Update category description")
         void updateCategory() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "description": "Updated PII description" }
                     """)
-                .when()
+                    .when()
                     .put("/api/v1/catalogue/categories/PII")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify (eventually consistent)
             support.awaitQueryValue(
-                "SELECT description FROM category WHERE category_name = ?",
-                "description", "Updated PII description", "PII"
-            );
+                    "SELECT description FROM category WHERE category_name = ?",
+                    "description",
+                    "Updated PII description",
+                    "PII");
 
             // Event verify
             var events = support.queryEvents("consent-category", "consent.category.updated");
@@ -473,11 +471,10 @@ class CatalogueResourceIT {
         @Order(6)
         @DisplayName("Delete category: HEALTH")
         void deleteHealth() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/categories/HEALTH")
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.assertRowAbsent("category", "category_name", "HEALTH");
@@ -487,11 +484,10 @@ class CatalogueResourceIT {
         @Order(7)
         @DisplayName("Get deleted category → 404")
         void getDeletedCategory() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/categories/HEALTH")
-                .then()
+                    .then()
                     .statusCode(404);
         }
 
@@ -499,15 +495,15 @@ class CatalogueResourceIT {
         @Order(8)
         @DisplayName("Register category with blank name → 400")
         void registerBlankName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "categoryName": "", "description": "blank" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(400);
         }
     }
@@ -531,30 +527,29 @@ class CatalogueResourceIT {
         @Order(1)
         @DisplayName("Register field: email (User)")
         void registerEmail() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "email",
                       "entityName": "User",
                       "description": "User email address"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString("email"));
 
             // DB verify: field row with correct entity FK (eventually consistent)
             support.awaitQuery(
-                "SELECT f.field_name, e.entity_name FROM field f "
-                    + "JOIN entity e ON f.entity_id = e.entity_id "
-                    + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
-                rows -> rows.size() == 1,
-                "Expected 1 field row for email/User"
-            );
+                    "SELECT f.field_name, e.entity_name FROM field f "
+                            + "JOIN entity e ON f.entity_id = e.entity_id "
+                            + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
+                    rows -> rows.size() == 1,
+                    "Expected 1 field row for email/User");
 
             // Event verify
             var events = support.queryEvents("consent-field", "consent.field.registered");
@@ -565,19 +560,19 @@ class CatalogueResourceIT {
         @Order(2)
         @DisplayName("Register field: ssn (User)")
         void registerSsn() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "ssn",
                       "entityName": "User",
                       "description": "Social security number"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("field", "field_name", "ssn");
@@ -587,15 +582,15 @@ class CatalogueResourceIT {
         @Order(3)
         @DisplayName("Re-register Patient entity for field registration")
         void reRegisterPatient() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "Patient", "description": "Medical patient" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -603,19 +598,19 @@ class CatalogueResourceIT {
         @Order(4)
         @DisplayName("Register field: diagnosis (Patient)")
         void registerDiagnosis() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "diagnosis",
                       "entityName": "Patient",
                       "description": "Medical diagnosis"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("field", "field_name", "diagnosis");
@@ -625,11 +620,10 @@ class CatalogueResourceIT {
         @Order(5)
         @DisplayName("List fields includes all 3")
         void listFields() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(3)))
                     .body("fieldName", hasItems("email", "ssn", "diagnosis"));
@@ -639,33 +633,32 @@ class CatalogueResourceIT {
         @Order(6)
         @DisplayName("Assign category PII → email")
         void assignEmailPii() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "email",
                       "entityName": "User",
                       "categoryName": "PII"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields/categories")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("message", containsString("PII"));
 
             // DB verify: field_category join row (eventually consistent)
             support.awaitQuery(
-                "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
-                    + "FROM field_category fc "
-                    + "JOIN field f ON fc.field_id = f.field_id "
-                    + "JOIN entity e ON f.entity_id = e.entity_id "
-                    + "JOIN category c ON fc.category_id = c.category_id "
-                    + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
-                rows -> !rows.isEmpty() && "PII".equals(rows.get(0).get("category_name")),
-                "Expected field_category row for email/User/PII"
-            );
+                    "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
+                            + "FROM field_category fc "
+                            + "JOIN field f ON fc.field_id = f.field_id "
+                            + "JOIN entity e ON f.entity_id = e.entity_id "
+                            + "JOIN category c ON fc.category_id = c.category_id "
+                            + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
+                    rows -> !rows.isEmpty() && "PII".equals(rows.get(0).get("category_name")),
+                    "Expected field_category row for email/User/PII");
 
             // Event verify
             var events = support.queryEvents("consent-field", "consent.field.category-assigned");
@@ -676,31 +669,30 @@ class CatalogueResourceIT {
         @Order(7)
         @DisplayName("Assign category PII → ssn")
         void assignSsnPii() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "ssn",
                       "entityName": "User",
                       "categoryName": "PII"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields/categories")
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.awaitQuery(
-                "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
-                    + "FROM field_category fc "
-                    + "JOIN field f ON fc.field_id = f.field_id "
-                    + "JOIN entity e ON f.entity_id = e.entity_id "
-                    + "JOIN category c ON fc.category_id = c.category_id "
-                    + "WHERE f.field_name = 'ssn' AND e.entity_name = 'User'",
-                rows -> !rows.isEmpty(),
-                "Expected field_category row for ssn/User"
-            );
+                    "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
+                            + "FROM field_category fc "
+                            + "JOIN field f ON fc.field_id = f.field_id "
+                            + "JOIN entity e ON f.entity_id = e.entity_id "
+                            + "JOIN category c ON fc.category_id = c.category_id "
+                            + "WHERE f.field_name = 'ssn' AND e.entity_name = 'User'",
+                    rows -> !rows.isEmpty(),
+                    "Expected field_category row for ssn/User");
         }
 
         @Test
@@ -708,104 +700,119 @@ class CatalogueResourceIT {
         @DisplayName("Re-register HEALTH and assign to diagnosis")
         void assignDiagnosisHealth() {
             // Re-register HEALTH (was deleted in CategoryCrud phase)
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "categoryName": "HEALTH", "description": "Health data" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(201);
 
             // Assign HEALTH → diagnosis
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "diagnosis",
                       "entityName": "Patient",
                       "categoryName": "HEALTH"
                     }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields/categories")
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.awaitQuery(
-                "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
-                    + "FROM field_category fc "
-                    + "JOIN field f ON fc.field_id = f.field_id "
-                    + "JOIN entity e ON f.entity_id = e.entity_id "
-                    + "JOIN category c ON fc.category_id = c.category_id "
-                    + "WHERE f.field_name = 'diagnosis' AND e.entity_name = 'Patient'",
-                rows -> !rows.isEmpty() && "HEALTH".equals(rows.get(0).get("category_name")),
-                "Expected field_category row for diagnosis/Patient/HEALTH"
-            );
+                    "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
+                            + "FROM field_category fc "
+                            + "JOIN field f ON fc.field_id = f.field_id "
+                            + "JOIN entity e ON f.entity_id = e.entity_id "
+                            + "JOIN category c ON fc.category_id = c.category_id "
+                            + "WHERE f.field_name = 'diagnosis' AND e.entity_name = 'Patient'",
+                    rows -> !rows.isEmpty() && "HEALTH".equals(rows.get(0).get("category_name")),
+                    "Expected field_category row for diagnosis/Patient/HEALTH");
         }
 
         @Test
         @Order(9)
         @DisplayName("Fields list shows category assignments")
         void fieldsShowCategories() {
-            Response response = given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/catalogue/fields")
-                .then()
-                    .statusCode(200)
-                    .extract().response();
+            Response response =
+                    given().header("Authorization", auth())
+                            .when()
+                            .get("/api/v1/catalogue/fields")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
 
             // Find the email field and verify it has PII category (eventually consistent)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(10))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    Response retry = given()
-                        .header("Authorization", auth())
-                        .when()
-                            .get("/api/v1/catalogue/fields")
-                        .then()
-                            .statusCode(200)
-                            .extract().response();
-                    List<Map<String, Object>> retryFields = retry.jsonPath().getList("$");
-                    var emailField = retryFields.stream()
-                        .filter(f -> "email".equals(f.get("fieldName")))
-                        .findFirst()
-                        .orElseThrow(() -> new AssertionError("email field not found in fields list"));
-                    @SuppressWarnings("unchecked")
-                    var categories = (List<Map<String, Object>>) emailField.get("categories");
-                    assertThat(categories).isNotEmpty();
-                    assertThat(categories.stream().map(c -> c.get("categoryName")))
-                        .contains("PII");
-                });
+                    .atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                Response retry =
+                                        given().header("Authorization", auth())
+                                                .when()
+                                                .get("/api/v1/catalogue/fields")
+                                                .then()
+                                                .statusCode(200)
+                                                .extract()
+                                                .response();
+                                List<Map<String, Object>> retryFields =
+                                        retry.jsonPath().getList("$");
+                                var emailField =
+                                        retryFields.stream()
+                                                .filter(f -> "email".equals(f.get("fieldName")))
+                                                .findFirst()
+                                                .orElseThrow(
+                                                        () ->
+                                                                new AssertionError(
+                                                                        "email field not found in"
+                                                                                + " fields list"));
+                                @SuppressWarnings("unchecked")
+                                var categories =
+                                        (List<Map<String, Object>>) emailField.get("categories");
+                                assertThat(categories).isNotEmpty();
+                                assertThat(categories.stream().map(c -> c.get("categoryName")))
+                                        .contains("PII");
+                            });
         }
 
         @Test
         @Order(10)
         @DisplayName("Unassign category PII from email")
         void unassignEmailPii() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/fields/User/email/categories/PII")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify: field_category link removed (eventually consistent)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(10))
-                .pollInterval(Duration.ofMillis(200))
-                .untilAsserted(() -> {
-                    var links = support.queryFieldCategories("email", "User");
-                    assertThat(links.stream()
-                        .filter(l -> "PII".equals(l.get("category_name")))
-                        .toList()
-                    ).isEmpty();
-                });
+                    .atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(200))
+                    .untilAsserted(
+                            () -> {
+                                var links = support.queryFieldCategories("email", "User");
+                                assertThat(
+                                                links.stream()
+                                                        .filter(
+                                                                l ->
+                                                                        "PII"
+                                                                                .equals(
+                                                                                        l.get(
+                                                                                                "category_name")))
+                                                        .toList())
+                                        .isEmpty();
+                            });
 
             // Event verify
             var events = support.queryEvents("consent-field", "consent.field.category-unassigned");
@@ -816,15 +823,15 @@ class CatalogueResourceIT {
         @Order(11)
         @DisplayName("Register field with blank name → 400")
         void registerBlankFieldName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "fieldName": "", "entityName": "User" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(400);
         }
     }
@@ -849,11 +856,10 @@ class CatalogueResourceIT {
         @DisplayName("Delete entity with fields → error (409 or 400)")
         void deleteEntityWithFields() {
             // User entity has email and ssn fields → should fail
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/entities/User")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(409), is(400), is(500)));
 
             // DB verify: entity still exists
@@ -865,11 +871,10 @@ class CatalogueResourceIT {
         @DisplayName("Delete category with assignments → 409")
         void deleteCategoryWithAssignmentsBlocked() {
             // PII is still assigned to ssn → should fail with integrity error
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/categories/PII")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(409), is(400), is(500)));
 
             // DB verify: category still exists
@@ -881,31 +886,36 @@ class CatalogueResourceIT {
         @DisplayName("Unassign PII from ssn → then delete PII succeeds")
         void unassignAndDeleteCategory() {
             // First unassign PII from ssn
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/fields/User/ssn/categories/PII")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Wait for unassignment to be projected before deleting category
             Awaitility.await()
-                .atMost(Duration.ofSeconds(10))
-                .pollInterval(Duration.ofMillis(300))
-                .untilAsserted(() -> {
-                    var links = support.queryFieldCategories("ssn", "User");
-                    assertThat(links.stream()
-                        .filter(l -> "PII".equals(l.get("category_name")))
-                        .toList()
-                    ).isEmpty();
-                });
+                    .atMost(Duration.ofSeconds(10))
+                    .pollInterval(Duration.ofMillis(300))
+                    .untilAsserted(
+                            () -> {
+                                var links = support.queryFieldCategories("ssn", "User");
+                                assertThat(
+                                                links.stream()
+                                                        .filter(
+                                                                l ->
+                                                                        "PII"
+                                                                                .equals(
+                                                                                        l.get(
+                                                                                                "category_name")))
+                                                        .toList())
+                                        .isEmpty();
+                            });
 
             // Now delete PII category
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/catalogue/categories/PII")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify: category removed
@@ -938,7 +948,8 @@ class CatalogueResourceIT {
         @DisplayName("Event table has entity events")
         void entityEventsExist() {
             var events = support.queryEventsByAggregate("consent-entity");
-            // We registered User, updated User, registered Patient, deleted Patient, re-registered Patient, upserted User
+            // We registered User, updated User, registered Patient, deleted Patient, re-registered
+            // Patient, upserted User
             assertThat(events).hasSizeGreaterThanOrEqualTo(3);
         }
 

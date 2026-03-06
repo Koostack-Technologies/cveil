@@ -17,37 +17,34 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 /**
- * Spring Security–based {@link IdentityResolver} that extracts a rich
- * {@link IdentityContext} from the current {@link SecurityContextHolder}.
+ * Spring Security–based {@link IdentityResolver} that extracts a rich {@link IdentityContext} from
+ * the current {@link SecurityContextHolder}.
  *
- * <p>In the Operio cloud deployment this plugin runs <em>after</em> the
- * {@code ApiKeyAuthenticationFilter} has already verified the API key via
- * {@code ApiKeyTokenVerifier.verifyToken()} and populated the
- * {@code SecurityContextHolder}.  This resolver therefore only <em>reads</em>
- * the authentication — it never verifies tokens itself.
+ * <p>In the Operio cloud deployment this plugin runs <em>after</em> the {@code
+ * ApiKeyAuthenticationFilter} has already verified the API key via {@code
+ * ApiKeyTokenVerifier.verifyToken()} and populated the {@code SecurityContextHolder}. This resolver
+ * therefore only <em>reads</em> the authentication — it never verifies tokens itself.
  *
  * <h3>Extraction rules</h3>
+ *
  * <ul>
- *   <li>{@code subject} — {@code auth.getName()}</li>
- *   <li>{@code token} — raw credentials if they are a {@code String}</li>
- *   <li>{@code email} — from OIDC {@code email} claim, OAuth2 attribute, or
- *       JWT claim (first match wins)</li>
- *   <li>{@code roles} — mapped from {@link GrantedAuthority} set</li>
- *   <li>{@code claims} — full claim map when the authentication carries a JWT
- *       or OAuth2/OIDC principal</li>
+ *   <li>{@code subject} — {@code auth.getName()}
+ *   <li>{@code token} — raw credentials if they are a {@code String}
+ *   <li>{@code email} — from OIDC {@code email} claim, OAuth2 attribute, or JWT claim (first match
+ *       wins)
+ *   <li>{@code roles} — mapped from {@link GrantedAuthority} set
+ *   <li>{@code claims} — full claim map when the authentication carries a JWT or OAuth2/OIDC
+ *       principal
  *   <li>{@code tenantId} — resolved with the following priority:
  *       <ol>
- *         <li>Authentication details map entry {@code "tenantId"}</li>
- *         <li>JWT / OAuth2 claim named {@code tenant_id} or {@code tenantId}</li>
- *         <li>Granted authority matching {@code TENANT_*} (suffix is the id)</li>
+ *         <li>Authentication details map entry {@code "tenantId"}
+ *         <li>JWT / OAuth2 claim named {@code tenant_id} or {@code tenantId}
+ *         <li>Granted authority matching {@code TENANT_*} (suffix is the id)
  *       </ol>
- *   </li>
- *   <li>{@code provider} — always {@code "spring-security"}</li>
+ *   <li>{@code provider} — always {@code "spring-security"}
  * </ul>
  */
-public class IdentitySpringSecurity
-    implements IdentityResolver<IdentitySpringSecurityConfig>
-{
+public class IdentitySpringSecurity implements IdentityResolver<IdentitySpringSecurityConfig> {
 
     private static final String PROVIDER = "spring-security";
     private static final String TENANT_AUTHORITY_PREFIX = "TENANT_";
@@ -71,15 +68,12 @@ public class IdentitySpringSecurity
     // --------------------------------------------------------- IdentityResolver
     @Override
     public IdentityContext resolve() {
-        Authentication auth =
-            SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         // Handle unauthenticated / anonymous states
-        if (
-            auth == null ||
-            !auth.isAuthenticated() ||
-            "anonymousUser".equals(auth.getPrincipal())
-        ) {
+        if (auth == null
+                || !auth.isAuthenticated()
+                || "anonymousUser".equals(auth.getPrincipal())) {
             return IdentityContext.anonymous();
         }
 
@@ -90,23 +84,15 @@ public class IdentitySpringSecurity
         String email = extractEmail(auth, claims);
         String tenantId = extractTenantId(auth, claims);
 
-        return new IdentityContext(
-            subject,
-            token,
-            email,
-            roles,
-            claims,
-            tenantId,
-            PROVIDER
-        );
+        return new IdentityContext(subject, token, email, roles, claims, tenantId, PROVIDER);
     }
 
     // -------------------------------------------------------- private helpers
 
     /**
-     * Extracts the raw bearer/credential token when the credentials are a
-     * plain {@code String} (common for JWT / Bearer setups).  For
-     * {@link JwtAuthenticationToken} the token value is available directly.
+     * Extracts the raw bearer/credential token when the credentials are a plain {@code String}
+     * (common for JWT / Bearer setups). For {@link JwtAuthenticationToken} the token value is
+     * available directly.
      */
     private static String extractToken(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jwtAuth) {
@@ -118,30 +104,26 @@ public class IdentitySpringSecurity
         return null;
     }
 
-    /**
-     * Maps all {@link GrantedAuthority} entries to a simple {@code Set<String>}.
-     */
+    /** Maps all {@link GrantedAuthority} entries to a simple {@code Set<String>}. */
     private static Set<String> extractRoles(Authentication auth) {
         if (auth.getAuthorities() == null || auth.getAuthorities().isEmpty()) {
             return Set.of();
         }
-        return auth
-            .getAuthorities()
-            .stream()
-            .map(GrantedAuthority::getAuthority)
-            .collect(Collectors.toUnmodifiableSet());
+        return auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * Builds a combined claim map from JWT claims or OAuth2 user attributes.
-     * Returns an unmodifiable map (never {@code null}).
+     * Builds a combined claim map from JWT claims or OAuth2 user attributes. Returns an
+     * unmodifiable map (never {@code null}).
      */
     private static Map<String, Object> extractClaims(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jwtAuth) {
             Map<String, Object> jwtClaims = jwtAuth.getToken().getClaims();
             return jwtClaims != null
-                ? Collections.unmodifiableMap(new LinkedHashMap<>(jwtClaims))
-                : Map.of();
+                    ? Collections.unmodifiableMap(new LinkedHashMap<>(jwtClaims))
+                    : Map.of();
         }
 
         if (auth instanceof OAuth2AuthenticationToken oauth2Auth) {
@@ -150,10 +132,7 @@ public class IdentitySpringSecurity
                 Map<String, Object> attrs = new LinkedHashMap<>();
 
                 // OIDC users carry structured claims; merge them first
-                if (
-                    principal instanceof OidcUser oidcUser &&
-                    oidcUser.getClaims() != null
-                ) {
+                if (principal instanceof OidcUser oidcUser && oidcUser.getClaims() != null) {
                     attrs.putAll(oidcUser.getClaims());
                 }
 
@@ -169,11 +148,12 @@ public class IdentitySpringSecurity
         // Fall back: check if details carries a map (e.g. custom auth filter)
         if (auth.getDetails() instanceof Map<?, ?> detailsMap) {
             Map<String, Object> safe = new HashMap<>();
-            detailsMap.forEach((k, v) -> {
-                if (k instanceof String key) {
-                    safe.put(key, v);
-                }
-            });
+            detailsMap.forEach(
+                    (k, v) -> {
+                        if (k instanceof String key) {
+                            safe.put(key, v);
+                        }
+                    });
             if (!safe.isEmpty()) {
                 return Collections.unmodifiableMap(safe);
             }
@@ -184,15 +164,13 @@ public class IdentitySpringSecurity
 
     /**
      * Extracts an email address from (in priority order):
+     *
      * <ol>
-     *   <li>OIDC/OAuth2 principal email</li>
-     *   <li>{@code email} key in the claims map</li>
+     *   <li>OIDC/OAuth2 principal email
+     *   <li>{@code email} key in the claims map
      * </ol>
      */
-    private static String extractEmail(
-        Authentication auth,
-        Map<String, Object> claims
-    ) {
+    private static String extractEmail(Authentication auth, Map<String, Object> claims) {
         // OIDC user has a typed email accessor
         if (auth instanceof OAuth2AuthenticationToken oauth2Auth) {
             OAuth2User principal = oauth2Auth.getPrincipal();
@@ -214,16 +192,14 @@ public class IdentitySpringSecurity
 
     /**
      * Resolves the tenant ID using a three-level fallback:
+     *
      * <ol>
-     *   <li>Authentication details map → {@code "tenantId"}</li>
-     *   <li>Claims map → {@code "tenant_id"} or {@code "tenantId"}</li>
-     *   <li>Granted authority with prefix {@code TENANT_}</li>
+     *   <li>Authentication details map → {@code "tenantId"}
+     *   <li>Claims map → {@code "tenant_id"} or {@code "tenantId"}
+     *   <li>Granted authority with prefix {@code TENANT_}
      * </ol>
      */
-    private static String extractTenantId(
-        Authentication auth,
-        Map<String, Object> claims
-    ) {
+    private static String extractTenantId(Authentication auth, Map<String, Object> claims) {
         // 1. Details map (set by custom auth filters such as ApiKeyAuthenticationFilter)
         if (auth.getDetails() instanceof Map<?, ?> detailsMap) {
             Object detailTenant = detailsMap.get("tenantId");
@@ -245,13 +221,8 @@ public class IdentitySpringSecurity
         if (auth.getAuthorities() != null) {
             for (GrantedAuthority ga : auth.getAuthorities()) {
                 String authority = ga.getAuthority();
-                if (
-                    authority != null &&
-                    authority.startsWith(TENANT_AUTHORITY_PREFIX)
-                ) {
-                    String suffix = authority.substring(
-                        TENANT_AUTHORITY_PREFIX.length()
-                    );
+                if (authority != null && authority.startsWith(TENANT_AUTHORITY_PREFIX)) {
+                    String suffix = authority.substring(TENANT_AUTHORITY_PREFIX.length());
                     if (!suffix.isBlank()) {
                         return suffix;
                     }
@@ -262,9 +233,7 @@ public class IdentitySpringSecurity
         return null;
     }
 
-    /**
-     * Safely extracts a non-blank {@code String} value from a claims map.
-     */
+    /** Safely extracts a non-blank {@code String} value from a claims map. */
     private static String stringClaim(Map<String, Object> claims, String key) {
         Object value = claims.get(key);
         if (value instanceof String s && !s.isBlank()) {

@@ -1,16 +1,15 @@
 package com.koostack.operio.core.tenant.consent.invalidation;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link SubscriptionManager}.
@@ -93,15 +92,17 @@ class SubscriptionManagerTest {
     @DisplayName("Metered sink tracks delivered messages")
     void metricsDelivered() throws Exception {
         AtomicReference<InvalidationSink> capturedSink = new AtomicReference<>();
-        stubSubscriber.onSubscribe = (tenantId, sink) -> {
-            capturedSink.set(sink);
-        };
+        stubSubscriber.onSubscribe =
+                (tenantId, sink) -> {
+                    capturedSink.set(sink);
+                };
 
         manager.add("conn-1", "tenant-a", msg -> {});
 
         // Simulate message delivery through the metered wrapper
-        CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                "id", "tenant-a", "s", "E", "f", null, "p", InvalidationAction.GRANTED);
+        CacheInvalidationMessage msg =
+                new CacheInvalidationMessage(
+                        "id", "tenant-a", "s", "E", "f", null, "p", InvalidationAction.GRANTED);
         capturedSink.get().send(msg);
 
         assertEquals(1, manager.messagesDelivered());
@@ -112,14 +113,21 @@ class SubscriptionManagerTest {
     @DisplayName("Metered sink tracks errors")
     void metricsErrors() {
         AtomicReference<InvalidationSink> capturedSink = new AtomicReference<>();
-        stubSubscriber.onSubscribe = (tenantId, sink) -> {
-            capturedSink.set(sink);
-        };
+        stubSubscriber.onSubscribe =
+                (tenantId, sink) -> {
+                    capturedSink.set(sink);
+                };
 
-        manager.add("conn-1", "tenant-a", msg -> { throw new RuntimeException("fail"); });
+        manager.add(
+                "conn-1",
+                "tenant-a",
+                msg -> {
+                    throw new RuntimeException("fail");
+                });
 
-        CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                "id", "tenant-a", "s", "E", "f", null, "p", InvalidationAction.GRANTED);
+        CacheInvalidationMessage msg =
+                new CacheInvalidationMessage(
+                        "id", "tenant-a", "s", "E", "f", null, "p", InvalidationAction.GRANTED);
 
         assertThrows(RuntimeException.class, () -> capturedSink.get().send(msg));
         assertEquals(0, manager.messagesDelivered());
@@ -150,15 +158,17 @@ class SubscriptionManagerTest {
         // Spawn threads that add connections concurrently
         for (int i = 0; i < adderCount; i++) {
             final String connId = "conn-" + i;
-            Thread.ofPlatform().start(() -> {
-                addersReady.countDown();
-                try {
-                    startLatch.await(5, TimeUnit.SECONDS);
-                    manager.add(connId, "tenant-a", msg -> {});
-                } catch (Exception e) {
-                    errors.add(e);
-                }
-            });
+            Thread.ofPlatform()
+                    .start(
+                            () -> {
+                                addersReady.countDown();
+                                try {
+                                    startLatch.await(5, TimeUnit.SECONDS);
+                                    manager.add(connId, "tenant-a", msg -> {});
+                                } catch (Exception e) {
+                                    errors.add(e);
+                                }
+                            });
         }
 
         addersReady.await(5, TimeUnit.SECONDS);
@@ -186,10 +196,14 @@ class SubscriptionManagerTest {
 
             return new Subscription() {
                 @Override
-                public String tenantId() { return tenantId; }
+                public String tenantId() {
+                    return tenantId;
+                }
 
                 @Override
-                public void cancel() { /* no-op for stub */ }
+                public void cancel() {
+                    /* no-op for stub */
+                }
             };
         }
 

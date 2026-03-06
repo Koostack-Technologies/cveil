@@ -4,7 +4,6 @@ import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -18,16 +17,15 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Response;
-import redis.clients.jedis.params.ZRangeParams;
 
 /**
  * Redis repository for the consent property graph.
  *
- * <p>Stores nodes as Hashes, edges as bidirectional Sets, edge properties as
- * Hashes, and node type indexes as Sorted Sets (for cursor pagination via
- * {@code ZRANGEBYLEX}).
+ * <p>Stores nodes as Hashes, edges as bidirectional Sets, edge properties as Hashes, and node type
+ * indexes as Sorted Sets (for cursor pagination via {@code ZRANGEBYLEX}).
  *
  * <h2>Redis Key Schema</h2>
+ *
  * <pre>
  *   Nodes:          {t}:node:{type}:{name}                      (Hash)
  *   Out-edges:      {t}:out:{type}:{name}                       (Set of "targetType:targetName")
@@ -37,6 +35,7 @@ import redis.clients.jedis.params.ZRangeParams;
  * </pre>
  *
  * <h2>Multi-Tenancy</h2>
+ *
  * <p>All keys are prefixed with the current tenant from {@link TenantContext#require()}.
  */
 public class ConsentGraphRedisRepository {
@@ -89,9 +88,7 @@ public class ConsentGraphRedisRepository {
     // Node operations
     // -----------------------------------------------------------------------
 
-    /**
-     * Creates or replaces a node. Adds the node to the type index.
-     */
+    /** Creates or replaces a node. Adds the node to the type index. */
     public void putNode(String type, String name, Map<String, String> properties) {
         try (Pipeline p = jedisProvider.get().pipelined()) {
             if (properties != null && !properties.isEmpty()) {
@@ -105,8 +102,8 @@ public class ConsentGraphRedisRepository {
     }
 
     /**
-     * Removes a node and cascades: deletes all connected edges (both
-     * directions) and their edge properties, then removes from the type index.
+     * Removes a node and cascades: deletes all connected edges (both directions) and their edge
+     * properties, then removes from the type index.
      */
     public void removeNode(String type, String name) {
         JedisPooled jedis = jedisProvider.get();
@@ -145,17 +142,13 @@ public class ConsentGraphRedisRepository {
         }
     }
 
-    /**
-     * Returns the properties of a node, or empty map if the node does not exist.
-     */
+    /** Returns the properties of a node, or empty map if the node does not exist. */
     public Map<String, String> getNode(String type, String name) {
         Map<String, String> result = jedisProvider.get().hgetAll(nodeKey(type, name));
         return result != null ? result : Collections.emptyMap();
     }
 
-    /**
-     * Returns {@code true} if the node exists in Redis.
-     */
+    /** Returns {@code true} if the node exists in Redis. */
     public boolean nodeExists(String type, String name) {
         return jedisProvider.get().exists(nodeKey(type, name));
     }
@@ -165,12 +158,15 @@ public class ConsentGraphRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Adds a directed edge between two nodes. Updates both out-set and in-set.
-     * Optionally stores edge properties.
+     * Adds a directed edge between two nodes. Updates both out-set and in-set. Optionally stores
+     * edge properties.
      */
-    public void addEdge(String fromType, String fromName,
-                        String toType, String toName,
-                        Map<String, String> edgeProps) {
+    public void addEdge(
+            String fromType,
+            String fromName,
+            String toType,
+            String toName,
+            Map<String, String> edgeProps) {
         try (Pipeline p = jedisProvider.get().pipelined()) {
             p.sadd(outKey(fromType, fromName), toType + ":" + toName);
             p.sadd(inKey(toType, toName), fromType + ":" + fromName);
@@ -181,11 +177,8 @@ public class ConsentGraphRedisRepository {
         }
     }
 
-    /**
-     * Removes a directed edge between two nodes and its edge properties.
-     */
-    public void removeEdge(String fromType, String fromName,
-                           String toType, String toName) {
+    /** Removes a directed edge between two nodes and its edge properties. */
+    public void removeEdge(String fromType, String fromName, String toType, String toName) {
         try (Pipeline p = jedisProvider.get().pipelined()) {
             p.srem(outKey(fromType, fromName), toType + ":" + toName);
             p.srem(inKey(toType, toName), fromType + ":" + fromName);
@@ -194,12 +187,13 @@ public class ConsentGraphRedisRepository {
         }
     }
 
-    /**
-     * Updates (overwrites) edge properties on an existing edge.
-     */
-    public void setEdgeProps(String fromType, String fromName,
-                             String toType, String toName,
-                             Map<String, String> edgeProps) {
+    /** Updates (overwrites) edge properties on an existing edge. */
+    public void setEdgeProps(
+            String fromType,
+            String fromName,
+            String toType,
+            String toName,
+            Map<String, String> edgeProps) {
         JedisPooled jedis = jedisProvider.get();
         String key = epKey(fromType, fromName, toType, toName);
         try (Pipeline p = jedis.pipelined()) {
@@ -212,8 +206,8 @@ public class ConsentGraphRedisRepository {
     }
 
     /**
-     * Batch update of edge properties across multiple edges in a single pipeline.
-     * Each entry maps an ep key to the properties to set.
+     * Batch update of edge properties across multiple edges in a single pipeline. Each entry maps
+     * an ep key to the properties to set.
      */
     public void batchSetEdgeProps(Map<String, Map<String, String>> keyToProps) {
         if (keyToProps == null || keyToProps.isEmpty()) return;
@@ -229,34 +223,26 @@ public class ConsentGraphRedisRepository {
         }
     }
 
-    /**
-     * Returns all edge properties, or empty map if no properties exist.
-     */
-    public Map<String, String> getEdgeProps(String fromType, String fromName,
-                                            String toType, String toName) {
-        Map<String, String> result = jedisProvider.get().hgetAll(
-            epKey(fromType, fromName, toType, toName)
-        );
+    /** Returns all edge properties, or empty map if no properties exist. */
+    public Map<String, String> getEdgeProps(
+            String fromType, String fromName, String toType, String toName) {
+        Map<String, String> result =
+                jedisProvider.get().hgetAll(epKey(fromType, fromName, toType, toName));
         return result != null ? result : Collections.emptyMap();
     }
 
     /**
-     * Returns a single edge property field, or {@code null} if not found.
-     * Optimized for evaluateConsent — single HGET per scope.
+     * Returns a single edge property field, or {@code null} if not found. Optimized for
+     * evaluateConsent — single HGET per scope.
      */
-    public String getEdgePropField(String fromType, String fromName,
-                                   String toType, String toName,
-                                   String field) {
-        return jedisProvider.get().hget(
-            epKey(fromType, fromName, toType, toName),
-            field
-        );
+    public String getEdgePropField(
+            String fromType, String fromName, String toType, String toName, String field) {
+        return jedisProvider.get().hget(epKey(fromType, fromName, toType, toName), field);
     }
 
     /**
-     * Batch HGET of a single field from multiple edge property keys.
-     * Returns results in same order as input keys.
-     * Uses a pipeline for a single round trip.
+     * Batch HGET of a single field from multiple edge property keys. Returns results in same order
+     * as input keys. Uses a pipeline for a single round trip.
      */
     public List<String> batchGetEdgePropField(List<String> epKeys, String field) {
         JedisPooled jedis = jedisProvider.get();
@@ -274,17 +260,13 @@ public class ConsentGraphRedisRepository {
         return results;
     }
 
-    /**
-     * Returns all out-edge members ({@code "targetType:targetName"}) from the node.
-     */
+    /** Returns all out-edge members ({@code "targetType:targetName"}) from the node. */
     public Set<String> getOutEdges(String type, String name) {
         Set<String> result = jedisProvider.get().smembers(outKey(type, name));
         return result != null ? result : Collections.emptySet();
     }
 
-    /**
-     * Returns all in-edge members ({@code "sourceType:sourceName"}) to the node.
-     */
+    /** Returns all in-edge members ({@code "sourceType:sourceName"}) to the node. */
     public Set<String> getInEdges(String type, String name) {
         Set<String> result = jedisProvider.get().smembers(inKey(type, name));
         return result != null ? result : Collections.emptySet();
@@ -296,18 +278,17 @@ public class ConsentGraphRedisRepository {
 
     /** All recognized node types, in canonical traversal order. */
     public static final String[] NODE_TYPES = {
-        "entity", "field", "category", "purpose", "regulation",
-        "jurisdiction", "policy", "subject"
+        "entity", "field", "category", "purpose", "regulation", "jurisdiction", "policy", "subject"
     };
 
     /**
-     * Lists node names of a given type using cursor-based lexicographic
-     * pagination on the sorted set index.
+     * Lists node names of a given type using cursor-based lexicographic pagination on the sorted
+     * set index.
      *
-     * @param type   the node type
-     * @param cursor the exclusive lower-bound name (pass {@code null} or
-     *               empty string for the first page)
-     * @param limit  maximum number of names to return
+     * @param type the node type
+     * @param cursor the exclusive lower-bound name (pass {@code null} or empty string for the first
+     *     page)
+     * @param limit maximum number of names to return
      * @return list of node names, ordered lexicographically
      */
     public List<String> listNodesByType(String type, String cursor, int limit) {
@@ -316,9 +297,7 @@ public class ConsentGraphRedisRepository {
         return jedisProvider.get().zrangeByLex(key, min, "+", 0, limit);
     }
 
-    /**
-     * Returns the total count of nodes of the given type.
-     */
+    /** Returns the total count of nodes of the given type. */
     public long countNodesByType(String type) {
         return jedisProvider.get().zcard(idxKey(type));
     }
@@ -328,12 +307,12 @@ public class ConsentGraphRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Performs a breadth-first traversal from a starting node up to
-     * {@code maxDepth} hops, collecting all reachable nodes.
+     * Performs a breadth-first traversal from a starting node up to {@code maxDepth} hops,
+     * collecting all reachable nodes.
      *
      * @param startType the starting node type
      * @param startName the starting node name
-     * @param maxDepth  maximum depth ({@code null} for unlimited)
+     * @param maxDepth maximum depth ({@code null} for unlimited)
      * @return ordered map of {@code "type:name"} → depth, including the start node at depth 0
      */
     public Map<String, Integer> traverse(String startType, String startName, Integer maxDepth) {
@@ -380,15 +359,15 @@ public class ConsentGraphRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Scans for subject→policy edge property keys whose {@code expiresAt}
-     * timestamp is before the given cutoff. Returns a list of ep keys that
-     * are expired and whose {@code action} is not already {@code "EXPIRE"}.
+     * Scans for subject→policy edge property keys whose {@code expiresAt} timestamp is before the
+     * given cutoff. Returns a list of ep keys that are expired and whose {@code action} is not
+     * already {@code "EXPIRE"}.
      *
-     * <p>Uses {@code SCAN} with a glob pattern to iterate all consent ep keys,
-     * then pipelines {@code HMGET expiresAt action} for each batch.
+     * <p>Uses {@code SCAN} with a glob pattern to iterate all consent ep keys, then pipelines
+     * {@code HMGET expiresAt action} for each batch.
      *
-     * @param cutoff  the instant to compare against
-     * @param scanCountHint  advisory hint for Redis SCAN COUNT (actual batch sizes may vary)
+     * @param cutoff the instant to compare against
+     * @param scanCountHint advisory hint for Redis SCAN COUNT (actual batch sizes may vary)
      * @return list of expired ep keys that need cleanup
      */
     public List<String> scanExpiredConsentEdges(java.time.Instant cutoff, int scanCountHint) {
@@ -436,12 +415,11 @@ public class ConsentGraphRedisRepository {
     }
 
     /**
-     * Atomically marks the given ep keys as expired, but ONLY if
-     * {@code expiresAt} is still before the cutoff and {@code action}
-     * is not already {@code "EXPIRE"}.
+     * Atomically marks the given ep keys as expired, but ONLY if {@code expiresAt} is still before
+     * the cutoff and {@code action} is not already {@code "EXPIRE"}.
      *
-     * <p>Uses a Lua script per key to avoid TOCTOU races where a
-     * concurrent grant could be overwritten by the reaper.
+     * <p>Uses a Lua script per key to avoid TOCTOU races where a concurrent grant could be
+     * overwritten by the reaper.
      *
      * @param epKeys the edge property keys to mark expired
      * @param cutoff the expiration cutoff used during scanning
@@ -454,7 +432,8 @@ public class ConsentGraphRedisRepository {
         JedisPooled jedis = jedisProvider.get();
 
         // Lua: atomically check expiresAt < cutoff AND action != "EXPIRE" before updating
-        String lua = """
+        String lua =
+                """
                 local ea = redis.call('HGET', KEYS[1], 'expiresAt')
                 if ea == false then return 0 end
                 local act = redis.call('HGET', KEYS[1], 'action')
@@ -475,9 +454,9 @@ public class ConsentGraphRedisRepository {
     }
 
     /**
-     * Extracts the subject ID from a consent ep key.
-     * Key format: {@code {tenant}:ep:subject:{subjectId}:policy:{policyName}}
-     * Returns the subjectId, or {@code null} if the key doesn't match.
+     * Extracts the subject ID from a consent ep key. Key format: {@code
+     * {tenant}:ep:subject:{subjectId}:policy:{policyName}} Returns the subjectId, or {@code null}
+     * if the key doesn't match.
      */
     public static String extractSubjectFromEpKey(String epKey) {
         // Find ":ep:subject:" then extract until ":policy:"
@@ -494,13 +473,13 @@ public class ConsentGraphRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Splits an edge member string ({@code "type:name"}) into [type, name].
-     * Handles names that contain {@code :} by splitting on the first occurrence only.
+     * Splits an edge member string ({@code "type:name"}) into [type, name]. Handles names that
+     * contain {@code :} by splitting on the first occurrence only.
      */
     static String[] splitEdgeMember(String member) {
         if (member == null) return null;
         int idx = member.indexOf(':');
         if (idx <= 0 || idx >= member.length() - 1) return null;
-        return new String[]{ member.substring(0, idx), member.substring(idx + 1) };
+        return new String[] {member.substring(0, idx), member.substring(idx + 1)};
     }
 }

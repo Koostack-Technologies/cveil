@@ -34,8 +34,10 @@ public final class ConsentEventTypes {
     public static final String REGULATION_REGISTERED = "consent.regulation.registered";
     public static final String REGULATION_UPDATED = "consent.regulation.updated";
     public static final String REGULATION_REMOVED = "consent.regulation.removed";
-    public static final String REGULATION_JURISDICTION_ADDED = "consent.regulation.jurisdiction-added";
-    public static final String REGULATION_JURISDICTION_REMOVED = "consent.regulation.jurisdiction-removed";
+    public static final String REGULATION_JURISDICTION_ADDED =
+            "consent.regulation.jurisdiction-added";
+    public static final String REGULATION_JURISDICTION_REMOVED =
+            "consent.regulation.jurisdiction-removed";
 
     // -- JurisdictionAggregate ------------------------------------------------
     public static final String JURISDICTION_REGISTERED = "consent.jurisdiction.registered";
@@ -50,8 +52,8 @@ public final class ConsentEventTypes {
 
     // -- SubjectAggregate (entity lifecycle) -----------------------------------
     public static final String SUBJECT_REGISTERED = "consent.subject-entity.registered";
-    public static final String SUBJECT_UPDATED    = "consent.subject-entity.updated";
-    public static final String SUBJECT_REMOVED    = "consent.subject-entity.removed";
+    public static final String SUBJECT_UPDATED = "consent.subject-entity.updated";
+    public static final String SUBJECT_REMOVED = "consent.subject-entity.removed";
 
     // -- DsarAggregate --------------------------------------------------------
     public static final String SUBJECT_AUDIT_DELETED = "consent.dsar.audit-deleted";

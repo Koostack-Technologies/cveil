@@ -1,7 +1,7 @@
 package com.koostack.operio.rest.filter;
 
-import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.exception.OperioAuthException;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
@@ -31,43 +31,41 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /**
- * JAX-RS request filter that authenticates every incoming request via API key
- * (Bearer token) or the one-time bootstrap key.
+ * JAX-RS request filter that authenticates every incoming request via API key (Bearer token) or the
+ * one-time bootstrap key.
  *
- * <p>This is the first filter in the authentication chain. It runs at
- * {@link Priorities#AUTHENTICATION} priority, before authorization filters,
- * rate limiting, and resource method invocation.
+ * <p>This is the first filter in the authentication chain. It runs at {@link
+ * Priorities#AUTHENTICATION} priority, before authorization filters, rate limiting, and resource
+ * method invocation.
  *
  * <h2>Authentication Flow</h2>
+ *
  * <ol>
- *   <li><strong>Public paths</strong> — health check endpoints are skipped
- *       (unauthenticated access allowed for Kubernetes probes).</li>
- *   <li><strong>CORS preflight</strong> — {@code OPTIONS} requests are
- *       skipped (handled by Quarkus CORS filter).</li>
- *   <li><strong>Extract Bearer token</strong> — reads the
- *       {@code Authorization: Bearer <token>} header.</li>
- *   <li><strong>Bootstrap key check</strong> — if the token matches the
- *       configured {@code operio.super-admin.bootstrap-key}, the request
- *       is granted {@code super-admin} role with no tenant scope. This
- *       allows initial platform setup before any real API keys exist.</li>
- *   <li><strong>Token verification</strong> — delegates to
- *       {@link TokenValidationService#verifyToken(String)} (the
- *       {@code ApiKeyTokenVerifier} implementation SHA-256 hashes the token
- *       and looks it up in the platform {@code api_key} table).</li>
- *   <li><strong>Security context</strong> — on success, sets a JAX-RS
- *       {@link SecurityContext} with the authenticated principal and roles,
- *       and stores the full {@link IdentityContext} as a request property
- *       for downstream consumption (e.g. {@code TenantScopeInterceptor}).</li>
- *   <li><strong>401 on failure</strong> — aborts with HTTP 401 and a JSON
- *       error body if authentication fails.</li>
+ *   <li><strong>Public paths</strong> — health check endpoints are skipped (unauthenticated access
+ *       allowed for Kubernetes probes).
+ *   <li><strong>CORS preflight</strong> — {@code OPTIONS} requests are skipped (handled by Quarkus
+ *       CORS filter).
+ *   <li><strong>Extract Bearer token</strong> — reads the {@code Authorization: Bearer <token>}
+ *       header.
+ *   <li><strong>Bootstrap key check</strong> — if the token matches the configured {@code
+ *       operio.super-admin.bootstrap-key}, the request is granted {@code super-admin} role with no
+ *       tenant scope. This allows initial platform setup before any real API keys exist.
+ *   <li><strong>Token verification</strong> — delegates to {@link
+ *       TokenValidationService#verifyToken(String)} (the {@code ApiKeyTokenVerifier} implementation
+ *       SHA-256 hashes the token and looks it up in the platform {@code api_key} table).
+ *   <li><strong>Security context</strong> — on success, sets a JAX-RS {@link SecurityContext} with
+ *       the authenticated principal and roles, and stores the full {@link IdentityContext} as a
+ *       request property for downstream consumption (e.g. {@code TenantScopeInterceptor}).
+ *   <li><strong>401 on failure</strong> — aborts with HTTP 401 and a JSON error body if
+ *       authentication fails.
  * </ol>
  *
  * <h2>Important</h2>
- * <p>This filter does <strong>not</strong> call
- * {@code TenantContext.runWhere()} because JAX-RS filters cannot wrap the
- * resource method invocation. {@code ScopedValue} binding is handled by a
- * separate CDI interceptor ({@code TenantScopeInterceptor}) that reads the
- * {@link IdentityContext} from the request property set here.
+ *
+ * <p>This filter does <strong>not</strong> call {@code TenantContext.runWhere()} because JAX-RS
+ * filters cannot wrap the resource method invocation. {@code ScopedValue} binding is handled by a
+ * separate CDI interceptor ({@code TenantScopeInterceptor}) that reads the {@link IdentityContext}
+ * from the request property set here.
  *
  * @see com.koostack.operio.core.platform.iam.TokenValidationService
  * @see OperioConfig.SuperAdminConfig
@@ -76,18 +74,14 @@ import org.slf4j.MDC;
 @Priority(Priorities.AUTHENTICATION)
 public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        ApiKeyAuthFilter.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(ApiKeyAuthFilter.class);
 
     /**
-     * Request property key under which the authenticated
-     * {@link IdentityContext} is stored. Downstream filters and interceptors
-     * (e.g. {@code TenantScopeInterceptor}) read this property to bind
-     * {@code TenantContext} and {@code RequestContext}.
+     * Request property key under which the authenticated {@link IdentityContext} is stored.
+     * Downstream filters and interceptors (e.g. {@code TenantScopeInterceptor}) read this property
+     * to bind {@code TenantContext} and {@code RequestContext}.
      */
-    public static final String IDENTITY_CONTEXT_PROPERTY =
-        "operio.identity-context";
+    public static final String IDENTITY_CONTEXT_PROPERTY = "operio.identity-context";
 
     /** Standard HTTP Bearer authentication scheme prefix. */
     private static final String BEARER_PREFIX = "Bearer ";
@@ -106,64 +100,53 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * Holder for platform CQRS services including token validation.
-     * Uses a concrete non-generic type to avoid ArC raw-type resolution issues.
+     * Holder for platform CQRS services including token validation. Uses a concrete non-generic
+     * type to avoid ArC raw-type resolution issues.
      */
-    @Inject
-    PlatformCqrsHolder cqrsHolder;
+    @Inject PlatformCqrsHolder cqrsHolder;
 
     /**
-     * Operio configuration — used to read the bootstrap key from
-     * {@code operio.super-admin.bootstrap-key}.
+     * Operio configuration — used to read the bootstrap key from {@code
+     * operio.super-admin.bootstrap-key}.
      *
-     * <p>Injected as {@code Instance<OperioConfig>} (lazy) rather than
-     * directly because this filter is eagerly instantiated by RESTEasy
-     * Reactive during the Quarkus static-init deployment phase, before
-     * the runtime {@link io.smallrye.config.SmallRyeConfig} (which
-     * holds the {@code @ConfigMapping} registrations) has been built.
-     * Using {@code Instance} defers the actual config-mapping resolution
-     * to first access at request time, when the runtime config is
+     * <p>Injected as {@code Instance<OperioConfig>} (lazy) rather than directly because this filter
+     * is eagerly instantiated by RESTEasy Reactive during the Quarkus static-init deployment phase,
+     * before the runtime {@link io.smallrye.config.SmallRyeConfig} (which holds the
+     * {@code @ConfigMapping} registrations) has been built. Using {@code Instance} defers the
+     * actual config-mapping resolution to first access at request time, when the runtime config is
      * available.
      */
-    @Inject
-    Instance<OperioConfig> configInstance;
+    @Inject Instance<OperioConfig> configInstance;
 
     /**
-     * Bootstrap key lifecycle service — manages the bootstrap key's
-     * active/consumed state, including auto-disable after the first
-     * API key is created and the force-override escape hatch.
+     * Bootstrap key lifecycle service — manages the bootstrap key's active/consumed state,
+     * including auto-disable after the first API key is created and the force-override escape
+     * hatch.
      *
-     * <p>Replaces the previous inline {@code isBootstrapKey()} check
-     * with lifecycle-aware validation that rejects consumed bootstrap
-     * keys with a descriptive 403 instead of silently falling through
-     * to the token verifier (which would return 401 "invalid token").
+     * <p>Replaces the previous inline {@code isBootstrapKey()} check with lifecycle-aware
+     * validation that rejects consumed bootstrap keys with a descriptive 403 instead of silently
+     * falling through to the token verifier (which would return 401 "invalid token").
      *
      * @see BootstrapKeyLifecycleService
      */
-    @Inject
-    BootstrapKeyLifecycleService bootstrapLifecycle;
+    @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
     /**
-     * Request-scoped holder that carries the authenticated
-     * {@link IdentityContext} and HTTP metadata to the
-     * {@code TenantScopeInterceptor}. Populated on successful
-     * authentication so the interceptor can bind {@code TenantContext}
-     * and {@code RequestContext} scoped values around the resource
-     * method invocation.
+     * Request-scoped holder that carries the authenticated {@link IdentityContext} and HTTP
+     * metadata to the {@code TenantScopeInterceptor}. Populated on successful authentication so the
+     * interceptor can bind {@code TenantContext} and {@code RequestContext} scoped values around
+     * the resource method invocation.
      *
      * @see com.koostack.operio.rest.interceptor.TenantScopeInterceptor
      */
-    @Inject
-    OperioRequestHolder requestHolder;
+    @Inject OperioRequestHolder requestHolder;
 
     /**
-     * Tenant-aware IdP resolver for JWT verification. Resolves which
-     * {@link IdpProvider} to use for a given tenant (defaults to
-     * Keycloak, overridable per tenant). May be {@code null} in embedded
-     * mode when no IdP is configured.
+     * Tenant-aware IdP resolver for JWT verification. Resolves which {@link IdpProvider} to use for
+     * a given tenant (defaults to Keycloak, overridable per tenant). May be {@code null} in
+     * embedded mode when no IdP is configured.
      */
-    @Inject
-    Instance<IdpTenantResolver> idpTenantResolverInstance;
+    @Inject Instance<IdpTenantResolver> idpTenantResolverInstance;
 
     // -----------------------------------------------------------------------
     // Filter implementation
@@ -188,10 +171,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         String authHeader = ctx.getHeaderString("Authorization");
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
             abortUnauthorized(
-                ctx,
-                "Missing or invalid Authorization header — " +
-                    "expected 'Bearer <token>'"
-            );
+                    ctx,
+                    "Missing or invalid Authorization header — " + "expected 'Bearer <token>'");
             return;
         }
 
@@ -205,24 +186,18 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         //    Delegates to BootstrapKeyLifecycleService which manages the
         //    active/consumed state of the bootstrap key.
         if (bootstrapLifecycle.isActiveBootstrapKey(token)) {
-            LOG.info(
-                "Bootstrap key authentication — granting super-admin access"
-            );
-            IdentityContext identity = new IdentityContext(
-                BOOTSTRAP_SUBJECT,
-                token,
-                null,
-                Set.of("super-admin"),
-                Map.of(),
-                null, // no tenant scope for bootstrap
-                BOOTSTRAP_PROVIDER
-            );
+            LOG.info("Bootstrap key authentication — granting super-admin access");
+            IdentityContext identity =
+                    new IdentityContext(
+                            BOOTSTRAP_SUBJECT,
+                            token,
+                            null,
+                            Set.of("super-admin"),
+                            Map.of(),
+                            null, // no tenant scope for bootstrap
+                            BOOTSTRAP_PROVIDER);
             applyAuthentication(
-                ctx,
-                identity,
-                resolveRemoteAddress(ctx),
-                ctx.getHeaderString("User-Agent")
-            );
+                    ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
             return;
         }
 
@@ -232,28 +207,24 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         //     (which would confusingly return 401 "invalid token").
         if (bootstrapLifecycle.isBootstrapKeyValue(token)) {
             LOG.warn(
-                "Bootstrap key authentication rejected — key has been " +
-                    "auto-disabled after API key creation. Use a real " +
-                    "API key or set OPERIO_FORCE_BOOTSTRAP=true for " +
-                    "disaster recovery."
-            );
+                    "Bootstrap key authentication rejected — key has been "
+                            + "auto-disabled after API key creation. Use a real "
+                            + "API key or set OPERIO_FORCE_BOOTSTRAP=true for "
+                            + "disaster recovery.");
             ctx.abortWith(
-                Response.status(Response.Status.FORBIDDEN)
-                    .entity(
-                        Map.of(
-                            "error",
-                            "Forbidden",
-                            "message",
-                            "Bootstrap key has been disabled — real API keys " +
-                                "exist on the platform. Use a regular API key " +
-                                "for authentication, or set " +
-                                "OPERIO_FORCE_BOOTSTRAP=true if disaster " +
-                                "recovery is needed."
-                        )
-                    )
-                    .type(MediaType.APPLICATION_JSON_TYPE)
-                    .build()
-            );
+                    Response.status(Response.Status.FORBIDDEN)
+                            .entity(
+                                    Map.of(
+                                            "error",
+                                            "Forbidden",
+                                            "message",
+                                            "Bootstrap key has been disabled — real API keys exist"
+                                                    + " on the platform. Use a regular API key for"
+                                                    + " authentication, or set"
+                                                    + " OPERIO_FORCE_BOOTSTRAP=true if disaster"
+                                                    + " recovery is needed."))
+                            .type(MediaType.APPLICATION_JSON_TYPE)
+                            .build());
             return;
         }
 
@@ -261,17 +232,15 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         IdentityContext configIdentity = resolveConfigApiKey(token);
         if (configIdentity != null) {
             LOG.debug(
-                "Config-based API key authentication — subject={}, tenant={}, roles={}",
-                configIdentity.subject(),
-                configIdentity.tenantId(),
-                configIdentity.roles()
-            );
+                    "Config-based API key authentication — subject={}, tenant={}, roles={}",
+                    configIdentity.subject(),
+                    configIdentity.tenantId(),
+                    configIdentity.roles());
             applyAuthentication(
-                ctx,
-                configIdentity,
-                resolveRemoteAddress(ctx),
-                ctx.getHeaderString("User-Agent")
-            );
+                    ctx,
+                    configIdentity,
+                    resolveRemoteAddress(ctx),
+                    ctx.getHeaderString("User-Agent"));
             return;
         }
 
@@ -284,37 +253,28 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         // 5. Verify via TokenValidationService (API key hash lookup)
         TokenValidationService<?> tokenValidationService =
-            cqrsHolder.isTokenValidationAvailable()
-                ? cqrsHolder.tokenValidationService()
-                : null;
+                cqrsHolder.isTokenValidationAvailable()
+                        ? cqrsHolder.tokenValidationService()
+                        : null;
         if (tokenValidationService == null) {
             LOG.error(
-                "No TokenValidationService configured — cannot authenticate requests. " +
-                    "Is operio.mode=production with platform-db configured?"
-            );
+                    "No TokenValidationService configured — cannot authenticate requests. "
+                            + "Is operio.mode=production with platform-db configured?");
             abortUnauthorized(
-                ctx,
-                "Authentication service not available — " +
-                    "server configuration error"
-            );
+                    ctx, "Authentication service not available — " + "server configuration error");
             return;
         }
 
         try {
             IdentityContext identity = tokenValidationService.verifyToken(token);
             LOG.debug(
-                "Authenticated: subject={}, tenantId={}, provider={}, roles={}",
-                identity.subject(),
-                identity.tenantId(),
-                identity.provider(),
-                identity.roles()
-            );
+                    "Authenticated: subject={}, tenantId={}, provider={}, roles={}",
+                    identity.subject(),
+                    identity.tenantId(),
+                    identity.provider(),
+                    identity.roles());
             applyAuthentication(
-                ctx,
-                identity,
-                resolveRemoteAddress(ctx),
-                ctx.getHeaderString("User-Agent")
-            );
+                    ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
         } catch (OperioAuthException e) {
             LOG.debug("Authentication failed: {}", e.getMessage());
             abortUnauthorized(ctx, e.getMessage());
@@ -333,8 +293,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /**
      * Resolves a config-based API key from {@code operio.api-keys.*}.
      *
-     * <p>Parses the comma-separated value string to extract roles
-     * ({@code role:X}) and tenant binding ({@code tenant:X}).
+     * <p>Parses the comma-separated value string to extract roles ({@code role:X}) and tenant
+     * binding ({@code tenant:X}).
      *
      * @param token the bearer token to look up
      * @return the resolved identity, or {@code null} if not a config key
@@ -364,19 +324,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         return new IdentityContext(
-            "config-api-key:" + token,
-            token,
-            null,
-            roles,
-            Map.of(),
-            tenantId,
-            "config-api-key"
-        );
+                "config-api-key:" + token,
+                token,
+                null,
+                roles,
+                Map.of(),
+                tenantId,
+                "config-api-key");
     }
 
     /**
-     * Checks whether the bearer token looks like a JWT (three
-     * dot-separated base64url segments).
+     * Checks whether the bearer token looks like a JWT (three dot-separated base64url segments).
      */
     private static boolean isJwt(String token) {
         int firstDot = token.indexOf('.');
@@ -388,23 +346,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Extracts the tenant ID from a JWT's payload without verifying the
-     * signature. Used to route the token to the correct IdP for full
-     * verification.
+     * Extracts the tenant ID from a JWT's payload without verifying the signature. Used to route
+     * the token to the correct IdP for full verification.
      *
-     * <p>Looks for {@code tenant_id}, {@code tenantId}, or extracts
-     * from the {@code iss} claim (Keycloak issuers end with
-     * {@code /realms/{tenantId}}).
+     * <p>Looks for {@code tenant_id}, {@code tenantId}, or extracts from the {@code iss} claim
+     * (Keycloak issuers end with {@code /realms/{tenantId}}).
      */
     private static String extractTenantFromJwt(String token) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length < 2) return null;
 
-            String payload = new String(
-                Base64.getUrlDecoder().decode(parts[1]),
-                StandardCharsets.UTF_8
-            );
+            String payload =
+                    new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
 
             // Lightweight JSON extraction without a full parser
             String tenantId = extractJsonStringValue(payload, "tenant_id");
@@ -416,7 +370,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 // For Keycloak JWTs: iss = http://host/realms/{realmName}
                 String issuer = extractJsonStringValue(payload, "iss");
                 if (issuer != null && issuer.contains("/realms/")) {
-                    tenantId = issuer.substring(issuer.lastIndexOf("/realms/") + "/realms/".length());
+                    tenantId =
+                            issuer.substring(issuer.lastIndexOf("/realms/") + "/realms/".length());
                 }
             }
 
@@ -427,8 +382,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Minimal JSON string value extraction — avoids a full JSON parser
-     * dependency in the auth filter hot path. Handles backslash-escaped quotes.
+     * Minimal JSON string value extraction — avoids a full JSON parser dependency in the auth
+     * filter hot path. Handles backslash-escaped quotes.
      */
     private static String extractJsonStringValue(String json, String key) {
         String searchKey = "\"" + key + "\"";
@@ -456,15 +411,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /**
      * Verifies a JWT bearer token via the tenant's IdpProvider.
      *
-     * <p>Extracts the tenant ID from the JWT payload (without
-     * verification), resolves the IdpProvider for that tenant,
-     * and delegates to its {@code verifyToken()} method for full
+     * <p>Extracts the tenant ID from the JWT payload (without verification), resolves the
+     * IdpProvider for that tenant, and delegates to its {@code verifyToken()} method for full
      * JWKS-based signature verification.
      */
     private void verifyJwt(ContainerRequestContext ctx, String token) {
-        IdpTenantResolver idpResolver = idpTenantResolverInstance.isResolvable()
-            ? idpTenantResolverInstance.get()
-            : null;
+        IdpTenantResolver idpResolver =
+                idpTenantResolverInstance.isResolvable() ? idpTenantResolverInstance.get() : null;
 
         if (idpResolver == null) {
             LOG.error("JWT received but no IdpTenantResolver configured");
@@ -482,18 +435,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             IdpProvider<?> idpProvider = idpResolver.resolve(tenantId);
             IdentityContext identity = idpProvider.verifyToken(tenantId, token);
             LOG.debug(
-                "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}",
-                identity.subject(),
-                identity.tenantId(),
-                identity.provider(),
-                identity.roles()
-            );
+                    "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}",
+                    identity.subject(),
+                    identity.tenantId(),
+                    identity.provider(),
+                    identity.roles());
             applyAuthentication(
-                ctx,
-                identity,
-                resolveRemoteAddress(ctx),
-                ctx.getHeaderString("User-Agent")
-            );
+                    ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
         } catch (OperioAuthException e) {
             LOG.debug("JWT authentication failed: {}", e.getMessage());
             abortUnauthorized(ctx, e.getMessage());
@@ -505,27 +453,27 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     /**
      * Applies the authenticated identity to the request context:
+     *
      * <ol>
-     *   <li>Populates the {@link OperioRequestHolder} with the identity and
-     *       HTTP metadata so the {@code TenantScopeInterceptor} can bind
-     *       {@code TenantContext} and {@code RequestContext} scoped values.</li>
-     *   <li>Sets the JAX-RS {@link SecurityContext} with the principal and
-     *       role information (enables {@code @RolesAllowed} on resources).</li>
-     *   <li>Stores the full {@link IdentityContext} as a request property
-     *       for backward-compatible downstream consumption.</li>
+     *   <li>Populates the {@link OperioRequestHolder} with the identity and HTTP metadata so the
+     *       {@code TenantScopeInterceptor} can bind {@code TenantContext} and {@code
+     *       RequestContext} scoped values.
+     *   <li>Sets the JAX-RS {@link SecurityContext} with the principal and role information
+     *       (enables {@code @RolesAllowed} on resources).
+     *   <li>Stores the full {@link IdentityContext} as a request property for backward-compatible
+     *       downstream consumption.
      * </ol>
      *
-     * @param ctx           the request context
-     * @param identity      the authenticated identity
+     * @param ctx the request context
+     * @param identity the authenticated identity
      * @param remoteAddress the resolved remote IP address (may be {@code null})
-     * @param userAgent     the User-Agent header value (may be {@code null})
+     * @param userAgent the User-Agent header value (may be {@code null})
      */
     private void applyAuthentication(
-        ContainerRequestContext ctx,
-        IdentityContext identity,
-        String remoteAddress,
-        String userAgent
-    ) {
+            ContainerRequestContext ctx,
+            IdentityContext identity,
+            String remoteAddress,
+            String userAgent) {
         // Populate the request-scoped holder for TenantScopeInterceptor
         requestHolder.set(identity, remoteAddress, userAgent);
 
@@ -553,42 +501,40 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /**
      * Checks whether the given token matches the configured bootstrap key.
      *
-     * <p>Returns {@code false} if no bootstrap key is configured or if
-     * the key is blank (i.e. the env var is not set).
+     * <p>Returns {@code false} if no bootstrap key is configured or if the key is blank (i.e. the
+     * env var is not set).
      *
      * @param token the bearer token to check
      * @return {@code true} if the token is the bootstrap key
      * @deprecated Replaced by {@link BootstrapKeyLifecycleService#isActiveBootstrapKey(String)}
-     *             which adds auto-disable and force-override semantics.
-     *             Retained as a private helper for any future fallback needs.
+     *     which adds auto-disable and force-override semantics. Retained as a private helper for
+     *     any future fallback needs.
      */
     @Deprecated
     @SuppressWarnings("unused")
     private boolean isBootstrapKey(String token) {
         return configInstance
-            .get()
-            .superAdmin()
-            .flatMap(OperioConfig.SuperAdminConfig::bootstrapKey)
-            .filter(key -> !key.isBlank())
-            .map(key -> key.equals(token))
-            .orElse(false);
+                .get()
+                .superAdmin()
+                .flatMap(OperioConfig.SuperAdminConfig::bootstrapKey)
+                .filter(key -> !key.isBlank())
+                .map(key -> key.equals(token))
+                .orElse(false);
     }
 
     /**
-     * Resolves the remote (client) IP address from the request headers,
-     * falling back through standard proxy headers.
+     * Resolves the remote (client) IP address from the request headers, falling back through
+     * standard proxy headers.
      *
      * <p>Resolution order:
+     *
      * <ol>
-     *   <li>{@code X-Forwarded-For} — the de-facto standard header set by
-     *       reverse proxies and load balancers. If the header contains
-     *       multiple comma-separated addresses, the <strong>first</strong>
-     *       entry (closest to the client) is used.</li>
-     *   <li>{@code X-Real-IP} — alternative header used by some proxies
-     *       (e.g. nginx).</li>
-     *   <li>{@code null} — if neither header is present. In production
-     *       deployments behind a load balancer at least one of these
-     *       headers should always be set.</li>
+     *   <li>{@code X-Forwarded-For} — the de-facto standard header set by reverse proxies and load
+     *       balancers. If the header contains multiple comma-separated addresses, the
+     *       <strong>first</strong> entry (closest to the client) is used.
+     *   <li>{@code X-Real-IP} — alternative header used by some proxies (e.g. nginx).
+     *   <li>{@code null} — if neither header is present. In production deployments behind a load
+     *       balancer at least one of these headers should always be set.
      * </ol>
      *
      * @param ctx the request context
@@ -612,20 +558,20 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Determines whether the given request path is a public endpoint that
-     * does not require authentication.
+     * Determines whether the given request path is a public endpoint that does not require
+     * authentication.
      *
      * <p>Public paths include:
+     *
      * <ul>
-     *   <li>{@code q/health}, {@code q/health/*} — Quarkus SmallRye Health
-     *       built-in endpoints (used by Kubernetes liveness/readiness
-     *       probes)</li>
-     *   <li>{@code api/v1/health} — application-level health endpoint</li>
-     *   <li>{@code api/v1/docs}, {@code api/v1/docs/openapi.json} — tenant
-     *       API documentation (Swagger UI and OpenAPI spec)</li>
-     *   <li>{@code api/v1/platform/docs} — platform docs Swagger UI page
-     *       (the spec endpoint at {@code api/v1/platform/docs/openapi.json}
-     *       is <em>not</em> public and requires super-admin auth)</li>
+     *   <li>{@code q/health}, {@code q/health/*} — Quarkus SmallRye Health built-in endpoints (used
+     *       by Kubernetes liveness/readiness probes)
+     *   <li>{@code api/v1/health} — application-level health endpoint
+     *   <li>{@code api/v1/docs}, {@code api/v1/docs/openapi.json} — tenant API documentation
+     *       (Swagger UI and OpenAPI spec)
+     *   <li>{@code api/v1/platform/docs} — platform docs Swagger UI page (the spec endpoint at
+     *       {@code api/v1/platform/docs/openapi.json} is <em>not</em> public and requires
+     *       super-admin auth)
      * </ul>
      *
      * @param path the request URI path (without leading slash)
@@ -634,38 +580,37 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     private static boolean isPublicPath(String path) {
         // Normalize: strip leading slash if present
         String normalized = path.startsWith("/") ? path.substring(1) : path;
-        return (
-            normalized.startsWith("q/health") ||
-            normalized.startsWith("api/v1/health") ||
-            // Tenant API docs (Swagger UI + OpenAPI spec)
-            normalized.startsWith("api/v1/docs/") ||
-            normalized.equals("api/v1/docs") ||
-            // Platform docs Swagger UI page only (spec endpoint is NOT public)
-            normalized.equals("api/v1/platform/docs") ||
-            normalized.equals("api/v1/platform/docs/") ||
-            // Site pages (public, unauthenticated)
-            normalized.isEmpty() ||
-            normalized.equals("docs") || normalized.equals("docs/") ||
-            normalized.equals("plans") || normalized.equals("plans/")
-        );
+        return (normalized.startsWith("q/health")
+                || normalized.startsWith("api/v1/health")
+                ||
+                // Tenant API docs (Swagger UI + OpenAPI spec)
+                normalized.startsWith("api/v1/docs/")
+                || normalized.equals("api/v1/docs")
+                ||
+                // Platform docs Swagger UI page only (spec endpoint is NOT public)
+                normalized.equals("api/v1/platform/docs")
+                || normalized.equals("api/v1/platform/docs/")
+                ||
+                // Site pages (public, unauthenticated)
+                normalized.isEmpty()
+                || normalized.equals("docs")
+                || normalized.equals("docs/")
+                || normalized.equals("plans")
+                || normalized.equals("plans/"));
     }
 
     /**
      * Aborts the request with HTTP 401 Unauthorized and a JSON error body.
      *
-     * @param ctx     the request context
+     * @param ctx the request context
      * @param message the error message to include in the response body
      */
-    private static void abortUnauthorized(
-        ContainerRequestContext ctx,
-        String message
-    ) {
+    private static void abortUnauthorized(ContainerRequestContext ctx, String message) {
         ctx.abortWith(
-            Response.status(Response.Status.UNAUTHORIZED)
-                .entity(Map.of("error", "Unauthorized", "message", message))
-                .type(MediaType.APPLICATION_JSON_TYPE)
-                .build()
-        );
+                Response.status(Response.Status.UNAUTHORIZED)
+                        .entity(Map.of("error", "Unauthorized", "message", message))
+                        .type(MediaType.APPLICATION_JSON_TYPE)
+                        .build());
     }
 
     // -----------------------------------------------------------------------
@@ -673,17 +618,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * Simple {@link SecurityContext} implementation backed by an
-     * {@link IdentityContext}.
+     * Simple {@link SecurityContext} implementation backed by an {@link IdentityContext}.
      *
-     * <p>Enables standard Jakarta Security annotations
-     * ({@code @RolesAllowed}, {@code @PermitAll}) and programmatic
-     * security context access in JAX-RS resources.
+     * <p>Enables standard Jakarta Security annotations ({@code @RolesAllowed}, {@code @PermitAll})
+     * and programmatic security context access in JAX-RS resources.
      */
-    private record OperioSecurityContext(
-        IdentityContext identity,
-        boolean secure
-    ) implements SecurityContext {
+    private record OperioSecurityContext(IdentityContext identity, boolean secure)
+            implements SecurityContext {
         @Override
         public Principal getUserPrincipal() {
             return identity::subject;
@@ -691,11 +632,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         @Override
         public boolean isUserInRole(String role) {
-            return (
-                role != null &&
-                identity.roles() != null &&
-                identity.roles().contains(role)
-            );
+            return (role != null && identity.roles() != null && identity.roles().contains(role));
         }
 
         @Override

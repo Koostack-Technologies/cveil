@@ -3,19 +3,18 @@ package com.koostack.operio.tenant.authz.keycloak;
 /**
  * Configuration for the Keycloak-backed {@link KeycloakAuthzProvider}.
  *
- * @param serverUrl      the Keycloak server base URL (e.g. {@code http://localhost:8080})
- * @param adminRealm     the admin realm (typically {@code "master"})
- * @param adminClientId  the admin client ID (typically {@code "admin-cli"})
- * @param adminUsername  the admin username
- * @param adminPassword  the admin password
+ * @param serverUrl the Keycloak server base URL (e.g. {@code http://localhost:8080})
+ * @param adminRealm the admin realm (typically {@code "master"})
+ * @param adminClientId the admin client ID (typically {@code "admin-cli"})
+ * @param adminUsername the admin username
+ * @param adminPassword the admin password
  */
 public record KeycloakAuthzConfig(
-    String serverUrl,
-    String adminRealm,
-    String adminClientId,
-    String adminUsername,
-    String adminPassword
-) {
+        String serverUrl,
+        String adminRealm,
+        String adminClientId,
+        String adminUsername,
+        String adminPassword) {
     public KeycloakAuthzConfig {
         if (serverUrl == null || serverUrl.isBlank()) {
             throw new IllegalArgumentException("serverUrl must not be blank");

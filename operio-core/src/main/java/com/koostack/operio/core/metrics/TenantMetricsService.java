@@ -3,9 +3,8 @@ package com.koostack.operio.core.metrics;
 import com.koostack.operio.core.spi.Plugin;
 
 /**
- * @deprecated Use {@link MetricPublisherService} instead. This interface
- *             will be removed in a future release.
+ * @deprecated Use {@link MetricPublisherService} instead. This interface will be removed in a
+ *     future release.
  */
 @Deprecated(forRemoval = true)
-public interface TenantMetricsService<T> extends Plugin<T> {
-}
+public interface TenantMetricsService<T> extends Plugin<T> {}

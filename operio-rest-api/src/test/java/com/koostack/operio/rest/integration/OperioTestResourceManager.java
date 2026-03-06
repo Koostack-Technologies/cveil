@@ -12,40 +12,42 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Quarkus test resource manager that starts Postgres and Redis containers
- * via Testcontainers before the Quarkus application boots, and injects
- * their connection details as system properties.
+ * Quarkus test resource manager that starts Postgres and Redis containers via Testcontainers before
+ * the Quarkus application boots, and injects their connection details as system properties.
  *
  * <h2>Why this exists</h2>
- * <p>Operio manages its own HikariCP connection pools and Redis clients
- * through {@code OperioProducers} — it does not use Quarkus DevServices
- * or Quarkus-managed datasources. This means Quarkus DevServices cannot
- * auto-provision infrastructure for tests. This resource manager fills
+ *
+ * <p>Operio manages its own HikariCP connection pools and Redis clients through {@code
+ * OperioProducers} — it does not use Quarkus DevServices or Quarkus-managed datasources. This means
+ * Quarkus DevServices cannot auto-provision infrastructure for tests. This resource manager fills
  * that gap by:
+ *
  * <ol>
- *   <li>Starting a Postgres 16 container with the {@code operio_test}
- *       database.</li>
- *   <li>Starting a Redis 7 container.</li>
- *   <li>Returning a property map that the Quarkus test framework injects
- *       as config overrides before the CDI container initializes.</li>
+ *   <li>Starting a Postgres 16 container with the {@code operio_test} database.
+ *   <li>Starting a Redis 7 container.
+ *   <li>Returning a property map that the Quarkus test framework injects as config overrides before
+ *       the CDI container initializes.
  * </ol>
  *
  * <h2>Injected properties</h2>
- * <p>The following properties are injected and referenced by the test
- * {@code application.yml} via {@code ${operio.test.*}} placeholders:
+ *
+ * <p>The following properties are injected and referenced by the test {@code application.yml} via
+ * {@code ${operio.test.*}} placeholders:
+ *
  * <ul>
- *   <li>{@code operio.test.db.url} — JDBC URL for the consent database</li>
- *   <li>{@code operio.test.db.username} — Postgres username</li>
- *   <li>{@code operio.test.db.password} — Postgres password</li>
- *   <li>{@code operio.test.platform-db.url} — JDBC URL for the platform database
- *       (same Postgres instance, same database — mirrors typical single-DB deployments)</li>
- *   <li>{@code operio.test.platform-db.username} — Postgres username (platform)</li>
- *   <li>{@code operio.test.platform-db.password} — Postgres password (platform)</li>
- *   <li>{@code operio.test.redis.host} — Redis hostname</li>
- *   <li>{@code operio.test.redis.port} — Redis port</li>
+ *   <li>{@code operio.test.db.url} — JDBC URL for the consent database
+ *   <li>{@code operio.test.db.username} — Postgres username
+ *   <li>{@code operio.test.db.password} — Postgres password
+ *   <li>{@code operio.test.platform-db.url} — JDBC URL for the platform database (same Postgres
+ *       instance, same database — mirrors typical single-DB deployments)
+ *   <li>{@code operio.test.platform-db.username} — Postgres username (platform)
+ *   <li>{@code operio.test.platform-db.password} — Postgres password (platform)
+ *   <li>{@code operio.test.redis.host} — Redis hostname
+ *   <li>{@code operio.test.redis.port} — Redis port
  * </ul>
  *
  * <h2>Usage</h2>
+ *
  * <pre>{@code
  * @QuarkusTest
  * @QuarkusTestResource(OperioTestResourceManager.class)
@@ -53,19 +55,16 @@ import org.testcontainers.utility.DockerImageName;
  * }</pre>
  *
  * <h2>Container lifecycle</h2>
- * <p>Containers are started once per test class (or shared across classes
- * if Quarkus caches the test application). They are stopped in
- * {@link #stop()} when the test resource is torn down. Testcontainers
- * also registers a JVM shutdown hook as a safety net.
+ *
+ * <p>Containers are started once per test class (or shared across classes if Quarkus caches the
+ * test application). They are stopped in {@link #stop()} when the test resource is torn down.
+ * Testcontainers also registers a JVM shutdown hook as a safety net.
  *
  * @see io.quarkus.test.common.QuarkusTestResourceLifecycleManager
  */
-public class OperioTestResourceManager
-    implements QuarkusTestResourceLifecycleManager {
+public class OperioTestResourceManager implements QuarkusTestResourceLifecycleManager {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        OperioTestResourceManager.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(OperioTestResourceManager.class);
 
     // -- Container image tags -------------------------------------------------
 
@@ -94,44 +93,37 @@ public class OperioTestResourceManager
     // -----------------------------------------------------------------------
 
     /**
-     * Starts Postgres and Redis containers and returns a map of config
-     * property overrides that the Quarkus test framework injects before
-     * the CDI container initializes.
+     * Starts Postgres and Redis containers and returns a map of config property overrides that the
+     * Quarkus test framework injects before the CDI container initializes.
      *
      * @return property overrides keyed by config property name
      */
     @Override
     public Map<String, String> start() {
-        LOG.info(
-            "Starting Testcontainers infrastructure (Postgres + Redis)..."
-        );
+        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis)...");
 
         // -- Postgres ---------------------------------------------------------
 
-        postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse(POSTGRES_IMAGE)
-        )
-            .withDatabaseName(DB_NAME)
-            .withUsername(DB_USERNAME)
-            .withPassword(DB_PASSWORD)
-            .withCommand("postgres", "-c", "max_connections=300")
-            .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("postgres"));
+        postgres =
+                new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+                        .withDatabaseName(DB_NAME)
+                        .withUsername(DB_USERNAME)
+                        .withPassword(DB_PASSWORD)
+                        .withCommand("postgres", "-c", "max_connections=300")
+                        .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("postgres"));
 
         postgres.start();
 
         String jdbcUrl = postgres.getJdbcUrl();
-        LOG.info(
-            "Postgres started: url={}, user={}",
-            jdbcUrl,
-            DB_USERNAME
-        );
+        LOG.info("Postgres started: url={}, user={}", jdbcUrl, DB_USERNAME);
 
         // -- Redis ------------------------------------------------------------
 
-        redis = new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
-            .withExposedPorts(REDIS_PORT)
-            .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1))
-            .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("redis"));
+        redis =
+                new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
+                        .withExposedPorts(REDIS_PORT)
+                        .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1))
+                        .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("redis"));
 
         redis.start();
 
@@ -160,16 +152,13 @@ public class OperioTestResourceManager
         props.put("operio.test.redis.port", String.valueOf(redisPort));
 
         LOG.info(
-            "Testcontainers infrastructure ready — {} config properties injected",
-            props.size()
-        );
+                "Testcontainers infrastructure ready — {} config properties injected",
+                props.size());
 
         return props;
     }
 
-    /**
-     * Stops and removes the Postgres and Redis containers.
-     */
+    /** Stops and removes the Postgres and Redis containers. */
     @Override
     public void stop() {
         LOG.info("Stopping Testcontainers infrastructure...");

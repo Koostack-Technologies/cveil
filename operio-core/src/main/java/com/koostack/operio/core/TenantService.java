@@ -8,13 +8,12 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Tenant-scoped application service that composes command and query services
- * into cohesive business operations.
+ * Tenant-scoped application service that composes command and query services into cohesive business
+ * operations.
  *
- * <p>This is the primary interface consumed by REST resources and other
- * entry points. It owns all orchestration logic — validation, enrichment
- * (resolving ConsentScope to policy_id), and routing to the appropriate
- * command or query service.
+ * <p>This is the primary interface consumed by REST resources and other entry points. It owns all
+ * orchestration logic — validation, enrichment (resolving ConsentScope to policy_id), and routing
+ * to the appropriate command or query service.
  *
  * <p>All methods require an active {@link TenantContext}.
  */
@@ -31,16 +30,15 @@ public interface TenantService extends OperioService {
     void removeSubject(String subjectName);
 
     /**
-     * Cryptographically shreds a subject by deleting their per-subject DSAR
-     * encryption key.  All shreddable event payloads for this subject become
-     * permanently unreadable.  GDPR Article 17 — right to be forgotten.
+     * Cryptographically shreds a subject by deleting their per-subject DSAR encryption key. All
+     * shreddable event payloads for this subject become permanently unreadable. GDPR Article 17 —
+     * right to be forgotten.
      */
     void shredSubject(String subjectName);
 
     /**
-     * Returns {@code true} if all events encrypted with the subject's DSAR
-     * key have been published by the outbox poller.  This is the safety
-     * check before calling {@link #shredSubject(String)}.
+     * Returns {@code true} if all events encrypted with the subject's DSAR key have been published
+     * by the outbox poller. This is the safety check before calling {@link #shredSubject(String)}.
      *
      * @param subjectName the data subject identifier
      * @return {@code true} if zero unpublished events remain
@@ -61,11 +59,9 @@ public interface TenantService extends OperioService {
 
     void revokeAllConsent(String subject);
 
-    BatchConsentResult grantAllConsent(
-        String subject, List<BatchConsentEntry> entries);
+    BatchConsentResult grantAllConsent(String subject, List<BatchConsentEntry> entries);
 
-    BatchConsentResult revokeAllConsent(
-        String subject, List<BatchConsentEntry> entries);
+    BatchConsentResult revokeAllConsent(String subject, List<BatchConsentEntry> entries);
 
     // -----------------------------------------------------------------------
     // Entity Aggregate operations
@@ -91,18 +87,17 @@ public interface TenantService extends OperioService {
     // Field Aggregate operations
     // -----------------------------------------------------------------------
 
-    void registerField(String fieldName, String entityName,
-                       String description, String entityDescription);
+    void registerField(
+            String fieldName, String entityName, String description, String entityDescription);
 
     void updateField(String fieldName, String entityName, String description);
 
     void removeField(String fieldName, String entityName);
 
-    void assignFieldCategory(String fieldName, String entityName,
-                             String categoryName, String categoryDescription);
+    void assignFieldCategory(
+            String fieldName, String entityName, String categoryName, String categoryDescription);
 
-    void unassignFieldCategory(String fieldName, String entityName,
-                               String categoryName);
+    void unassignFieldCategory(String fieldName, String entityName, String categoryName);
 
     // -----------------------------------------------------------------------
     // Purpose Aggregate operations
@@ -114,19 +109,28 @@ public interface TenantService extends OperioService {
 
     void removePurpose(String purposeName);
 
-    void linkPurposeToRegulation(String purposeName, String regulationName,
-                                 String lawfulBasis, String onGranted,
-                                 String onDenied);
+    void linkPurposeToRegulation(
+            String purposeName,
+            String regulationName,
+            String lawfulBasis,
+            String onGranted,
+            String onDenied);
 
     void unlinkPurposeFromRegulation(String purposeName, String regulationName);
 
-    void addPurposePolicy(String purposeName, String policyType,
-                          String fieldName, String entityName,
-                          String categoryName);
+    void addPurposePolicy(
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName);
 
-    void removePurposePolicy(String purposeName, String policyType,
-                             String fieldName, String entityName,
-                             String categoryName);
+    void removePurposePolicy(
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName);
 
     // -----------------------------------------------------------------------
     // Jurisdiction Aggregate operations
@@ -148,12 +152,10 @@ public interface TenantService extends OperioService {
 
     void removeRegulation(String regulationName);
 
-    void addRegulationJurisdiction(String regulationName,
-                                   String jurisdictionName,
-                                   String description);
+    void addRegulationJurisdiction(
+            String regulationName, String jurisdictionName, String description);
 
-    void removeRegulationJurisdiction(String regulationName,
-                                      String jurisdictionName);
+    void removeRegulationJurisdiction(String regulationName, String jurisdictionName);
 
     // -----------------------------------------------------------------------
     // Aggregate queries
@@ -214,18 +216,19 @@ public interface TenantService extends OperioService {
     /**
      * Orchestrates complete subject erasure (GDPR Article 17).
      *
-     * <p>Executes the following steps in order, each wrapped in its own
-     * try/catch so that a failure in one step does not prevent the others:
+     * <p>Executes the following steps in order, each wrapped in its own try/catch so that a failure
+     * in one step does not prevent the others:
+     *
      * <ol>
-     *   <li>Count and revoke all consent entries</li>
-     *   <li>Delete cached consent-decision keys</li>
-     *   <li>Remove the subject entity</li>
-     *   <li>Log the DSAR audit event (deletes ledger + writes audit log)</li>
+     *   <li>Count and revoke all consent entries
+     *   <li>Delete cached consent-decision keys
+     *   <li>Remove the subject entity
+     *   <li>Log the DSAR audit event (deletes ledger + writes audit log)
      * </ol>
      *
-     * <p>The DSAR encryption key is <em>not</em> deleted inline — callers
-     * must invoke the shred endpoint separately after confirming the outbox
-     * has flushed all pending events for this subject.
+     * <p>The DSAR encryption key is <em>not</em> deleted inline — callers must invoke the shred
+     * endpoint separately after confirming the outbox has flushed all pending events for this
+     * subject.
      *
      * @param subjectId the data subject identifier
      * @param requestId unique DSAR request identifier for audit trail
@@ -234,18 +237,17 @@ public interface TenantService extends OperioService {
     ErasureReceipt eraseSubject(String subjectId, String requestId);
 
     /**
-     * Returns the number of cached consent-decision keys for the given subject.
-     * Implementations backed by a cache (e.g. Redis) should override this;
-     * the default returns {@code 0} (no cache).
+     * Returns the number of cached consent-decision keys for the given subject. Implementations
+     * backed by a cache (e.g. Redis) should override this; the default returns {@code 0} (no
+     * cache).
      */
     default long countCachedKeysForSubject(String subject) {
         return 0;
     }
 
     /**
-     * Deletes all cached consent-decision keys for the given subject.
-     * Implementations backed by a cache (e.g. Redis) should override this;
-     * the default is a no-op returning {@code 0}.
+     * Deletes all cached consent-decision keys for the given subject. Implementations backed by a
+     * cache (e.g. Redis) should override this; the default is a no-op returning {@code 0}.
      */
     default long deleteCachedKeysForSubject(String subject) {
         return 0;
@@ -256,21 +258,19 @@ public interface TenantService extends OperioService {
     // -----------------------------------------------------------------------
 
     /**
-     * Returns a paginated view of the consent graph. Supports full-graph
-     * pagination and BFS subgraph queries. Requires a graph-capable backend
-     * (Redis graph projection).
+     * Returns a paginated view of the consent graph. Supports full-graph pagination and BFS
+     * subgraph queries. Requires a graph-capable backend (Redis graph projection).
      *
-     * @param cursor   opaque cursor for pagination, or {@code null} for first page
-     * @param limit    max nodes per page
+     * @param cursor opaque cursor for pagination, or {@code null} for first page
+     * @param limit max nodes per page
      * @param rootType optional root node type for subgraph BFS
      * @param rootName optional root node name for subgraph BFS
-     * @param depth    optional BFS depth limit (ignored if no root specified)
+     * @param depth optional BFS depth limit (ignored if no root specified)
      * @return the consent graph page
      * @throws UnsupportedOperationException if the backend does not support graph queries
      */
-    default ConsentGraph getConsentGraph(String cursor, int limit,
-                                         String rootType, String rootName,
-                                         Integer depth) {
+    default ConsentGraph getConsentGraph(
+            String cursor, int limit, String rootType, String rootName, Integer depth) {
         throw new UnsupportedOperationException("Consent graph not available");
     }
 

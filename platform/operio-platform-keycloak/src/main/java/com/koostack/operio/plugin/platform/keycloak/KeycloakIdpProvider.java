@@ -8,6 +8,16 @@ import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.platform.iam.EmailService;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import jakarta.ws.rs.core.Response;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -18,35 +28,22 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Keycloak-backed identity provider — the platform default.
  *
- * <p>Uses the Keycloak Admin REST API for user management and realm
- * lifecycle, and the token endpoint for authentication. JWT verification
- * is delegated to {@link JwksTokenVerifier} using the realm's JWKS
- * endpoint.
+ * <p>Uses the Keycloak Admin REST API for user management and realm lifecycle, and the token
+ * endpoint for authentication. JWT verification is delegated to {@link JwksTokenVerifier} using the
+ * realm's JWKS endpoint.
  *
  * <h2>Realm Mapping</h2>
- * <p>Each Operio tenant maps to a dedicated Keycloak realm. The realm
- * name equals the tenant ID. Provisioning creates the realm, a
- * confidential client, and default roles.
+ *
+ * <p>Each Operio tenant maps to a dedicated Keycloak realm. The realm name equals the tenant ID.
+ * Provisioning creates the realm, a confidential client, and default roles.
  *
  * <h2>Thread Safety</h2>
- * <p>This class is thread-safe. The Keycloak admin client is shared
- * across threads; per-tenant client secrets are cached in a
- * {@link ConcurrentHashMap}.
+ *
+ * <p>This class is thread-safe. The Keycloak admin client is shared across threads; per-tenant
+ * client secrets are cached in a {@link ConcurrentHashMap}.
  */
 public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
@@ -106,18 +103,17 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     @Override
     public void configure(KeycloakConfig config) {
         this.config = config;
-        this.adminClient = KeycloakBuilder.builder()
-            .serverUrl(config.serverUrl())
-            .realm(config.adminRealm())
-            .clientId(config.adminClientId())
-            .username(config.adminUsername())
-            .password(config.adminPassword())
-            .build();
+        this.adminClient =
+                KeycloakBuilder.builder()
+                        .serverUrl(config.serverUrl())
+                        .realm(config.adminRealm())
+                        .clientId(config.adminClientId())
+                        .username(config.adminUsername())
+                        .password(config.adminPassword())
+                        .build();
         this.realmProvisioner = new KeycloakRealmProvisioner(adminClient, config.operioClientId());
         this.jwksVerifier = new JwksTokenVerifier();
-        this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(HTTP_TIMEOUT)
-            .build();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     }
 
     @Override
@@ -142,28 +138,37 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     public AuthResult authenticate(String tenantId, String email, String password) {
         try {
             String clientSecret = resolveClientSecret(tenantId);
-            String tokenUrl = config.serverUrl() + "/realms/" + tenantId
-                + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + tenantId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=password"
-                + "&client_id=" + urlEncode(config.operioClientId())
-                + "&client_secret=" + urlEncode(clientSecret)
-                + "&username=" + urlEncode(email)
-                + "&password=" + urlEncode(password);
+            String formBody =
+                    "grant_type=password"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&username="
+                            + urlEncode(email)
+                            + "&password="
+                            + urlEncode(password);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(tokenUrl))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(HTTP_TIMEOUT)
-                .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                .build();
+            HttpRequest request =
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(tokenUrl))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .timeout(HTTP_TIMEOUT)
+                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                            .build();
 
-            HttpResponse<String> response = httpClient.send(request,
-                HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                LOG.debug("Authentication failed for tenant '{}', email '{}': HTTP {}",
-                    tenantId, email, response.statusCode());
+                LOG.debug(
+                        "Authentication failed for tenant '{}', email '{}': HTTP {}",
+                        tenantId,
+                        email,
+                        response.statusCode());
                 throw new OperioAuthException("Invalid email or password");
             }
 
@@ -171,8 +176,11 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         } catch (OperioAuthException e) {
             throw e;
         } catch (Exception e) {
-            LOG.debug("Authentication failed for tenant '{}', email '{}': {}",
-                tenantId, email, e.getMessage());
+            LOG.debug(
+                    "Authentication failed for tenant '{}', email '{}': {}",
+                    tenantId,
+                    email,
+                    e.getMessage());
             throw new OperioAuthException("Invalid email or password");
         }
     }
@@ -181,27 +189,34 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     public AuthResult refreshToken(String tenantId, String refreshToken) {
         try {
             String clientSecret = resolveClientSecret(tenantId);
-            String tokenUrl = config.serverUrl() + "/realms/" + tenantId
-                + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + tenantId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=refresh_token"
-                + "&client_id=" + urlEncode(config.operioClientId())
-                + "&client_secret=" + urlEncode(clientSecret)
-                + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "grant_type=refresh_token"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(tokenUrl))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(HTTP_TIMEOUT)
-                .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                .build();
+            HttpRequest request =
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(tokenUrl))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .timeout(HTTP_TIMEOUT)
+                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                            .build();
 
-            HttpResponse<String> response = httpClient.send(request,
-                HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                LOG.debug("Token refresh failed for tenant '{}': HTTP {}",
-                    tenantId, response.statusCode());
+                LOG.debug(
+                        "Token refresh failed for tenant '{}': HTTP {}",
+                        tenantId,
+                        response.statusCode());
                 throw new OperioAuthException("Invalid or expired refresh token");
             }
 
@@ -218,29 +233,37 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     public void logout(String tenantId, String refreshToken) {
         try {
             String clientSecret = resolveClientSecret(tenantId);
-            String logoutUrl = config.serverUrl() + "/realms/" + tenantId
-                + "/protocol/openid-connect/logout";
+            String logoutUrl =
+                    config.serverUrl() + "/realms/" + tenantId + "/protocol/openid-connect/logout";
 
-            String formBody = "client_id=" + urlEncode(config.operioClientId())
-                + "&client_secret=" + urlEncode(clientSecret)
-                + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(logoutUrl))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(HTTP_TIMEOUT)
-                .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                .build();
+            HttpRequest request =
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(logoutUrl))
+                            .header("Content-Type", "application/x-www-form-urlencoded")
+                            .timeout(HTTP_TIMEOUT)
+                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                            .build();
 
-            HttpResponse<String> response = httpClient.send(request,
-                HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 204 || response.statusCode() == 200) {
                 LOG.debug("Refresh token revoked for tenant '{}'", tenantId);
             } else {
                 // Log but don't fail — the token may already be expired/revoked
-                LOG.warn("Logout returned HTTP {} for tenant '{}': {}",
-                    response.statusCode(), tenantId, response.body());
+                LOG.warn(
+                        "Logout returned HTTP {} for tenant '{}': {}",
+                        response.statusCode(),
+                        tenantId,
+                        response.body());
             }
         } catch (Exception e) {
             LOG.warn("Logout failed for tenant '{}': {}", tenantId, e.getMessage());
@@ -280,29 +303,35 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
             if (response.getStatus() != 201) {
                 String body = response.hasEntity() ? response.readEntity(String.class) : "";
                 throw new OperioServiceException(
-                    "Failed to create user in Keycloak: HTTP " + response.getStatus()
-                    + (body.isEmpty() ? "" : " — " + body)
-                );
+                        "Failed to create user in Keycloak: HTTP "
+                                + response.getStatus()
+                                + (body.isEmpty() ? "" : " — " + body));
             }
 
             // Extract user ID from Location header
             String locationHeader = response.getHeaderString("Location");
             if (locationHeader == null || !locationHeader.contains("/")) {
                 throw new OperioServiceException(
-                    "Keycloak did not return a Location header for the created user"
-                );
+                        "Keycloak did not return a Location header for the created user");
             }
             String userId = locationHeader.substring(locationHeader.lastIndexOf('/') + 1);
 
-            LOG.info("User registered in tenant '{}': userId={}, email={}", tenantId, userId, email);
+            LOG.info(
+                    "User registered in tenant '{}': userId={}, email={}", tenantId, userId, email);
 
             // Trigger Keycloak's built-in email verification flow
             try {
-                adminClient.realm(tenantId).users().get(userId)
-                    .executeActionsEmail(List.of("VERIFY_EMAIL"));
+                adminClient
+                        .realm(tenantId)
+                        .users()
+                        .get(userId)
+                        .executeActionsEmail(List.of("VERIFY_EMAIL"));
             } catch (Exception e) {
-                LOG.warn("Failed to send verification email for user '{}' in tenant '{}': {}",
-                    userId, tenantId, e.getMessage());
+                LOG.warn(
+                        "Failed to send verification email for user '{}' in tenant '{}': {}",
+                        userId,
+                        tenantId,
+                        e.getMessage());
             }
 
             return new IdpUser(userId, email, fullName, "unverified", Instant.now());
@@ -322,8 +351,8 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
     @Override
     public void initiatePasswordReset(String tenantId, String email) {
-        List<UserRepresentation> users = adminClient.realm(tenantId).users()
-            .searchByEmail(email, true);
+        List<UserRepresentation> users =
+                adminClient.realm(tenantId).users().searchByEmail(email, true);
 
         if (users.isEmpty()) {
             // Don't reveal whether the email exists
@@ -332,8 +361,11 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         }
 
         String userId = users.get(0).getId();
-        adminClient.realm(tenantId).users().get(userId)
-            .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+        adminClient
+                .realm(tenantId)
+                .users()
+                .get(userId)
+                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
 
         LOG.info("Password reset initiated for email '{}' in tenant '{}'", email, tenantId);
     }
@@ -422,18 +454,22 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
                 }
             }
         } catch (Exception e) {
-            LOG.warn("Failed to resolve client secret for tenant '{}': {}", tenantId, e.getMessage());
+            LOG.warn(
+                    "Failed to resolve client secret for tenant '{}': {}",
+                    tenantId,
+                    e.getMessage());
         }
 
         throw new OperioAuthException(
-            "No client secret available for tenant '" + tenantId + "'. " +
-            "Was the realm provisioned via provisionTenant()?"
-        );
+                "No client secret available for tenant '"
+                        + tenantId
+                        + "'. "
+                        + "Was the realm provisioned via provisionTenant()?");
     }
 
     /**
-     * Parse the JSON token response from Keycloak's token endpoint.
-     * Uses minimal JSON extraction to avoid adding a Jackson dependency.
+     * Parse the JSON token response from Keycloak's token endpoint. Uses minimal JSON extraction to
+     * avoid adding a Jackson dependency.
      */
     private AuthResult parseTokenResponse(String json, String tenantId) {
         String accessToken = extractJsonStringValue(json, "access_token");
@@ -446,16 +482,12 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
         long expiresIn = expiresInStr != null ? Long.parseLong(expiresInStr) : 900;
 
-        IdentityContext identity = jwksVerifier.verify(
-            jwksUrl(tenantId), accessToken, tenantId
-        );
+        IdentityContext identity = jwksVerifier.verify(jwksUrl(tenantId), accessToken, tenantId);
 
         return AuthResult.bearer(accessToken, refreshToken, expiresIn, identity);
     }
 
-    /**
-     * Extract a JSON string value by key. Handles escaped quotes within values.
-     */
+    /** Extract a JSON string value by key. Handles escaped quotes within values. */
     private static String extractJsonStringValue(String json, String key) {
         String searchKey = "\"" + key + "\"";
         int keyIndex = json.indexOf(searchKey);
@@ -479,9 +511,7 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         return null;
     }
 
-    /**
-     * Extract a JSON numeric value by key (unquoted).
-     */
+    /** Extract a JSON numeric value by key (unquoted). */
     private static String extractJsonNumberValue(String json, String key) {
         String searchKey = "\"" + key + "\"";
         int keyIndex = json.indexOf(searchKey);
@@ -498,7 +528,8 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
         // Read digits
         int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.')) {
+        while (end < json.length()
+                && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.')) {
             end++;
         }
         return start < end ? json.substring(start, end) : null;

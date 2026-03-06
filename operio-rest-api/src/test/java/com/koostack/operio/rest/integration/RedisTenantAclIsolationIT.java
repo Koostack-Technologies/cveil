@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.TenantService;
-import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -28,54 +27,51 @@ import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.exceptions.JedisAccessControlException;
 
 /**
- * Integration test that verifies <strong>server-side</strong> Redis ACL
- * tenant isolation — the critical security boundary that prevents one
- * tenant from reading or writing another tenant's consent data in Redis.
+ * Integration test that verifies <strong>server-side</strong> Redis ACL tenant isolation — the
+ * critical security boundary that prevents one tenant from reading or writing another tenant's
+ * consent data in Redis.
  *
  * <h2>What this test proves</h2>
+ *
  * <ol>
- *   <li>Each tenant provisioned by {@code TenantManager} gets a dedicated
- *       Redis ACL user (e.g. {@code t_acl_tenant_a}) restricted to keys
- *       matching {@code operio:{tenantId}:*}.</li>
- *   <li>A per-tenant Redis connection (authenticated as the tenant's ACL
- *       user) <strong>can</strong> read/write keys within its own
- *       namespace.</li>
- *   <li>A per-tenant Redis connection <strong>cannot</strong> read, write,
- *       or delete keys in another tenant's namespace — Redis rejects the
- *       operation with a {@link JedisAccessControlException} (NOPERM).</li>
- *   <li>A per-tenant Redis connection <strong>cannot</strong> access
- *       platform-level keys (e.g. {@code ratelimit:*}) — those are
- *       intentionally outside the tenant ACL key pattern.</li>
- *   <li>The admin (default) Redis user <strong>can</strong> access all
- *       keys (needed for provisioning, health checks, rate limiting).</li>
- *   <li>Redis ACL reprovisioning (credential rotation / backfill) works
- *       correctly — after reprovisioning, the old password is rejected
- *       and the new password authenticates successfully.</li>
+ *   <li>Each tenant provisioned by {@code TenantManager} gets a dedicated Redis ACL user (e.g.
+ *       {@code t_acl_tenant_a}) restricted to keys matching {@code operio:{tenantId}:*}.
+ *   <li>A per-tenant Redis connection (authenticated as the tenant's ACL user) <strong>can</strong>
+ *       read/write keys within its own namespace.
+ *   <li>A per-tenant Redis connection <strong>cannot</strong> read, write, or delete keys in
+ *       another tenant's namespace — Redis rejects the operation with a {@link
+ *       JedisAccessControlException} (NOPERM).
+ *   <li>A per-tenant Redis connection <strong>cannot</strong> access platform-level keys (e.g.
+ *       {@code ratelimit:*}) — those are intentionally outside the tenant ACL key pattern.
+ *   <li>The admin (default) Redis user <strong>can</strong> access all keys (needed for
+ *       provisioning, health checks, rate limiting).
+ *   <li>Redis ACL reprovisioning (credential rotation / backfill) works correctly — after
+ *       reprovisioning, the old password is rejected and the new password authenticates
+ *       successfully.
  * </ol>
  *
  * <h2>Infrastructure</h2>
- * <p>Uses the same {@link OperioTestResourceManager} as
- * {@link ProductionStackIT} to start Postgres 16 and Redis 7 containers
- * via Testcontainers. The Quarkus application boots in production mode
+ *
+ * <p>Uses the same {@link OperioTestResourceManager} as {@link ProductionStackIT} to start Postgres
+ * 16 and Redis 7 containers via Testcontainers. The Quarkus application boots in production mode
  * with real infrastructure.
  *
  * <h2>Test flow</h2>
+ *
  * <p>Tests are ordered to build on each other:
+ *
  * <ol>
- *   <li><strong>Setup</strong> — creates two tenants (A and B) and API
- *       keys via the REST API using the bootstrap key.</li>
- *   <li><strong>Write isolation</strong> — writes keys in each tenant's
- *       namespace using per-tenant ACL connections, verifies cross-tenant
- *       writes are rejected.</li>
- *   <li><strong>Read isolation</strong> — verifies cross-tenant reads are
- *       rejected.</li>
- *   <li><strong>Platform key isolation</strong> — verifies tenant ACL
- *       users cannot access platform-level keys.</li>
- *   <li><strong>Admin access</strong> — verifies the admin user can
- *       access all keys.</li>
- *   <li><strong>Reprovisioning</strong> — rotates credentials for tenant A,
- *       verifies old credentials fail and new ones work.</li>
- *   <li><strong>Cleanup</strong> — deletes both tenants.</li>
+ *   <li><strong>Setup</strong> — creates two tenants (A and B) and API keys via the REST API using
+ *       the bootstrap key.
+ *   <li><strong>Write isolation</strong> — writes keys in each tenant's namespace using per-tenant
+ *       ACL connections, verifies cross-tenant writes are rejected.
+ *   <li><strong>Read isolation</strong> — verifies cross-tenant reads are rejected.
+ *   <li><strong>Platform key isolation</strong> — verifies tenant ACL users cannot access
+ *       platform-level keys.
+ *   <li><strong>Admin access</strong> — verifies the admin user can access all keys.
+ *   <li><strong>Reprovisioning</strong> — rotates credentials for tenant A, verifies old
+ *       credentials fail and new ones work.
+ *   <li><strong>Cleanup</strong> — deletes both tenants.
  * </ol>
  *
  * @see ProductionStackIT
@@ -89,8 +85,7 @@ import redis.clients.jedis.exceptions.JedisAccessControlException;
 class RedisTenantAclIsolationIT {
 
     // -- Bootstrap key (must match test application.yml) -----------------------
-    private static final String BOOTSTRAP_KEY =
-        "test-bootstrap-key-for-integration-tests";
+    private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
     // -- Tenants under test ---------------------------------------------------
     private static final String TENANT_A = "acl_tenant_a";
@@ -110,14 +105,11 @@ class RedisTenantAclIsolationIT {
     private static volatile int redisPort;
     private static volatile String redisAdminPassword; // may be null (no-auth)
 
-    @Inject
-    TenantService tenantService;
+    @Inject TenantService tenantService;
 
-    @Inject
-    OperioConfig config;
+    @Inject OperioConfig config;
 
-    @Inject
-    com.koostack.operio.rest.config.PlatformCqrsHolder cqrsHolder;
+    @Inject com.koostack.operio.rest.config.PlatformCqrsHolder cqrsHolder;
 
     // =======================================================================
     // 1. Setup — create tenants and resolve Redis credentials
@@ -133,10 +125,13 @@ class RedisTenantAclIsolationIT {
         @Order(1)
         @DisplayName("resolve Redis connection from config")
         void resolveRedisConnection() {
-            OperioConfig.RedisConfig redis = config.redis()
-                .orElseThrow(() -> new AssertionError(
-                    "Redis config must be present in production mode"
-                ));
+            OperioConfig.RedisConfig redis =
+                    config.redis()
+                            .orElseThrow(
+                                    () ->
+                                            new AssertionError(
+                                                    "Redis config must be present in production"
+                                                            + " mode"));
 
             redisHost = redis.host();
             redisPort = redis.port();
@@ -150,56 +145,61 @@ class RedisTenantAclIsolationIT {
         @Order(2)
         @DisplayName("create tenant A")
         void createTenantA() {
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .body(Map.of(
-                    "tenantId", TENANT_A,
-                    "displayName", "ACL Test Tenant A",
-                    "plan", "pro"
-                ))
-                .when()
-                .post("/api/v1/platform/tenants")
-                .then()
-                .statusCode(anyOf(is(201), is(200)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .body(
+                            Map.of(
+                                    "tenantId", TENANT_A,
+                                    "displayName", "ACL Test Tenant A",
+                                    "plan", "pro"))
+                    .when()
+                    .post("/api/v1/platform/tenants")
+                    .then()
+                    .statusCode(anyOf(is(201), is(200)));
         }
 
         @Test
         @Order(3)
         @DisplayName("create tenant B")
         void createTenantB() {
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .body(Map.of(
-                    "tenantId", TENANT_B,
-                    "displayName", "ACL Test Tenant B",
-                    "plan", "pro"
-                ))
-                .when()
-                .post("/api/v1/platform/tenants")
-                .then()
-                .statusCode(anyOf(is(201), is(200)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .body(
+                            Map.of(
+                                    "tenantId", TENANT_B,
+                                    "displayName", "ACL Test Tenant B",
+                                    "plan", "pro"))
+                    .when()
+                    .post("/api/v1/platform/tenants")
+                    .then()
+                    .statusCode(anyOf(is(201), is(200)));
         }
 
         @Test
         @Order(4)
         @DisplayName("create API key for tenant A")
         void createApiKeyA() {
-            Response resp = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .body(Map.of(
-                    "tenantId", TENANT_A,
-                    "subject", "acl-test-a",
-                    "roles", Set.of("consent:read", "consent:write", "admin:read", "admin:write")
-                ))
-                .when()
-                .post("/api/v1/platform/api-keys")
-                .then()
-                .statusCode(anyOf(is(201), is(200)))
-                .extract()
-                .response();
+            Response resp =
+                    given().contentType(ContentType.JSON)
+                            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .body(
+                                    Map.of(
+                                            "tenantId",
+                                            TENANT_A,
+                                            "subject",
+                                            "acl-test-a",
+                                            "roles",
+                                            Set.of(
+                                                    "consent:read",
+                                                    "consent:write",
+                                                    "admin:read",
+                                                    "admin:write")))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(anyOf(is(201), is(200)))
+                            .extract()
+                            .response();
 
             tenantAApiKey = resp.jsonPath().getString("rawKey");
             assertNotNull(tenantAApiKey, "API key for tenant A must be returned");
@@ -210,20 +210,27 @@ class RedisTenantAclIsolationIT {
         @Order(5)
         @DisplayName("create API key for tenant B")
         void createApiKeyB() {
-            Response resp = given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .body(Map.of(
-                    "tenantId", TENANT_B,
-                    "subject", "acl-test-b",
-                    "roles", Set.of("consent:read", "consent:write", "admin:read", "admin:write")
-                ))
-                .when()
-                .post("/api/v1/platform/api-keys")
-                .then()
-                .statusCode(anyOf(is(201), is(200)))
-                .extract()
-                .response();
+            Response resp =
+                    given().contentType(ContentType.JSON)
+                            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .body(
+                                    Map.of(
+                                            "tenantId",
+                                            TENANT_B,
+                                            "subject",
+                                            "acl-test-b",
+                                            "roles",
+                                            Set.of(
+                                                    "consent:read",
+                                                    "consent:write",
+                                                    "admin:read",
+                                                    "admin:write")))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(anyOf(is(201), is(200)))
+                            .extract()
+                            .response();
 
             tenantBApiKey = resp.jsonPath().getString("rawKey");
             assertNotNull(tenantBApiKey, "API key for tenant B must be returned");
@@ -243,17 +250,17 @@ class RedisTenantAclIsolationIT {
 
                 // Find tenant A's ACL user
                 tenantAAclUser = "t_" + TENANT_A;
-                boolean foundA = aclList.stream()
-                    .anyMatch(rule -> rule.contains(tenantAAclUser));
-                assertTrue(foundA,
-                    "Redis ACL user '" + tenantAAclUser + "' must exist. ACL LIST: " + aclList);
+                boolean foundA = aclList.stream().anyMatch(rule -> rule.contains(tenantAAclUser));
+                assertTrue(
+                        foundA,
+                        "Redis ACL user '" + tenantAAclUser + "' must exist. ACL LIST: " + aclList);
 
                 // Find tenant B's ACL user
                 tenantBAclUser = "t_" + TENANT_B;
-                boolean foundB = aclList.stream()
-                    .anyMatch(rule -> rule.contains(tenantBAclUser));
-                assertTrue(foundB,
-                    "Redis ACL user '" + tenantBAclUser + "' must exist. ACL LIST: " + aclList);
+                boolean foundB = aclList.stream().anyMatch(rule -> rule.contains(tenantBAclUser));
+                assertTrue(
+                        foundB,
+                        "Redis ACL user '" + tenantBAclUser + "' must exist. ACL LIST: " + aclList);
 
                 // Retrieve the plaintext passwords from the platform database
                 // via CoreQueryService.getTenantCredentials().
@@ -267,14 +274,14 @@ class RedisTenantAclIsolationIT {
                 tenantAAclPassword = credsA.redisAclPassword();
                 tenantBAclPassword = credsB.redisAclPassword();
 
-                assertNotNull(tenantAAclPassword,
-                    "Tenant A redis_acl_password must not be null");
-                assertFalse(tenantAAclPassword.isBlank(),
-                    "Tenant A redis_acl_password must not be blank");
-                assertNotNull(tenantBAclPassword,
-                    "Tenant B redis_acl_password must not be null");
-                assertFalse(tenantBAclPassword.isBlank(),
-                    "Tenant B redis_acl_password must not be blank");
+                assertNotNull(tenantAAclPassword, "Tenant A redis_acl_password must not be null");
+                assertFalse(
+                        tenantAAclPassword.isBlank(),
+                        "Tenant A redis_acl_password must not be blank");
+                assertNotNull(tenantBAclPassword, "Tenant B redis_acl_password must not be null");
+                assertFalse(
+                        tenantBAclPassword.isBlank(),
+                        "Tenant B redis_acl_password must not be blank");
             }
         }
     }
@@ -296,8 +303,8 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String key = tenantAKey("consent:policy:test_field");
                 String result = pool.set(key, "granted");
-                assertEquals("OK", result,
-                    "Tenant A should be able to SET keys in its own namespace");
+                assertEquals(
+                        "OK", result, "Tenant A should be able to SET keys in its own namespace");
             }
         }
 
@@ -308,8 +315,8 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantBAclUser, tenantBAclPassword)) {
                 String key = tenantBKey("consent:policy:test_field");
                 String result = pool.set(key, "denied");
-                assertEquals("OK", result,
-                    "Tenant B should be able to SET keys in its own namespace");
+                assertEquals(
+                        "OK", result, "Tenant B should be able to SET keys in its own namespace");
             }
         }
 
@@ -320,17 +327,17 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String tenantBKey = tenantBKey("consent:policy:cross_tenant_write");
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.set(tenantBKey, "should-fail"),
-                    "Tenant A's ACL user must NOT be allowed to SET keys in tenant B's namespace"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.set(tenantBKey, "should-fail"),
+                                "Tenant A's ACL user must NOT be allowed to SET keys in tenant B's"
+                                        + " namespace");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -341,17 +348,17 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantBAclUser, tenantBAclPassword)) {
                 String tenantAKey = tenantAKey("consent:policy:cross_tenant_write");
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.set(tenantAKey, "should-fail"),
-                    "Tenant B's ACL user must NOT be allowed to SET keys in tenant A's namespace"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.set(tenantAKey, "should-fail"),
+                                "Tenant B's ACL user must NOT be allowed to SET keys in tenant A's"
+                                        + " namespace");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
     }
@@ -373,8 +380,10 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String key = tenantAKey("consent:policy:test_field");
                 String value = pool.get(key);
-                assertEquals("granted", value,
-                    "Tenant A should be able to GET keys from its own namespace");
+                assertEquals(
+                        "granted",
+                        value,
+                        "Tenant A should be able to GET keys from its own namespace");
             }
         }
 
@@ -385,8 +394,10 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantBAclUser, tenantBAclPassword)) {
                 String key = tenantBKey("consent:policy:test_field");
                 String value = pool.get(key);
-                assertEquals("denied", value,
-                    "Tenant B should be able to GET keys from its own namespace");
+                assertEquals(
+                        "denied",
+                        value,
+                        "Tenant B should be able to GET keys from its own namespace");
             }
         }
 
@@ -397,17 +408,17 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String tenantBKey = tenantBKey("consent:policy:test_field");
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.get(tenantBKey),
-                    "Tenant A's ACL user must NOT be allowed to GET keys from tenant B's namespace"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.get(tenantBKey),
+                                "Tenant A's ACL user must NOT be allowed to GET keys from tenant"
+                                        + " B's namespace");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -418,17 +429,17 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantBAclUser, tenantBAclPassword)) {
                 String tenantAKey = tenantAKey("consent:policy:test_field");
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.get(tenantAKey),
-                    "Tenant B's ACL user must NOT be allowed to GET keys from tenant A's namespace"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.get(tenantAKey),
+                                "Tenant B's ACL user must NOT be allowed to GET keys from tenant"
+                                        + " A's namespace");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
     }
@@ -463,17 +474,17 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String tenantBKey = tenantBKey("consent:policy:test_field");
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.del(tenantBKey),
-                    "Tenant A's ACL user must NOT be allowed to DEL keys in tenant B's namespace"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.del(tenantBKey),
+                                "Tenant A's ACL user must NOT be allowed to DEL keys in tenant B's"
+                                        + " namespace");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
     }
@@ -495,8 +506,7 @@ class RedisTenantAclIsolationIT {
             try (Jedis admin = createAdminJedis()) {
                 String key = "ratelimit:" + TENANT_A + ":burst:202601011200";
                 String result = admin.set(key, "42");
-                assertEquals("OK", result,
-                    "Admin user should be able to write ratelimit keys");
+                assertEquals("OK", result, "Admin user should be able to write ratelimit keys");
             }
         }
 
@@ -507,17 +517,16 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String rateLimitKey = "ratelimit:" + TENANT_A + ":burst:202601011200";
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.get(rateLimitKey),
-                    "Tenant ACL user must NOT be allowed to read ratelimit keys"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.get(rateLimitKey),
+                                "Tenant ACL user must NOT be allowed to read ratelimit keys");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -528,17 +537,16 @@ class RedisTenantAclIsolationIT {
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
                 String rateLimitKey = "ratelimit:" + TENANT_A + ":burst:202601011200";
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.set(rateLimitKey, "9999"),
-                    "Tenant ACL user must NOT be allowed to write ratelimit keys"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.set(rateLimitKey, "9999"),
+                                "Tenant ACL user must NOT be allowed to write ratelimit keys");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -553,17 +561,16 @@ class RedisTenantAclIsolationIT {
 
             // Tenant A should not be able to read it
             try (JedisPooled pool = createTenantPool(tenantAAclUser, tenantAAclPassword)) {
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> pool.get("some:random:key"),
-                    "Tenant ACL user must NOT be allowed to access arbitrary keys"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> pool.get("some:random:key"),
+                                "Tenant ACL user must NOT be allowed to access arbitrary keys");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
     }
@@ -587,8 +594,7 @@ class RedisTenantAclIsolationIT {
                 String key = tenantAKey("consent:admin_test:field1");
                 admin.set(key, "admin-value");
                 String value = admin.get(key);
-                assertEquals("admin-value", value,
-                    "Admin should be able to read tenant A's keys");
+                assertEquals("admin-value", value, "Admin should be able to read tenant A's keys");
             }
         }
 
@@ -599,8 +605,7 @@ class RedisTenantAclIsolationIT {
             try (Jedis admin = createAdminJedis()) {
                 String key = tenantBKey("consent:policy:test_field");
                 String value = admin.get(key);
-                assertEquals("denied", value,
-                    "Admin should be able to read tenant B's keys");
+                assertEquals("denied", value, "Admin should be able to read tenant B's keys");
             }
         }
 
@@ -611,8 +616,7 @@ class RedisTenantAclIsolationIT {
             try (Jedis admin = createAdminJedis()) {
                 String key = "ratelimit:" + TENANT_A + ":burst:202601011200";
                 String value = admin.get(key);
-                assertEquals("42", value,
-                    "Admin should be able to read ratelimit keys");
+                assertEquals("42", value, "Admin should be able to read ratelimit keys");
             }
         }
     }
@@ -623,8 +627,9 @@ class RedisTenantAclIsolationIT {
 
     @Nested
     @Order(7)
-    @Disabled("Reprovisioning tests require JooqPlatformAdminService (removed). " +
-              "TODO: expose reprovisionRedisAcl via a REST endpoint or CQRS command.")
+    @Disabled(
+            "Reprovisioning tests require JooqPlatformAdminService (removed). "
+                    + "TODO: expose reprovisionRedisAcl via a REST endpoint or CQRS command.")
     @DisplayName("7 — ACL Reprovisioning: Credential Rotation")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class AclReprovisioning {
@@ -675,17 +680,16 @@ class RedisTenantAclIsolationIT {
             try (Jedis tenantJedis = new Jedis(redisHost, redisPort)) {
                 tenantJedis.auth(tenantBAclUser, tenantBAclPassword);
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> tenantJedis.aclList(),
-                    "Tenant ACL user must NOT be allowed to run ACL LIST"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> tenantJedis.aclList(),
+                                "Tenant ACL user must NOT be allowed to run ACL LIST");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -696,17 +700,16 @@ class RedisTenantAclIsolationIT {
             try (Jedis tenantJedis = new Jedis(redisHost, redisPort)) {
                 tenantJedis.auth(tenantBAclUser, tenantBAclPassword);
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> tenantJedis.flushDB(),
-                    "Tenant ACL user must NOT be allowed to run FLUSHDB"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> tenantJedis.flushDB(),
+                                "Tenant ACL user must NOT be allowed to run FLUSHDB");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
 
@@ -717,17 +720,16 @@ class RedisTenantAclIsolationIT {
             try (Jedis tenantJedis = new Jedis(redisHost, redisPort)) {
                 tenantJedis.auth(tenantBAclUser, tenantBAclPassword);
 
-                JedisAccessControlException ex = assertThrows(
-                    JedisAccessControlException.class,
-                    () -> tenantJedis.configGet("*"),
-                    "Tenant ACL user must NOT be allowed to run CONFIG GET"
-                );
+                JedisAccessControlException ex =
+                        assertThrows(
+                                JedisAccessControlException.class,
+                                () -> tenantJedis.configGet("*"),
+                                "Tenant ACL user must NOT be allowed to run CONFIG GET");
 
                 assertTrue(
-                    ex.getMessage().toLowerCase().contains("noperm") ||
-                    ex.getMessage().toLowerCase().contains("no permissions"),
-                    "Redis error should indicate permission denial: " + ex.getMessage()
-                );
+                        ex.getMessage().toLowerCase().contains("noperm")
+                                || ex.getMessage().toLowerCase().contains("no permissions"),
+                        "Redis error should indicate permission denial: " + ex.getMessage());
             }
         }
     }
@@ -747,86 +749,80 @@ class RedisTenantAclIsolationIT {
         @DisplayName("register schema for tenant A")
         void registerSchemaA() {
             // Register a field + category for tenant A
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "fieldName", "email",
-                    "entityName", "user",
-                    "description", "Email address"
-                ))
-                .when()
-                .post("/api/v1/admin/fields")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "fieldName", "email",
+                                    "entityName", "user",
+                                    "description", "Email address"))
+                    .when()
+                    .post("/api/v1/admin/fields")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "categoryName", "pii",
-                    "description", "Personal info"
-                ))
-                .when()
-                .post("/api/v1/admin/categories")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "categoryName", "pii",
+                                    "description", "Personal info"))
+                    .when()
+                    .post("/api/v1/admin/categories")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "fieldName", "email",
-                    "entityName", "user",
-                    "categoryName", "pii"
-                ))
-                .when()
-                .post("/api/v1/admin/fields/link-category")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "fieldName", "email",
+                                    "entityName", "user",
+                                    "categoryName", "pii"))
+                    .when()
+                    .post("/api/v1/admin/fields/link-category")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
         }
 
         @Test
         @Order(2)
         @DisplayName("register schema for tenant B")
         void registerSchemaB() {
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "fieldName", "email",
-                    "entityName", "user",
-                    "description", "Email address"
-                ))
-                .when()
-                .post("/api/v1/admin/fields")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "fieldName", "email",
+                                    "entityName", "user",
+                                    "description", "Email address"))
+                    .when()
+                    .post("/api/v1/admin/fields")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "categoryName", "pii",
-                    "description", "Personal info"
-                ))
-                .when()
-                .post("/api/v1/admin/categories")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "categoryName", "pii",
+                                    "description", "Personal info"))
+                    .when()
+                    .post("/api/v1/admin/categories")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "fieldName", "email",
-                    "entityName", "user",
-                    "categoryName", "pii"
-                ))
-                .when()
-                .post("/api/v1/admin/fields/link-category")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "fieldName", "email",
+                                    "entityName", "user",
+                                    "categoryName", "pii"))
+                    .when()
+                    .post("/api/v1/admin/fields/link-category")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
         }
 
         @Test
@@ -834,59 +830,62 @@ class RedisTenantAclIsolationIT {
         @DisplayName("grant consent for tenant A subject — does NOT appear in tenant B")
         void grantConsentTenantA() {
             // Grant consent for subject "alice" in tenant A
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "subject", "alice",
-                    "scope", Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    )
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/grant")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "alice",
+                                    "scope",
+                                    Map.of(
+                                            "category", "pii",
+                                            "fieldName", "email",
+                                            "entityName", "user")))
+                    .when()
+                    .post("/api/v1/subjects/consent/grant")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
             // Evaluate in tenant A — should be granted
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "subject", "alice",
-                    "scopes", Set.of(Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    ))
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/evaluate")
-                .then()
-                .statusCode(200)
-                .body("granted", hasSize(1));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "alice",
+                                    "scopes",
+                                    Set.of(
+                                            Map.of(
+                                                    "category", "pii",
+                                                    "fieldName", "email",
+                                                    "entityName", "user"))))
+                    .when()
+                    .post("/api/v1/subjects/consent/evaluate")
+                    .then()
+                    .statusCode(200)
+                    .body("granted", hasSize(1));
 
             // Evaluate in tenant B — "alice" should NOT have any grants
             // (tenant B has never granted consent for alice)
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "subject", "alice",
-                    "scopes", Set.of(Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    ))
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/evaluate")
-                .then()
-                .statusCode(200)
-                .body("granted", hasSize(0),
-                      "denied", hasSize(1));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "alice",
+                                    "scopes",
+                                    Set.of(
+                                            Map.of(
+                                                    "category", "pii",
+                                                    "fieldName", "email",
+                                                    "entityName", "user"))))
+                    .when()
+                    .post("/api/v1/subjects/consent/evaluate")
+                    .then()
+                    .statusCode(200)
+                    .body(
+                            "granted", hasSize(0),
+                            "denied", hasSize(1));
         }
 
         @Test
@@ -894,58 +893,61 @@ class RedisTenantAclIsolationIT {
         @DisplayName("grant consent for tenant B subject — does NOT appear in tenant A")
         void grantConsentTenantB() {
             // Grant consent for subject "bob" in tenant B
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "subject", "bob",
-                    "scope", Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    )
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/grant")
-                .then()
-                .statusCode(anyOf(is(200), is(201), is(204)));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "bob",
+                                    "scope",
+                                    Map.of(
+                                            "category", "pii",
+                                            "fieldName", "email",
+                                            "entityName", "user")))
+                    .when()
+                    .post("/api/v1/subjects/consent/grant")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201), is(204)));
 
             // Evaluate "bob" in tenant B — should be granted
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantBApiKey)
-                .body(Map.of(
-                    "subject", "bob",
-                    "scopes", Set.of(Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    ))
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/evaluate")
-                .then()
-                .statusCode(200)
-                .body("granted", hasSize(1));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "bob",
+                                    "scopes",
+                                    Set.of(
+                                            Map.of(
+                                                    "category", "pii",
+                                                    "fieldName", "email",
+                                                    "entityName", "user"))))
+                    .when()
+                    .post("/api/v1/subjects/consent/evaluate")
+                    .then()
+                    .statusCode(200)
+                    .body("granted", hasSize(1));
 
             // Evaluate "bob" in tenant A — should NOT have any grants
-            given()
-                .contentType(ContentType.JSON)
-                .header("Authorization", "Bearer " + tenantAApiKey)
-                .body(Map.of(
-                    "subject", "bob",
-                    "scopes", Set.of(Map.of(
-                        "category", "pii",
-                        "fieldName", "email",
-                        "entityName", "user"
-                    ))
-                ))
-                .when()
-                .post("/api/v1/subjects/consent/evaluate")
-                .then()
-                .statusCode(200)
-                .body("granted", hasSize(0),
-                      "denied", hasSize(1));
+            given().contentType(ContentType.JSON)
+                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .body(
+                            Map.of(
+                                    "subject",
+                                    "bob",
+                                    "scopes",
+                                    Set.of(
+                                            Map.of(
+                                                    "category", "pii",
+                                                    "fieldName", "email",
+                                                    "entityName", "user"))))
+                    .when()
+                    .post("/api/v1/subjects/consent/evaluate")
+                    .then()
+                    .statusCode(200)
+                    .body(
+                            "granted", hasSize(0),
+                            "denied", hasSize(1));
         }
     }
 
@@ -963,24 +965,22 @@ class RedisTenantAclIsolationIT {
         @Order(1)
         @DisplayName("delete tenant A")
         void deleteTenantA() {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .when()
-                .delete("/api/v1/platform/tenants/" + TENANT_A)
-                .then()
-                .statusCode(anyOf(is(200), is(204)));
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .when()
+                    .delete("/api/v1/platform/tenants/" + TENANT_A)
+                    .then()
+                    .statusCode(anyOf(is(200), is(204)));
         }
 
         @Test
         @Order(2)
         @DisplayName("delete tenant B")
         void deleteTenantB() {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .when()
-                .delete("/api/v1/platform/tenants/" + TENANT_B)
-                .then()
-                .statusCode(anyOf(is(200), is(204)));
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .when()
+                    .delete("/api/v1/platform/tenants/" + TENANT_B)
+                    .then()
+                    .statusCode(anyOf(is(200), is(204)));
         }
 
         @Test
@@ -990,15 +990,11 @@ class RedisTenantAclIsolationIT {
             try (Jedis admin = createAdminJedis()) {
                 var aclList = admin.aclList();
 
-                boolean foundA = aclList.stream()
-                    .anyMatch(rule -> rule.contains(tenantAAclUser));
-                assertFalse(foundA,
-                    "Tenant A's ACL user should be removed after deletion");
+                boolean foundA = aclList.stream().anyMatch(rule -> rule.contains(tenantAAclUser));
+                assertFalse(foundA, "Tenant A's ACL user should be removed after deletion");
 
-                boolean foundB = aclList.stream()
-                    .anyMatch(rule -> rule.contains(tenantBAclUser));
-                assertFalse(foundB,
-                    "Tenant B's ACL user should be removed after deletion");
+                boolean foundB = aclList.stream().anyMatch(rule -> rule.contains(tenantBAclUser));
+                assertFalse(foundB, "Tenant B's ACL user should be removed after deletion");
             }
         }
 
@@ -1025,9 +1021,7 @@ class RedisTenantAclIsolationIT {
     // Helpers
     // =======================================================================
 
-    /**
-     * Creates a short-lived admin {@link Jedis} connection (default user).
-     */
+    /** Creates a short-lived admin {@link Jedis} connection (default user). */
     private Jedis createAdminJedis() {
         Jedis jedis = new Jedis(redisHost, redisPort);
         if (redisAdminPassword != null && !redisAdminPassword.isBlank()) {
@@ -1037,25 +1031,19 @@ class RedisTenantAclIsolationIT {
     }
 
     /**
-     * Creates a per-tenant {@link JedisPooled} authenticated as the given
-     * ACL user. Callers must close this pool when done.
+     * Creates a per-tenant {@link JedisPooled} authenticated as the given ACL user. Callers must
+     * close this pool when done.
      */
     private JedisPooled createTenantPool(String aclUser, String aclPassword) {
         return new JedisPooled(redisHost, redisPort, aclUser, aclPassword);
     }
 
-    /**
-     * Constructs a key in tenant A's namespace.
-     * Pattern: {@code operio:{tenantId}:{suffix}}
-     */
+    /** Constructs a key in tenant A's namespace. Pattern: {@code operio:{tenantId}:{suffix}} */
     private static String tenantAKey(String suffix) {
         return APP_NAME + ":" + TENANT_A + ":" + suffix;
     }
 
-    /**
-     * Constructs a key in tenant B's namespace.
-     * Pattern: {@code operio:{tenantId}:{suffix}}
-     */
+    /** Constructs a key in tenant B's namespace. Pattern: {@code operio:{tenantId}:{suffix}} */
     private static String tenantBKey(String suffix) {
         return APP_NAME + ":" + TENANT_B + ":" + suffix;
     }

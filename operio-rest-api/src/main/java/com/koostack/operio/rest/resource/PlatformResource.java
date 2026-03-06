@@ -45,10 +45,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * JAX-RS resource for platform-level administration: tenant lifecycle
- * and API key management.
+ * JAX-RS resource for platform-level administration: tenant lifecycle and API key management.
  *
- * All endpoints require the super-admin role.
+ * <p>All endpoints require the super-admin role.
  */
 @Path("/api/v1/platform")
 @TenantScoped
@@ -58,21 +57,15 @@ import org.slf4j.LoggerFactory;
 @SecurityRequirement(name = OperioOpenApiConfig.SECURITY_SCHEME)
 public class PlatformResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        PlatformResource.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(PlatformResource.class);
 
-    @Inject
-    PlatformCqrsHolder cqrs;
+    @Inject PlatformCqrsHolder cqrs;
 
-    @Inject
-    com.koostack.operio.core.PlatformService platformService;
+    @Inject com.koostack.operio.core.PlatformService platformService;
 
-    @Inject
-    BootstrapKeyLifecycleService bootstrapLifecycle;
+    @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
-    @Inject
-    RateLimitService rateLimitService;
+    @Inject RateLimitService rateLimitService;
 
     // -------------------------------------------------------------------
     // Role enforcement
@@ -85,18 +78,16 @@ public class PlatformResource {
     private void requireCqrsServices() {
         if (!cqrs.isCqrsAvailable()) {
             throw new IllegalStateException(
-                "Platform CQRS services are not available in embedded mode. " +
-                    "Set operio.mode=production to enable tenant management."
-            );
+                    "Platform CQRS services are not available in embedded mode. "
+                            + "Set operio.mode=production to enable tenant management.");
         }
     }
 
     private void requireCoreCommandService() {
         if (cqrs.coreCommandService() == null) {
             throw new IllegalStateException(
-                "Core command service is not available in embedded mode. " +
-                    "Set operio.mode=production to enable tenant management."
-            );
+                    "Core command service is not available in embedded mode. "
+                            + "Set operio.mode=production to enable tenant management.");
         }
     }
 
@@ -107,124 +98,101 @@ public class PlatformResource {
     @POST
     @Path("/tenants")
     @Operation(
-        operationId = "createTenant",
-        summary = "Create a new tenant",
-        description = "Provisions a new tenant on the platform: creates a dedicated " +
-            "Postgres schema, Redis ACL user, and inserts the tenant row. " +
-            "Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "createTenant",
+            summary = "Create a new tenant",
+            description =
+                    "Provisions a new tenant on the platform: creates a dedicated "
+                            + "Postgres schema, Redis ACL user, and inserts the tenant row. "
+                            + "Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "201",
                 description = "Tenant created successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = TenantResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = TenantResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error (invalid tenantId, plan, etc.)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "500",
                 description = "Platform admin not available (embedded mode)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response createTenant(
-        @Context SecurityContext securityContext,
-        @Valid CreateTenantRequest request
-    ) {
+            @Context SecurityContext securityContext, @Valid CreateTenantRequest request) {
         requireSuperAdmin(securityContext);
 
         if (platformService == null) {
             throw new IllegalStateException(
-                "PlatformService is not available in embedded mode. " +
-                    "Set operio.mode=production to enable tenant management."
-            );
+                    "PlatformService is not available in embedded mode. "
+                            + "Set operio.mode=production to enable tenant management.");
         }
 
         LOG.info(
-            "POST /platform/tenants - creating tenant={}, plan={}",
-            request.tenantId(),
-            request.plan()
-        );
+                "POST /platform/tenants - creating tenant={}, plan={}",
+                request.tenantId(),
+                request.plan());
 
-        String billingEmail = request.billingEmail() != null
-            ? request.billingEmail()
-            : request.tenantId() + "@billing.operio.local";
+        String billingEmail =
+                request.billingEmail() != null
+                        ? request.billingEmail()
+                        : request.tenantId() + "@billing.operio.local";
 
         platformService.createTenant(
-            request.tenantId(),
-            request.displayName(),
-            request.plan(),
-            billingEmail
-        );
+                request.tenantId(), request.displayName(), request.plan(), billingEmail);
 
         // Return the accepted data directly — the projection materializes
         // asynchronously so a DB read-back would return null or stale data.
-        TenantResponse response = new TenantResponse(
-            request.tenantId(),
-            request.displayName(),
-            request.plan(),
-            "created",
-            null
-        );
+        TenantResponse response =
+                new TenantResponse(
+                        request.tenantId(), request.displayName(), request.plan(), "created", null);
 
-        return Response.status(Response.Status.CREATED)
-            .entity(response)
-            .build();
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
     @GET
     @Path("/tenants")
     @Operation(
-        operationId = "listTenants",
-        summary = "List all tenants",
-        description = "Returns all tenants on the platform with their metadata " +
-            "and plan-level limits. Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "listTenants",
+            summary = "List all tenants",
+            description =
+                    "Returns all tenants on the platform with their metadata "
+                            + "and plan-level limits. Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "List of all tenants",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        type = SchemaType.ARRAY,
-                        implementation = TenantResponse.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                type = SchemaType.ARRAY,
+                                                implementation = TenantResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response listTenants(@Context SecurityContext securityContext) {
         requireSuperAdmin(securityContext);
         requireCqrsServices();
@@ -233,12 +201,9 @@ public class PlatformResource {
 
         @SuppressWarnings("unchecked")
         List<com.koostack.operio.core.platform.core.models.TenantInfo> tenants =
-            cqrs.coreQueryService().listTenants();
+                cqrs.coreQueryService().listTenants();
 
-        List<TenantResponse> dtos = tenants
-            .stream()
-            .map(TenantResponse::fromCoreModel)
-            .toList();
+        List<TenantResponse> dtos = tenants.stream().map(TenantResponse::fromCoreModel).toList();
 
         return Response.ok(dtos).build();
     }
@@ -246,47 +211,42 @@ public class PlatformResource {
     @GET
     @Path("/tenants/{id}")
     @Operation(
-        operationId = "getTenant",
-        summary = "Get tenant details",
-        description = "Retrieves full information about a specific tenant including " +
-            "plan-level limits and status. Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "getTenant",
+            summary = "Get tenant details",
+            description =
+                    "Retrieves full information about a specific tenant including "
+                            + "plan-level limits and status. Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Tenant details",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = TenantResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = TenantResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "404",
                 description = "Tenant not found",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response getTenant(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "Unique tenant identifier",
-            required = true,
-            example = "acme_corp"
-        ) @PathParam("id") String tenantId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "Unique tenant identifier",
+                            required = true,
+                            example = "acme_corp")
+                    @PathParam("id")
+                    String tenantId) {
         requireSuperAdmin(securityContext);
         requireCqrsServices();
 
@@ -295,8 +255,8 @@ public class PlatformResource {
         var tenant = cqrs.coreQueryService().getTenant(tenantId);
         if (tenant == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                .entity(ErrorResponse.of("not_found", "Tenant not found: " + tenantId))
-                .build();
+                    .entity(ErrorResponse.of("not_found", "Tenant not found: " + tenantId))
+                    .build();
         }
 
         return Response.ok(TenantResponse.fromCoreModel(tenant)).build();
@@ -305,48 +265,43 @@ public class PlatformResource {
     @DELETE
     @Path("/tenants/{id}")
     @Operation(
-        operationId = "deleteTenant",
-        summary = "Delete a tenant",
-        description = "Deletes a tenant and all associated resources: Postgres schema, " +
-            "Redis ACL user, and all API keys. This action is irreversible. " +
-            "Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "deleteTenant",
+            summary = "Delete a tenant",
+            description =
+                    "Deletes a tenant and all associated resources: Postgres schema, "
+                            + "Redis ACL user, and all API keys. This action is irreversible. "
+                            + "Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Tenant deleted successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = MessageResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "404",
                 description = "Tenant not found",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response deleteTenant(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "Unique tenant identifier",
-            required = true,
-            example = "acme_corp"
-        ) @PathParam("id") String tenantId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "Unique tenant identifier",
+                            required = true,
+                            example = "acme_corp")
+                    @PathParam("id")
+                    String tenantId) {
         requireSuperAdmin(securityContext);
         requireCoreCommandService();
 
@@ -354,9 +309,8 @@ public class PlatformResource {
 
         cqrs.coreCommandService().deleteTenant(tenantId);
 
-        return Response.ok(
-            MessageResponse.of("Tenant '" + tenantId + "' deleted successfully")
-        ).build();
+        return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
+                .build();
     }
 
     // -------------------------------------------------------------------
@@ -366,146 +320,119 @@ public class PlatformResource {
     @POST
     @Path("/api-keys")
     @Operation(
-        operationId = "createApiKey",
-        summary = "Create an API key for a tenant",
-        description = "Generates a new API key for the specified tenant with the given " +
-            "roles. The raw key is returned only once in the response body and " +
-            "is never stored in plaintext. Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "createApiKey",
+            summary = "Create an API key for a tenant",
+            description =
+                    "Generates a new API key for the specified tenant with the given "
+                            + "roles. The raw key is returned only once in the response body and "
+                            + "is never stored in plaintext. Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "201",
                 description = "API key created (raw key returned once)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        implementation = ApiKeyCreatedResponse.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ApiKeyCreatedResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response createApiKey(
-        @Context SecurityContext securityContext,
-        @Valid CreateApiKeyRequest request
-    ) {
+            @Context SecurityContext securityContext, @Valid CreateApiKeyRequest request) {
         requireSuperAdmin(securityContext);
         requireCqrsServices();
 
         LOG.info(
-            "POST /platform/api-keys - tenant={}, subject={}",
-            request.tenantId(),
-            request.subject()
-        );
+                "POST /platform/api-keys - tenant={}, subject={}",
+                request.tenantId(),
+                request.subject());
 
-        String roles = request.roles() != null
-            ? String.join(",", request.roles())
-            : null;
+        String roles = request.roles() != null ? String.join(",", request.roles()) : null;
 
-        IamCommandService.CreateApiTokenResult result = cqrs.iamCommandService().createApiToken(
-            request.tenantId(),
-            request.subject(),
-            "PROD",
-            roles
-        );
+        IamCommandService.CreateApiTokenResult result =
+                cqrs.iamCommandService()
+                        .createApiToken(request.tenantId(), request.subject(), "PROD", roles);
 
-        ApiKeyCreatedResponse response = new ApiKeyCreatedResponse(
-            result.plaintextKey(),
-            result.keyPrefix(),
-            request.tenantId(),
-            request.subject(),
-            request.roles()
-        );
+        ApiKeyCreatedResponse response =
+                new ApiKeyCreatedResponse(
+                        result.plaintextKey(),
+                        result.keyPrefix(),
+                        request.tenantId(),
+                        request.subject(),
+                        request.roles());
 
         bootstrapLifecycle.markBootstrapConsumed();
 
-        return Response.status(Response.Status.CREATED)
-            .entity(response)
-            .build();
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
     @GET
     @Path("/api-keys")
     @Operation(
-        operationId = "listApiKeys",
-        summary = "List API keys for a tenant",
-        description = "Returns metadata for all API keys belonging to the specified " +
-            "tenant. Never returns the raw key or its hash. " +
-            "Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "listApiKeys",
+            summary = "List API keys for a tenant",
+            description =
+                    "Returns metadata for all API keys belonging to the specified "
+                            + "tenant. Never returns the raw key or its hash. "
+                            + "Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "List of API key metadata",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(
-                        type = SchemaType.ARRAY,
-                        implementation = ApiKeyResponse.class
-                    )
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                type = SchemaType.ARRAY,
+                                                implementation = ApiKeyResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Missing tenantId query parameter",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response listApiKeys(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "Tenant identifier to list API keys for",
-            required = true,
-            example = "acme_corp"
-        ) @QueryParam("tenantId") String tenantId
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "Tenant identifier to list API keys for",
+                            required = true,
+                            example = "acme_corp")
+                    @QueryParam("tenantId")
+                    String tenantId) {
         requireSuperAdmin(securityContext);
         requireCqrsServices();
 
         if (tenantId == null || tenantId.isBlank()) {
-            throw new IllegalArgumentException(
-                "Query parameter 'tenantId' is required"
-            );
+            throw new IllegalArgumentException("Query parameter 'tenantId' is required");
         }
 
         LOG.debug("GET /platform/api-keys?tenantId={}", tenantId);
 
         List<IamQueryService.ApiKeyInfo> keys = cqrs.iamQueryService().listApiKeys(tenantId);
 
-        List<ApiKeyResponse> dtos = keys
-            .stream()
-            .map(ApiKeyResponse::fromIamModel)
-            .toList();
+        List<ApiKeyResponse> dtos = keys.stream().map(ApiKeyResponse::fromIamModel).toList();
 
         return Response.ok(dtos).build();
     }
@@ -513,47 +440,42 @@ public class PlatformResource {
     @DELETE
     @Path("/api-keys/{prefix}")
     @Operation(
-        operationId = "revokeApiKey",
-        summary = "Revoke an API key by prefix",
-        description = "Revokes an API key identified by its 8-character prefix. " +
-            "The key becomes immediately unusable. Requires the super-admin role."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "revokeApiKey",
+            summary = "Revoke an API key by prefix",
+            description =
+                    "Revokes an API key identified by its 8-character prefix. The key becomes"
+                            + " immediately unusable. Requires the super-admin role.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "API key revoked successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = MessageResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = MessageResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "404",
                 description = "API key not found",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response revokeApiKey(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "The 8-character key prefix used for identification",
-            required = true,
-            example = "opr_live"
-        ) @PathParam("prefix") String keyPrefix
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "The 8-character key prefix used for identification",
+                            required = true,
+                            example = "opr_live")
+                    @PathParam("prefix")
+                    String keyPrefix) {
         requireSuperAdmin(securityContext);
         requireCqrsServices();
 
@@ -562,15 +484,13 @@ public class PlatformResource {
         IamQueryService.ApiKeyInfo key = cqrs.iamQueryService().findByKeyPrefix(keyPrefix);
         if (key == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                .entity(ErrorResponse.of("not_found", "API key not found: " + keyPrefix))
-                .build();
+                    .entity(ErrorResponse.of("not_found", "API key not found: " + keyPrefix))
+                    .build();
         }
 
         cqrs.iamCommandService().revokeApiToken(key.tenantId(), key.keyId());
 
-        return Response.ok(
-            MessageResponse.of("API key '" + keyPrefix + "' revoked")
-        ).build();
+        return Response.ok(MessageResponse.of("API key '" + keyPrefix + "' revoked")).build();
     }
 
     // -------------------------------------------------------------------
@@ -580,70 +500,60 @@ public class PlatformResource {
     @PUT
     @Path("/tenants/{id}/plan")
     @Operation(
-        operationId = "updateTenantPlan",
-        summary = "Update a tenant's subscription plan",
-        description = "Changes the tenant's plan and recalculates all plan-level " +
-            "rate limits (evaluation quota, subject limit, burst cap). " +
-            "The new limits take effect immediately — cached rate-limit " +
-            "data is evicted so the next request uses the updated values. " +
-            "Requires the super-admin role.\n\n" +
-            "This endpoint is what a Stripe webhook handler would call " +
-            "after a subscription change."
-    )
-    @APIResponses(
-        {
-            @APIResponse(
+            operationId = "updateTenantPlan",
+            summary = "Update a tenant's subscription plan",
+            description =
+                    "Changes the tenant's plan and recalculates all plan-level "
+                            + "rate limits (evaluation quota, subject limit, burst cap). "
+                            + "The new limits take effect immediately — cached rate-limit "
+                            + "data is evicted so the next request uses the updated values. "
+                            + "Requires the super-admin role.\n\n"
+                            + "This endpoint is what a Stripe webhook handler would call "
+                            + "after a subscription change.")
+    @APIResponses({
+        @APIResponse(
                 responseCode = "200",
                 description = "Plan updated successfully",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = TenantResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = TenantResponse.class))),
+        @APIResponse(
                 responseCode = "400",
                 description = "Validation error (invalid plan)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "403",
                 description = "Missing required role (super-admin)",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-            @APIResponse(
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+        @APIResponse(
                 responseCode = "404",
                 description = "Tenant not found",
-                content = @Content(
-                    mediaType = MediaType.APPLICATION_JSON,
-                    schema = @Schema(implementation = ErrorResponse.class)
-                )
-            ),
-        }
-    )
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
     public Response updateTenantPlan(
-        @Context SecurityContext securityContext,
-        @Parameter(
-            description = "Unique tenant identifier",
-            required = true,
-            example = "acme_corp"
-        ) @PathParam("id") String tenantId,
-        @Valid UpdatePlanRequest request
-    ) {
+            @Context SecurityContext securityContext,
+            @Parameter(
+                            description = "Unique tenant identifier",
+                            required = true,
+                            example = "acme_corp")
+                    @PathParam("id")
+                    String tenantId,
+            @Valid UpdatePlanRequest request) {
         requireSuperAdmin(securityContext);
         requireCoreCommandService();
         requireCqrsServices();
 
-        LOG.info(
-            "PUT /platform/tenants/{}/plan - newPlan={}",
-            tenantId,
-            request.plan()
-        );
+        LOG.info("PUT /platform/tenants/{}/plan - newPlan={}", tenantId, request.plan());
 
         platformService.changeTenantPlan(tenantId, request.plan());
 
@@ -655,13 +565,13 @@ public class PlatformResource {
         var tenant = cqrs.coreQueryService().getTenant(tenantId);
         TenantResponse response;
         if (tenant != null) {
-            response = new TenantResponse(
-                tenant.tenantId(),
-                tenant.displayName(),
-                request.plan(),
-                tenant.status(),
-                tenant.createdAt()
-            );
+            response =
+                    new TenantResponse(
+                            tenant.tenantId(),
+                            tenant.displayName(),
+                            request.plan(),
+                            tenant.status(),
+                            tenant.createdAt());
         } else {
             response = new TenantResponse(tenantId, null, request.plan(), null, null);
         }

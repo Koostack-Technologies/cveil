@@ -3,8 +3,5 @@ package com.koostack.operio.core.tenant.consent.events;
 import com.koostack.operio.core.event.DomainEvent;
 
 public record FieldUpdatedEvent(
-        String entityName,
-        String fieldName,
-        String description,
-        FieldSnapshot snapshot
-) implements DomainEvent {}
+        String entityName, String fieldName, String description, FieldSnapshot snapshot)
+        implements DomainEvent {}

@@ -14,8 +14,8 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
  * Serves the tenant-facing (non-platform) API documentation.
  *
  * <ul>
- *   <li>{@code GET /api/v1/docs} — Swagger UI page</li>
- *   <li>{@code GET /api/v1/docs/openapi.json} — filtered OpenAPI spec (JSON)</li>
+ *   <li>{@code GET /api/v1/docs} — Swagger UI page
+ *   <li>{@code GET /api/v1/docs/openapi.json} — filtered OpenAPI spec (JSON)
  * </ul>
  *
  * <p>Both endpoints are public and do not require authentication.
@@ -23,8 +23,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 @Path("/api/v1/docs")
 public class TenantDocsResource {
 
-    @Inject
-    OpenApiSplitService splitService;
+    @Inject OpenApiSplitService splitService;
 
     @Inject
     @Location("swagger-ui")
@@ -35,9 +34,9 @@ public class TenantDocsResource {
     @Operation(hidden = true)
     public TemplateInstance swaggerUI() {
         return swaggerUi
-            .data("title", "Operio API Documentation")
-            .data("specUrl", "/api/v1/docs/openapi.json")
-            .data("requiresAuth", false);
+                .data("title", "Operio API Documentation")
+                .data("specUrl", "/api/v1/docs/openapi.json")
+                .data("requiresAuth", false);
     }
 
     @GET

@@ -14,9 +14,6 @@ import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.URI;
 import java.text.ParseException;
@@ -27,17 +24,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * JWKS-based JWT verifier that caches key sets per issuer URL.
  *
- * <p>This verifier is generic — it works with any OIDC-compliant IdP
- * (Keycloak, Auth0, Okta, Azure AD) by fetching their JWKS endpoint.
+ * <p>This verifier is generic — it works with any OIDC-compliant IdP (Keycloak, Auth0, Okta, Azure
+ * AD) by fetching their JWKS endpoint.
  *
  * <h2>Caching</h2>
- * <p>JWKS key sets are cached per issuer with a configurable TTL.
- * On a {@code kid} miss (e.g. after key rotation), the cache is
- * refreshed and verification retried once.
+ *
+ * <p>JWKS key sets are cached per issuer with a configurable TTL. On a {@code kid} miss (e.g. after
+ * key rotation), the cache is refreshed and verification retried once.
  */
 public class JwksTokenVerifier {
 
@@ -59,8 +58,9 @@ public class JwksTokenVerifier {
     /**
      * Verify a JWT against the JWKS at the given endpoint URL.
      *
-     * @param jwksUrl  the JWKS endpoint URL (e.g. {@code http://keycloak:8180/realms/tenant-1/protocol/openid-connect/certs})
-     * @param token    the raw JWT string
+     * @param jwksUrl the JWKS endpoint URL (e.g. {@code
+     *     http://keycloak:8180/realms/tenant-1/protocol/openid-connect/certs})
+     * @param token the raw JWT string
      * @param tenantId expected tenant ID (used to build the IdentityContext)
      * @return the verified identity context
      * @throws OperioAuthException if verification fails
@@ -77,7 +77,7 @@ public class JwksTokenVerifier {
     }
 
     private JWTClaimsSet verifyAndParseClaims(String jwksUrl, String token)
-        throws BadJOSEException, JOSEException, ParseException {
+            throws BadJOSEException, JOSEException, ParseException {
 
         JWKSet jwkSet = getJwks(jwksUrl, false);
         try {
@@ -91,11 +91,11 @@ public class JwksTokenVerifier {
     }
 
     private JWTClaimsSet processToken(JWKSet jwkSet, String token)
-        throws BadJOSEException, JOSEException, ParseException {
+            throws BadJOSEException, JOSEException, ParseException {
 
         JWKSource<SecurityContext> keySource = new ImmutableJWKSet<>(jwkSet);
         JWSKeySelector<SecurityContext> keySelector =
-            new JWSVerificationKeySelector<>(JWSAlgorithm.RS256, keySource);
+                new JWSVerificationKeySelector<>(JWSAlgorithm.RS256, keySource);
 
         ConfigurableJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
         processor.setJWSKeySelector(keySelector);
@@ -136,21 +136,18 @@ public class JwksTokenVerifier {
         }
 
         String issuer = claims.getIssuer();
-        String provider = issuer != null && issuer.contains("/realms/")
-            ? "keycloak"
-            : "oidc";
+        String provider = issuer != null && issuer.contains("/realms/") ? "keycloak" : "oidc";
 
         Map<String, Object> claimsMap = claims.getClaims();
 
         return new IdentityContext(
-            subject,
-            token,
-            email,
-            Collections.unmodifiableSet(roles),
-            claimsMap != null ? Map.copyOf(claimsMap) : Map.of(),
-            tenantId,
-            provider
-        );
+                subject,
+                token,
+                email,
+                Collections.unmodifiableSet(roles),
+                claimsMap != null ? Map.copyOf(claimsMap) : Map.of(),
+                tenantId,
+                provider);
     }
 
     private JWKSet getJwks(String jwksUrl, boolean forceRefresh) {
@@ -168,23 +165,23 @@ public class JwksTokenVerifier {
         } catch (IOException | ParseException e) {
             // If we have a stale cache, use it rather than failing
             if (cached != null) {
-                LOG.warn("Failed to refresh JWKS from {}, using stale cache: {}", jwksUrl, e.getMessage());
+                LOG.warn(
+                        "Failed to refresh JWKS from {}, using stale cache: {}",
+                        jwksUrl,
+                        e.getMessage());
                 return cached.jwkSet();
             }
-            throw new OperioAuthException("Failed to fetch JWKS from " + jwksUrl + ": " + e.getMessage());
+            throw new OperioAuthException(
+                    "Failed to fetch JWKS from " + jwksUrl + ": " + e.getMessage());
         }
     }
 
-    /**
-     * Evict cached JWKS for a specific URL (e.g. on realm deletion).
-     */
+    /** Evict cached JWKS for a specific URL (e.g. on realm deletion). */
     public void evict(String jwksUrl) {
         jwksCache.remove(jwksUrl);
     }
 
-    /**
-     * Clear all cached JWKS.
-     */
+    /** Clear all cached JWKS. */
     public void clearCache() {
         jwksCache.clear();
     }

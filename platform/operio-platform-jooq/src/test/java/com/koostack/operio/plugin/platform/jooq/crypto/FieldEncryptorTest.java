@@ -6,9 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests for {@link FieldEncryptor} — AES-256-GCM field-level encryption.
- */
+/** Tests for {@link FieldEncryptor} — AES-256-GCM field-level encryption. */
 class FieldEncryptorTest {
 
     private static final String KEY = "my-super-secret-encryption-key-2026";
@@ -63,8 +61,7 @@ class FieldEncryptorTest {
             // 32-char base64url password (what generateSecurePassword() produces)
             String password = "dGhpcyBpcyBhIHRlc3QgcGFzc3dvcmQ";
             String ciphertext = FieldEncryptor.encrypt(password, KEY);
-            assertNotEquals(password, ciphertext,
-                "Ciphertext should differ from plaintext");
+            assertNotEquals(password, ciphertext, "Ciphertext should differ from plaintext");
             String decrypted = FieldEncryptor.decrypt(ciphertext, KEY);
             assertEquals(password, decrypted);
         }
@@ -84,9 +81,11 @@ class FieldEncryptorTest {
             String plaintext = "same-password";
             String ciphertext1 = FieldEncryptor.encrypt(plaintext, KEY);
             String ciphertext2 = FieldEncryptor.encrypt(plaintext, KEY);
-            assertNotEquals(ciphertext1, ciphertext2,
-                "Each encryption should produce a unique ciphertext " +
-                    "(different random IV)");
+            assertNotEquals(
+                    ciphertext1,
+                    ciphertext2,
+                    "Each encryption should produce a unique ciphertext "
+                            + "(different random IV)");
 
             // Both should still decrypt correctly
             assertEquals(plaintext, FieldEncryptor.decrypt(ciphertext1, KEY));
@@ -129,31 +128,29 @@ class FieldEncryptorTest {
         @Test
         @DisplayName("encrypt(plaintext, null) throws IllegalArgumentException")
         void encryptNullKeyThrows() {
-            assertThrows(IllegalArgumentException.class,
-                () -> FieldEncryptor.encrypt("secret", null));
+            assertThrows(
+                    IllegalArgumentException.class, () -> FieldEncryptor.encrypt("secret", null));
         }
 
         @Test
         @DisplayName("encrypt(plaintext, blank) throws IllegalArgumentException")
         void encryptBlankKeyThrows() {
-            assertThrows(IllegalArgumentException.class,
-                () -> FieldEncryptor.encrypt("secret", "  "));
+            assertThrows(
+                    IllegalArgumentException.class, () -> FieldEncryptor.encrypt("secret", "  "));
         }
 
         @Test
         @DisplayName("decrypt(ciphertext, null) throws IllegalArgumentException")
         void decryptNullKeyThrows() {
             String ct = FieldEncryptor.encrypt("secret", KEY);
-            assertThrows(IllegalArgumentException.class,
-                () -> FieldEncryptor.decrypt(ct, null));
+            assertThrows(IllegalArgumentException.class, () -> FieldEncryptor.decrypt(ct, null));
         }
 
         @Test
         @DisplayName("decrypt(ciphertext, blank) throws IllegalArgumentException")
         void decryptBlankKeyThrows() {
             String ct = FieldEncryptor.encrypt("secret", KEY);
-            assertThrows(IllegalArgumentException.class,
-                () -> FieldEncryptor.decrypt(ct, "  "));
+            assertThrows(IllegalArgumentException.class, () -> FieldEncryptor.decrypt(ct, "  "));
         }
     }
 
@@ -169,8 +166,9 @@ class FieldEncryptorTest {
         @DisplayName("decrypting with a different key throws IllegalStateException")
         void wrongKeyThrows() {
             String ciphertext = FieldEncryptor.encrypt("secret", KEY);
-            assertThrows(IllegalStateException.class,
-                () -> FieldEncryptor.decrypt(ciphertext, OTHER_KEY));
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> FieldEncryptor.decrypt(ciphertext, OTHER_KEY));
         }
 
         @Test
@@ -178,18 +176,16 @@ class FieldEncryptorTest {
         void corruptedCiphertextThrows() {
             String ciphertext = FieldEncryptor.encrypt("secret", KEY);
             // Corrupt by flipping characters
-            String corrupted = ciphertext.substring(0, 5) + "XXXX" +
-                ciphertext.substring(9);
-            assertThrows(IllegalStateException.class,
-                () -> FieldEncryptor.decrypt(corrupted, KEY));
+            String corrupted = ciphertext.substring(0, 5) + "XXXX" + ciphertext.substring(9);
+            assertThrows(IllegalStateException.class, () -> FieldEncryptor.decrypt(corrupted, KEY));
         }
 
         @Test
         @DisplayName("decrypting too-short ciphertext throws IllegalStateException")
         void tooShortCiphertextThrows() {
             // Less than 12 bytes (IV length) after Base64 decode
-            assertThrows(IllegalStateException.class,
-                () -> FieldEncryptor.decrypt("dG9vc2hvcnQ=", KEY));
+            assertThrows(
+                    IllegalStateException.class, () -> FieldEncryptor.decrypt("dG9vc2hvcnQ=", KEY));
         }
     }
 
@@ -207,9 +203,8 @@ class FieldEncryptorTest {
             String ciphertext = FieldEncryptor.encrypt("test-password", KEY);
             assertNotNull(ciphertext);
             assertDoesNotThrow(
-                () -> java.util.Base64.getDecoder().decode(ciphertext),
-                "Ciphertext should be valid Base64"
-            );
+                    () -> java.util.Base64.getDecoder().decode(ciphertext),
+                    "Ciphertext should be valid Base64");
         }
 
         @Test
@@ -219,8 +214,9 @@ class FieldEncryptorTest {
             String ciphertext = FieldEncryptor.encrypt(plaintext, KEY);
             // 12-byte IV + 5-byte plaintext + 16-byte GCM tag = 33 bytes
             // Base64(33) = 44 chars
-            assertTrue(ciphertext.length() > plaintext.length(),
-                "Ciphertext should be longer due to IV + GCM tag");
+            assertTrue(
+                    ciphertext.length() > plaintext.length(),
+                    "Ciphertext should be longer due to IV + GCM tag");
         }
     }
 
@@ -236,16 +232,14 @@ class FieldEncryptorTest {
         @DisplayName("encryptIfKeyPresent with null key returns plaintext unchanged")
         void encryptIfKeyPresentNullKey() {
             String plaintext = "my-password";
-            assertEquals(plaintext,
-                FieldEncryptor.encryptIfKeyPresent(plaintext, null));
+            assertEquals(plaintext, FieldEncryptor.encryptIfKeyPresent(plaintext, null));
         }
 
         @Test
         @DisplayName("encryptIfKeyPresent with blank key returns plaintext unchanged")
         void encryptIfKeyPresentBlankKey() {
             String plaintext = "my-password";
-            assertEquals(plaintext,
-                FieldEncryptor.encryptIfKeyPresent(plaintext, "  "));
+            assertEquals(plaintext, FieldEncryptor.encryptIfKeyPresent(plaintext, "  "));
         }
 
         @Test
@@ -261,24 +255,21 @@ class FieldEncryptorTest {
         @DisplayName("decryptIfKeyPresent with null key returns value unchanged")
         void decryptIfKeyPresentNullKey() {
             String ciphertext = FieldEncryptor.encrypt("secret", KEY);
-            assertEquals(ciphertext,
-                FieldEncryptor.decryptIfKeyPresent(ciphertext, null));
+            assertEquals(ciphertext, FieldEncryptor.decryptIfKeyPresent(ciphertext, null));
         }
 
         @Test
         @DisplayName("decryptIfKeyPresent with blank key returns value unchanged")
         void decryptIfKeyPresentBlankKey() {
             String ciphertext = FieldEncryptor.encrypt("secret", KEY);
-            assertEquals(ciphertext,
-                FieldEncryptor.decryptIfKeyPresent(ciphertext, "  "));
+            assertEquals(ciphertext, FieldEncryptor.decryptIfKeyPresent(ciphertext, "  "));
         }
 
         @Test
         @DisplayName("decryptIfKeyPresent with valid key decrypts")
         void decryptIfKeyPresentWithKey() {
             String ciphertext = FieldEncryptor.encrypt("secret", KEY);
-            assertEquals("secret",
-                FieldEncryptor.decryptIfKeyPresent(ciphertext, KEY));
+            assertEquals("secret", FieldEncryptor.decryptIfKeyPresent(ciphertext, KEY));
         }
 
         @Test
@@ -301,10 +292,8 @@ class FieldEncryptorTest {
         void passthroughLegacyPlaintext() {
             // A value that is NOT valid AES-GCM ciphertext (legacy row)
             String legacyPlaintext = "dGhpcyBpcyBhIHRlc3Q";
-            String result = FieldEncryptor.decryptOrPassthrough(
-                legacyPlaintext, KEY);
-            assertEquals(legacyPlaintext, result,
-                "Legacy plaintext should pass through unchanged");
+            String result = FieldEncryptor.decryptOrPassthrough(legacyPlaintext, KEY);
+            assertEquals(legacyPlaintext, result, "Legacy plaintext should pass through unchanged");
         }
 
         @Test
@@ -320,16 +309,14 @@ class FieldEncryptorTest {
         @DisplayName("null key returns value as-is")
         void nullKeyReturnsAsIs() {
             String value = "anything";
-            assertEquals(value,
-                FieldEncryptor.decryptOrPassthrough(value, null));
+            assertEquals(value, FieldEncryptor.decryptOrPassthrough(value, null));
         }
 
         @Test
         @DisplayName("blank key returns value as-is")
         void blankKeyReturnsAsIs() {
             String value = "anything";
-            assertEquals(value,
-                FieldEncryptor.decryptOrPassthrough(value, "  "));
+            assertEquals(value, FieldEncryptor.decryptOrPassthrough(value, "  "));
         }
 
         @Test
@@ -341,8 +328,7 @@ class FieldEncryptorTest {
         @Test
         @DisplayName("blank value returns blank")
         void blankValueReturnsBlank() {
-            assertEquals("  ",
-                FieldEncryptor.decryptOrPassthrough("  ", KEY));
+            assertEquals("  ", FieldEncryptor.decryptOrPassthrough("  ", KEY));
         }
     }
 
@@ -355,17 +341,17 @@ class FieldEncryptorTest {
     class KeySensitivityTests {
 
         @Test
-        @DisplayName("keys differing by one character produce different ciphertext that won't cross-decrypt")
+        @DisplayName(
+                "keys differing by one character produce different ciphertext that won't"
+                        + " cross-decrypt")
         void differentKeysProduceDifferentResults() {
             String plaintext = "test-password";
             String ct1 = FieldEncryptor.encrypt(plaintext, "key-A");
             String ct2 = FieldEncryptor.encrypt(plaintext, "key-B");
 
             // Different keys should not decrypt each other's ciphertext
-            assertThrows(IllegalStateException.class,
-                () -> FieldEncryptor.decrypt(ct1, "key-B"));
-            assertThrows(IllegalStateException.class,
-                () -> FieldEncryptor.decrypt(ct2, "key-A"));
+            assertThrows(IllegalStateException.class, () -> FieldEncryptor.decrypt(ct1, "key-B"));
+            assertThrows(IllegalStateException.class, () -> FieldEncryptor.decrypt(ct2, "key-A"));
 
             // But each decrypts with its own key
             assertEquals(plaintext, FieldEncryptor.decrypt(ct1, "key-A"));

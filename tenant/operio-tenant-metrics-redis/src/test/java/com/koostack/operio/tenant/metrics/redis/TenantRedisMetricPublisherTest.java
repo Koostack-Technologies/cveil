@@ -1,14 +1,11 @@
 package com.koostack.operio.tenant.metrics.redis;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for {@link TenantRedisMetricPublisher} stream key routing.
- */
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+/** Unit tests for {@link TenantRedisMetricPublisher} stream key routing. */
 class TenantRedisMetricPublisherTest {
 
     @Test
@@ -31,14 +28,16 @@ class TenantRedisMetricPublisherTest {
             String tenantId = UUID.randomUUID().toString();
             String key = TenantRedisMetricPublisher.streamKeyForTenant(tenantId);
             assertTrue(key.startsWith(TenantRedisMetricPublisher.STREAM_KEY_PREFIX));
-            assertEquals(tenantId, key.substring(TenantRedisMetricPublisher.STREAM_KEY_PREFIX.length()));
+            assertEquals(
+                    tenantId, key.substring(TenantRedisMetricPublisher.STREAM_KEY_PREFIX.length()));
         }
     }
 
     @Test
     void nullInputThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> TenantRedisMetricPublisher.streamKeyForTenant(null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TenantRedisMetricPublisher.streamKeyForTenant(null));
     }
 
     @Test

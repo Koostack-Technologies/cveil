@@ -1,21 +1,18 @@
 package com.koostack.operio.tenant.authz.keycloak;
 
-import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.*;
-import org.keycloak.representations.idm.RoleRepresentation;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.lang.reflect.Field;
-import java.util.*;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for {@link KeycloakAuthzProvider}.
- */
+import java.lang.reflect.Field;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.*;
+import org.keycloak.representations.idm.RoleRepresentation;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+/** Unit tests for {@link KeycloakAuthzProvider}. */
 @DisplayName("KeycloakAuthzProvider")
 @ExtendWith(MockitoExtension.class)
 class KeycloakAuthzProviderTest {
@@ -35,9 +32,10 @@ class KeycloakAuthzProviderTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        provider = new KeycloakAuthzProvider(new KeycloakAuthzConfig(
-            "http://keycloak:8180", "master", "admin-cli", "admin", "admin"
-        ));
+        provider =
+                new KeycloakAuthzProvider(
+                        new KeycloakAuthzConfig(
+                                "http://keycloak:8180", "master", "admin-cli", "admin", "admin"));
 
         // Replace admin client with mock
         adminClient = mock(Keycloak.class);
@@ -129,8 +127,7 @@ class KeycloakAuthzProviderTest {
             r1.setName("consent:read");
             RoleRepresentation r2 = new RoleRepresentation();
             r2.setName("admin:write");
-            when(roleScopeResource.listEffective())
-                .thenReturn(List.of(r1, r2));
+            when(roleScopeResource.listEffective()).thenReturn(List.of(r1, r2));
 
             Set<String> roles = provider.getUserRoles(TENANT_ID, USER_ID);
 
@@ -144,9 +141,7 @@ class KeycloakAuthzProviderTest {
 
             Set<String> roles = provider.getUserRoles(TENANT_ID, USER_ID);
 
-            assertThrows(UnsupportedOperationException.class, () ->
-                roles.add("injected")
-            );
+            assertThrows(UnsupportedOperationException.class, () -> roles.add("injected"));
         }
 
         @Test
@@ -171,25 +166,29 @@ class KeycloakAuthzProviderTest {
         @Test
         @DisplayName("rejects blank serverUrl")
         void blankServerUrl() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakAuthzConfig("", "master", "admin-cli", "admin", "admin")
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> new KeycloakAuthzConfig("", "master", "admin-cli", "admin", "admin"));
         }
 
         @Test
         @DisplayName("rejects null adminUsername")
         void nullAdminUsername() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakAuthzConfig("http://localhost:8180", "master", "admin-cli", null, "admin")
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            new KeycloakAuthzConfig(
+                                    "http://localhost:8180", "master", "admin-cli", null, "admin"));
         }
 
         @Test
         @DisplayName("rejects null adminPassword")
         void nullAdminPassword() {
-            assertThrows(IllegalArgumentException.class, () ->
-                new KeycloakAuthzConfig("http://localhost:8180", "master", "admin-cli", "admin", null)
-            );
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () ->
+                            new KeycloakAuthzConfig(
+                                    "http://localhost:8180", "master", "admin-cli", "admin", null));
         }
     }
 }

@@ -1,14 +1,12 @@
 package com.koostack.operio.core.tenant.consent.invalidation;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-/**
- * Verifies JSON serialization round-trip for {@link CacheInvalidationMessage}.
- */
+/** Verifies JSON serialization round-trip for {@link CacheInvalidationMessage}. */
 @DisplayName("CacheInvalidationMessage")
 class CacheInvalidationMessageTest {
 
@@ -17,13 +15,20 @@ class CacheInvalidationMessageTest {
     @Test
     @DisplayName("round-trips a fully-populated message through JSON")
     void fullRoundTrip() throws Exception {
-        CacheInvalidationMessage original = new CacheInvalidationMessage(
-            "msg-001", "tenant-a", "subject-1", "User", "email",
-            "PII", "marketing", InvalidationAction.GRANTED
-        );
+        CacheInvalidationMessage original =
+                new CacheInvalidationMessage(
+                        "msg-001",
+                        "tenant-a",
+                        "subject-1",
+                        "User",
+                        "email",
+                        "PII",
+                        "marketing",
+                        InvalidationAction.GRANTED);
 
         String json = mapper.writeValueAsString(original);
-        CacheInvalidationMessage deserialized = mapper.readValue(json, CacheInvalidationMessage.class);
+        CacheInvalidationMessage deserialized =
+                mapper.readValue(json, CacheInvalidationMessage.class);
 
         assertEquals(original, deserialized);
     }
@@ -31,12 +36,20 @@ class CacheInvalidationMessageTest {
     @Test
     @DisplayName("round-trips a message with null optional fields")
     void nullFieldsRoundTrip() throws Exception {
-        CacheInvalidationMessage original = new CacheInvalidationMessage(
-            "msg-002", "tenant-b", null, null, null, null, null, InvalidationAction.ALL_REVOKED
-        );
+        CacheInvalidationMessage original =
+                new CacheInvalidationMessage(
+                        "msg-002",
+                        "tenant-b",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.ALL_REVOKED);
 
         String json = mapper.writeValueAsString(original);
-        CacheInvalidationMessage deserialized = mapper.readValue(json, CacheInvalidationMessage.class);
+        CacheInvalidationMessage deserialized =
+                mapper.readValue(json, CacheInvalidationMessage.class);
 
         assertEquals(original, deserialized);
         assertNull(deserialized.subject());
@@ -49,9 +62,16 @@ class CacheInvalidationMessageTest {
     @Test
     @DisplayName("@JsonInclude(NON_NULL) omits null fields from JSON output")
     void nullFieldsOmittedInJson() throws Exception {
-        CacheInvalidationMessage msg = new CacheInvalidationMessage(
-            "msg-003", "tenant-c", "subj", null, null, null, null, InvalidationAction.ALL_REVOKED
-        );
+        CacheInvalidationMessage msg =
+                new CacheInvalidationMessage(
+                        "msg-003",
+                        "tenant-c",
+                        "subj",
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.ALL_REVOKED);
 
         String json = mapper.writeValueAsString(msg);
         assertFalse(json.contains("\"entity\""), "null entity should be omitted");
@@ -67,11 +87,12 @@ class CacheInvalidationMessageTest {
     @DisplayName("all InvalidationAction values serialize and deserialize")
     void allActionsRoundTrip() throws Exception {
         for (InvalidationAction action : InvalidationAction.values()) {
-            CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                "msg-" + action.name(), "t", null, null, null, null, null, action
-            );
+            CacheInvalidationMessage msg =
+                    new CacheInvalidationMessage(
+                            "msg-" + action.name(), "t", null, null, null, null, null, action);
             String json = mapper.writeValueAsString(msg);
-            CacheInvalidationMessage deserialized = mapper.readValue(json, CacheInvalidationMessage.class);
+            CacheInvalidationMessage deserialized =
+                    mapper.readValue(json, CacheInvalidationMessage.class);
             assertEquals(action, deserialized.action());
         }
     }

@@ -7,9 +7,7 @@ import org.jooq.DSLContext;
  *
  * @param dsl jOOQ context pointing at the platform database
  */
-public record JooqCoreProjectionConfig(
-    DSLContext dsl
-) {
+public record JooqCoreProjectionConfig(DSLContext dsl) {
     public JooqCoreProjectionConfig {
         if (dsl == null) {
             throw new IllegalArgumentException("dsl must not be null");

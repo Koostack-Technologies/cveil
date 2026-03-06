@@ -5,26 +5,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.iam.IamCommandService;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
-
 /**
- * Event consumer that reacts to core domain events to manage tenant
- * infrastructure lifecycle.
+ * Event consumer that reacts to core domain events to manage tenant infrastructure lifecycle.
  *
  * <p>Handles:
+ *
  * <ul>
- *   <li>{@code core.tenant.provisioning-started} → provisions Postgres schema,
- *       Flyway migrations, Redis ACL, generates 3 API tokens (DEV/TEST/PROD),
- *       then emits {@code TenantProvisioned} via {@link CoreCommandService}.</li>
- *   <li>{@code core.tenant.deleted} → tears down Postgres schema and
- *       Redis ACL user.</li>
+ *   <li>{@code core.tenant.provisioning-started} → provisions Postgres schema, Flyway migrations,
+ *       Redis ACL, generates 3 API tokens (DEV/TEST/PROD), then emits {@code TenantProvisioned} via
+ *       {@link CoreCommandService}.
+ *   <li>{@code core.tenant.deleted} → tears down Postgres schema and Redis ACL user.
  * </ul>
  *
- * <p>Compatible with the {@code StreamHandler.onEvent} signature used by
- * the platform stream consumer infrastructure.
+ * <p>Compatible with the {@code StreamHandler.onEvent} signature used by the platform stream
+ * consumer infrastructure.
  */
 public class TenantManagerProjectionHandler {
 
@@ -49,16 +47,14 @@ public class TenantManagerProjectionHandler {
     }
 
     /**
-     * Sets a callback invoked after a tenant is fully provisioned.
-     * Used to register the new tenant with the consent stream consumer.
+     * Sets a callback invoked after a tenant is fully provisioned. Used to register the new tenant
+     * with the consent stream consumer.
      */
     public void setOnTenantProvisioned(java.util.function.Consumer<String> callback) {
         this.onTenantProvisioned = callback;
     }
 
-    /**
-     * Handle a platform stream event.
-     */
+    /** Handle a platform stream event. */
     public void onEvent(String streamKey, String messageId, Map<String, String> fields) {
         String eventType = fields.get("eventType");
         String payload = fields.get("payload");
@@ -69,7 +65,8 @@ public class TenantManagerProjectionHandler {
 
         try {
             switch (eventType) {
-                case CoreEventTypes.TENANT_PROVISIONING_STARTED -> handleProvisioningStarted(payload);
+                case CoreEventTypes.TENANT_PROVISIONING_STARTED -> handleProvisioningStarted(
+                        payload);
                 case CoreEventTypes.TENANT_DELETED -> handleTenantDeleted(payload);
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
@@ -91,13 +88,14 @@ public class TenantManagerProjectionHandler {
         // look them up later (the ProvisionResult carries the plaintext password
         // that was used to create the ACL user — we must store it now).
         if (result.redisAclPassword() != null) {
-            tenantManager.getTenantRepository().updateRedisAclCredentials(
-                tenantId,
-                result.redisAclUser(),
-                result.redisAclPassword(),
-                result.redisAclPassHash(),
-                "tenant-provisioning"
-            );
+            tenantManager
+                    .getTenantRepository()
+                    .updateRedisAclCredentials(
+                            tenantId,
+                            result.redisAclUser(),
+                            result.redisAclPassword(),
+                            result.redisAclPassHash(),
+                            "tenant-provisioning");
             LOG.info("Stored Redis ACL credentials for tenant '{}'", tenantId);
         }
 
@@ -105,15 +103,22 @@ public class TenantManagerProjectionHandler {
         for (String env : API_KEY_ENVIRONMENTS) {
             String keyName = tenantId + "-" + env.toLowerCase();
             IamCommandService.CreateApiTokenResult tokenResult =
-                iamCommandService.createApiToken(tenantId, keyName, env, null);
-            LOG.info("Generated {} API token for tenant '{}': keyId={}, prefix={}",
-                env, tenantId, tokenResult.keyId(), tokenResult.keyPrefix());
+                    iamCommandService.createApiToken(tenantId, keyName, env, null);
+            LOG.info(
+                    "Generated {} API token for tenant '{}': keyId={}, prefix={}",
+                    env,
+                    tenantId,
+                    tokenResult.keyId(),
+                    tokenResult.keyPrefix());
         }
 
         // 3. Emit TenantProvisioned event
         coreCommandService.provisionTenant(tenantId, result.schemaName(), result.redisAclUser());
-        LOG.info("Tenant '{}' fully provisioned: schema={}, redisUser={}, apiKeys=3",
-            tenantId, result.schemaName(), result.redisAclUser());
+        LOG.info(
+                "Tenant '{}' fully provisioned: schema={}, redisUser={}, apiKeys=3",
+                tenantId,
+                result.schemaName(),
+                result.redisAclUser());
 
         // 4. Notify listeners (e.g., register with consent stream consumer)
         var callback = this.onTenantProvisioned;

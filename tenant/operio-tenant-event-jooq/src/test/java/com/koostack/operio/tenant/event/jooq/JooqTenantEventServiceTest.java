@@ -1,42 +1,42 @@
 package com.koostack.operio.tenant.event.jooq;
 
-import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
-import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
-import com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent;
+import static com.koostack.operio.tenant.event.jooq.generated.tables.AggregateSnapshot.AGGREGATE_SNAPSHOT;
+import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT;
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import static com.koostack.operio.tenant.event.jooq.generated.tables.AggregateSnapshot.AGGREGATE_SNAPSHOT;
-import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT;
-import static org.junit.jupiter.api.Assertions.*;
-
 /**
  * Integration tests for {@link JooqTenantEventService}.
  *
- * <p>Tests publishEvent, getAggregateVersion, snapshot creation,
- * outbox-to-Redis publishing, and multi-tenant isolation.
- * Aggregate replay is validated via {@link AggregateEventApplier} directly.
+ * <p>Tests publishEvent, getAggregateVersion, snapshot creation, outbox-to-Redis publishing, and
+ * multi-tenant isolation. Aggregate replay is validated via {@link AggregateEventApplier} directly.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
     @BeforeAll
     static void registerTestEventType() {
-        service.registerEventType(new RegisterEventTypeInput<>(
-            ConsentEventTypes.REGULATION_REGISTERED, "Regulation Registered", RegulationRegisteredEvent.class
-        ));
+        service.registerEventType(
+                new RegisterEventTypeInput<>(
+                        ConsentEventTypes.REGULATION_REGISTERED,
+                        "Regulation Registered",
+                        RegulationRegisteredEvent.class));
     }
 
     // -----------------------------------------------------------------------
@@ -50,14 +50,16 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
 
         var payload = new RegulationRegisteredEvent(regulationName, "Test regulation description");
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-        ));
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
 
-        var record = dsl.selectFrom(EVENT)
-            .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .fetchOne();
+        var record =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
+                        .fetchOne();
 
         assertNotNull(record);
         assertEquals(RegulationAggregate.AGGREGATE_TYPE, record.getAggregateType());
@@ -80,16 +82,17 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void getAggregateVersionReturnsCorrectVersion() {
         String regulationName = "ver-regulation-" + UUID.randomUUID();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         Long v0 = service.getAggregateVersion(key);
         assertEquals(0L, v0, "Non-existent aggregate should have version 0");
 
         for (int i = 1; i <= 3; i++) {
             var payload = new RegulationRegisteredEvent(regulationName, "description-v" + i);
-            service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-            ));
+            service.publishEvent(
+                    PublishDomainEventInput.of(
+                            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
         }
 
         Long v3 = service.getAggregateVersion(key);
@@ -105,24 +108,28 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void snapshotCreatedAfterTwentyEvents() throws Exception {
         String regulationName = "snap-regulation-" + UUID.randomUUID();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
             var payload = new RegulationRegisteredEvent(regulationName, "snap-desc-v" + i);
-            service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-            ));
+            service.publishEvent(
+                    PublishDomainEventInput.of(
+                            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
         }
 
         // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
-        var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
-            .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .and(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(RegulationAggregate.AGGREGATE_TYPE))
-            .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
-            .limit(1)
-            .fetchOne();
+        var snapshot =
+                dsl.selectFrom(AGGREGATE_SNAPSHOT)
+                        .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))
+                        .and(
+                                AGGREGATE_SNAPSHOT.AGGREGATE_TYPE.eq(
+                                        RegulationAggregate.AGGREGATE_TYPE))
+                        .orderBy(AGGREGATE_SNAPSHOT.VERSION.desc())
+                        .limit(1)
+                        .fetchOne();
 
         assertNotNull(snapshot, "Snapshot should have been created after 21 events");
         assertTrue(snapshot.getVersion() >= 20, "Snapshot version should be >= 20");
@@ -138,13 +145,14 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     void rehydrateFromSnapshotReturnsCorrectState() throws Exception {
         String regulationName = "rehydrate-regulation-" + UUID.randomUUID();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
 
         for (int i = 1; i <= 21; i++) {
             var payload = new RegulationRegisteredEvent(regulationName, "pre-snap-" + i);
-            service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-            ));
+            service.publishEvent(
+                    PublishDomainEventInput.of(
+                            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
         }
 
         // Snapshot is triggered automatically at version 20 during publishEvent
@@ -153,9 +161,9 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         // Post-snapshot events
         for (int i = 22; i <= 25; i++) {
             var payload = new RegulationRegisteredEvent(regulationName, "post-snap-" + i);
-            service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-            ));
+            service.publishEvent(
+                    PublishDomainEventInput.of(
+                            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
         }
 
         RegulationAggregate hydrated = hydrateAggregate(aggregateId, RegulationAggregate.class);
@@ -175,17 +183,23 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
         String regulationName = "redis-regulation-" + UUID.randomUUID();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new RegulationRegisteredEvent(regulationName, "Redis test");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
 
-        var matching = consumedEvents.stream()
-            .filter(e -> aggregateId.toString().equals(e.get(TenantEvent.FIELD_AGGREGATE_ID)))
-            .toList();
+        var matching =
+                consumedEvents.stream()
+                        .filter(
+                                e ->
+                                        aggregateId
+                                                .toString()
+                                                .equals(e.get(TenantEvent.FIELD_AGGREGATE_ID)))
+                        .toList();
 
         assertFalse(matching.isEmpty(), "Event should appear in Redis stream");
 
@@ -212,19 +226,20 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
 
         var payload1 = new RegulationRegisteredEvent(regulationName, "TenantA-v1");
-        AggregateKey keyA = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantA);
-        service.publishEvent(PublishDomainEventInput.of(
-            tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload1
-        ));
+        AggregateKey keyA =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantA);
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload1));
 
         RegulationAggregate hydratedA = hydrateAggregate(aggregateId, RegulationAggregate.class);
         assertEquals("TenantA-v1", hydratedA.description());
 
         // Publish a second version under the same tenant and verify version increments
         var payload2 = new RegulationRegisteredEvent(regulationName, "TenantA-Updated");
-        service.publishEvent(PublishDomainEventInput.of(
-            tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload2
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload2));
 
         RegulationAggregate hydratedA2 = hydrateAggregate(aggregateId, RegulationAggregate.class);
         assertEquals("TenantA-Updated", hydratedA2.description());
@@ -237,11 +252,12 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
         String regulationName = "mt-redis-regulation-" + UUID.randomUUID();
         UUID aggregateId = RegulationAggregate.deriveId(regulationName);
-        AggregateKey key = new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
+        AggregateKey key =
+                new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new RegulationRegisteredEvent(regulationName, "MT-Redis test");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
 
@@ -249,8 +265,10 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         assertFalse(tenantEvents.isEmpty(), "Should have events for " + TEST_TENANT);
 
         for (Map<String, String> event : tenantEvents) {
-            assertEquals(TEST_TENANT, event.get(TenantEvent.FIELD_TENANT_ID),
-                "All events should carry the correct tenantId");
+            assertEquals(
+                    TEST_TENANT,
+                    event.get(TenantEvent.FIELD_TENANT_ID),
+                    "All events should carry the correct tenantId");
         }
     }
 
@@ -262,9 +280,9 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
     private <T extends com.koostack.operio.core.models.AggregateRoot> T hydrateAggregate(
             UUID aggregateId, Class<T> type) {
         EventRepository repo = new EventRepository(dsl);
-        var events = repo.fetchChangesForAggregate(
-            RegulationAggregate.AGGREGATE_TYPE, aggregateId.toString()
-        );
+        var events =
+                repo.fetchChangesForAggregate(
+                        RegulationAggregate.AGGREGATE_TYPE, aggregateId.toString());
         return (T) AggregateEventApplier.replay(events, type);
     }
 }

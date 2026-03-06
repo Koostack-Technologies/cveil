@@ -3,25 +3,21 @@ package com.koostack.operio.plugin.consent.jooq;
 import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
+import java.util.Optional;
+import java.util.UUID;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Optional;
-import java.util.UUID;
-
 /**
  * jOOQ-backed {@link SubjectDsarService} implementation.
  *
- * <p>Creates a {@link SubjectDsarRepository} during {@link #configure}
- * and delegates all operations to it.
+ * <p>Creates a {@link SubjectDsarRepository} during {@link #configure} and delegates all operations
+ * to it.
  */
-public class JooqSubjectDsarService
-    implements SubjectDsarService<JooqConsentAdminServiceConfig> {
+public class JooqSubjectDsarService implements SubjectDsarService<JooqConsentAdminServiceConfig> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        JooqSubjectDsarService.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(JooqSubjectDsarService.class);
 
     private DSLContext dsl;
     private SubjectDsarRepository subjectDsarRepository;
@@ -58,10 +54,7 @@ public class JooqSubjectDsarService
 
     @Override
     public void configure(JooqConsentAdminServiceConfig config) {
-        this.dsl = JooqContextFactory.createTenantAwareContext(
-            config,
-            "operio-subject-dsar-jooq"
-        );
+        this.dsl = JooqContextFactory.createTenantAwareContext(config, "operio-subject-dsar-jooq");
         this.subjectDsarRepository = new SubjectDsarRepository(dsl);
         LOG.info("JooqSubjectDsarService configured");
     }
@@ -73,8 +66,7 @@ public class JooqSubjectDsarService
     private DSLContext getDsl() {
         if (dsl == null) {
             throw new OperioConfigurationException(
-                "JooqSubjectDsarService not configured. Call configure() first."
-            );
+                    "JooqSubjectDsarService not configured. Call configure() first.");
         }
         return dsl;
     }

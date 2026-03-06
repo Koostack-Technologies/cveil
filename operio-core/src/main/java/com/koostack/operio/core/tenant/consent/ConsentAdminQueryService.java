@@ -64,7 +64,10 @@ public interface ConsentAdminQueryService<T> extends Plugin<T> {
 
     // -- Policy Lookup (for TenantService enrichment) -------------------------
 
-    PurposeView.PolicyView findPolicy(String purposeName, String policyType,
-                                      String fieldName, String entityName,
-                                      String categoryName);
+    PurposeView.PolicyView findPolicy(
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName);
 }

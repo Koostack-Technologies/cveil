@@ -1,15 +1,13 @@
 package com.koostack.operio.core.platform.billing;
 
 import com.koostack.operio.core.spi.Plugin;
-
 import java.time.Instant;
 
 /**
  * Command service for the billing platform domain.
  *
- * <p>All commands publish semantic domain events to the platform event
- * store. The read model is materialized by the corresponding
- * {@link BillingProjection}.
+ * <p>All commands publish semantic domain events to the platform event store. The read model is
+ * materialized by the corresponding {@link BillingProjection}.
  */
 public interface BillingCommandService<T> extends Plugin<T> {
 
@@ -33,12 +31,17 @@ public interface BillingCommandService<T> extends Plugin<T> {
     // -- Subscription ---------------------------------------------------------
 
     /** Create an initial subscription for a tenant. */
-    void createSubscription(String tenantId, String planTier,
-                            int evalLimit, int subjectLimit, int burstLimit);
+    void createSubscription(
+            String tenantId, String planTier, int evalLimit, int subjectLimit, int burstLimit);
 
     /** Change the subscription plan tier and associated limits. */
-    void changeSubscriptionPlan(String tenantId, String oldPlanTier, String newPlanTier,
-                                int evalLimit, int subjectLimit, int burstLimit);
+    void changeSubscriptionPlan(
+            String tenantId,
+            String oldPlanTier,
+            String newPlanTier,
+            int evalLimit,
+            int subjectLimit,
+            int burstLimit);
 
     /** Cancel the current subscription. */
     void cancelSubscription(String tenantId);

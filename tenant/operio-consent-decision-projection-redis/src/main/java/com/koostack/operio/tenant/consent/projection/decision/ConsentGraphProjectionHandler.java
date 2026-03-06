@@ -3,36 +3,33 @@ package com.koostack.operio.tenant.consent.projection.decision;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.koostack.operio.core.event.models.TenantEvent;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationPublisher;
-import com.koostack.operio.core.event.models.TenantEvent;
-import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.tenant.event.jooq.StreamEventHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Unified stream projection handler that materializes ALL consent domain
- * events into the Redis property graph.
+ * Unified stream projection handler that materializes ALL consent domain events into the Redis
+ * property graph.
  *
- * <p>Replaces both {@code ConsentDecisionProjectionHandler} (decision cache)
- * and {@code ConsentAdminRedisProjectionHandler} (admin views) with a single
- * graph-based projection that stores 8 first-class node types:
- * entity, field, category, purpose, regulation, jurisdiction, policy, subject.
+ * <p>Replaces both {@code ConsentDecisionProjectionHandler} (decision cache) and {@code
+ * ConsentAdminRedisProjectionHandler} (admin views) with a single graph-based projection that
+ * stores 8 first-class node types: entity, field, category, purpose, regulation, jurisdiction,
+ * policy, subject.
  *
- * <p>Each event creates/updates/removes nodes and edges in the graph via
- * {@link ConsentGraphRedisRepository}. All writes are routed to the correct
- * tenant's key namespace via {@link TenantContext}.
+ * <p>Each event creates/updates/removes nodes and edges in the graph via {@link
+ * ConsentGraphRedisRepository}. All writes are routed to the correct tenant's key namespace via
+ * {@link TenantContext}.
  */
 public class ConsentGraphProjectionHandler implements StreamEventHandler {
 
@@ -47,8 +44,7 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
     }
 
     public ConsentGraphProjectionHandler(
-            ConsentGraphRedisRepository graph,
-            InvalidationPublisher invalidationPublisher) {
+            ConsentGraphRedisRepository graph, InvalidationPublisher invalidationPublisher) {
         this(graph, invalidationPublisher, defaultObjectMapper());
     }
 
@@ -80,67 +76,91 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
             return;
         }
 
-        TenantContext.runWhere(tenantId, () -> {
-            try {
-                JsonNode node = payload != null
-                        ? objectMapper.readTree(payload)
-                        : objectMapper.createObjectNode();
-                dispatch(tenantId, eventType, node);
-                log.debug("Graph-projected event {} [{}] for tenant {}", messageId, eventType, tenantId);
-            } catch (Exception e) {
-                log.error("Failed to graph-project event {} [{}] for tenant {}",
-                        messageId, eventType, tenantId, e);
-                throw new RuntimeException(e);
-            }
-        });
+        TenantContext.runWhere(
+                tenantId,
+                () -> {
+                    try {
+                        JsonNode node =
+                                payload != null
+                                        ? objectMapper.readTree(payload)
+                                        : objectMapper.createObjectNode();
+                        dispatch(tenantId, eventType, node);
+                        log.debug(
+                                "Graph-projected event {} [{}] for tenant {}",
+                                messageId,
+                                eventType,
+                                tenantId);
+                    } catch (Exception e) {
+                        log.error(
+                                "Failed to graph-project event {} [{}] for tenant {}",
+                                messageId,
+                                eventType,
+                                tenantId,
+                                e);
+                        throw new RuntimeException(e);
+                    }
+                });
     }
 
     private void dispatch(String tenantId, String eventType, JsonNode node) {
         switch (eventType) {
-            // -- Entity Aggregate --
+                // -- Entity Aggregate --
             case ConsentEventTypes.ENTITY_REGISTERED -> handleEntityRegistered(tenantId, node);
             case ConsentEventTypes.ENTITY_UPDATED -> handleEntityUpdated(tenantId, node);
             case ConsentEventTypes.ENTITY_REMOVED -> handleEntityRemoved(tenantId, node);
 
-            // -- Category Aggregate --
+                // -- Category Aggregate --
             case ConsentEventTypes.CATEGORY_REGISTERED -> handleCategoryRegistered(tenantId, node);
             case ConsentEventTypes.CATEGORY_UPDATED -> handleCategoryUpdated(tenantId, node);
             case ConsentEventTypes.CATEGORY_REMOVED -> handleCategoryRemoved(tenantId, node);
 
-            // -- Field Aggregate --
+                // -- Field Aggregate --
             case ConsentEventTypes.FIELD_REGISTERED -> handleFieldRegistered(tenantId, node);
             case ConsentEventTypes.FIELD_UPDATED -> handleFieldUpdated(tenantId, node);
             case ConsentEventTypes.FIELD_REMOVED -> handleFieldRemoved(tenantId, node);
-            case ConsentEventTypes.FIELD_CATEGORY_ASSIGNED -> handleFieldCategoryAssigned(tenantId, node);
-            case ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED -> handleFieldCategoryUnassigned(tenantId, node);
+            case ConsentEventTypes.FIELD_CATEGORY_ASSIGNED -> handleFieldCategoryAssigned(
+                    tenantId, node);
+            case ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED -> handleFieldCategoryUnassigned(
+                    tenantId, node);
 
-            // -- Purpose Aggregate --
+                // -- Purpose Aggregate --
             case ConsentEventTypes.PURPOSE_REGISTERED -> handlePurposeRegistered(tenantId, node);
             case ConsentEventTypes.PURPOSE_UPDATED -> handlePurposeUpdated(tenantId, node);
             case ConsentEventTypes.PURPOSE_REMOVED -> handlePurposeRemoved(tenantId, node);
-            case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> handlePurposeRegulationLinked(tenantId, node);
-            case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> handlePurposeRegulationUnlinked(tenantId, node);
+            case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> handlePurposeRegulationLinked(
+                    tenantId, node);
+            case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> handlePurposeRegulationUnlinked(
+                    tenantId, node);
             case ConsentEventTypes.PURPOSE_POLICY_ADDED -> handlePurposePolicyAdded(tenantId, node);
-            case ConsentEventTypes.PURPOSE_POLICY_REMOVED -> handlePurposePolicyRemoved(tenantId, node);
+            case ConsentEventTypes.PURPOSE_POLICY_REMOVED -> handlePurposePolicyRemoved(
+                    tenantId, node);
 
-            // -- Regulation Aggregate --
-            case ConsentEventTypes.REGULATION_REGISTERED -> handleRegulationRegistered(tenantId, node);
+                // -- Regulation Aggregate --
+            case ConsentEventTypes.REGULATION_REGISTERED -> handleRegulationRegistered(
+                    tenantId, node);
             case ConsentEventTypes.REGULATION_UPDATED -> handleRegulationUpdated(tenantId, node);
             case ConsentEventTypes.REGULATION_REMOVED -> handleRegulationRemoved(tenantId, node);
-            case ConsentEventTypes.REGULATION_JURISDICTION_ADDED -> handleRegulationJurisdictionAdded(tenantId, node);
-            case ConsentEventTypes.REGULATION_JURISDICTION_REMOVED -> handleRegulationJurisdictionRemoved(tenantId, node);
+            case ConsentEventTypes
+                    .REGULATION_JURISDICTION_ADDED -> handleRegulationJurisdictionAdded(
+                    tenantId, node);
+            case ConsentEventTypes
+                    .REGULATION_JURISDICTION_REMOVED -> handleRegulationJurisdictionRemoved(
+                    tenantId, node);
 
-            // -- Jurisdiction Aggregate --
-            case ConsentEventTypes.JURISDICTION_REGISTERED -> handleJurisdictionRegistered(tenantId, node);
-            case ConsentEventTypes.JURISDICTION_UPDATED -> handleJurisdictionUpdated(tenantId, node);
-            case ConsentEventTypes.JURISDICTION_REMOVED -> handleJurisdictionRemoved(tenantId, node);
+                // -- Jurisdiction Aggregate --
+            case ConsentEventTypes.JURISDICTION_REGISTERED -> handleJurisdictionRegistered(
+                    tenantId, node);
+            case ConsentEventTypes.JURISDICTION_UPDATED -> handleJurisdictionUpdated(
+                    tenantId, node);
+            case ConsentEventTypes.JURISDICTION_REMOVED -> handleJurisdictionRemoved(
+                    tenantId, node);
 
-            // -- Subject Aggregate (entity lifecycle) --
+                // -- Subject Aggregate (entity lifecycle) --
             case ConsentEventTypes.SUBJECT_REGISTERED -> handleSubjectRegistered(tenantId, node);
             case ConsentEventTypes.SUBJECT_UPDATED -> handleSubjectUpdated(tenantId, node);
             case ConsentEventTypes.SUBJECT_REMOVED -> handleSubjectRemoved(tenantId, node);
 
-            // -- SubjectConsent Aggregate --
+                // -- SubjectConsent Aggregate --
             case ConsentEventTypes.CONSENT_GRANTED -> handleConsentGranted(tenantId, node);
             case ConsentEventTypes.CONSENT_REVOKED -> handleConsentRevoked(tenantId, node);
             case ConsentEventTypes.CONSENT_EXPIRED -> handleConsentExpired(tenantId, node);
@@ -163,7 +183,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("entity", entityName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
     }
 
     private void handleEntityUpdated(String tenantId, JsonNode node) {
@@ -175,13 +196,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("entity", entityName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
     }
 
     private void handleEntityRemoved(String tenantId, JsonNode node) {
         String entityName = requiredText(node, "entityName");
         graph.removeNode("entity", entityName);
-        publishInvalidation(tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -197,7 +220,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("category", categoryName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
     }
 
     private void handleCategoryUpdated(String tenantId, JsonNode node) {
@@ -209,13 +233,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("category", categoryName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
     }
 
     private void handleCategoryRemoved(String tenantId, JsonNode node) {
         String categoryName = requiredText(node, "categoryName");
         graph.removeNode("category", categoryName);
-        publishInvalidation(tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.CATEGORY_CHANGED, null, null, categoryName, null);
     }
 
     // -----------------------------------------------------------------------
@@ -240,9 +266,11 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         graph.putNode("field", qualifiedField, props);
         graph.addEdge("field", qualifiedField, "entity", entityName, null);
 
-        publishInvalidation(tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
         if (entityCreated) {
-            publishInvalidation(tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
+            publishInvalidation(
+                    tenantId, InvalidationAction.ENTITY_CHANGED, entityName, null, null, null);
         }
     }
 
@@ -264,7 +292,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
             syncFieldCategories(qualifiedField, snapshot);
         }
 
-        publishInvalidation(tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
     }
 
     private void handleFieldRemoved(String tenantId, JsonNode node) {
@@ -273,7 +302,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String qualifiedField = entityName + "/" + fieldName;
 
         graph.removeNode("field", qualifiedField);
-        publishInvalidation(tenantId, InvalidationAction.FIELD_REMOVED, entityName, fieldName, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.FIELD_REMOVED, entityName, fieldName, null, null);
     }
 
     private void handleFieldCategoryAssigned(String tenantId, JsonNode node) {
@@ -285,8 +315,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         ensureNode("category", categoryName, Map.of("name", categoryName));
         graph.addEdge("field", qualifiedField, "category", categoryName, null);
 
-        publishInvalidation(tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
-        publishInvalidation(tenantId, InvalidationAction.CATEGORY_CHANGED, entityName, fieldName, categoryName, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
+        publishInvalidation(
+                tenantId,
+                InvalidationAction.CATEGORY_CHANGED,
+                entityName,
+                fieldName,
+                categoryName,
+                null);
     }
 
     private void handleFieldCategoryUnassigned(String tenantId, JsonNode node) {
@@ -296,8 +333,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String qualifiedField = entityName + "/" + fieldName;
 
         graph.removeEdge("field", qualifiedField, "category", categoryName);
-        publishInvalidation(tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
-        publishInvalidation(tenantId, InvalidationAction.CATEGORY_CHANGED, entityName, fieldName, categoryName, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.FIELD_CHANGED, entityName, fieldName, null, null);
+        publishInvalidation(
+                tenantId,
+                InvalidationAction.CATEGORY_CHANGED,
+                entityName,
+                fieldName,
+                categoryName,
+                null);
     }
 
     // -----------------------------------------------------------------------
@@ -313,7 +357,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("purpose", purposeName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
     }
 
     private void handlePurposeUpdated(String tenantId, JsonNode node) {
@@ -325,13 +370,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("purpose", purposeName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
     }
 
     private void handlePurposeRemoved(String tenantId, JsonNode node) {
         String purposeName = requiredText(node, "purposeName");
         graph.removeNode("purpose", purposeName);
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
     }
 
     private void handlePurposeRegulationLinked(String tenantId, JsonNode node) {
@@ -348,11 +395,17 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (onGranted != null) edgeProps.put("onGranted", onGranted);
         if (onDenied != null) edgeProps.put("onDenied", onDenied);
 
-        graph.addEdge("purpose", purposeName, "regulation", regulationName,
+        graph.addEdge(
+                "purpose",
+                purposeName,
+                "regulation",
+                regulationName,
                 edgeProps.isEmpty() ? null : edgeProps);
 
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
     private void handlePurposeRegulationUnlinked(String tenantId, JsonNode node) {
@@ -360,8 +413,10 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String regulationName = requiredText(node, "regulationName");
 
         graph.removeEdge("purpose", purposeName, "regulation", regulationName);
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
     private void handlePurposePolicyAdded(String tenantId, JsonNode node) {
@@ -371,7 +426,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
 
-        String policyName = buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
+        String policyName =
+                buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
 
         Map<String, String> policyProps = new HashMap<>();
         policyProps.put("policyType", policyType);
@@ -381,7 +437,9 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
             policyProps.put("field", qualifiedField);
             graph.putNode("policy", policyName, policyProps);
             graph.addEdge("purpose", purposeName, "policy", policyName, null);
-            ensureNode("field", qualifiedField,
+            ensureNode(
+                    "field",
+                    qualifiedField,
                     Map.of("name", fieldName, "entity", entityName != null ? entityName : ""));
             graph.addEdge("policy", policyName, "field", qualifiedField, null);
         } else {
@@ -392,8 +450,10 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
             graph.addEdge("policy", policyName, "category", categoryName, null);
         }
 
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
-        publishInvalidation(tenantId, InvalidationAction.POLICY_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.POLICY_CHANGED, null, null, null, purposeName);
     }
 
     private void handlePurposePolicyRemoved(String tenantId, JsonNode node) {
@@ -403,11 +463,14 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
 
-        String policyName = buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
+        String policyName =
+                buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
         graph.removeNode("policy", policyName);
 
-        publishInvalidation(tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
-        publishInvalidation(tenantId, InvalidationAction.POLICY_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.PURPOSE_CHANGED, null, null, null, purposeName);
+        publishInvalidation(
+                tenantId, InvalidationAction.POLICY_CHANGED, null, null, null, purposeName);
     }
 
     // -----------------------------------------------------------------------
@@ -423,7 +486,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("regulation", regulationName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
     private void handleRegulationUpdated(String tenantId, JsonNode node) {
@@ -435,13 +499,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("regulation", regulationName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
     private void handleRegulationRemoved(String tenantId, JsonNode node) {
         String regulationName = requiredText(node, "regulationName");
         graph.removeNode("regulation", regulationName);
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
     }
 
     private void handleRegulationJurisdictionAdded(String tenantId, JsonNode node) {
@@ -451,8 +517,10 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         ensureNode("jurisdiction", jurisdictionName, Map.of("name", jurisdictionName));
         graph.addEdge("regulation", regulationName, "jurisdiction", jurisdictionName, null);
 
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
-        publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
     }
 
     private void handleRegulationJurisdictionRemoved(String tenantId, JsonNode node) {
@@ -460,8 +528,10 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String jurisdictionName = requiredText(node, "jurisdictionName");
 
         graph.removeEdge("regulation", regulationName, "jurisdiction", jurisdictionName);
-        publishInvalidation(tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
-        publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.REGULATION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -477,7 +547,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("jurisdiction", jurisdictionName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
     }
 
     private void handleJurisdictionUpdated(String tenantId, JsonNode node) {
@@ -489,13 +560,15 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("jurisdiction", jurisdictionName, props);
 
-        publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
     }
 
     private void handleJurisdictionRemoved(String tenantId, JsonNode node) {
         String jurisdictionName = requiredText(node, "jurisdictionName");
         graph.removeNode("jurisdiction", jurisdictionName);
-        publishInvalidation(tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
+        publishInvalidation(
+                tenantId, InvalidationAction.JURISDICTION_CHANGED, null, null, null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -511,9 +584,16 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         ensureNode("subject", subjectName, props);
 
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectName,
-                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectName,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.SUBJECT_CHANGED));
     }
 
     private void handleSubjectUpdated(String tenantId, JsonNode node) {
@@ -525,9 +605,16 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         if (description != null) props.put("desc", description);
         graph.putNode("subject", subjectName, props);
 
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectName,
-                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectName,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.SUBJECT_CHANGED));
     }
 
     private void handleSubjectRemoved(String tenantId, JsonNode node) {
@@ -535,9 +622,16 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
 
         graph.removeNode("subject", subjectName);
 
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectName,
-                null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectName,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.SUBJECT_CHANGED));
     }
 
     // -----------------------------------------------------------------------
@@ -567,7 +661,8 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         String ipAddress = textOrNull(node, "ipAddress");
         Instant expiresAt = instantOrNull(node, "expiresAt");
 
-        String policyName = buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
+        String policyName =
+                buildPolicyName(policyType, entityName, fieldName, categoryName, purposeName);
 
         boolean subjectCreated = !graph.nodeExists("subject", subjectId);
         ensureNode("subject", subjectId, Map.of("id", subjectId));
@@ -581,19 +676,39 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
 
         graph.addEdge("subject", subjectId, "policy", policyName, edgeProps);
 
-        InvalidationAction invAction = "GRANT".equals(action)
-                ? InvalidationAction.GRANTED : InvalidationAction.REVOKED;
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectId,
-                entityName, fieldName, categoryName, purposeName, invAction));
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectId,
-                entityName, fieldName, categoryName, purposeName,
-                InvalidationAction.CONSENT_ENTRY_CHANGED));
+        InvalidationAction invAction =
+                "GRANT".equals(action) ? InvalidationAction.GRANTED : InvalidationAction.REVOKED;
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectId,
+                        entityName,
+                        fieldName,
+                        categoryName,
+                        purposeName,
+                        invAction));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectId,
+                        entityName,
+                        fieldName,
+                        categoryName,
+                        purposeName,
+                        InvalidationAction.CONSENT_ENTRY_CHANGED));
         if (subjectCreated) {
-            publishInvalidation(new CacheInvalidationMessage(
-                    UUID.randomUUID().toString(), tenantId, subjectId,
-                    null, null, null, null, InvalidationAction.SUBJECT_CHANGED));
+            publishInvalidation(
+                    new CacheInvalidationMessage(
+                            UUID.randomUUID().toString(),
+                            tenantId,
+                            subjectId,
+                            null,
+                            null,
+                            null,
+                            null,
+                            InvalidationAction.SUBJECT_CHANGED));
         }
     }
 
@@ -619,12 +734,26 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         }
         graph.batchSetEdgeProps(batchProps);
 
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectId,
-                null, null, null, null, InvalidationAction.ALL_REVOKED));
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, subjectId,
-                null, null, null, null, InvalidationAction.CONSENT_ENTRY_CHANGED));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.ALL_REVOKED));
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        subjectId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        InvalidationAction.CONSENT_ENTRY_CHANGED));
     }
 
     // -----------------------------------------------------------------------
@@ -632,15 +761,22 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
     // -----------------------------------------------------------------------
 
     /**
-     * Builds a canonical policy node name.
-     * Format: {@code FIELD:{entity}/{field}:{purpose}} or {@code CAT:{category}:{purpose}}
+     * Builds a canonical policy node name. Format: {@code FIELD:{entity}/{field}:{purpose}} or
+     * {@code CAT:{category}:{purpose}}
      */
-    static String buildPolicyName(String policyType, String entityName,
-                                  String fieldName, String categoryName,
-                                  String purposeName) {
+    static String buildPolicyName(
+            String policyType,
+            String entityName,
+            String fieldName,
+            String categoryName,
+            String purposeName) {
         if ("FIELD".equals(policyType)) {
-            return "FIELD:" + (entityName != null ? entityName : "_default_")
-                    + "/" + fieldName + ":" + purposeName;
+            return "FIELD:"
+                    + (entityName != null ? entityName : "_default_")
+                    + "/"
+                    + fieldName
+                    + ":"
+                    + purposeName;
         }
         return "CAT:" + categoryName + ":" + purposeName;
     }
@@ -665,7 +801,9 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         // Remove stale category edges
         for (String member : currentOut) {
             String[] parts = ConsentGraphRedisRepository.splitEdgeMember(member);
-            if (parts != null && "category".equals(parts[0]) && !desiredCategories.contains(parts[1])) {
+            if (parts != null
+                    && "category".equals(parts[0])
+                    && !desiredCategories.contains(parts[1])) {
                 graph.removeEdge("field", qualifiedField, "category", parts[1]);
             }
         }
@@ -696,8 +834,12 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         try {
             if (child.isNumber()) {
                 long epochSecond = child.longValue();
-                int nano = (int) ((child.decimalValue().remainder(java.math.BigDecimal.ONE)
-                        .movePointRight(9)).intValue());
+                int nano =
+                        (int)
+                                ((child.decimalValue()
+                                                .remainder(java.math.BigDecimal.ONE)
+                                                .movePointRight(9))
+                                        .intValue());
                 return Instant.ofEpochSecond(epochSecond, nano);
             }
             return Instant.parse(child.asText());
@@ -710,11 +852,23 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
     // Invalidation publishing
     // -----------------------------------------------------------------------
 
-    private void publishInvalidation(String tenantId, InvalidationAction action,
-                                     String entity, String field, String category, String purpose) {
-        publishInvalidation(new CacheInvalidationMessage(
-                UUID.randomUUID().toString(), tenantId, null,
-                entity, field, category, purpose, action));
+    private void publishInvalidation(
+            String tenantId,
+            InvalidationAction action,
+            String entity,
+            String field,
+            String category,
+            String purpose) {
+        publishInvalidation(
+                new CacheInvalidationMessage(
+                        UUID.randomUUID().toString(),
+                        tenantId,
+                        null,
+                        entity,
+                        field,
+                        category,
+                        purpose,
+                        action));
     }
 
     private void publishInvalidation(CacheInvalidationMessage message) {
@@ -722,8 +876,11 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         try {
             invalidationPublisher.publish(message);
         } catch (Exception e) {
-            log.warn("Failed to publish cache invalidation — messageId={}, action={}",
-                    message.messageId(), message.action(), e);
+            log.warn(
+                    "Failed to publish cache invalidation — messageId={}, action={}",
+                    message.messageId(),
+                    message.action(),
+                    e);
         }
     }
 }

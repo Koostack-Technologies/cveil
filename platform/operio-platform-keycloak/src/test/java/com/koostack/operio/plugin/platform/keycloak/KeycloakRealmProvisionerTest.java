@@ -1,28 +1,27 @@
 package com.koostack.operio.plugin.platform.keycloak;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.*;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.*;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
-import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
-
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link KeycloakRealmProvisioner}.
  *
- * <p>Verifies that provisioning creates a realm, a confidential client, and
- * default roles with the correct configuration. Also tests deprovisioning
- * including the case where the realm does not exist.
+ * <p>Verifies that provisioning creates a realm, a confidential client, and default roles with the
+ * correct configuration. Also tests deprovisioning including the case where the realm does not
+ * exist.
  */
 @DisplayName("KeycloakRealmProvisioner")
 class KeycloakRealmProvisionerTest {
@@ -69,10 +68,8 @@ class KeycloakRealmProvisionerTest {
             // Client creation chain
             ClientRepresentation clientRep = new ClientRepresentation();
             clientRep.setId("internal-client-id");
-            when(clientsResource.findByClientId(OPERIO_CLIENT_ID))
-                .thenReturn(List.of(clientRep));
-            when(clientsResource.get("internal-client-id"))
-                .thenReturn(clientResource);
+            when(clientsResource.findByClientId(OPERIO_CLIENT_ID)).thenReturn(List.of(clientRep));
+            when(clientsResource.get("internal-client-id")).thenReturn(clientResource);
 
             CredentialRepresentation cred = new CredentialRepresentation();
             cred.setValue("generated-secret");
@@ -85,7 +82,7 @@ class KeycloakRealmProvisionerTest {
             provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME);
 
             ArgumentCaptor<RealmRepresentation> captor =
-                ArgumentCaptor.forClass(RealmRepresentation.class);
+                    ArgumentCaptor.forClass(RealmRepresentation.class);
             verify(realmsResource).create(captor.capture());
             RealmRepresentation realm = captor.getValue();
 
@@ -100,11 +97,11 @@ class KeycloakRealmProvisionerTest {
             provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME);
 
             ArgumentCaptor<RealmRepresentation> captor =
-                ArgumentCaptor.forClass(RealmRepresentation.class);
+                    ArgumentCaptor.forClass(RealmRepresentation.class);
             verify(realmsResource).create(captor.capture());
             RealmRepresentation realm = captor.getValue();
 
-            assertEquals(900, realm.getAccessTokenLifespan());     // 15 minutes
+            assertEquals(900, realm.getAccessTokenLifespan()); // 15 minutes
             assertEquals(604800, realm.getSsoSessionMaxLifespan()); // 7 days
         }
 
@@ -114,7 +111,7 @@ class KeycloakRealmProvisionerTest {
             provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME);
 
             ArgumentCaptor<RealmRepresentation> captor =
-                ArgumentCaptor.forClass(RealmRepresentation.class);
+                    ArgumentCaptor.forClass(RealmRepresentation.class);
             verify(realmsResource).create(captor.capture());
             RealmRepresentation realm = captor.getValue();
 
@@ -129,7 +126,7 @@ class KeycloakRealmProvisionerTest {
             provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME);
 
             ArgumentCaptor<ClientRepresentation> captor =
-                ArgumentCaptor.forClass(ClientRepresentation.class);
+                    ArgumentCaptor.forClass(ClientRepresentation.class);
             verify(clientsResource).create(captor.capture());
             ClientRepresentation client = captor.getValue();
 
@@ -148,17 +145,17 @@ class KeycloakRealmProvisionerTest {
             provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME);
 
             ArgumentCaptor<RoleRepresentation> captor =
-                ArgumentCaptor.forClass(RoleRepresentation.class);
+                    ArgumentCaptor.forClass(RoleRepresentation.class);
             verify(rolesResource, times(4)).create(captor.capture());
 
-            Set<String> roleNames = captor.getAllValues().stream()
-                .map(RoleRepresentation::getName)
-                .collect(Collectors.toSet());
+            Set<String> roleNames =
+                    captor.getAllValues().stream()
+                            .map(RoleRepresentation::getName)
+                            .collect(Collectors.toSet());
 
             assertEquals(
-                Set.of("consent:read", "consent:write", "admin:read", "admin:write"),
-                roleNames
-            );
+                    Set.of("consent:read", "consent:write", "admin:read", "admin:write"),
+                    roleNames);
         }
 
         @Test
@@ -172,12 +169,11 @@ class KeycloakRealmProvisionerTest {
         @Test
         @DisplayName("throws when client not found after creation")
         void throwsWhenClientNotFound() {
-            when(clientsResource.findByClientId(OPERIO_CLIENT_ID))
-                .thenReturn(List.of());
+            when(clientsResource.findByClientId(OPERIO_CLIENT_ID)).thenReturn(List.of());
 
-            assertThrows(IllegalStateException.class, () ->
-                provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME)
-            );
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> provisioner.provisionRealm(TENANT_ID, DISPLAY_NAME));
         }
     }
 
@@ -201,22 +197,18 @@ class KeycloakRealmProvisionerTest {
         @DisplayName("silently ignores NotFoundException (realm already gone)")
         void ignoresNotFound() {
             doThrow(new jakarta.ws.rs.NotFoundException("Realm not found"))
-                .when(realmResource).remove();
+                    .when(realmResource)
+                    .remove();
 
-            assertDoesNotThrow(() ->
-                provisioner.deprovisionRealm(TENANT_ID)
-            );
+            assertDoesNotThrow(() -> provisioner.deprovisionRealm(TENANT_ID));
         }
 
         @Test
         @DisplayName("re-throws unexpected exceptions")
         void rethrowsUnexpected() {
-            doThrow(new RuntimeException("Keycloak down"))
-                .when(realmResource).remove();
+            doThrow(new RuntimeException("Keycloak down")).when(realmResource).remove();
 
-            assertThrows(RuntimeException.class, () ->
-                provisioner.deprovisionRealm(TENANT_ID)
-            );
+            assertThrows(RuntimeException.class, () -> provisioner.deprovisionRealm(TENANT_ID));
         }
     }
 }

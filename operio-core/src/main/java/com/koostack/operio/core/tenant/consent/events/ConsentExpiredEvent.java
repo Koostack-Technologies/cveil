@@ -10,9 +10,11 @@ public record ConsentExpiredEvent(
         String policyType,
         String fieldName,
         String entityName,
-        String categoryName
-) implements DomainEvent, Shreddable {
+        String categoryName)
+        implements DomainEvent, Shreddable {
 
     @Override
-    public String subjectIdentifier() { return subjectId; }
+    public String subjectIdentifier() {
+        return subjectId;
+    }
 }

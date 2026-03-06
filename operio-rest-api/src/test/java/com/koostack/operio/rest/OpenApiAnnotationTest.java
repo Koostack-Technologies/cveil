@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.resource.CatalogueResource;
 import com.koostack.operio.rest.resource.ConsentResource;
-import com.koostack.operio.rest.resource.HealthResource;
 import com.koostack.operio.rest.resource.GovernanceResource;
+import com.koostack.operio.rest.resource.HealthResource;
 import com.koostack.operio.rest.resource.PlatformResource;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -26,12 +26,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies that OpenAPI annotations are correctly applied to all resource
- * classes, the application-level configuration, and individual endpoints.
+ * Verifies that OpenAPI annotations are correctly applied to all resource classes, the
+ * application-level configuration, and individual endpoints.
  *
- * These are compile-time/reflection-based tests that do not require a
- * running Quarkus container. They ensure that the Swagger UI documentation
- * stays in sync with the actual resource methods.
+ * <p>These are compile-time/reflection-based tests that do not require a running Quarkus container.
+ * They ensure that the Swagger UI documentation stays in sync with the actual resource methods.
  */
 @DisplayName("OpenAPI Annotation Tests")
 class OpenApiAnnotationTest {
@@ -48,19 +47,15 @@ class OpenApiAnnotationTest {
         @DisplayName("class carries @OpenAPIDefinition")
         void hasOpenApiDefinition() {
             assertTrue(
-                OperioOpenApiConfig.class.isAnnotationPresent(
-                    OpenAPIDefinition.class
-                ),
-                "OperioOpenApiConfig must have @OpenAPIDefinition"
-            );
+                    OperioOpenApiConfig.class.isAnnotationPresent(OpenAPIDefinition.class),
+                    "OperioOpenApiConfig must have @OpenAPIDefinition");
         }
 
         @Test
         @DisplayName("@OpenAPIDefinition has info with title and version")
         void hasInfoTitleAndVersion() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertNotNull(def.info());
             assertEquals("Operio Consent Management API", def.info().title());
             assertEquals("1.0.0", def.info().version());
@@ -69,9 +64,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has contact")
         void hasContact() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("KooStack", def.info().contact().name());
             assertFalse(def.info().contact().url().isBlank());
         }
@@ -79,9 +73,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has license")
         void hasLicense() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("Apache 2.0", def.info().license().name());
             assertFalse(def.info().license().url().isBlank());
         }
@@ -89,32 +82,22 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition has info description mentioning GDPR")
         void hasDescriptionWithRegulations() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             String desc = def.info().description();
-            assertTrue(
-                desc.contains("GDPR"),
-                "Description should mention GDPR"
-            );
-            assertTrue(
-                desc.contains("CCPA"),
-                "Description should mention CCPA"
-            );
+            assertTrue(desc.contains("GDPR"), "Description should mention GDPR");
+            assertTrue(desc.contains("CCPA"), "Description should mention CCPA");
         }
 
         @Test
         @DisplayName("defines all six tags")
         void definesAllTags() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             Tag[] tags = def.tags();
             assertEquals(6, tags.length, "Should define 6 tags");
 
-            Set<String> tagNames = Arrays.stream(tags)
-                .map(Tag::name)
-                .collect(Collectors.toSet());
+            Set<String> tagNames = Arrays.stream(tags).map(Tag::name).collect(Collectors.toSet());
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CONSENT));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CATALOGUE));
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_GOVERNANCE));
@@ -126,70 +109,42 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("each tag has a non-empty description")
         void tagsHaveDescriptions() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             for (Tag tag : def.tags()) {
                 assertFalse(
-                    tag.description().isBlank(),
-                    "Tag '" + tag.name() + "' must have a description"
-                );
+                        tag.description().isBlank(),
+                        "Tag '" + tag.name() + "' must have a description");
             }
         }
 
         @Test
         @DisplayName("defines BearerAuth security scheme with HTTP bearer type")
         void definesSecurityScheme() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme[] schemes = def.components().securitySchemes();
-            assertEquals(
-                1,
-                schemes.length,
-                "Should define exactly one security scheme"
-            );
+            assertEquals(1, schemes.length, "Should define exactly one security scheme");
 
             SecurityScheme scheme = schemes[0];
-            assertEquals(
-                OperioOpenApiConfig.SECURITY_SCHEME,
-                scheme.securitySchemeName()
-            );
+            assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, scheme.securitySchemeName());
             assertEquals(SecuritySchemeType.HTTP, scheme.type());
             assertEquals("bearer", scheme.scheme());
             assertEquals("API Key", scheme.bearerFormat());
         }
 
         @Test
-        @DisplayName(
-            "security scheme has non-empty description mentioning roles"
-        )
+        @DisplayName("security scheme has non-empty description mentioning roles")
         void securitySchemeDescribesRoles() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             String desc = scheme.description();
-            assertTrue(
-                desc.contains("consent:read"),
-                "Should mention consent:read role"
-            );
-            assertTrue(
-                desc.contains("consent:write"),
-                "Should mention consent:write role"
-            );
-            assertTrue(
-                desc.contains("admin:read"),
-                "Should mention admin:read role"
-            );
-            assertTrue(
-                desc.contains("admin:write"),
-                "Should mention admin:write role"
-            );
-            assertTrue(
-                desc.contains("super-admin"),
-                "Should mention super-admin role"
-            );
+            assertTrue(desc.contains("consent:read"), "Should mention consent:read role");
+            assertTrue(desc.contains("consent:write"), "Should mention consent:write role");
+            assertTrue(desc.contains("admin:read"), "Should mention admin:read role");
+            assertTrue(desc.contains("admin:write"), "Should mention admin:write role");
+            assertTrue(desc.contains("super-admin"), "Should mention super-admin role");
         }
 
         @Test
@@ -212,15 +167,13 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("SECURITY_SCHEME constant matches annotation")
         void securitySchemeConstantMatchesAnnotation() {
-            OpenAPIDefinition def = OperioOpenApiConfig.class.getAnnotation(
-                OpenAPIDefinition.class
-            );
+            OpenAPIDefinition def =
+                    OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             assertEquals(
-                OperioOpenApiConfig.SECURITY_SCHEME,
-                scheme.securitySchemeName(),
-                "SECURITY_SCHEME constant must match the annotation"
-            );
+                    OperioOpenApiConfig.SECURITY_SCHEME,
+                    scheme.securitySchemeName(),
+                    "SECURITY_SCHEME constant must match the annotation");
         }
     }
 
@@ -243,9 +196,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = ConsentResource.class.getAnnotation(
-                SecurityRequirement.class
-            );
+            SecurityRequirement sr = ConsentResource.class.getAnnotation(SecurityRequirement.class);
             assertNotNull(sr, "ConsentResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
@@ -265,51 +216,40 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("grant has operationId=grantConsent")
         void grantOperationId() throws Exception {
-            Method m = ConsentResource.class.getMethod(
-                "grant",
-                jakarta.ws.rs.core.SecurityContext.class,
-                com.koostack.operio.rest.dto.ConsentDtos.GrantRequest.class
-            );
-            assertEquals(
-                "grantConsent",
-                m.getAnnotation(Operation.class).operationId()
-            );
+            Method m =
+                    ConsentResource.class.getMethod(
+                            "grant",
+                            jakarta.ws.rs.core.SecurityContext.class,
+                            com.koostack.operio.rest.dto.ConsentDtos.GrantRequest.class);
+            assertEquals("grantConsent", m.getAnnotation(Operation.class).operationId());
         }
 
         @Test
         @DisplayName("evaluate has operationId=evaluateConsent")
         void evaluateOperationId() throws Exception {
-            Method m = ConsentResource.class.getMethod(
-                "evaluate",
-                jakarta.ws.rs.core.SecurityContext.class,
-                String.class,
-                com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest.class
-            );
-            assertEquals(
-                "evaluateConsent",
-                m.getAnnotation(Operation.class).operationId()
-            );
+            Method m =
+                    ConsentResource.class.getMethod(
+                            "evaluate",
+                            jakarta.ws.rs.core.SecurityContext.class,
+                            String.class,
+                            com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest.class);
+            assertEquals("evaluateConsent", m.getAnnotation(Operation.class).operationId());
         }
 
         @Test
-        @DisplayName(
-            "subjectHistory has @Parameter annotations on path and query params"
-        )
+        @DisplayName("subjectHistory has @Parameter annotations on path and query params")
         void subjectHistoryHasParameters() throws Exception {
-            Method m = ConsentResource.class.getMethod(
-                "subjectHistory",
-                jakarta.ws.rs.core.SecurityContext.class,
-                String.class
-            );
-            long paramCount = Arrays.stream(m.getParameters())
-                .filter(p -> p.isAnnotationPresent(Parameter.class))
-                .count();
+            Method m =
+                    ConsentResource.class.getMethod(
+                            "subjectHistory",
+                            jakarta.ws.rs.core.SecurityContext.class,
+                            String.class);
+            long paramCount =
+                    Arrays.stream(m.getParameters())
+                            .filter(p -> p.isAnnotationPresent(Parameter.class))
+                            .count();
             // 1 param: subjectId (path)
-            assertEquals(
-                1,
-                paramCount,
-                "subjectHistory should have 1 @Parameter annotation"
-            );
+            assertEquals(1, paramCount, "subjectHistory should have 1 @Parameter annotation");
         }
 
         @Test
@@ -327,14 +267,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("consent endpoints have 15 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
-            long opCount = countOperationAnnotatedMethods(
-                ConsentResource.class
-            );
-            assertEquals(
-                15,
-                opCount,
-                "ConsentResource should have 15 @Operation methods"
-            );
+            long opCount = countOperationAnnotatedMethods(ConsentResource.class);
+            assertEquals(15, opCount, "ConsentResource should have 15 @Operation methods");
         }
 
         @Test
@@ -363,9 +297,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = CatalogueResource.class.getAnnotation(
-                SecurityRequirement.class
-            );
+            SecurityRequirement sr =
+                    CatalogueResource.class.getAnnotation(SecurityRequirement.class);
             assertNotNull(sr, "CatalogueResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
@@ -386,11 +319,7 @@ class OpenApiAnnotationTest {
         @DisplayName("catalogue endpoints have 15 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(CatalogueResource.class);
-            assertEquals(
-                15,
-                opCount,
-                "CatalogueResource should have 15 @Operation methods"
-            );
+            assertEquals(15, opCount, "CatalogueResource should have 15 @Operation methods");
         }
 
         @Test
@@ -425,9 +354,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = GovernanceResource.class.getAnnotation(
-                SecurityRequirement.class
-            );
+            SecurityRequirement sr =
+                    GovernanceResource.class.getAnnotation(SecurityRequirement.class);
             assertNotNull(sr, "GovernanceResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
@@ -448,11 +376,7 @@ class OpenApiAnnotationTest {
         @DisplayName("governance endpoints have 19 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(GovernanceResource.class);
-            assertEquals(
-                19,
-                opCount,
-                "GovernanceResource should have 19 @Operation methods"
-            );
+            assertEquals(19, opCount, "GovernanceResource should have 19 @Operation methods");
         }
 
         @Test
@@ -487,13 +411,9 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("class has @SecurityRequirement referencing BearerAuth")
         void hasSecurityRequirement() {
-            SecurityRequirement sr = PlatformResource.class.getAnnotation(
-                SecurityRequirement.class
-            );
-            assertNotNull(
-                sr,
-                "PlatformResource must have @SecurityRequirement"
-            );
+            SecurityRequirement sr =
+                    PlatformResource.class.getAnnotation(SecurityRequirement.class);
+            assertNotNull(sr, "PlatformResource must have @SecurityRequirement");
             assertEquals(OperioOpenApiConfig.SECURITY_SCHEME, sr.name());
         }
 
@@ -512,14 +432,8 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("platform endpoints have 8 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
-            long opCount = countOperationAnnotatedMethods(
-                PlatformResource.class
-            );
-            assertEquals(
-                8,
-                opCount,
-                "PlatformResource should have 8 @Operation methods"
-            );
+            long opCount = countOperationAnnotatedMethods(PlatformResource.class);
+            assertEquals(8, opCount, "PlatformResource should have 8 @Operation methods");
         }
 
         @Test
@@ -531,50 +445,40 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("getTenant has @Parameter on path param")
         void getTenantHasParameter() throws Exception {
-            Method m = PlatformResource.class.getMethod(
-                "getTenant",
-                jakarta.ws.rs.core.SecurityContext.class,
-                String.class
-            );
-            long paramCount = Arrays.stream(m.getParameters())
-                .filter(p -> p.isAnnotationPresent(Parameter.class))
-                .count();
-            assertTrue(
-                paramCount >= 1,
-                "getTenant should have at least 1 @Parameter"
-            );
+            Method m =
+                    PlatformResource.class.getMethod(
+                            "getTenant", jakarta.ws.rs.core.SecurityContext.class, String.class);
+            long paramCount =
+                    Arrays.stream(m.getParameters())
+                            .filter(p -> p.isAnnotationPresent(Parameter.class))
+                            .count();
+            assertTrue(paramCount >= 1, "getTenant should have at least 1 @Parameter");
         }
 
         @Test
         @DisplayName("listApiKeys has @Parameter on tenantId query param")
         void listApiKeysHasParameter() throws Exception {
-            Method m = PlatformResource.class.getMethod(
-                "listApiKeys",
-                jakarta.ws.rs.core.SecurityContext.class,
-                String.class
-            );
-            long paramCount = Arrays.stream(m.getParameters())
-                .filter(p -> p.isAnnotationPresent(Parameter.class))
-                .count();
-            assertTrue(
-                paramCount >= 1,
-                "listApiKeys should have at least 1 @Parameter"
-            );
+            Method m =
+                    PlatformResource.class.getMethod(
+                            "listApiKeys", jakarta.ws.rs.core.SecurityContext.class, String.class);
+            long paramCount =
+                    Arrays.stream(m.getParameters())
+                            .filter(p -> p.isAnnotationPresent(Parameter.class))
+                            .count();
+            assertTrue(paramCount >= 1, "listApiKeys should have at least 1 @Parameter");
         }
 
         @Test
         @DisplayName("createApiKey returns 201 per @APIResponse")
         void createApiKeyReturns201() throws Exception {
-            Method m = PlatformResource.class.getMethod(
-                "createApiKey",
-                jakarta.ws.rs.core.SecurityContext.class,
-                com.koostack.operio.rest.dto.PlatformDtos
-                    .CreateApiKeyRequest.class
-            );
+            Method m =
+                    PlatformResource.class.getMethod(
+                            "createApiKey",
+                            jakarta.ws.rs.core.SecurityContext.class,
+                            com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest.class);
             APIResponses responses = m.getAnnotation(APIResponses.class);
-            boolean has201 = Arrays.stream(responses.value()).anyMatch(r ->
-                r.responseCode().equals("201")
-            );
+            boolean has201 =
+                    Arrays.stream(responses.value()).anyMatch(r -> r.responseCode().equals("201"));
             assertTrue(has201, "createApiKey should document a 201 response");
         }
     }
@@ -596,17 +500,10 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName(
-            "class does NOT have @SecurityRequirement (public endpoint)"
-        )
+        @DisplayName("class does NOT have @SecurityRequirement (public endpoint)")
         void noSecurityRequirement() {
-            SecurityRequirement sr = HealthResource.class.getAnnotation(
-                SecurityRequirement.class
-            );
-            assertNull(
-                sr,
-                "HealthResource should not have @SecurityRequirement (public)"
-            );
+            SecurityRequirement sr = HealthResource.class.getAnnotation(SecurityRequirement.class);
+            assertNull(sr, "HealthResource should not have @SecurityRequirement (public)");
         }
 
         @Test
@@ -625,9 +522,10 @@ class OpenApiAnnotationTest {
             APIResponses responses = m.getAnnotation(APIResponses.class);
             assertNotNull(responses, "health() must have @APIResponses");
 
-            Set<String> codes = Arrays.stream(responses.value())
-                .map(APIResponse::responseCode)
-                .collect(Collectors.toSet());
+            Set<String> codes =
+                    Arrays.stream(responses.value())
+                            .map(APIResponse::responseCode)
+                            .collect(Collectors.toSet());
             assertTrue(codes.contains("200"), "Should have 200 response");
             assertTrue(codes.contains("503"), "Should have 503 response");
         }
@@ -637,10 +535,7 @@ class OpenApiAnnotationTest {
         void healthHasSummary() throws Exception {
             Method m = HealthResource.class.getMethod("health");
             Operation op = m.getAnnotation(Operation.class);
-            assertFalse(
-                op.summary().isBlank(),
-                "health @Operation must have a summary"
-            );
+            assertFalse(op.summary().isBlank(), "health @Operation must have a summary");
         }
     }
 
@@ -653,61 +548,43 @@ class OpenApiAnnotationTest {
     class CrossCuttingTests {
 
         @Test
-        @DisplayName(
-            "all operationIds across all resources are globally unique"
-        )
+        @DisplayName("all operationIds across all resources are globally unique")
         void operationIdsGloballyUnique() {
             Set<String> allIds = new java.util.HashSet<>();
-            for (Class<?> clazz : new Class<?>[] {
-                ConsentResource.class,
-                CatalogueResource.class,
-                GovernanceResource.class,
-                PlatformResource.class,
-                HealthResource.class,
-            }) {
+            for (Class<?> clazz :
+                    new Class<?>[] {
+                        ConsentResource.class,
+                        CatalogueResource.class,
+                        GovernanceResource.class,
+                        PlatformResource.class,
+                        HealthResource.class,
+                    }) {
                 for (Method m : clazz.getDeclaredMethods()) {
                     Operation op = m.getAnnotation(Operation.class);
                     if (op != null && !op.operationId().isBlank()) {
                         assertTrue(
-                            allIds.add(op.operationId()),
-                            "Duplicate operationId: " +
-                                op.operationId() +
-                                " in " +
-                                clazz.getSimpleName() +
-                                "." +
-                                m.getName()
-                        );
+                                allIds.add(op.operationId()),
+                                "Duplicate operationId: "
+                                        + op.operationId()
+                                        + " in "
+                                        + clazz.getSimpleName()
+                                        + "."
+                                        + m.getName());
                     }
                 }
             }
             // 15 consent + 15 catalogue + 19 governance + 8 platform + 1 health = 58
-            assertEquals(
-                58,
-                allIds.size(),
-                "Expected 58 globally unique operationIds"
-            );
+            assertEquals(58, allIds.size(), "Expected 58 globally unique operationIds");
         }
 
         @Test
-        @DisplayName(
-            "authenticated resources have @SecurityRequirement, public ones do not"
-        )
+        @DisplayName("authenticated resources have @SecurityRequirement, public ones do not")
         void securityRequirementPresenceIsCorrect() {
-            assertNotNull(
-                ConsentResource.class.getAnnotation(SecurityRequirement.class)
-            );
-            assertNotNull(
-                CatalogueResource.class.getAnnotation(SecurityRequirement.class)
-            );
-            assertNotNull(
-                GovernanceResource.class.getAnnotation(SecurityRequirement.class)
-            );
-            assertNotNull(
-                PlatformResource.class.getAnnotation(SecurityRequirement.class)
-            );
-            assertNull(
-                HealthResource.class.getAnnotation(SecurityRequirement.class)
-            );
+            assertNotNull(ConsentResource.class.getAnnotation(SecurityRequirement.class));
+            assertNotNull(CatalogueResource.class.getAnnotation(SecurityRequirement.class));
+            assertNotNull(GovernanceResource.class.getAnnotation(SecurityRequirement.class));
+            assertNotNull(PlatformResource.class.getAnnotation(SecurityRequirement.class));
+            assertNull(HealthResource.class.getAnnotation(SecurityRequirement.class));
         }
 
         @Test
@@ -733,52 +610,40 @@ class OpenApiAnnotationTest {
         @DisplayName("ErrorResponse has @Schema")
         void errorResponseHasSchema() {
             assertTrue(
-                com.koostack.operio.rest.dto.CommonDtos
-                    .ErrorResponse.class.isAnnotationPresent(
-                    org.eclipse.microprofile.openapi.annotations.media
-                        .Schema.class
-                ),
-                "ErrorResponse must have @Schema"
-            );
+                    com.koostack.operio.rest.dto.CommonDtos.ErrorResponse.class.isAnnotationPresent(
+                            org.eclipse.microprofile.openapi.annotations.media.Schema.class),
+                    "ErrorResponse must have @Schema");
         }
 
         @Test
         @DisplayName("HealthResponse has @Schema")
         void healthResponseHasSchema() {
             assertTrue(
-                com.koostack.operio.rest.dto.CommonDtos
-                    .HealthResponse.class.isAnnotationPresent(
-                    org.eclipse.microprofile.openapi.annotations.media
-                        .Schema.class
-                ),
-                "HealthResponse must have @Schema"
-            );
+                    com.koostack.operio.rest.dto.CommonDtos.HealthResponse.class
+                            .isAnnotationPresent(
+                                    org.eclipse.microprofile.openapi.annotations.media.Schema
+                                            .class),
+                    "HealthResponse must have @Schema");
         }
 
         @Test
         @DisplayName("MessageResponse has @Schema")
         void messageResponseHasSchema() {
             assertTrue(
-                com.koostack.operio.rest.dto.CommonDtos
-                    .MessageResponse.class.isAnnotationPresent(
-                    org.eclipse.microprofile.openapi.annotations.media
-                        .Schema.class
-                ),
-                "MessageResponse must have @Schema"
-            );
+                    com.koostack.operio.rest.dto.CommonDtos.MessageResponse.class
+                            .isAnnotationPresent(
+                                    org.eclipse.microprofile.openapi.annotations.media.Schema
+                                            .class),
+                    "MessageResponse must have @Schema");
         }
 
         @Test
         @DisplayName("ConsentScopeDto has @Schema")
         void consentScopeDtoHasSchema() {
             assertTrue(
-                com.koostack.operio.rest.dto
-                    .ConsentScopeDto.class.isAnnotationPresent(
-                    org.eclipse.microprofile.openapi.annotations.media
-                        .Schema.class
-                ),
-                "ConsentScopeDto must have @Schema"
-            );
+                    com.koostack.operio.rest.dto.ConsentScopeDto.class.isAnnotationPresent(
+                            org.eclipse.microprofile.openapi.annotations.media.Schema.class),
+                    "ConsentScopeDto must have @Schema");
         }
 
         @Test
@@ -787,45 +652,34 @@ class OpenApiAnnotationTest {
             // @Schema targets FIELD/METHOD/PARAMETER/TYPE — Java propagates
             // record-component annotations to the backing field when the
             // annotation's @Target includes FIELD.
-            for (var field : com.koostack.operio.rest.dto.CommonDtos
-                .ErrorResponse.class.getDeclaredFields()) {
+            for (var field :
+                    com.koostack.operio.rest.dto.CommonDtos.ErrorResponse.class
+                            .getDeclaredFields()) {
                 // Skip synthetic/static fields (e.g. $assertionsEnabled)
-                if (
-                    field.isSynthetic() ||
-                    java.lang.reflect.Modifier.isStatic(field.getModifiers())
-                ) {
+                if (field.isSynthetic()
+                        || java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
                     continue;
                 }
                 assertTrue(
-                    field.isAnnotationPresent(
-                        org.eclipse.microprofile.openapi.annotations.media
-                            .Schema.class
-                    ),
-                    "ErrorResponse." + field.getName() + " must have @Schema"
-                );
+                        field.isAnnotationPresent(
+                                org.eclipse.microprofile.openapi.annotations.media.Schema.class),
+                        "ErrorResponse." + field.getName() + " must have @Schema");
             }
         }
 
         @Test
-        @DisplayName(
-            "ConsentScopeDto fields have @Schema (via declared fields)"
-        )
+        @DisplayName("ConsentScopeDto fields have @Schema (via declared fields)")
         void consentScopeDtoFieldsHaveSchema() {
-            for (var field : com.koostack.operio.rest.dto
-                .ConsentScopeDto.class.getDeclaredFields()) {
-                if (
-                    field.isSynthetic() ||
-                    java.lang.reflect.Modifier.isStatic(field.getModifiers())
-                ) {
+            for (var field :
+                    com.koostack.operio.rest.dto.ConsentScopeDto.class.getDeclaredFields()) {
+                if (field.isSynthetic()
+                        || java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
                     continue;
                 }
                 assertTrue(
-                    field.isAnnotationPresent(
-                        org.eclipse.microprofile.openapi.annotations.media
-                            .Schema.class
-                    ),
-                    "ConsentScopeDto." + field.getName() + " must have @Schema"
-                );
+                        field.isAnnotationPresent(
+                                org.eclipse.microprofile.openapi.annotations.media.Schema.class),
+                        "ConsentScopeDto." + field.getName() + " must have @Schema");
             }
         }
     }
@@ -835,110 +689,93 @@ class OpenApiAnnotationTest {
     // ===================================================================
 
     /**
-     * Verifies every public method with a JAX-RS HTTP method annotation
-     * (@GET, @POST, @DELETE, etc.) also has @Operation.
+     * Verifies every public method with a JAX-RS HTTP method annotation (@GET, @POST, @DELETE,
+     * etc.) also has @Operation.
      */
     private void assertAllEndpointMethodsHaveOperation(Class<?> resourceClass) {
         for (Method m : resourceClass.getDeclaredMethods()) {
             if (isJaxRsEndpoint(m)) {
                 assertNotNull(
-                    m.getAnnotation(Operation.class),
-                    resourceClass.getSimpleName() +
-                        "." +
-                        m.getName() +
-                        "() must have @Operation"
-                );
+                        m.getAnnotation(Operation.class),
+                        resourceClass.getSimpleName()
+                                + "."
+                                + m.getName()
+                                + "() must have @Operation");
             }
         }
     }
 
-    /**
-     * Verifies every JAX-RS endpoint method has @APIResponses.
-     */
-    private void assertAllEndpointMethodsHaveApiResponses(
-        Class<?> resourceClass
-    ) {
+    /** Verifies every JAX-RS endpoint method has @APIResponses. */
+    private void assertAllEndpointMethodsHaveApiResponses(Class<?> resourceClass) {
         for (Method m : resourceClass.getDeclaredMethods()) {
             if (isJaxRsEndpoint(m)) {
                 assertNotNull(
-                    m.getAnnotation(APIResponses.class),
-                    resourceClass.getSimpleName() +
-                        "." +
-                        m.getName() +
-                        "() must have @APIResponses"
-                );
+                        m.getAnnotation(APIResponses.class),
+                        resourceClass.getSimpleName()
+                                + "."
+                                + m.getName()
+                                + "() must have @APIResponses");
             }
         }
     }
 
-    /**
-     * Verifies every @Operation has a non-blank summary.
-     */
+    /** Verifies every @Operation has a non-blank summary. */
     private void assertAllOperationsHaveSummaries(Class<?> resourceClass) {
         for (Method m : resourceClass.getDeclaredMethods()) {
             Operation op = m.getAnnotation(Operation.class);
             if (op != null) {
                 assertFalse(
-                    op.summary().isBlank(),
-                    resourceClass.getSimpleName() +
-                        "." +
-                        m.getName() +
-                        "() @Operation must have a non-blank summary"
-                );
+                        op.summary().isBlank(),
+                        resourceClass.getSimpleName()
+                                + "."
+                                + m.getName()
+                                + "() @Operation must have a non-blank summary");
             }
         }
     }
 
-    /**
-     * Verifies every @Operation has a non-blank description.
-     */
+    /** Verifies every @Operation has a non-blank description. */
     private void assertAllOperationsHaveDescriptions(Class<?> resourceClass) {
         for (Method m : resourceClass.getDeclaredMethods()) {
             Operation op = m.getAnnotation(Operation.class);
             if (op != null) {
                 assertFalse(
-                    op.description().isBlank(),
-                    resourceClass.getSimpleName() +
-                        "." +
-                        m.getName() +
-                        "() @Operation must have a non-blank description"
-                );
+                        op.description().isBlank(),
+                        resourceClass.getSimpleName()
+                                + "."
+                                + m.getName()
+                                + "() @Operation must have a non-blank description");
             }
         }
     }
 
-    /**
-     * Verifies all operation IDs within a single resource class are unique.
-     */
+    /** Verifies all operation IDs within a single resource class are unique. */
     private void assertOperationIdsAreUnique(Class<?> resourceClass) {
         Set<String> ids = new java.util.HashSet<>();
         for (Method m : resourceClass.getDeclaredMethods()) {
             Operation op = m.getAnnotation(Operation.class);
             if (op != null && !op.operationId().isBlank()) {
                 assertTrue(
-                    ids.add(op.operationId()),
-                    "Duplicate operationId '" +
-                        op.operationId() +
-                        "' in " +
-                        resourceClass.getSimpleName()
-                );
+                        ids.add(op.operationId()),
+                        "Duplicate operationId '"
+                                + op.operationId()
+                                + "' in "
+                                + resourceClass.getSimpleName());
             }
         }
     }
 
     private long countOperationAnnotatedMethods(Class<?> resourceClass) {
         return Arrays.stream(resourceClass.getDeclaredMethods())
-            .filter(m -> m.isAnnotationPresent(Operation.class))
-            .count();
+                .filter(m -> m.isAnnotationPresent(Operation.class))
+                .count();
     }
 
     private boolean isJaxRsEndpoint(Method m) {
-        return (
-            m.isAnnotationPresent(jakarta.ws.rs.GET.class) ||
-            m.isAnnotationPresent(jakarta.ws.rs.POST.class) ||
-            m.isAnnotationPresent(jakarta.ws.rs.PUT.class) ||
-            m.isAnnotationPresent(jakarta.ws.rs.DELETE.class) ||
-            m.isAnnotationPresent(jakarta.ws.rs.PATCH.class)
-        );
+        return (m.isAnnotationPresent(jakarta.ws.rs.GET.class)
+                || m.isAnnotationPresent(jakarta.ws.rs.POST.class)
+                || m.isAnnotationPresent(jakarta.ws.rs.PUT.class)
+                || m.isAnnotationPresent(jakarta.ws.rs.DELETE.class)
+                || m.isAnnotationPresent(jakarta.ws.rs.PATCH.class));
     }
 }

@@ -7,9 +7,7 @@ import com.koostack.operio.core.event.EventService;
  *
  * @param eventService the platform event service for publishing domain events
  */
-public record JooqIamCommandConfig(
-    EventService<?> eventService
-) {
+public record JooqIamCommandConfig(EventService<?> eventService) {
     public JooqIamCommandConfig {
         if (eventService == null) {
             throw new IllegalArgumentException("eventService must not be null");

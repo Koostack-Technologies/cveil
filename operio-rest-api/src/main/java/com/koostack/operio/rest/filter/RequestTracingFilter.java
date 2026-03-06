@@ -17,40 +17,39 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /**
- * JAX-RS filter that manages distributed tracing context for every HTTP
- * request processed by the Operio REST API.
+ * JAX-RS filter that manages distributed tracing context for every HTTP request processed by the
+ * Operio REST API.
  *
- * <p>This filter implements both {@link ContainerRequestFilter} and
- * {@link ContainerResponseFilter} to bracket the entire request lifecycle:
+ * <p>This filter implements both {@link ContainerRequestFilter} and {@link ContainerResponseFilter}
+ * to bracket the entire request lifecycle:
  *
  * <h2>Request Phase (pre-authentication)</h2>
+ *
  * <ol>
- *   <li>Reads the {@code X-Request-Id} header from the incoming request.
- *       If absent, generates a random UUID.</li>
- *   <li>Stores the request ID as a JAX-RS request property so downstream
- *       filters and resource methods can access it.</li>
- *   <li>Sets the {@code requestId} key in the SLF4J {@link MDC} so all
- *       log statements emitted during request processing include the
- *       request ID automatically (when the log format includes
- *       {@code %X{requestId}}).</li>
+ *   <li>Reads the {@code X-Request-Id} header from the incoming request. If absent, generates a
+ *       random UUID.
+ *   <li>Stores the request ID as a JAX-RS request property so downstream filters and resource
+ *       methods can access it.
+ *   <li>Sets the {@code requestId} key in the SLF4J {@link MDC} so all log statements emitted
+ *       during request processing include the request ID automatically (when the log format
+ *       includes {@code %X{requestId}}).
  * </ol>
  *
  * <h2>Response Phase (post-resource-method)</h2>
+ *
  * <ol>
- *   <li>Reads the authenticated {@link IdentityContext} from the
- *       {@link OperioRequestHolder} and enriches the MDC with
- *       {@code tenantId} and {@code subject} — these values are only
- *       available after the auth filter has run, so they are set here
- *       (on the response side) to ensure final response-phase log lines
- *       include the full tracing context.</li>
- *   <li>Echoes the {@code X-Request-Id} header back in the HTTP response
- *       so clients can correlate requests with server-side logs.</li>
- *   <li>Clears the SLF4J MDC to prevent context leaking across requests
- *       (defense-in-depth — with virtual threads each request has its own
- *       thread, but clearing is still good hygiene).</li>
+ *   <li>Reads the authenticated {@link IdentityContext} from the {@link OperioRequestHolder} and
+ *       enriches the MDC with {@code tenantId} and {@code subject} — these values are only
+ *       available after the auth filter has run, so they are set here (on the response side) to
+ *       ensure final response-phase log lines include the full tracing context.
+ *   <li>Echoes the {@code X-Request-Id} header back in the HTTP response so clients can correlate
+ *       requests with server-side logs.
+ *   <li>Clears the SLF4J MDC to prevent context leaking across requests (defense-in-depth — with
+ *       virtual threads each request has its own thread, but clearing is still good hygiene).
  * </ol>
  *
  * <h2>MDC Keys</h2>
+ *
  * <table>
  *   <tr><th>Key</th><th>Set When</th><th>Description</th></tr>
  *   <tr><td>{@code requestId}</td><td>Request phase</td>
@@ -65,37 +64,33 @@ import org.slf4j.MDC;
  * </table>
  *
  * <h2>Priority &amp; Ordering</h2>
+ *
  * <p>Priority is {@code Priorities.AUTHENTICATION - 100} (= 900), so:
+ *
  * <ul>
- *   <li><strong>Request phase:</strong> runs <em>before</em> the auth
- *       filter ({@code AUTHENTICATION} = 1000) — the request ID is
- *       available in MDC for auth-related log messages.</li>
- *   <li><strong>Response phase:</strong> JAX-RS response filters execute
- *       in reverse priority order (highest priority first), so this
- *       filter runs <em>last</em> among response filters — MDC is
- *       cleared only after all other response filters have had a chance
- *       to log.</li>
+ *   <li><strong>Request phase:</strong> runs <em>before</em> the auth filter ({@code
+ *       AUTHENTICATION} = 1000) — the request ID is available in MDC for auth-related log messages.
+ *   <li><strong>Response phase:</strong> JAX-RS response filters execute in reverse priority order
+ *       (highest priority first), so this filter runs <em>last</em> among response filters — MDC is
+ *       cleared only after all other response filters have had a chance to log.
  * </ul>
  *
  * <h2>Integration with {@code ApiKeyAuthFilter}</h2>
- * <p>The auth filter enriches MDC with {@code tenantId} and {@code subject}
- * immediately after successful authentication (request phase). This means
- * log lines emitted during resource method execution already include the
- * full tracing context. The response-phase enrichment here is a safety net
- * that ensures the values are present even if the auth filter didn't set
- * them (e.g. on public endpoints or auth failures).
+ *
+ * <p>The auth filter enriches MDC with {@code tenantId} and {@code subject} immediately after
+ * successful authentication (request phase). This means log lines emitted during resource method
+ * execution already include the full tracing context. The response-phase enrichment here is a
+ * safety net that ensures the values are present even if the auth filter didn't set them (e.g. on
+ * public endpoints or auth failures).
  *
  * @see ApiKeyAuthFilter
  * @see OperioRequestHolder
  */
 @Provider
 @Priority(Priorities.AUTHENTICATION - 100)
-public class RequestTracingFilter
-    implements ContainerRequestFilter, ContainerResponseFilter {
+public class RequestTracingFilter implements ContainerRequestFilter, ContainerResponseFilter {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        RequestTracingFilter.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(RequestTracingFilter.class);
 
     // -----------------------------------------------------------------------
     // Constants
@@ -105,9 +100,9 @@ public class RequestTracingFilter
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     /**
-     * JAX-RS request property key under which the request ID is stored.
-     * Downstream filters and resource methods can read this property to
-     * access the current request ID without going through MDC.
+     * JAX-RS request property key under which the request ID is stored. Downstream filters and
+     * resource methods can read this property to access the current request ID without going
+     * through MDC.
      */
     public static final String REQUEST_ID_PROPERTY = "operio.request-id";
 
@@ -131,12 +126,10 @@ public class RequestTracingFilter
     // -----------------------------------------------------------------------
 
     /**
-     * Request-scoped holder populated by {@link ApiKeyAuthFilter} with the
-     * authenticated identity. Used in the response phase to enrich MDC with
-     * {@code tenantId} and {@code subject}.
+     * Request-scoped holder populated by {@link ApiKeyAuthFilter} with the authenticated identity.
+     * Used in the response phase to enrich MDC with {@code tenantId} and {@code subject}.
      */
-    @Inject
-    OperioRequestHolder requestHolder;
+    @Inject OperioRequestHolder requestHolder;
 
     // -----------------------------------------------------------------------
     // Request filter — runs BEFORE authentication
@@ -145,8 +138,8 @@ public class RequestTracingFilter
     /**
      * Extracts or generates the request ID and initializes the SLF4J MDC.
      *
-     * <p>This runs at priority {@code AUTHENTICATION - 100}, so the request
-     * ID is available in MDC before the auth filter logs anything.
+     * <p>This runs at priority {@code AUTHENTICATION - 100}, so the request ID is available in MDC
+     * before the auth filter logs anything.
      *
      * @param requestCtx the incoming request context
      * @throws IOException never thrown — declared by the interface contract
@@ -157,18 +150,10 @@ public class RequestTracingFilter
         String requestId = requestCtx.getHeaderString(REQUEST_ID_HEADER);
         if (requestId == null || requestId.isBlank()) {
             requestId = UUID.randomUUID().toString();
-            LOG.trace(
-                "No {} header present — generated: {}",
-                REQUEST_ID_HEADER,
-                requestId
-            );
+            LOG.trace("No {} header present — generated: {}", REQUEST_ID_HEADER, requestId);
         } else {
             requestId = requestId.trim();
-            LOG.trace(
-                "Using client-provided {}: {}",
-                REQUEST_ID_HEADER,
-                requestId
-            );
+            LOG.trace("Using client-provided {}: {}", REQUEST_ID_HEADER, requestId);
         }
 
         // 2. Store as request property for downstream access
@@ -191,11 +176,10 @@ public class RequestTracingFilter
         LOG.info("→ {} {}", method, path);
         if (LOG.isDebugEnabled()) {
             LOG.debug(
-                "→ {} {} (full URI: {})",
-                method,
-                path,
-                requestCtx.getUriInfo().getRequestUri()
-            );
+                    "→ {} {} (full URI: {})",
+                    method,
+                    path,
+                    requestCtx.getUriInfo().getRequestUri());
         }
     }
 
@@ -204,36 +188,28 @@ public class RequestTracingFilter
     // -----------------------------------------------------------------------
 
     /**
-     * Echoes the request ID in the response header, enriches MDC with
-     * post-authentication context, and clears MDC.
+     * Echoes the request ID in the response header, enriches MDC with post-authentication context,
+     * and clears MDC.
      *
-     * <p>Because this filter has the lowest priority among response filters
-     * (JAX-RS response filters execute in descending priority order), it
-     * runs last — ensuring the MDC is cleared only after all other
-     * response filters have completed.
+     * <p>Because this filter has the lowest priority among response filters (JAX-RS response
+     * filters execute in descending priority order), it runs last — ensuring the MDC is cleared
+     * only after all other response filters have completed.
      *
-     * @param requestCtx  the request context
+     * @param requestCtx the request context
      * @param responseCtx the response context
      * @throws IOException never thrown — declared by the interface contract
      */
     @Override
-    public void filter(
-        ContainerRequestContext requestCtx,
-        ContainerResponseContext responseCtx
-    ) throws IOException {
+    public void filter(ContainerRequestContext requestCtx, ContainerResponseContext responseCtx)
+            throws IOException {
         try {
             // 1. Retrieve the request ID (stored in request phase)
             Object requestIdObj = requestCtx.getProperty(REQUEST_ID_PROPERTY);
-            String requestId = requestIdObj instanceof String s
-                ? s
-                : MDC.get(MDC_REQUEST_ID);
+            String requestId = requestIdObj instanceof String s ? s : MDC.get(MDC_REQUEST_ID);
 
             // 2. Echo X-Request-Id in the response for client correlation
             if (requestId != null) {
-                responseCtx.getHeaders().putSingle(
-                    REQUEST_ID_HEADER,
-                    requestId
-                );
+                responseCtx.getHeaders().putSingle(REQUEST_ID_HEADER, requestId);
             }
 
             // 3. Enrich MDC with post-authentication identity context
@@ -256,16 +232,15 @@ public class RequestTracingFilter
             LOG.info("← {} {} {} {}ms", method, path, status, durationMs);
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
-                    "← {} {} {} {}ms (full URI: {}, requestId={}, tenant={}, subject={})",
-                    method,
-                    path,
-                    status,
-                    durationMs,
-                    requestCtx.getUriInfo().getRequestUri(),
-                    requestId != null ? requestId : MDC_ABSENT,
-                    MDC.get(MDC_TENANT_ID),
-                    MDC.get(MDC_SUBJECT)
-                );
+                        "← {} {} {} {}ms (full URI: {}, requestId={}, tenant={}, subject={})",
+                        method,
+                        path,
+                        status,
+                        durationMs,
+                        requestCtx.getUriInfo().getRequestUri(),
+                        requestId != null ? requestId : MDC_ABSENT,
+                        MDC.get(MDC_TENANT_ID),
+                        MDC.get(MDC_SUBJECT));
             }
         } finally {
             // Clear MDC to prevent context leaking.
@@ -281,13 +256,11 @@ public class RequestTracingFilter
     // -----------------------------------------------------------------------
 
     /**
-     * Enriches the SLF4J MDC with {@code tenantId} and {@code subject}
-     * from the authenticated identity stored in the
-     * {@link OperioRequestHolder}.
+     * Enriches the SLF4J MDC with {@code tenantId} and {@code subject} from the authenticated
+     * identity stored in the {@link OperioRequestHolder}.
      *
-     * <p>If no identity is available (unauthenticated request, public
-     * endpoint, or auth failure), placeholder values ({@code "-"}) are
-     * left in place.
+     * <p>If no identity is available (unauthenticated request, public endpoint, or auth failure),
+     * placeholder values ({@code "-"}) are left in place.
      */
     private void enrichMdcWithIdentity() {
         if (requestHolder == null || !requestHolder.isAuthenticated()) {

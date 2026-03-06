@@ -5,8 +5,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.Shreddable;
 import com.koostack.operio.core.event.TenantEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
-import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -15,30 +15,26 @@ import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
+import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
 import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.UUID;
-import java.util.concurrent.LinkedBlockingQueue;
-
 /**
- * jOOQ-backed {@link TenantEventService} implementation — durable event
- * store for tenant-scoped domain events.
+ * jOOQ-backed {@link TenantEventService} implementation — durable event store for tenant-scoped
+ * domain events.
  *
- * <p>Events are appended to an append-only {@code event} table with
- * optimistic concurrency control via per-aggregate versioning. A unique
- * constraint on {@code (aggregate_type, aggregate_id, version, tenant_id)}
- * prevents duplicate writes.
+ * <p>Events are appended to an append-only {@code event} table with optimistic concurrency control
+ * via per-aggregate versioning. A unique constraint on {@code (aggregate_type, aggregate_id,
+ * version, tenant_id)} prevents duplicate writes.
  */
-public class JooqTenantEventService
-    implements TenantEventService<TenantEventJooqConfig>
-{
+public class JooqTenantEventService implements TenantEventService<TenantEventJooqConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(JooqTenantEventService.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-        .registerModule(new JavaTimeModule());
+    private static final ObjectMapper objectMapper =
+            new ObjectMapper().registerModule(new JavaTimeModule());
     private static final int SNAPSHOT_DEPTH_THRESHOLD = 20;
 
     private DSLContext dslContext;
@@ -48,7 +44,8 @@ public class JooqTenantEventService
     private volatile SubjectDsarService<?> subjectDsarService;
     private volatile String encryptionKey;
 
-    private final LinkedBlockingQueue<AggregateSnapshotTrigger> snapshotQueue = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<AggregateSnapshotTrigger> snapshotQueue =
+            new LinkedBlockingQueue<>();
     private SnapshotWorker snapshotWorker;
 
     // -----------------------------------------------------------------------
@@ -72,41 +69,37 @@ public class JooqTenantEventService
 
     @Override
     public void configure(TenantEventJooqConfig config) {
-        this.dslContext = JooqContextFactory.createTenantAwareContext(
-            config,
-            "operio-tenant-event-jooq"
-        );
+        this.dslContext =
+                JooqContextFactory.createTenantAwareContext(config, "operio-tenant-event-jooq");
 
         this.eventRepository = new EventRepository(dslContext);
 
         if (config.redis() != null) {
             if (config.tenantCredentialLookup() == null) {
                 throw new IllegalStateException(
-                    "Redis is enabled but no TenantCredentialLookup was provided. " +
-                    "A tenant credential lookup is required for per-tenant Redis ACL isolation."
-                );
+                        "Redis is enabled but no TenantCredentialLookup was provided. A tenant"
+                            + " credential lookup is required for per-tenant Redis ACL isolation.");
             }
             if (config.tenantDiscovery() == null) {
                 throw new IllegalStateException(
-                    "Redis is enabled but no tenantDiscovery supplier was provided. " +
-                    "A tenant discovery supplier is required so the outbox poller can " +
-                    "iterate per-tenant schemas."
-                );
+                        "Redis is enabled but no tenantDiscovery supplier was provided. A tenant"
+                                + " discovery supplier is required so the outbox poller can iterate"
+                                + " per-tenant schemas.");
             }
-            JedisProvider jedisProvider = RedisContextFactory.createProvider(
-                config.redis(), config.tenantCredentialLookup()
-            );
+            JedisProvider jedisProvider =
+                    RedisContextFactory.createProvider(
+                            config.redis(), config.tenantCredentialLookup());
             this.redisPublisher = new RedisEventPublisher(jedisProvider);
-            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, config.tenantDiscovery());
+            this.outboxPoller =
+                    new OutboxPoller(dslContext, redisPublisher, config.tenantDiscovery());
             this.outboxPoller.start(2);
         }
 
         log.info(
-            "JooqTenantEventService configured (dialect={}, redis={}, tenantAcl={})",
-            config.dialect(),
-            config.redis() != null ? "enabled" : "disabled",
-            config.tenantCredentialLookup() != null ? "enabled" : "disabled"
-        );
+                "JooqTenantEventService configured (dialect={}, redis={}, tenantAcl={})",
+                config.dialect(),
+                config.redis() != null ? "enabled" : "disabled",
+                config.tenantCredentialLookup() != null ? "enabled" : "disabled");
 
         this.snapshotWorker = new SnapshotWorker(snapshotQueue, eventRepository);
         this.snapshotWorker.start(2);
@@ -118,8 +111,8 @@ public class JooqTenantEventService
     }
 
     /**
-     * Shuts down background workers (outbox poller and snapshot worker).
-     * Safe to call multiple times or before {@link #configure}.
+     * Shuts down background workers (outbox poller and snapshot worker). Safe to call multiple
+     * times or before {@link #configure}.
      */
     public void stop() {
         if (outboxPoller != null) {
@@ -131,9 +124,9 @@ public class JooqTenantEventService
     }
 
     /**
-     * Injects the DSAR key repository and the admin encryption key used to
-     * decrypt per-subject DSAR keys at publish time (digital shredder).
-     * Forwards the same references to the OutboxPoller for decryption.
+     * Injects the DSAR key repository and the admin encryption key used to decrypt per-subject DSAR
+     * keys at publish time (digital shredder). Forwards the same references to the OutboxPoller for
+     * decryption.
      */
     public void setSubjectDsarService(SubjectDsarService<?> service, String encryptionKey) {
         this.subjectDsarService = service;
@@ -152,82 +145,103 @@ public class JooqTenantEventService
         if (dslContext == null) {
             throw new OperioServiceException("JooqTenantEventService is not configured");
         }
-        TenantContext.runWhere(input.tenantId(), () -> {
-            try {
-                String aggregateType = input.key().aggregateType();
-                String aggregateId = input.key().aggregateId().toString();
-                String serializedPayload = objectMapper.writeValueAsString(input.payload());
+        TenantContext.runWhere(
+                input.tenantId(),
+                () -> {
+                    try {
+                        String aggregateType = input.key().aggregateType();
+                        String aggregateId = input.key().aggregateId().toString();
+                        String serializedPayload = objectMapper.writeValueAsString(input.payload());
 
-                // Digital shredder: encrypt payload if the event is Shreddable
-                boolean shreddable = false;
-                UUID dsarId = null;
-                if (input.payload() instanceof Shreddable s
-                        && subjectDsarService != null && encryptionKey != null) {
-                    String subjectId = s.subjectIdentifier();
-                    if (subjectId == null || subjectId.isBlank()) {
+                        // Digital shredder: encrypt payload if the event is Shreddable
+                        boolean shreddable = false;
+                        UUID dsarId = null;
+                        if (input.payload() instanceof Shreddable s
+                                && subjectDsarService != null
+                                && encryptionKey != null) {
+                            String subjectId = s.subjectIdentifier();
+                            if (subjectId == null || subjectId.isBlank()) {
+                                throw new OperioServiceException(
+                                        "Shreddable event "
+                                                + input.eventType()
+                                                + " returned null/blank subjectIdentifier() —"
+                                                + " cannot encrypt");
+                            }
+                            dsarId = SubjectDsarService.deriveDsarId(subjectId);
+                            final UUID lookupId = dsarId;
+                            String encryptedDsarKey =
+                                    subjectDsarService
+                                            .findKeyByDsarId(dsarId)
+                                            .orElseThrow(
+                                                    () ->
+                                                            new OperioServiceException(
+                                                                    "No DSAR key found for dsar_id="
+                                                                            + lookupId
+                                                                            + " — cannot encrypt"
+                                                                            + " shreddable event "
+                                                                            + input.eventType()));
+                            String rawDsarKey =
+                                    FieldEncryptor.decrypt(encryptedDsarKey, encryptionKey);
+                            serializedPayload =
+                                    objectMapper.writeValueAsString(
+                                            FieldEncryptor.encrypt(serializedPayload, rawDsarKey));
+                            shreddable = true;
+                        }
+
+                        final boolean isShreddable = shreddable;
+                        final UUID eventDsarId = dsarId;
+                        final String payload = serializedPayload;
+
+                        dslContext.transaction(
+                                txConfig -> {
+                                    DSLContext txDsl = txConfig.dsl();
+                                    EventRepository txRepo = new EventRepository(txDsl);
+
+                                    Long version =
+                                            txRepo.getAggregateVersion(aggregateType, aggregateId)
+                                                    + 1;
+                                    TenantEvent event =
+                                            new TenantEvent(
+                                                    null,
+                                                    input.tenantId(),
+                                                    input.key().aggregateId(),
+                                                    aggregateType,
+                                                    input.eventType(),
+                                                    java.time.Instant.now(),
+                                                    version,
+                                                    payload);
+
+                                    long eventId = txRepo.insert(event, isShreddable, eventDsarId);
+                                    log.debug(
+                                            "Published event {} for {}/{} (shreddable={})",
+                                            eventId,
+                                            aggregateType,
+                                            aggregateId,
+                                            isShreddable);
+
+                                    if (version % SNAPSHOT_DEPTH_THRESHOLD == 0) {
+                                        triggerSnapshot(aggregateType, aggregateId, version);
+                                    }
+                                });
+                    } catch (OperioServiceException e) {
+                        throw e;
+                    } catch (DataAccessException e) {
                         throw new OperioServiceException(
-                            "Shreddable event " + input.eventType()
-                                + " returned null/blank subjectIdentifier() — cannot encrypt");
-                    }
-                    dsarId = SubjectDsarService.deriveDsarId(subjectId);
-                    final UUID lookupId = dsarId;
-                    String encryptedDsarKey = subjectDsarService.findKeyByDsarId(dsarId)
-                        .orElseThrow(() -> new OperioServiceException(
-                            "No DSAR key found for dsar_id=" + lookupId
-                                + " — cannot encrypt shreddable event " + input.eventType()));
-                    String rawDsarKey = FieldEncryptor.decrypt(encryptedDsarKey, encryptionKey);
-                    serializedPayload = objectMapper.writeValueAsString(
-                        FieldEncryptor.encrypt(serializedPayload, rawDsarKey));
-                    shreddable = true;
-                }
-
-                final boolean isShreddable = shreddable;
-                final UUID eventDsarId = dsarId;
-                final String payload = serializedPayload;
-
-                dslContext.transaction(txConfig -> {
-                    DSLContext txDsl = txConfig.dsl();
-                    EventRepository txRepo = new EventRepository(txDsl);
-
-                    Long version = txRepo.getAggregateVersion(aggregateType, aggregateId) + 1;
-                    TenantEvent event = new TenantEvent(
-                        null,
-                        input.tenantId(),
-                        input.key().aggregateId(),
-                        aggregateType,
-                        input.eventType(),
-                        java.time.Instant.now(),
-                        version,
-                        payload
-                    );
-
-                    long eventId = txRepo.insert(event, isShreddable, eventDsarId);
-                    log.debug(
-                        "Published event {} for {}/{} (shreddable={})",
-                        eventId, aggregateType, aggregateId, isShreddable
-                    );
-
-                    if (version % SNAPSHOT_DEPTH_THRESHOLD == 0) {
-                        triggerSnapshot(aggregateType, aggregateId, version);
+                                "Concurrent modification conflict for "
+                                        + input.key().aggregateType()
+                                        + "/"
+                                        + input.key().aggregateId()
+                                        + " — retry the operation",
+                                e);
+                    } catch (Exception e) {
+                        throw new OperioServiceException(
+                                "Failed to publish event for "
+                                        + input.key().aggregateType()
+                                        + "/"
+                                        + input.key().aggregateId(),
+                                e);
                     }
                 });
-            } catch (OperioServiceException e) {
-                throw e;
-            } catch (DataAccessException e) {
-                throw new OperioServiceException(
-                    "Concurrent modification conflict for "
-                        + input.key().aggregateType() + "/" + input.key().aggregateId()
-                        + " — retry the operation",
-                    e
-                );
-            } catch (Exception e) {
-                throw new OperioServiceException(
-                    "Failed to publish event for " + input.key().aggregateType()
-                        + "/" + input.key().aggregateId(),
-                    e
-                );
-            }
-        });
     }
 
     @Override
@@ -236,14 +250,20 @@ public class JooqTenantEventService
             throw new OperioServiceException("JooqTenantEventService is not configured");
         }
         try {
-            return TenantContext.callWhere(key.tenantId(), () ->
-                eventRepository.getAggregateVersion(key.aggregateType(), key.aggregateId().toString())
-            );
+            return TenantContext.callWhere(
+                    key.tenantId(),
+                    () ->
+                            eventRepository.getAggregateVersion(
+                                    key.aggregateType(), key.aggregateId().toString()));
         } catch (OperioServiceException e) {
             throw e;
         } catch (Exception e) {
             throw new OperioServiceException(
-                "Failed to get aggregate version for " + key.aggregateType() + "/" + key.aggregateId(), e);
+                    "Failed to get aggregate version for "
+                            + key.aggregateType()
+                            + "/"
+                            + key.aggregateId(),
+                    e);
         }
     }
 
@@ -252,14 +272,13 @@ public class JooqTenantEventService
     // -----------------------------------------------------------------------
 
     private void triggerSnapshot(String aggregateType, String aggregateId, long targetVersion) {
-        AggregateKey key = new AggregateKey(
-            UUID.fromString(aggregateId), aggregateType, TenantContext.get()
-        );
+        AggregateKey key =
+                new AggregateKey(UUID.fromString(aggregateId), aggregateType, TenantContext.get());
         snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
         log.debug(
-            "Snapshot trigger enqueued for {}/{} at version {}",
-            aggregateType, aggregateId, targetVersion
-        );
+                "Snapshot trigger enqueued for {}/{} at version {}",
+                aggregateType,
+                aggregateId,
+                targetVersion);
     }
-
 }

@@ -2,14 +2,13 @@ package com.koostack.operio.plugin.consent.sync.embedded;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.exception.OperioConfigurationException;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionService;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentRepository;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineFieldCategoryMappingRepository;
-import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import java.time.Duration;
@@ -33,13 +32,11 @@ class EmbeddedConsentSyncServiceTest {
 
     @BeforeAll
     void setUpService() {
-        var config = new EmbeddedConsentSyncServiceConfig(
-            new JooqConsentAdminServiceConfig(
-                "jdbc:h2:mem:embedded_sync_test;DB_CLOSE_DELAY=-1",
-                "H2"
-            ),
-            new CaffeineConsentDecisionServiceConfig()
-        );
+        var config =
+                new EmbeddedConsentSyncServiceConfig(
+                        new JooqConsentAdminServiceConfig(
+                                "jdbc:h2:mem:embedded_sync_test;DB_CLOSE_DELAY=-1", "H2"),
+                        new CaffeineConsentDecisionServiceConfig());
 
         syncService = new EmbeddedConsentSyncServiceImpl();
         syncService.configure(config);
@@ -80,33 +77,27 @@ class EmbeddedConsentSyncServiceTest {
         @DisplayName("configuration type is EmbeddedConsentSyncServiceConfig")
         void configurationType() {
             assertEquals(
-                EmbeddedConsentSyncServiceConfig.class,
-                syncService.getConfigurationType()
-            );
+                    EmbeddedConsentSyncServiceConfig.class, syncService.getConfigurationType());
         }
 
         @Test
-        @DisplayName(
-            "unconfigured service throws OperioConfigurationException on syncGrant"
-        )
+        @DisplayName("unconfigured service throws OperioConfigurationException on syncGrant")
         void unconfiguredServiceThrowsOnGrant() {
             var unconfigured = new EmbeddedConsentSyncServiceImpl();
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            assertThrows(OperioConfigurationException.class, () ->
-                unconfigured.syncGrant("user-1", scope, null)
-            );
+            assertThrows(
+                    OperioConfigurationException.class,
+                    () -> unconfigured.syncGrant("user-1", scope, null));
         }
 
         @Test
-        @DisplayName(
-            "unconfigured service throws OperioConfigurationException on syncRevoke"
-        )
+        @DisplayName("unconfigured service throws OperioConfigurationException on syncRevoke")
         void unconfiguredServiceThrowsOnRevoke() {
             var unconfigured = new EmbeddedConsentSyncServiceImpl();
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            assertThrows(OperioConfigurationException.class, () ->
-                unconfigured.syncRevoke("user-1", scope, null)
-            );
+            assertThrows(
+                    OperioConfigurationException.class,
+                    () -> unconfigured.syncRevoke("user-1", scope, null));
         }
 
         @Test
@@ -132,54 +123,38 @@ class EmbeddedConsentSyncServiceTest {
     class InstanceSharing {
 
         @Test
-        @DisplayName(
-            "queryService() returns a non-null configured instance"
-        )
+        @DisplayName("queryService() returns a non-null configured instance")
         void queryServiceAccessible() {
             assertNotNull(queryService);
             assertTrue(queryService.isReady());
         }
 
         @Test
-        @DisplayName(
-            "caffeineDecisionService() returns a non-null configured instance"
-        )
+        @DisplayName("caffeineDecisionService() returns a non-null configured instance")
         void caffeineDecisionAccessible() {
             assertNotNull(caffeineDecision);
             assertTrue(caffeineDecision.isReady());
         }
 
         @Test
-        @DisplayName(
-            "caffeineConsentRepository() is the same instance as decision service's repo"
-        )
+        @DisplayName("caffeineConsentRepository() is the same instance as decision service's repo")
         void consentRepoIsShared() {
             assertSame(consentRepo, caffeineDecision.consentRepository());
         }
 
         @Test
-        @DisplayName(
-            "caffeineMappingRepository() is the same instance as decision service's repo"
-        )
+        @DisplayName("caffeineMappingRepository() is the same instance as decision service's repo")
         void mappingRepoIsShared() {
-            assertSame(
-                mappingRepo,
-                caffeineDecision.fieldCategoryMappingRepository()
-            );
+            assertSame(mappingRepo, caffeineDecision.fieldCategoryMappingRepository());
         }
 
         @Test
-        @DisplayName(
-            "sync writes are visible through the decision service's evaluateConsent"
-        )
+        @DisplayName("sync writes are visible through the decision service's evaluateConsent")
         void syncWritesVisibleThroughDecision() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncGrant("user-1", scope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
 
             assertTrue(response.granted().contains(scope));
         }
@@ -200,24 +175,14 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncGrant("user-1", scope, null);
 
             // Caffeine cache should have the entry
-            assertTrue(
-                consentRepo.exists("user-1", "User", "email", "marketing")
-            );
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            assertTrue(consentRepo.exists("user-1", "User", "email", "marketing"));
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("GRANTED", entry.get().status());
             assertEquals("FIELD", entry.get().source());
 
             // Decision service should evaluate as granted
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
 
@@ -228,12 +193,7 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncGrant("user-1", scope, future);
 
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("GRANTED", entry.get().status());
             assertEquals(future, entry.get().expiresAt());
@@ -245,12 +205,7 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncGrant("user-1", scope, null);
 
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertNull(entry.get().expiresAt());
         }
@@ -258,26 +213,14 @@ class EmbeddedConsentSyncServiceTest {
         @Test
         @DisplayName("multiple grants for different fields")
         void multipleGrants() {
-            var emailScope = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var phoneScope = ConsentScope.to(
-                "PII",
-                "phone",
-                "User",
-                "marketing"
-            );
+            var emailScope = ConsentScope.to("PII", "email", "User", "marketing");
+            var phoneScope = ConsentScope.to("PII", "phone", "User", "marketing");
 
             syncService.syncGrant("user-1", emailScope, null);
             syncService.syncGrant("user-1", phoneScope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(emailScope, phoneScope)
-            );
+            ConsentResponse response =
+                    caffeineDecision.evaluateConsent("user-1", Set.of(emailScope, phoneScope));
             assertEquals(2, response.granted().size());
             assertTrue(response.granted().contains(emailScope));
             assertTrue(response.granted().contains(phoneScope));
@@ -289,14 +232,8 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncGrant("user-1", scope, null);
 
-            ConsentResponse r1 = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
-            ConsentResponse r2 = caffeineDecision.evaluateConsent(
-                "user-2",
-                Set.of(scope)
-            );
+            ConsentResponse r1 = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
+            ConsentResponse r2 = caffeineDecision.evaluateConsent("user-2", Set.of(scope));
 
             assertTrue(r1.granted().contains(scope));
             assertTrue(r2.denied().contains(scope));
@@ -321,20 +258,12 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncRevoke("user-1", scope, null);
 
             // Caffeine cache should have the revoked entry
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("REVOKED", entry.get().status());
 
             // Decision service should evaluate as denied
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.denied().contains(scope));
         }
 
@@ -347,12 +276,7 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncGrant("user-1", scope, null);
             syncService.syncRevoke("user-1", scope, future);
 
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("REVOKED", entry.get().status());
             assertEquals(future, entry.get().expiresAt());
@@ -364,12 +288,7 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncRevoke("user-1", scope, null);
 
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("REVOKED", entry.get().status());
         }
@@ -395,23 +314,11 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncGrant("user-1", scope, null);
 
             // Both fields should be granted in the cache
-            var emailScope = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var phoneScope = ConsentScope.to(
-                "PII",
-                "phone",
-                "User",
-                "marketing"
-            );
+            var emailScope = ConsentScope.to("PII", "email", "User", "marketing");
+            var phoneScope = ConsentScope.to("PII", "phone", "User", "marketing");
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(emailScope, phoneScope)
-            );
+            ConsentResponse response =
+                    caffeineDecision.evaluateConsent("user-1", Set.of(emailScope, phoneScope));
 
             assertEquals(2, response.granted().size());
             assertTrue(response.granted().contains(emailScope));
@@ -422,12 +329,7 @@ class EmbeddedConsentSyncServiceTest {
         @DisplayName("category fan-out does not overwrite field-level entries")
         void categoryFanOutRespectsFieldPrecedence() {
             // Field-level revoke for email
-            var emailScope = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
+            var emailScope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncRevoke("user-1", emailScope, null);
 
             // Register category mapping
@@ -435,25 +337,13 @@ class EmbeddedConsentSyncServiceTest {
             mappingRepo.addFieldToCategory("User", "phone", "PII");
 
             // Category-level grant — should NOT overwrite email's field-level revoke
-            var categoryScope = new ConsentScope(
-                "PII",
-                null,
-                null,
-                "marketing"
-            );
+            var categoryScope = new ConsentScope("PII", null, null, "marketing");
             syncService.syncGrant("user-1", categoryScope, null);
 
-            var phoneScope = ConsentScope.to(
-                "PII",
-                "phone",
-                "User",
-                "marketing"
-            );
+            var phoneScope = ConsentScope.to("PII", "phone", "User", "marketing");
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(emailScope, phoneScope)
-            );
+            ConsentResponse response =
+                    caffeineDecision.evaluateConsent("user-1", Set.of(emailScope, phoneScope));
 
             // email: field-level revoke survives
             assertTrue(response.denied().contains(emailScope));
@@ -467,20 +357,10 @@ class EmbeddedConsentSyncServiceTest {
             mappingRepo.addFieldToCategory("User", "email", "PII");
 
             Instant future = Instant.now().plus(Duration.ofHours(1));
-            var categoryScope = new ConsentScope(
-                "PII",
-                null,
-                null,
-                "marketing"
-            );
+            var categoryScope = new ConsentScope("PII", null, null, "marketing");
             syncService.syncGrant("user-1", categoryScope, future);
 
-            var entry = consentRepo.getConsentEntry(
-                "user-1",
-                "User",
-                "email",
-                "marketing"
-            );
+            var entry = consentRepo.getConsentEntry("user-1", "User", "email", "marketing");
             assertTrue(entry.isPresent());
             assertEquals("GRANTED", entry.get().status());
             assertEquals("CATEGORY", entry.get().source());
@@ -511,26 +391,15 @@ class EmbeddedConsentSyncServiceTest {
         @Test
         @DisplayName("same field name on different entities is isolated")
         void sameFieldDifferentEntity() {
-            var userEmailScope = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var contactEmailScope = ConsentScope.to(
-                "PII",
-                "email",
-                "Contact",
-                "marketing"
-            );
+            var userEmailScope = ConsentScope.to("PII", "email", "User", "marketing");
+            var contactEmailScope = ConsentScope.to("PII", "email", "Contact", "marketing");
 
             syncService.syncGrant("user-1", userEmailScope, null);
             syncService.syncRevoke("user-1", contactEmailScope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(userEmailScope, contactEmailScope)
-            );
+            ConsentResponse response =
+                    caffeineDecision.evaluateConsent(
+                            "user-1", Set.of(userEmailScope, contactEmailScope));
 
             assertTrue(response.granted().contains(userEmailScope));
             assertTrue(response.denied().contains(contactEmailScope));
@@ -542,10 +411,7 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "zipcode", "marketing");
             syncService.syncGrant("user-1", scope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
     }
@@ -561,25 +427,13 @@ class EmbeddedConsentSyncServiceTest {
         @Test
         @DisplayName("grants are isolated per purpose")
         void purposeIsolation() {
-            var marketing = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var analytics = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "analytics"
-            );
+            var marketing = ConsentScope.to("PII", "email", "User", "marketing");
+            var analytics = ConsentScope.to("PII", "email", "User", "analytics");
 
             syncService.syncGrant("user-1", marketing, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(marketing, analytics)
-            );
+            ConsentResponse response =
+                    caffeineDecision.evaluateConsent("user-1", Set.of(marketing, analytics));
 
             assertTrue(response.granted().contains(marketing));
             assertTrue(response.denied().contains(analytics));
@@ -619,26 +473,17 @@ class EmbeddedConsentSyncServiceTest {
 
             // Grant
             syncService.syncGrant("user-1", scope, null);
-            ConsentResponse r1 = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse r1 = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(r1.granted().contains(scope));
 
             // Revoke
             syncService.syncRevoke("user-1", scope, null);
-            ConsentResponse r2 = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse r2 = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(r2.denied().contains(scope));
 
             // Re-grant
             syncService.syncGrant("user-1", scope, null);
-            ConsentResponse r3 = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse r3 = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(r3.granted().contains(scope));
         }
 
@@ -650,10 +495,7 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncRevoke("user-1", scope, null);
             syncService.syncGrant("user-1", scope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
     }
@@ -674,9 +516,7 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncGrant("user-1", scope, past);
 
             // The Caffeine cache should skip the write for past expiry
-            assertFalse(
-                consentRepo.exists("user-1", "User", "email", "marketing")
-            );
+            assertFalse(consentRepo.exists("user-1", "User", "email", "marketing"));
         }
 
         @Test
@@ -688,18 +528,9 @@ class EmbeddedConsentSyncServiceTest {
             syncService.syncRevoke("user-2", scope, null);
             // user-3 has no consent record
 
-            ConsentResponse r1 = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
-            ConsentResponse r2 = caffeineDecision.evaluateConsent(
-                "user-2",
-                Set.of(scope)
-            );
-            ConsentResponse r3 = caffeineDecision.evaluateConsent(
-                "user-3",
-                Set.of(scope)
-            );
+            ConsentResponse r1 = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
+            ConsentResponse r2 = caffeineDecision.evaluateConsent("user-2", Set.of(scope));
+            ConsentResponse r3 = caffeineDecision.evaluateConsent("user-3", Set.of(scope));
 
             assertTrue(r1.granted().contains(scope));
             assertTrue(r2.denied().contains(scope));
@@ -719,10 +550,7 @@ class EmbeddedConsentSyncServiceTest {
         @DisplayName("isolation check 1 — cache is empty after clearCaches")
         void emptyRun1() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.denied().contains(scope));
         }
 
@@ -732,10 +560,7 @@ class EmbeddedConsentSyncServiceTest {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
             syncService.syncGrant("user-1", scope, null);
 
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
 
@@ -743,10 +568,7 @@ class EmbeddedConsentSyncServiceTest {
         @DisplayName("isolation check 3 — previous test's cache data is gone")
         void emptyRun3() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            ConsentResponse response = caffeineDecision.evaluateConsent(
-                "user-1",
-                Set.of(scope)
-            );
+            ConsentResponse response = caffeineDecision.evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.denied().contains(scope));
         }
     }
@@ -763,54 +585,38 @@ class EmbeddedConsentSyncServiceTest {
 
         @BeforeEach
         void setUpStrictService() {
-            var config = new EmbeddedConsentSyncServiceConfig(
-                new JooqConsentAdminServiceConfig(
-                    "jdbc:h2:mem:strict_sync_test_" +
-                        System.nanoTime() +
-                        ";DB_CLOSE_DELAY=-1",
-                    "H2"
-                ),
-                new CaffeineConsentDecisionServiceConfig(),
-                false // auto-registration disabled
-            );
+            var config =
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:strict_sync_test_"
+                                            + System.nanoTime()
+                                            + ";DB_CLOSE_DELAY=-1",
+                                    "H2"),
+                            new CaffeineConsentDecisionServiceConfig(),
+                            false // auto-registration disabled
+                            );
             strictService = new EmbeddedConsentSyncServiceImpl();
             strictService.configure(config);
         }
 
         @Test
         @DisplayName(
-            "grant still writes to cache even when auto-registration is off (cache-only mode)"
-        )
+                "grant still writes to cache even when auto-registration is off (cache-only mode)")
         void grantWritesToCacheWithoutAutoRegistration() {
-            var scope = ConsentScope.to(
-                "PII",
-                "firstName",
-                "Person",
-                "analytics"
-            );
+            var scope = ConsentScope.to("PII", "firstName", "Person", "analytics");
             // In cache-only mode (no event service), syncGrant writes
             // directly to cache without metadata validation
-            assertDoesNotThrow(
-                () -> strictService.syncGrant("user-1", scope, null)
-            );
+            assertDoesNotThrow(() -> strictService.syncGrant("user-1", scope, null));
         }
 
         @Test
         @DisplayName(
-            "revoke still writes to cache even when auto-registration is off (cache-only mode)"
-        )
+                "revoke still writes to cache even when auto-registration is off (cache-only mode)")
         void revokeWritesToCacheWithoutAutoRegistration() {
-            var scope = ConsentScope.to(
-                "PII",
-                "firstName",
-                "Person",
-                "analytics"
-            );
+            var scope = ConsentScope.to("PII", "firstName", "Person", "analytics");
             // In cache-only mode (no event service), syncRevoke writes
             // directly to cache without metadata validation
-            assertDoesNotThrow(
-                () -> strictService.syncRevoke("user-1", scope, null)
-            );
+            assertDoesNotThrow(() -> strictService.syncRevoke("user-1", scope, null));
         }
 
         @Test
@@ -819,55 +625,44 @@ class EmbeddedConsentSyncServiceTest {
             // In cache-only mode (no event service), we pre-populate the
             // Caffeine mapping repo directly so cache fan-out works
             strictService
-                .caffeineMappingRepository()
-                .addFieldToCategory("Person", "firstName", "PII");
+                    .caffeineMappingRepository()
+                    .addFieldToCategory("Person", "firstName", "PII");
 
-            var scope = ConsentScope.to(
-                "PII",
-                "firstName",
-                "Person",
-                "analytics"
-            );
+            var scope = ConsentScope.to("PII", "firstName", "Person", "analytics");
 
             // syncGrant writes directly to cache in cache-only mode
-            assertDoesNotThrow(() ->
-                strictService.syncGrant("user-1", scope, null)
-            );
+            assertDoesNotThrow(() -> strictService.syncGrant("user-1", scope, null));
 
             // Verify the grant went through to the cache
-            var response = strictService
-                .caffeineDecisionService()
-                .evaluateConsent("user-1", Set.of(scope));
+            var response =
+                    strictService
+                            .caffeineDecisionService()
+                            .evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
 
         @Test
         @DisplayName("default config has auto-registration enabled")
         void defaultConfigHasAutoRegistrationEnabled() {
-            var defaultConfig = new EmbeddedConsentSyncServiceConfig(
-                new JooqConsentAdminServiceConfig(
-                    "jdbc:h2:mem:default_flag_test;DB_CLOSE_DELAY=-1",
-                    "H2"
-                ),
-                new CaffeineConsentDecisionServiceConfig()
-            );
+            var defaultConfig =
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:default_flag_test;DB_CLOSE_DELAY=-1", "H2"),
+                            new CaffeineConsentDecisionServiceConfig());
             assertTrue(
-                defaultConfig.autoRegisterMetadata(),
-                "2-arg constructor should default to true"
-            );
+                    defaultConfig.autoRegisterMetadata(),
+                    "2-arg constructor should default to true");
         }
 
         @Test
         @DisplayName("3-arg config with false disables auto-registration")
         void threeArgConfigDisablesAutoRegistration() {
-            var config = new EmbeddedConsentSyncServiceConfig(
-                new JooqConsentAdminServiceConfig(
-                    "jdbc:h2:mem:flag_off_test;DB_CLOSE_DELAY=-1",
-                    "H2"
-                ),
-                new CaffeineConsentDecisionServiceConfig(),
-                false
-            );
+            var config =
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:flag_off_test;DB_CLOSE_DELAY=-1", "H2"),
+                            new CaffeineConsentDecisionServiceConfig(),
+                            false);
             assertFalse(config.autoRegisterMetadata());
         }
     }

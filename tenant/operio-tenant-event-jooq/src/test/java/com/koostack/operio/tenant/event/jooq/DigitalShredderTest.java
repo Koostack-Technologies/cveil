@@ -1,5 +1,8 @@
 package com.koostack.operio.tenant.event.jooq;
 
+import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT;
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
@@ -10,29 +13,26 @@ import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.core.tenant.consent.aggregates.SubjectAggregate;
 import com.koostack.operio.core.tenant.consent.events.SubjectRegisteredEvent;
 import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
-
-import javax.crypto.KeyGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT;
-import static org.junit.jupiter.api.Assertions.*;
+import javax.crypto.KeyGenerator;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 
 /**
  * Integration tests for the Digital Shredder pattern:
+ *
  * <ol>
- *   <li>Shreddable event payloads are encrypted at publish time</li>
- *   <li>OutboxPoller decrypts before Redis publish</li>
- *   <li>Deleting the DSAR key permanently shreds events</li>
+ *   <li>Shreddable event payloads are encrypted at publish time
+ *   <li>OutboxPoller decrypts before Redis publish
+ *   <li>Deleting the DSAR key permanently shreds events
  * </ol>
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -47,10 +47,11 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         dsarService = new InMemorySubjectDsarService();
         service.setSubjectDsarService(dsarService, ADMIN_KEY);
 
-        service.registerEventType(new RegisterEventTypeInput<>(
-            ConsentEventTypes.SUBJECT_REGISTERED, "Subject Registered",
-            SubjectRegisteredEvent.class
-        ));
+        service.registerEventType(
+                new RegisterEventTypeInput<>(
+                        ConsentEventTypes.SUBJECT_REGISTERED,
+                        "Subject Registered",
+                        SubjectRegisteredEvent.class));
     }
 
     // -----------------------------------------------------------------------
@@ -67,17 +68,17 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         dsarService.saveKey(dsarId, encryptedKey);
 
         UUID aggregateId = SubjectAggregate.deriveId(subjectName);
-        AggregateKey key = new AggregateKey(
-            aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT
-        );
+        AggregateKey key =
+                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new SubjectRegisteredEvent(subjectName, "test description");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload));
 
-        var record = dsl.selectFrom(EVENT)
-            .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .fetchOne();
+        var record =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
+                        .fetchOne();
 
         assertNotNull(record, "Event should be in the database");
         assertTrue(record.getShreddable(), "Event should be marked shreddable");
@@ -86,22 +87,20 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         // Payload should NOT be plaintext JSON
         String storedPayload = record.getPayload();
         assertFalse(
-            storedPayload.contains(subjectName),
-            "Encrypted payload should not contain the subject name in plaintext"
-        );
+                storedPayload.contains(subjectName),
+                "Encrypted payload should not contain the subject name in plaintext");
 
         // Unwrap the JSON string scalar, then decrypt and verify
-        String ciphertext = new com.fasterxml.jackson.databind.ObjectMapper()
-            .readValue(storedPayload, String.class);
+        String ciphertext =
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readValue(storedPayload, String.class);
         String decryptedPayload = FieldEncryptor.decrypt(ciphertext, rawKey);
         assertTrue(
-            decryptedPayload.contains(subjectName),
-            "Decrypted payload should contain the subject name"
-        );
+                decryptedPayload.contains(subjectName),
+                "Decrypted payload should contain the subject name");
         assertTrue(
-            decryptedPayload.contains("test description"),
-            "Decrypted payload should contain the description"
-        );
+                decryptedPayload.contains("test description"),
+                "Decrypted payload should contain the description");
     }
 
     // -----------------------------------------------------------------------
@@ -120,20 +119,23 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         dsarService.saveKey(dsarId, encryptedKey);
 
         UUID aggregateId = SubjectAggregate.deriveId(subjectName);
-        AggregateKey key = new AggregateKey(
-            aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT
-        );
+        AggregateKey key =
+                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new SubjectRegisteredEvent(subjectName, "redis decrypt test");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload));
 
         awaitConsumedEvents(beforeCount + 1, 6000);
 
-        var matching = consumedEvents.stream()
-            .filter(e -> aggregateId.toString()
-                .equals(e.get(TenantEvent.FIELD_AGGREGATE_ID)))
-            .toList();
+        var matching =
+                consumedEvents.stream()
+                        .filter(
+                                e ->
+                                        aggregateId
+                                                .toString()
+                                                .equals(e.get(TenantEvent.FIELD_AGGREGATE_ID)))
+                        .toList();
 
         assertFalse(matching.isEmpty(), "Event should appear in Redis stream");
 
@@ -141,9 +143,8 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         String redisPayload = event.get(TenantEvent.FIELD_PAYLOAD);
         assertNotNull(redisPayload, "Redis event should have a payload");
         assertTrue(
-            redisPayload.contains(subjectName),
-            "Redis payload should contain plaintext subject name (OutboxPoller decrypted)"
-        );
+                redisPayload.contains(subjectName),
+                "Redis payload should contain plaintext subject name (OutboxPoller decrypted)");
     }
 
     // -----------------------------------------------------------------------
@@ -160,18 +161,18 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         dsarService.saveKey(dsarId, encryptedKey);
 
         UUID aggregateId = SubjectAggregate.deriveId(subjectName);
-        AggregateKey key = new AggregateKey(
-            aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT
-        );
+        AggregateKey key =
+                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new SubjectRegisteredEvent(subjectName, "will be shredded");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload
-        ));
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload));
 
         // Verify event exists and is encrypted
-        var record = dsl.selectFrom(EVENT)
-            .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .fetchOne();
+        var record =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
+                        .fetchOne();
         assertNotNull(record);
         assertTrue(record.getShreddable());
 
@@ -185,9 +186,8 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         String storedPayload = record.getPayload();
         assertNotNull(storedPayload, "Encrypted payload should still exist in DB");
         assertFalse(
-            storedPayload.contains(subjectName),
-            "Payload should remain encrypted (subject name not visible)"
-        );
+                storedPayload.contains(subjectName),
+                "Payload should remain encrypted (subject name not visible)");
     }
 
     // -----------------------------------------------------------------------
@@ -198,37 +198,40 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
     @Order(4)
     void nonShreddableEventRemainsPlaintext() {
         // RegulationRegisteredEvent does NOT implement Shreddable
-        service.registerEventType(new RegisterEventTypeInput<>(
-            ConsentEventTypes.REGULATION_REGISTERED, "Regulation Registered",
-            com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent.class
-        ));
+        service.registerEventType(
+                new RegisterEventTypeInput<>(
+                        ConsentEventTypes.REGULATION_REGISTERED,
+                        "Regulation Registered",
+                        com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent
+                                .class));
 
         String name = "non-shred-regulation-" + UUID.randomUUID();
-        UUID aggregateId = com.koostack.operio.core.tenant.consent.aggregates
-            .RegulationAggregate.deriveId(name);
-        AggregateKey key = new AggregateKey(
-            aggregateId,
-            com.koostack.operio.core.tenant.consent.aggregates
-                .RegulationAggregate.AGGREGATE_TYPE,
-            TEST_TENANT
-        );
-        var payload = new com.koostack.operio.core.tenant.consent.events
-            .RegulationRegisteredEvent(name, "plaintext description");
-        service.publishEvent(PublishDomainEventInput.of(
-            TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload
-        ));
+        UUID aggregateId =
+                com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate.deriveId(
+                        name);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate
+                                .AGGREGATE_TYPE,
+                        TEST_TENANT);
+        var payload =
+                new com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent(
+                        name, "plaintext description");
+        service.publishEvent(
+                PublishDomainEventInput.of(
+                        TEST_TENANT, ConsentEventTypes.REGULATION_REGISTERED, key, payload));
 
-        var record = dsl.selectFrom(EVENT)
-            .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
-            .fetchOne();
+        var record =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
+                        .fetchOne();
 
         assertNotNull(record);
         assertFalse(record.getShreddable(), "Non-shreddable event should not be marked");
         assertNull(record.getDsarId(), "Non-shreddable event should not have dsar_id");
         assertTrue(
-            record.getPayload().contains(name),
-            "Non-shreddable payload should be plaintext"
-        );
+                record.getPayload().contains(name), "Non-shreddable payload should be plaintext");
     }
 
     // -----------------------------------------------------------------------
@@ -242,17 +245,20 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
         // Intentionally NOT saving a DSAR key
 
         UUID aggregateId = SubjectAggregate.deriveId(subjectName);
-        AggregateKey key = new AggregateKey(
-            aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT
-        );
+        AggregateKey key =
+                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, TEST_TENANT);
         var payload = new SubjectRegisteredEvent(subjectName, "should fail");
 
-        assertThrows(OperioServiceException.class, () ->
-            service.publishEvent(PublishDomainEventInput.of(
-                TEST_TENANT, ConsentEventTypes.SUBJECT_REGISTERED, key, payload
-            )),
-            "Should throw when DSAR key is not found for a shreddable event"
-        );
+        assertThrows(
+                OperioServiceException.class,
+                () ->
+                        service.publishEvent(
+                                PublishDomainEventInput.of(
+                                        TEST_TENANT,
+                                        ConsentEventTypes.SUBJECT_REGISTERED,
+                                        key,
+                                        payload)),
+                "Should throw when DSAR key is not found for a shreddable event");
     }
 
     // -----------------------------------------------------------------------
@@ -270,18 +276,22 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
     }
 
     /**
-     * Simple in-memory DSAR service for testing — avoids needing the
-     * consent-admin schema in the tenant-event test database.
+     * Simple in-memory DSAR service for testing — avoids needing the consent-admin schema in the
+     * tenant-event test database.
      */
     static class InMemorySubjectDsarService implements SubjectDsarService<Void> {
 
         private final ConcurrentHashMap<UUID, String> keys = new ConcurrentHashMap<>();
 
         @Override
-        public Class<Void> getConfigurationType() { return Void.class; }
+        public Class<Void> getConfigurationType() {
+            return Void.class;
+        }
 
         @Override
-        public void configure(Void config) { /* no-op */ }
+        public void configure(Void config) {
+            /* no-op */
+        }
 
         @Override
         public Optional<String> findKeyByDsarId(UUID dsarId) {

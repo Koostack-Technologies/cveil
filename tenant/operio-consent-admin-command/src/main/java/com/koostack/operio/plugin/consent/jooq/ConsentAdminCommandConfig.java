@@ -7,9 +7,7 @@ import com.koostack.operio.core.event.EventService;
  *
  * @param eventService the event service used to publish domain events
  */
-public record ConsentAdminCommandConfig(
-    EventService<?> eventService
-) {
+public record ConsentAdminCommandConfig(EventService<?> eventService) {
     public ConsentAdminCommandConfig {
         if (eventService == null) {
             throw new IllegalArgumentException("eventService must not be null");

@@ -9,13 +9,11 @@ import com.koostack.operio.core.platform.iam.TokenValidationService;
 /**
  * Concrete non-generic holder for platform CQRS services.
  *
- * <p>Quarkus ArC cannot resolve raw parameterized types (e.g.,
- * {@code IamCommandService}) through {@code Instance<T>}. This
- * holder wraps nullable service references in a concrete type
- * that ArC can produce and inject normally.
+ * <p>Quarkus ArC cannot resolve raw parameterized types (e.g., {@code IamCommandService}) through
+ * {@code Instance<T>}. This holder wraps nullable service references in a concrete type that ArC
+ * can produce and inject normally.
  *
- * <p>Services may be {@code null} in embedded mode when the
- * platform CQRS stack is not configured.
+ * <p>Services may be {@code null} in embedded mode when the platform CQRS stack is not configured.
  */
 public class PlatformCqrsHolder {
 
@@ -39,7 +37,9 @@ public class PlatformCqrsHolder {
         this.tokenValidationService = tokenValidationService;
     }
 
-    /** Returns {@code true} if IAM command, IAM query, and core query services are all available. */
+    /**
+     * Returns {@code true} if IAM command, IAM query, and core query services are all available.
+     */
     public boolean isCqrsAvailable() {
         return iamCommandService != null && iamQueryService != null && coreQueryService != null;
     }

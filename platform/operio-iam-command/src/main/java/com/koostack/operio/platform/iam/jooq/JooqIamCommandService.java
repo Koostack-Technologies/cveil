@@ -7,18 +7,16 @@ import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.ApiKeyGeneratedEvent;
 import com.koostack.operio.core.platform.events.ApiKeyRevokedEvent;
-import com.koostack.operio.core.platform.events.IdpConfigUpdatedEvent;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class JooqIamCommandService implements IamCommandService<JooqIamCommandConfig> {
 
@@ -28,9 +26,20 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     private EventService<?> eventService;
 
-    @Override public String getName() { return "jooq-iam-command"; }
-    @Override public int getPriority() { return 100; }
-    @Override public Class<JooqIamCommandConfig> getConfigurationType() { return JooqIamCommandConfig.class; }
+    @Override
+    public String getName() {
+        return "jooq-iam-command";
+    }
+
+    @Override
+    public int getPriority() {
+        return 100;
+    }
+
+    @Override
+    public Class<JooqIamCommandConfig> getConfigurationType() {
+        return JooqIamCommandConfig.class;
+    }
 
     @Override
     public void configure(JooqIamCommandConfig config) {
@@ -39,7 +48,8 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     }
 
     @Override
-    public CreateApiTokenResult createApiToken(String tenantId, String name, String environment, String roles) {
+    public CreateApiTokenResult createApiToken(
+            String tenantId, String name, String environment, String roles) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
@@ -52,8 +62,9 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         String keyPrefix = plaintextKey.substring(0, Math.min(8, plaintextKey.length()));
         String keyHash = sha256Hex(plaintextKey);
 
-        var payload = new ApiKeyGeneratedEvent(
-            tenantId, keyId, keyPrefix, keyHash, name, environment, roles, null);
+        var payload =
+                new ApiKeyGeneratedEvent(
+                        tenantId, keyId, keyPrefix, keyHash, name, environment, roles, null);
         publishEvent(IamEventTypes.API_KEY_GENERATED, tenantId, payload);
 
         LOG.info("API token created: tenantId={}, keyId={}, env={}", tenantId, keyId, environment);
@@ -71,10 +82,11 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     private void publishEvent(String eventType, String tenantId, DomainEvent payload) {
         UUID aggregateId = deriveAggregateId(tenantId);
-        AggregateKey key = new AggregateKey(
-            aggregateId, AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(aggregateId, AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
         eventService.publishEvent(
-            PublishDomainEventInput.of(PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
+                PublishDomainEventInput.of(
+                        PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
     }
 
     private static UUID deriveAggregateId(String tenantId) {

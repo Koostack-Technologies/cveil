@@ -7,9 +7,7 @@ import org.jooq.DSLContext;
  *
  * @param dsl the {@link DSLContext} targeting the platform database
  */
-public record JooqIamQueryConfig(
-    DSLContext dsl
-) {
+public record JooqIamQueryConfig(DSLContext dsl) {
     public JooqIamQueryConfig {
         if (dsl == null) {
             throw new IllegalArgumentException("dsl must not be null");

@@ -8,9 +8,11 @@ public record SubjectAuditDeletedEvent(
         String deletionRequestId,
         String actor,
         String ipAddress,
-        String userAgent
-) implements DomainEvent, Shreddable {
+        String userAgent)
+        implements DomainEvent, Shreddable {
 
     @Override
-    public String subjectIdentifier() { return subjectId; }
+    public String subjectIdentifier() {
+        return subjectId;
+    }
 }

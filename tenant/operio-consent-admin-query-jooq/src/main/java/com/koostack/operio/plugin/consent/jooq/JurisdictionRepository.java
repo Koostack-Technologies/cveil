@@ -1,18 +1,14 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.JurisdictionDao;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Jurisdiction;
-
-import org.jooq.DSLContext;
-
-import java.util.List;
-import java.util.Optional;
-
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.JURISDICTION;
 
-/**
- * Read-only repository for the {@code jurisdiction} table.
- */
+import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.JurisdictionDao;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Jurisdiction;
+import java.util.List;
+import java.util.Optional;
+import org.jooq.DSLContext;
+
+/** Read-only repository for the {@code jurisdiction} table. */
 public class JurisdictionRepository {
 
     private final DSLContext dsl;
@@ -30,13 +26,13 @@ public class JurisdictionRepository {
 
     public Optional<Jurisdiction> findByName(String jurisdictionName) {
         return dsl.selectFrom(JURISDICTION)
-                  .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
-                  .fetchOptionalInto(Jurisdiction.class);
+                .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
+                .fetchOptionalInto(Jurisdiction.class);
     }
 
     public List<Jurisdiction> findAll() {
         return dsl.selectFrom(JURISDICTION)
-                  .orderBy(JURISDICTION.JURISDICTION_NAME)
-                  .fetchInto(Jurisdiction.class);
+                .orderBy(JURISDICTION.JURISDICTION_NAME)
+                .fetchInto(Jurisdiction.class);
     }
 }

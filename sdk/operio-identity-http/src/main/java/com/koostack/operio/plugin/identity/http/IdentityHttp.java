@@ -37,7 +37,7 @@ public class IdentityHttp implements IdentityResolver<IdentityHttpConfig> {
     @Override
     public IdentityContext resolve() {
         ServletRequestAttributes attributes =
-            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         // If we aren't in an active web request thread, default to anonymous
         if (attributes == null) {

@@ -1,16 +1,15 @@
 package com.koostack.operio.core.platform.events;
 
 import com.koostack.operio.core.event.DomainEvent;
-
 import java.time.Instant;
 
 public record ApiKeyGeneratedEvent(
-    String tenantId,
-    String keyId,
-    String keyPrefix,
-    String keyHash,
-    String name,
-    String environment,
-    String roles,
-    Instant expiresAt
-) implements DomainEvent {}
+        String tenantId,
+        String keyId,
+        String keyPrefix,
+        String keyHash,
+        String name,
+        String environment,
+        String roles,
+        Instant expiresAt)
+        implements DomainEvent {}

@@ -5,10 +5,9 @@ import com.koostack.operio.core.spi.Plugin;
 /**
  * Command service for the core platform domain (tenant lifecycle).
  *
- * <p>All commands publish semantic domain events to the platform event
- * store via the configured {@link com.koostack.operio.core.event.EventService}.
- * No direct database writes occur here — the read model is materialized
- * by the corresponding {@link CoreProjection}.
+ * <p>All commands publish semantic domain events to the platform event store via the configured
+ * {@link com.koostack.operio.core.event.EventService}. No direct database writes occur here — the
+ * read model is materialized by the corresponding {@link CoreProjection}.
  */
 public interface CoreCommandService<T> extends Plugin<T> {
 
@@ -33,15 +32,15 @@ public interface CoreCommandService<T> extends Plugin<T> {
     /**
      * Mark a tenant as fully provisioned after infrastructure setup completes.
      *
-     * <p>Typically called by the tenant-manager projection handler once
-     * Postgres schemas, Redis ACLs, and Flyway migrations have succeeded.
+     * <p>Typically called by the tenant-manager projection handler once Postgres schemas, Redis
+     * ACLs, and Flyway migrations have succeeded.
      */
     void provisionTenant(String tenantId, String schemaPrefix, String redisAclUser);
 
     /**
-     * Emit a {@code TenantProvisioningStarted} event to signal that async
-     * infrastructure provisioning should begin. Called after tenant, billing,
-     * and subscription records have been created.
+     * Emit a {@code TenantProvisioningStarted} event to signal that async infrastructure
+     * provisioning should begin. Called after tenant, billing, and subscription records have been
+     * created.
      */
     void emitProvisioningStarted(String tenantId, String displayName, String plan);
 }

@@ -1,23 +1,20 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import static com.koostack.operio.plugin.consent.jooq.generated.Tables.FIELD_CATEGORY;
+
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.FieldCategoryDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.FieldCategory;
-
-import org.jooq.DSLContext;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
-import static com.koostack.operio.plugin.consent.jooq.generated.Tables.FIELD_CATEGORY;
+import org.jooq.DSLContext;
 
 /**
- * Repository for the {@code field_category} join table — the many-to-many
- * assignment of fields into categories.
+ * Repository for the {@code field_category} join table — the many-to-many assignment of fields into
+ * categories.
  *
- * <p>Wraps the generated {@link FieldCategoryDao} for standard CRUD and adds
- * domain-specific link/unlink operations keyed on the unique
- * {@code (field_id, category_id)} composite constraint.
+ * <p>Wraps the generated {@link FieldCategoryDao} for standard CRUD and adds domain-specific
+ * link/unlink operations keyed on the unique {@code (field_id, category_id)} composite constraint.
  */
 public class FieldCategoryRepository {
 
@@ -46,8 +43,8 @@ public class FieldCategoryRepository {
      */
     public List<FieldCategory> findByField(Long fieldId) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                  .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                  .fetchInto(FieldCategory.class);
+                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .fetchInto(FieldCategory.class);
     }
 
     /**
@@ -58,22 +55,22 @@ public class FieldCategoryRepository {
      */
     public List<FieldCategory> findByCategory(Long categoryId) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                  .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-                  .fetchInto(FieldCategory.class);
+                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .fetchInto(FieldCategory.class);
     }
 
     /**
      * Looks up the specific link between a field and a category.
      *
-     * @param fieldId    the field identifier
+     * @param fieldId the field identifier
      * @param categoryId the category identifier
      * @return the matching join row, or empty if the link does not exist
      */
     public Optional<FieldCategory> findByFieldAndCategory(Long fieldId, Long categoryId) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                  .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                  .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-                  .fetchOptionalInto(FieldCategory.class);
+                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .fetchOptionalInto(FieldCategory.class);
     }
 
     /**
@@ -83,8 +80,8 @@ public class FieldCategoryRepository {
      */
     public List<FieldCategory> findAll() {
         return dsl.selectFrom(FIELD_CATEGORY)
-                  .orderBy(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
-                  .fetchInto(FieldCategory.class);
+                .orderBy(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
+                .fetchInto(FieldCategory.class);
     }
 
     // -----------------------------------------------------------------------
@@ -92,29 +89,27 @@ public class FieldCategoryRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Creates the link between a field and a category if it does not already
-     * exist.
+     * Creates the link between a field and a category if it does not already exist.
      *
-     * <p>Uses an {@code INSERT ... ON CONFLICT DO NOTHING} so the call is
-     * safely idempotent.
+     * <p>Uses an {@code INSERT ... ON CONFLICT DO NOTHING} so the call is safely idempotent.
      *
-     * @param fieldId    the field to link
+     * @param fieldId the field to link
      * @param categoryId the category to link
-     * @param actor      the identity performing the operation (may be {@code null})
+     * @param actor the identity performing the operation (may be {@code null})
      */
     public void link(Long fieldId, Long categoryId, String actor) {
         LocalDateTime now = LocalDateTime.now();
 
         dsl.insertInto(FIELD_CATEGORY)
-           .set(FIELD_CATEGORY.FIELD_ID, fieldId)
-           .set(FIELD_CATEGORY.CATEGORY_ID, categoryId)
-           .set(FIELD_CATEGORY.CREATED_AT, now)
-           .set(FIELD_CATEGORY.CREATED_BY, actor)
-           .set(FIELD_CATEGORY.UPDATED_AT, now)
-           .set(FIELD_CATEGORY.UPDATED_BY, actor)
-           .onConflict(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
-           .doNothing()
-           .execute();
+                .set(FIELD_CATEGORY.FIELD_ID, fieldId)
+                .set(FIELD_CATEGORY.CATEGORY_ID, categoryId)
+                .set(FIELD_CATEGORY.CREATED_AT, now)
+                .set(FIELD_CATEGORY.CREATED_BY, actor)
+                .set(FIELD_CATEGORY.UPDATED_AT, now)
+                .set(FIELD_CATEGORY.UPDATED_BY, actor)
+                .onConflict(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
+                .doNothing()
+                .execute();
     }
 
     /**
@@ -122,14 +117,14 @@ public class FieldCategoryRepository {
      *
      * <p>If the link does not exist this is a no-op.
      *
-     * @param fieldId    the field to unlink
+     * @param fieldId the field to unlink
      * @param categoryId the category to unlink
      */
     public void unlink(Long fieldId, Long categoryId) {
         dsl.deleteFrom(FIELD_CATEGORY)
-           .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-           .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-           .execute();
+                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .execute();
     }
 
     /**
@@ -139,9 +134,7 @@ public class FieldCategoryRepository {
      * @return the number of rows deleted
      */
     public int unlinkAllByField(Long fieldId) {
-        return dsl.deleteFrom(FIELD_CATEGORY)
-                  .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                  .execute();
+        return dsl.deleteFrom(FIELD_CATEGORY).where(FIELD_CATEGORY.FIELD_ID.eq(fieldId)).execute();
     }
 
     /**
@@ -152,7 +145,7 @@ public class FieldCategoryRepository {
      */
     public int unlinkAllByCategory(Long categoryId) {
         return dsl.deleteFrom(FIELD_CATEGORY)
-                  .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-                  .execute();
+                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .execute();
     }
 }

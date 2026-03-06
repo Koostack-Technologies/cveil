@@ -3,14 +3,13 @@ package com.koostack.operio.core.platform.core;
 import com.koostack.operio.core.platform.core.models.TenantCredentials;
 import com.koostack.operio.core.platform.core.models.TenantInfo;
 import com.koostack.operio.core.spi.Plugin;
-
 import java.util.List;
 
 /**
  * Query service for the core platform domain (tenant read model).
  *
- * <p>Reads from the materialized {@code platform_core.tenant} table
- * populated by the {@link CoreProjection}.
+ * <p>Reads from the materialized {@code platform_core.tenant} table populated by the {@link
+ * CoreProjection}.
  */
 public interface CoreQueryService<T> extends Plugin<T> {
 
@@ -24,8 +23,8 @@ public interface CoreQueryService<T> extends Plugin<T> {
     List<TenantInfo> listTenantsByStatus(String status);
 
     /**
-     * Retrieve Redis ACL credentials for a tenant, or {@code null} if the
-     * tenant does not exist or has no Redis ACL configured.
+     * Retrieve Redis ACL credentials for a tenant, or {@code null} if the tenant does not exist or
+     * has no Redis ACL configured.
      */
     default TenantCredentials getTenantCredentials(String tenantId) {
         return null;

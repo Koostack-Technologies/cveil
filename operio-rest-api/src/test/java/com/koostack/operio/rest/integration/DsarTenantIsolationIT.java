@@ -28,40 +28,37 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * Integration tests for DSAR tenant isolation (Task 1.4).
  *
- * <p>Validates that DSAR endpoints (export and delete) correctly enforce
- * tenant context when {@code operio.multi-tenant.enabled=true}, and that
- * the {@code TenantAwareExecuteListener} routes all database operations
- * to the correct per-tenant Postgres schema ({@code t_{tenantId}}).
+ * <p>Validates that DSAR endpoints (export and delete) correctly enforce tenant context when {@code
+ * operio.multi-tenant.enabled=true}, and that the {@code TenantAwareExecuteListener} routes all
+ * database operations to the correct per-tenant Postgres schema ({@code t_{tenantId}}).
  *
  * <h2>Test Coverage</h2>
+ *
  * <ul>
- *   <li>Tenant A data isolation: grant in tenant A, export in A visible,
- *       export in B returns empty</li>
- *   <li>Delete isolation: grant same subject in A and B, delete in A,
- *       verify B data intact</li>
- *   <li>DSAR audit per-tenant: delete in A, verify audit in A, absent in B</li>
- *   <li>Export without tenant context returns 403 when multi-tenant enabled</li>
- *   <li>Delete without tenant context returns 403 when multi-tenant enabled</li>
+ *   <li>Tenant A data isolation: grant in tenant A, export in A visible, export in B returns empty
+ *   <li>Delete isolation: grant same subject in A and B, delete in A, verify B data intact
+ *   <li>DSAR audit per-tenant: delete in A, verify audit in A, absent in B
+ *   <li>Export without tenant context returns 403 when multi-tenant enabled
+ *   <li>Delete without tenant context returns 403 when multi-tenant enabled
  * </ul>
  *
  * <h2>Multi-Tenant Test Architecture</h2>
+ *
  * <p>These tests use a dedicated resource manager that:
+ *
  * <ol>
- *   <li>Starts Postgres + Redis containers</li>
- *   <li>Sets {@code operio.multi-tenant.enabled=true}</li>
- *   <li>Configures two API keys: {@code test-key-tenant-a} (bound to
- *       tenant {@code tenant_a}) and {@code test-key-tenant-b} (bound
- *       to tenant {@code tenant_b})</li>
- *   <li>Provisions both tenant schemas ({@code t_tenant_a},
- *       {@code t_tenant_b}) with the required tables via Flyway
- *       or raw DDL</li>
+ *   <li>Starts Postgres + Redis containers
+ *   <li>Sets {@code operio.multi-tenant.enabled=true}
+ *   <li>Configures two API keys: {@code test-key-tenant-a} (bound to tenant {@code tenant_a}) and
+ *       {@code test-key-tenant-b} (bound to tenant {@code tenant_b})
+ *   <li>Provisions both tenant schemas ({@code t_tenant_a}, {@code t_tenant_b}) with the required
+ *       tables via Flyway or raw DDL
  * </ol>
  *
- * <p>The API key → tenant binding is resolved by the
- * {@link com.koostack.operio.rest.filter.ApiKeyAuthFilter ApiKeyAuthFilter}
- * and the {@code TenantScopeInterceptor}, which sets
- * {@link TenantContext TenantContext} for the
- * duration of the request.
+ * <p>The API key → tenant binding is resolved by the {@link
+ * com.koostack.operio.rest.filter.ApiKeyAuthFilter ApiKeyAuthFilter} and the {@code
+ * TenantScopeInterceptor}, which sets {@link TenantContext TenantContext} for the duration of the
+ * request.
  *
  * @see com.koostack.operio.rest.config.OperioConfig.MultiTenantConfig
  * @see TenantContext
@@ -73,49 +70,43 @@ import org.testcontainers.utility.DockerImageName;
 @DisplayName("DSAR Tenant Isolation (Task 1.4)")
 class DsarTenantIsolationIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        DsarTenantIsolationIT.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(DsarTenantIsolationIT.class);
 
     /**
-     * API key bound to tenant_a — the ApiKeyTokenVerifier resolves this
-     * to an IdentityContext with tenantId="tenant_a".
+     * API key bound to tenant_a — the ApiKeyTokenVerifier resolves this to an IdentityContext with
+     * tenantId="tenant_a".
      */
     private static final String KEY_TENANT_A = "test-key-tenant-a";
 
-    /**
-     * API key bound to tenant_b.
-     */
+    /** API key bound to tenant_b. */
     private static final String KEY_TENANT_B = "test-key-tenant-b";
 
     /**
-     * API key with NO tenant binding — simulates a super-admin or
-     * single-tenant key where TenantContext is not set.
+     * API key with NO tenant binding — simulates a super-admin or single-tenant key where
+     * TenantContext is not set.
      */
     private static final String KEY_NO_TENANT = "test-key-no-tenant";
 
     private static final String SUBJECT = "user_isolation_test";
 
-    private static final String BOOTSTRAP_KEY =
-        "test-bootstrap-key-for-integration-tests";
+    private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
     @Test
     @Order(0)
     @DisplayName("Setup: provision tenants")
     void provisionTenants() {
-        for (String tenantId : new String[] { "tenant_a", "tenant_b" }) {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body(Map.of(
-                    "tenantId", tenantId,
-                    "displayName", tenantId,
-                    "plan", "free"
-                ))
-                .when()
-                .post("/api/v1/platform/tenants")
-                .then()
-                .statusCode(201);
+        for (String tenantId : new String[] {"tenant_a", "tenant_b"}) {
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            Map.of(
+                                    "tenantId", tenantId,
+                                    "displayName", tenantId,
+                                    "plan", "free"))
+                    .when()
+                    .post("/api/v1/platform/tenants")
+                    .then()
+                    .statusCode(201);
         }
     }
 
@@ -126,17 +117,15 @@ class DsarTenantIsolationIT {
     /**
      * Test resource manager for tenant isolation tests.
      *
-     * <p>Starts Postgres + Redis, enables multi-tenant mode, and configures
-     * tenant-scoped API keys. Also provisions per-tenant schemas in Postgres
-     * so that TenantAwareExecuteListener has valid schemas to route to.
+     * <p>Starts Postgres + Redis, enables multi-tenant mode, and configures tenant-scoped API keys.
+     * Also provisions per-tenant schemas in Postgres so that TenantAwareExecuteListener has valid
+     * schemas to route to.
      */
     public static class TenantIsolationResourceManager
-        implements QuarkusTestResourceLifecycleManager
-    {
+            implements QuarkusTestResourceLifecycleManager {
 
-        private static final Logger LOG = LoggerFactory.getLogger(
-            TenantIsolationResourceManager.class
-        );
+        private static final Logger LOG =
+                LoggerFactory.getLogger(TenantIsolationResourceManager.class);
 
         private PostgreSQLContainer<?> postgres;
         private GenericContainer<?> redis;
@@ -145,26 +134,20 @@ class DsarTenantIsolationIT {
         public Map<String, String> start() {
             LOG.info("Starting tenant isolation test infrastructure...");
 
-            postgres = new PostgreSQLContainer<>(
-                DockerImageName.parse("postgres:16-alpine")
-            )
-                .withDatabaseName("operio_tenant_test")
-                .withUsername("operio_tenant_test")
-                .withPassword("operio_tenant_test")
-                .withLogConsumer(
-                    new Slf4jLogConsumer(LOG).withPrefix("postgres")
-                );
+            postgres =
+                    new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
+                            .withDatabaseName("operio_tenant_test")
+                            .withUsername("operio_tenant_test")
+                            .withPassword("operio_tenant_test")
+                            .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("postgres"));
 
             postgres.start();
 
-            redis = new GenericContainer<>(
-                DockerImageName.parse("redis:7-alpine")
-            )
-                .withExposedPorts(6379)
-                .waitingFor(
-                    Wait.forLogMessage(".*Ready to accept connections.*", 1)
-                )
-                .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("redis"));
+            redis =
+                    new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+                            .withExposedPorts(6379)
+                            .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1))
+                            .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("redis"));
 
             redis.start();
 
@@ -175,21 +158,12 @@ class DsarTenantIsolationIT {
             props.put("operio.test.db.username", postgres.getUsername());
             props.put("operio.test.db.password", postgres.getPassword());
             props.put("operio.test.platform-db.url", postgres.getJdbcUrl());
-            props.put(
-                "operio.test.platform-db.username",
-                postgres.getUsername()
-            );
-            props.put(
-                "operio.test.platform-db.password",
-                postgres.getPassword()
-            );
+            props.put("operio.test.platform-db.username", postgres.getUsername());
+            props.put("operio.test.platform-db.password", postgres.getPassword());
 
             // Redis config
             props.put("operio.test.redis.host", redis.getHost());
-            props.put(
-                "operio.test.redis.port",
-                String.valueOf(redis.getMappedPort(6379))
-            );
+            props.put("operio.test.redis.port", String.valueOf(redis.getMappedPort(6379)));
 
             // Enable multi-tenant mode
             props.put("operio.multi-tenant.enabled", "true");
@@ -197,23 +171,15 @@ class DsarTenantIsolationIT {
             // API keys with tenant bindings
             // Format: role:consent:read,role:consent:write,tenant:tenant_a
             props.put(
-                "operio.api-keys.test-key-tenant-a",
-                "role:consent:read,role:consent:write,tenant:tenant_a"
-            );
+                    "operio.api-keys.test-key-tenant-a",
+                    "role:consent:read,role:consent:write,tenant:tenant_a");
             props.put(
-                "operio.api-keys.test-key-tenant-b",
-                "role:consent:read,role:consent:write,tenant:tenant_b"
-            );
+                    "operio.api-keys.test-key-tenant-b",
+                    "role:consent:read,role:consent:write,tenant:tenant_b");
             // Key without tenant — only has roles, no tenant binding
-            props.put(
-                "operio.api-keys.test-key-no-tenant",
-                "role:consent:read,role:consent:write"
-            );
+            props.put("operio.api-keys.test-key-no-tenant", "role:consent:read,role:consent:write");
 
-            LOG.info(
-                "Tenant isolation test infrastructure ready — " +
-                    "multi-tenant.enabled=true"
-            );
+            LOG.info("Tenant isolation test infrastructure ready — " + "multi-tenant.enabled=true");
 
             return props;
         }
@@ -232,9 +198,8 @@ class DsarTenantIsolationIT {
     /**
      * Test 1: Tenant A isolation on export.
      *
-     * <p>Grant consent for a subject under tenant A's API key, then export
-     * using tenant A's key (data visible) and tenant B's key (empty — no
-     * cross-tenant leakage).
+     * <p>Grant consent for a subject under tenant A's API key, then export using tenant A's key
+     * (data visible) and tenant B's key (empty — no cross-tenant leakage).
      */
     @Test
     @Order(1)
@@ -263,8 +228,8 @@ class DsarTenantIsolationIT {
     /**
      * Test 2: Deletion isolation between tenants.
      *
-     * <p>Grant the same subject in both tenant A and tenant B. Delete in
-     * tenant A. Verify that tenant B's data is still intact.
+     * <p>Grant the same subject in both tenant A and tenant B. Delete in tenant A. Verify that
+     * tenant B's data is still intact.
      */
     @Test
     @Order(2)
@@ -278,11 +243,7 @@ class DsarTenantIsolationIT {
 
         // Delete in tenant A
         String confirmToken = "DELETE_" + subject;
-        DsarDeletionReceipt receipt = deleteSubject(
-            KEY_TENANT_A,
-            subject,
-            confirmToken
-        );
+        DsarDeletionReceipt receipt = deleteSubject(KEY_TENANT_A, subject, confirmToken);
         assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
 
         // Tenant A export should be empty
@@ -299,12 +260,10 @@ class DsarTenantIsolationIT {
     // ===================================================================
 
     /**
-     * Test 3: DSAR audit entries are scoped to the tenant where the
-     * deletion occurred.
+     * Test 3: DSAR audit entries are scoped to the tenant where the deletion occurred.
      *
-     * <p>Delete a subject under tenant A's key, then verify the DSAR
-     * deletion receipt is returned correctly. The audit log entry lives
-     * in tenant A's schema — no cross-tenant audit leakage.
+     * <p>Delete a subject under tenant A's key, then verify the DSAR deletion receipt is returned
+     * correctly. The audit log entry lives in tenant A's schema — no cross-tenant audit leakage.
      */
     @Test
     @Order(3)
@@ -315,11 +274,7 @@ class DsarTenantIsolationIT {
         // Grant and delete under tenant A
         grantConsent(KEY_TENANT_A, subject, "email", null, "sales");
         String confirmToken = "DELETE_" + subject;
-        DsarDeletionReceipt receipt = deleteSubject(
-            KEY_TENANT_A,
-            subject,
-            confirmToken
-        );
+        DsarDeletionReceipt receipt = deleteSubject(KEY_TENANT_A, subject, confirmToken);
 
         // Receipt should be valid and scoped to tenant A
         assertThat(receipt.subject()).isEqualTo(subject);
@@ -333,29 +288,25 @@ class DsarTenantIsolationIT {
     // ===================================================================
 
     /**
-     * Test 4: When multi-tenant mode is enabled, export requests from an
-     * API key with no tenant binding should return 403 Forbidden.
+     * Test 4: When multi-tenant mode is enabled, export requests from an API key with no tenant
+     * binding should return 403 Forbidden.
      *
-     * <p>This tests the guard in
-     * {@link com.koostack.operio.rest.resource.ConsentResource#exportSubjectData}
-     * that checks {@code TenantContext.isPresent()} when
-     * {@code operio.multi-tenant.enabled=true}.
+     * <p>This tests the guard in {@link
+     * com.koostack.operio.rest.resource.ConsentResource#exportSubjectData} that checks {@code
+     * TenantContext.isPresent()} when {@code operio.multi-tenant.enabled=true}.
      */
     @Test
     @Order(4)
-    @DisplayName(
-        "Export without tenant context should return 403 when multi-tenant enabled"
-    )
+    @DisplayName("Export without tenant context should return 403 when multi-tenant enabled")
     void testExportWithoutTenantContext403() {
         String subject = "export_no_tenant_1";
 
-        given()
-            .header("Authorization", "Bearer " + KEY_NO_TENANT)
-            .contentType(ContentType.JSON)
-            .when()
-            .get("/api/v1/subjects/{id}/export", subject)
-            .then()
-            .statusCode(403);
+        given().header("Authorization", "Bearer " + KEY_NO_TENANT)
+                .contentType(ContentType.JSON)
+                .when()
+                .get("/api/v1/subjects/{id}/export", subject)
+                .then()
+                .statusCode(403);
     }
 
     // ===================================================================
@@ -363,31 +314,27 @@ class DsarTenantIsolationIT {
     // ===================================================================
 
     /**
-     * Test 5: When multi-tenant mode is enabled, delete requests from an
-     * API key with no tenant binding should return 403 Forbidden.
+     * Test 5: When multi-tenant mode is enabled, delete requests from an API key with no tenant
+     * binding should return 403 Forbidden.
      *
-     * <p>This tests the guard in
-     * {@link com.koostack.operio.rest.resource.ConsentResource#deleteSubjectData}
-     * that checks {@code TenantContext.isPresent()} when
-     * {@code operio.multi-tenant.enabled=true}.
+     * <p>This tests the guard in {@link
+     * com.koostack.operio.rest.resource.ConsentResource#deleteSubjectData} that checks {@code
+     * TenantContext.isPresent()} when {@code operio.multi-tenant.enabled=true}.
      */
     @Test
     @Order(5)
-    @DisplayName(
-        "Delete without tenant context should return 403 when multi-tenant enabled"
-    )
+    @DisplayName("Delete without tenant context should return 403 when multi-tenant enabled")
     void testDeleteWithoutTenantContext403() {
         String subject = "delete_no_tenant_1";
         String confirmToken = "DELETE_" + subject;
 
-        given()
-            .header("Authorization", "Bearer " + KEY_NO_TENANT)
-            .contentType(ContentType.JSON)
-            .queryParam("confirm", confirmToken)
-            .when()
-            .delete("/api/v1/subjects/{id}", subject)
-            .then()
-            .statusCode(403);
+        given().header("Authorization", "Bearer " + KEY_NO_TENANT)
+                .contentType(ContentType.JSON)
+                .queryParam("confirm", confirmToken)
+                .when()
+                .delete("/api/v1/subjects/{id}", subject)
+                .then()
+                .statusCode(403);
     }
 
     // ===================================================================
@@ -395,62 +342,47 @@ class DsarTenantIsolationIT {
     // ===================================================================
 
     private void grantConsent(
-        String apiKey,
-        String subject,
-        String fieldName,
-        String entityName,
-        String purposeName
-    ) {
-        Map<String, Object> scope = buildScope(
-            fieldName,
-            entityName,
-            purposeName
-        );
+            String apiKey,
+            String subject,
+            String fieldName,
+            String entityName,
+            String purposeName) {
+        Map<String, Object> scope = buildScope(fieldName, entityName, purposeName);
 
-        given()
-            .header("Authorization", "Bearer " + apiKey)
-            .contentType(ContentType.JSON)
-            .body(Map.of("subject", subject, "scope", scope))
-            .when()
-            .post("/api/v1/subjects/consent/grant")
-            .then()
-            .statusCode(200);
+        given().header("Authorization", "Bearer " + apiKey)
+                .contentType(ContentType.JSON)
+                .body(Map.of("subject", subject, "scope", scope))
+                .when()
+                .post("/api/v1/subjects/consent/grant")
+                .then()
+                .statusCode(200);
     }
 
     private SubjectDataExport exportSubject(String apiKey, String subject) {
-        return given()
-            .header("Authorization", "Bearer " + apiKey)
-            .contentType(ContentType.JSON)
-            .when()
-            .get("/api/v1/subjects/{id}/export", subject)
-            .then()
-            .statusCode(200)
-            .extract()
-            .as(SubjectDataExport.class);
+        return given().header("Authorization", "Bearer " + apiKey)
+                .contentType(ContentType.JSON)
+                .when()
+                .get("/api/v1/subjects/{id}/export", subject)
+                .then()
+                .statusCode(200)
+                .extract()
+                .as(SubjectDataExport.class);
     }
 
-    private DsarDeletionReceipt deleteSubject(
-        String apiKey,
-        String subject,
-        String confirmToken
-    ) {
-        return given()
-            .header("Authorization", "Bearer " + apiKey)
-            .contentType(ContentType.JSON)
-            .queryParam("confirm", confirmToken)
-            .when()
-            .delete("/api/v1/subjects/{id}", subject)
-            .then()
-            .statusCode(200)
-            .extract()
-            .as(DsarDeletionReceipt.class);
+    private DsarDeletionReceipt deleteSubject(String apiKey, String subject, String confirmToken) {
+        return given().header("Authorization", "Bearer " + apiKey)
+                .contentType(ContentType.JSON)
+                .queryParam("confirm", confirmToken)
+                .when()
+                .delete("/api/v1/subjects/{id}", subject)
+                .then()
+                .statusCode(200)
+                .extract()
+                .as(DsarDeletionReceipt.class);
     }
 
     private static Map<String, Object> buildScope(
-        String fieldName,
-        String entityName,
-        String purposeName
-    ) {
+            String fieldName, String entityName, String purposeName) {
         Map<String, Object> scope = new HashMap<>();
         scope.put("category", "PII");
         if (fieldName != null) {

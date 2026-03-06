@@ -1,17 +1,14 @@
 package com.koostack.operio.platform.metrics.redis;
 
-import com.koostack.operio.core.metrics.Metric;
-import com.koostack.operio.core.metrics.MetricType;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.Map;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for {@link PlatformRedisMetricPublisher} serialization.
- */
+import com.koostack.operio.core.metrics.Metric;
+import com.koostack.operio.core.metrics.MetricType;
+import java.time.Instant;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/** Unit tests for {@link PlatformRedisMetricPublisher} serialization. */
 class PlatformRedisMetricPublisherTest {
 
     @Test
@@ -22,14 +19,15 @@ class PlatformRedisMetricPublisherTest {
     @Test
     void serializesMetricToStreamFields() {
         Instant now = Instant.parse("2026-02-28T10:00:00Z");
-        Metric metric = Metric.builder()
-            .metricName("api_evaluations")
-            .metricValue(100.0)
-            .metricType(MetricType.COUNTER)
-            .tenantId("acme")
-            .dimensions(Map.of("region", "us-east"))
-            .publishedAt(now)
-            .build();
+        Metric metric =
+                Metric.builder()
+                        .metricName("api_evaluations")
+                        .metricValue(100.0)
+                        .metricType(MetricType.COUNTER)
+                        .tenantId("acme")
+                        .dimensions(Map.of("region", "us-east"))
+                        .publishedAt(now)
+                        .build();
 
         PlatformRedisMetricPublisher publisher = new PlatformRedisMetricPublisher();
         Map<String, String> fields = publisher.serializeMetric(metric);
@@ -44,11 +42,12 @@ class PlatformRedisMetricPublisherTest {
 
     @Test
     void serializesPlatformMetricWithSystemTenantId() {
-        Metric metric = Metric.builder()
-            .metricName("db_connection_count")
-            .metricValue(8.0)
-            .metricType(MetricType.GAUGE)
-            .build();
+        Metric metric =
+                Metric.builder()
+                        .metricName("db_connection_count")
+                        .metricValue(8.0)
+                        .metricType(MetricType.GAUGE)
+                        .build();
 
         PlatformRedisMetricPublisher publisher = new PlatformRedisMetricPublisher();
         Map<String, String> fields = publisher.serializeMetric(metric);
@@ -59,10 +58,7 @@ class PlatformRedisMetricPublisherTest {
 
     @Test
     void serializesEmptyDimensionsAsEmptyJson() {
-        Metric metric = Metric.builder()
-            .metricName("test")
-            .metricValue(1.0)
-            .build();
+        Metric metric = Metric.builder().metricName("test").metricValue(1.0).build();
 
         PlatformRedisMetricPublisher publisher = new PlatformRedisMetricPublisher();
         Map<String, String> fields = publisher.serializeMetric(metric);

@@ -7,13 +7,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Manages the lifecycle of {@link InvalidationSubscriber.Subscription}s for a
- * set of client connections.
+ * Manages the lifecycle of {@link InvalidationSubscriber.Subscription}s for a set of client
+ * connections.
  *
- * <p>Typical usage: a transport layer (SSE endpoint, WebSocket handler) creates
- * one {@code SubscriptionManager} per server instance.  When a client connects,
- * it calls {@link #add}; when the client disconnects, {@link #removeAll} cleans
- * up every subscription for that connection.
+ * <p>Typical usage: a transport layer (SSE endpoint, WebSocket handler) creates one {@code
+ * SubscriptionManager} per server instance. When a client connects, it calls {@link #add}; when the
+ * client disconnects, {@link #removeAll} cleans up every subscription for that connection.
  *
  * <p>Thread-safe for concurrent use from transport threads.
  */
@@ -38,24 +37,25 @@ public class SubscriptionManager implements AutoCloseable {
      * Add a subscription for a client connection.
      *
      * @param connectionId unique identifier for the client connection
-     * @param tenantId     the tenant to subscribe to
-     * @param sink         the sink that delivers messages to the client
+     * @param tenantId the tenant to subscribe to
+     * @param sink the sink that delivers messages to the client
      * @return the subscription handle
      */
-    public InvalidationSubscriber.Subscription add(String connectionId, String tenantId,
-                                                    InvalidationSink sink) {
+    public InvalidationSubscriber.Subscription add(
+            String connectionId, String tenantId, InvalidationSink sink) {
         Objects.requireNonNull(connectionId, "connectionId");
 
         // Wrap the sink to track metrics
-        InvalidationSink metered = message -> {
-            try {
-                sink.send(message);
-                totalMessagesDelivered.incrementAndGet();
-            } catch (Exception e) {
-                totalErrors.incrementAndGet();
-                throw e;
-            }
-        };
+        InvalidationSink metered =
+                message -> {
+                    try {
+                        sink.send(message);
+                        totalMessagesDelivered.incrementAndGet();
+                    } catch (Exception e) {
+                        totalErrors.incrementAndGet();
+                        throw e;
+                    }
+                };
 
         InvalidationSubscriber.Subscription sub = subscriber.subscribe(tenantId, metered);
         connections.computeIfAbsent(connectionId, k -> ConcurrentHashMap.newKeySet()).add(sub);
@@ -63,9 +63,7 @@ public class SubscriptionManager implements AutoCloseable {
         return sub;
     }
 
-    /**
-     * Remove a single subscription for a connection.
-     */
+    /** Remove a single subscription for a connection. */
     public void remove(String connectionId, InvalidationSubscriber.Subscription subscription) {
         Set<InvalidationSubscriber.Subscription> subs = connections.get(connectionId);
         if (subs != null) {
@@ -117,9 +115,7 @@ public class SubscriptionManager implements AutoCloseable {
         return connections.size();
     }
 
-    /**
-     * Close all subscriptions and the underlying subscriber.
-     */
+    /** Close all subscriptions and the underlying subscriber. */
     @Override
     public void close() throws Exception {
         for (String connId : List.copyOf(connections.keySet())) {

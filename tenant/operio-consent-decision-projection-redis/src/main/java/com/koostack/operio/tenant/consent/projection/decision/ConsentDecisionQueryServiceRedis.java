@@ -13,7 +13,6 @@ import com.koostack.operio.core.tenant.consent.ConsentGraphQueryService;
 import com.koostack.operio.plugin.redis.common.ConsentGraphRedisConfig;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,23 +24,24 @@ import java.util.Set;
 /**
  * Graph-based Redis implementation of consent evaluation and graph querying.
  *
- * <p>Implements both {@link ConsentDecisionService} (for consent evaluation via
- * pipelined HGET traversal) and {@link ConsentGraphQueryService} (for paginated
- * graph queries with optional BFS subgraph filtering).
+ * <p>Implements both {@link ConsentDecisionService} (for consent evaluation via pipelined HGET
+ * traversal) and {@link ConsentGraphQueryService} (for paginated graph queries with optional BFS
+ * subgraph filtering).
  *
  * <h2>evaluateConsent</h2>
- * <p>For each scope, issues 2 pipelined {@code HGET} calls on the edge property
- * hashes: one for field-level, one for category-level. Field-level takes
- * precedence. All HGETs are batched into a single Redis pipeline (one round trip).
+ *
+ * <p>For each scope, issues 2 pipelined {@code HGET} calls on the edge property hashes: one for
+ * field-level, one for category-level. Field-level takes precedence. All HGETs are batched into a
+ * single Redis pipeline (one round trip).
  *
  * <h2>getConsentGraph</h2>
- * <p>When no root is specified, paginates across all node types using
- * {@code ZRANGEBYLEX} on sorted set indexes. When a root is specified,
- * performs BFS traversal to the given depth.
+ *
+ * <p>When no root is specified, paginates across all node types using {@code ZRANGEBYLEX} on sorted
+ * set indexes. When a root is specified, performs BFS traversal to the given depth.
  */
 public class ConsentDecisionQueryServiceRedis
         implements ConsentDecisionService<ConsentGraphRedisConfig>,
-                   ConsentGraphQueryService<ConsentGraphRedisConfig> {
+                ConsentGraphQueryService<ConsentGraphRedisConfig> {
 
     static final String REASON_REVOKED = "Consent explicitly revoked";
     static final String REASON_NO_RECORD = "No consent record found";
@@ -112,9 +112,12 @@ public class ConsentDecisionQueryServiceRedis
         ensureConfigured();
 
         if (accessRequests == null || accessRequests.isEmpty()) {
-            return ConsentResponse.to(subject,
-                    Collections.emptySet(), Collections.emptySet(),
-                    Collections.emptyMap(), Collections.emptyMap());
+            return ConsentResponse.to(
+                    subject,
+                    Collections.emptySet(),
+                    Collections.emptySet(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap());
         }
 
         // Build 2N ep keys: field-level + category-level per scope
@@ -123,8 +126,11 @@ public class ConsentDecisionQueryServiceRedis
         List<String> categoryKeys = new ArrayList<>(scopeList.size());
 
         for (ConsentScope scope : scopeList) {
-            String fieldPolicyName = "FIELD:" + qualifyField(scope.entityName(), scope.fieldName())
-                    + ":" + scope.purposeName();
+            String fieldPolicyName =
+                    "FIELD:"
+                            + qualifyField(scope.entityName(), scope.fieldName())
+                            + ":"
+                            + scope.purposeName();
             fieldKeys.add(graphRepo.epKey("subject", subject, "policy", fieldPolicyName));
 
             String catPolicyName = "CAT:" + scope.category() + ":" + scope.purposeName();
@@ -179,9 +185,8 @@ public class ConsentDecisionQueryServiceRedis
     // -----------------------------------------------------------------------
 
     @Override
-    public ConsentGraph getConsentGraph(String cursor, int limit,
-                                        String rootType, String rootName,
-                                        Integer depth) {
+    public ConsentGraph getConsentGraph(
+            String cursor, int limit, String rootType, String rootName, Integer depth) {
         ensureConfigured();
 
         if (rootType != null && rootName != null) {
@@ -241,12 +246,12 @@ public class ConsentDecisionQueryServiceRedis
         boolean hasMore = remaining == 0;
         String nextCursor = hasMore && lastType != null ? lastType + ":" + lastName : null;
 
-        return new ConsentGraph(nodes, edges,
-                new GraphPageInfo(nextCursor, hasMore, totalNodes, edges.size()));
+        return new ConsentGraph(
+                nodes, edges, new GraphPageInfo(nextCursor, hasMore, totalNodes, edges.size()));
     }
 
-    private ConsentGraph getSubgraph(String rootType, String rootName,
-                                     Integer depth, String cursor, int limit) {
+    private ConsentGraph getSubgraph(
+            String rootType, String rootName, Integer depth, String cursor, int limit) {
         Map<String, Integer> visited = graphRepo.traverse(rootType, rootName, depth);
 
         // Apply cursor-based pagination over the traversal result
@@ -281,9 +286,15 @@ public class ConsentDecisionQueryServiceRedis
                 if (visited.containsKey(member)) {
                     String[] target = ConsentGraphRedisRepository.splitEdgeMember(member);
                     if (target != null) {
-                        Map<String, String> ep = graphRepo.getEdgeProps(parts[0], parts[1], target[0], target[1]);
-                        edges.add(new GraphEdge(parts[0], parts[1], target[0], target[1],
-                                ep.isEmpty() ? Collections.emptyMap() : ep));
+                        Map<String, String> ep =
+                                graphRepo.getEdgeProps(parts[0], parts[1], target[0], target[1]);
+                        edges.add(
+                                new GraphEdge(
+                                        parts[0],
+                                        parts[1],
+                                        target[0],
+                                        target[1],
+                                        ep.isEmpty() ? Collections.emptyMap() : ep));
                     }
                 }
             }
@@ -292,8 +303,8 @@ public class ConsentDecisionQueryServiceRedis
         boolean hasMore = end < allKeys.size();
         String nextCursor = hasMore ? allKeys.get(end - 1) : null;
 
-        return new ConsentGraph(nodes, edges,
-                new GraphPageInfo(nextCursor, hasMore, visited.size(), edges.size()));
+        return new ConsentGraph(
+                nodes, edges, new GraphPageInfo(nextCursor, hasMore, visited.size(), edges.size()));
     }
 
     // -----------------------------------------------------------------------
@@ -306,15 +317,20 @@ public class ConsentDecisionQueryServiceRedis
             String[] target = ConsentGraphRedisRepository.splitEdgeMember(member);
             if (target != null) {
                 Map<String, String> ep = graphRepo.getEdgeProps(type, name, target[0], target[1]);
-                edges.add(new GraphEdge(type, name, target[0], target[1],
-                        ep.isEmpty() ? Collections.emptyMap() : ep));
+                edges.add(
+                        new GraphEdge(
+                                type,
+                                name,
+                                target[0],
+                                target[1],
+                                ep.isEmpty() ? Collections.emptyMap() : ep));
             }
         }
     }
 
     private static String qualifyField(String entity, String field) {
-        String e = (entity != null && !entity.isBlank() && !"*".equals(entity))
-                ? entity : "_default_";
+        String e =
+                (entity != null && !entity.isBlank() && !"*".equals(entity)) ? entity : "_default_";
         return e + "/" + field;
     }
 
@@ -341,8 +357,8 @@ public class ConsentDecisionQueryServiceRedis
     private void ensureConfigured() {
         if (!configured) {
             throw new OperioConfigurationException(
-                    "ConsentDecisionQueryServiceRedis has not been configured. " +
-                            "Call configure() first.");
+                    "ConsentDecisionQueryServiceRedis has not been configured. "
+                            + "Call configure() first.");
         }
     }
 }

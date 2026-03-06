@@ -2,9 +2,9 @@ package com.koostack.operio.plugin.discovery.sensitive.annotation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.koostack.operio.core.annotation.Sensitive;
 import com.koostack.operio.core.models.DiscoveredField;
 import com.koostack.operio.core.models.DiscoveryResult;
-import com.koostack.operio.core.annotation.Sensitive;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -216,8 +216,7 @@ class SensitiveAnnotationDiscoveryTest {
 
     public static class NoCategoryOrPurpose {
 
-        @Sensitive
-        private String rawField;
+        @Sensitive private String rawField;
 
         public NoCategoryOrPurpose() {}
 
@@ -242,17 +241,13 @@ class SensitiveAnnotationDiscoveryTest {
         assertNotNull(result);
         assertFalse(result.fields().isEmpty());
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
         // "email" comes from @Sensitive(fieldName = "email") override
-        assertTrue(
-            fieldNames.contains("email"),
-            "Should find field with overridden name 'email'"
-        );
+        assertTrue(fieldNames.contains("email"), "Should find field with overridden name 'email'");
         // "name" comes from the property name
         assertTrue(fieldNames.contains("name"), "Should find field 'name'");
     }
@@ -262,17 +257,14 @@ class SensitiveAnnotationDiscoveryTest {
         discovery.configure(AnnotationDiscoveryConfig.of(User.class));
         DiscoveryResult result = discovery.discover();
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
         // "nickname" is not annotated
         assertFalse(
-            fieldNames.contains("nickname"),
-            "Should not find unannotated field 'nickname'"
-        );
+                fieldNames.contains("nickname"), "Should not find unannotated field 'nickname'");
     }
 
     @Test
@@ -280,21 +272,18 @@ class SensitiveAnnotationDiscoveryTest {
         discovery.configure(AnnotationDiscoveryConfig.of(User.class));
         DiscoveryResult result = discovery.discover();
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
         // Address.street should be found at both home.street and work.street paths
         assertTrue(
-            fieldNames.contains("home.street"),
-            "Should find nested field 'home.street', found: " + fieldNames
-        );
+                fieldNames.contains("home.street"),
+                "Should find nested field 'home.street', found: " + fieldNames);
         assertTrue(
-            fieldNames.contains("work.street"),
-            "Should find nested field 'work.street', found: " + fieldNames
-        );
+                fieldNames.contains("work.street"),
+                "Should find nested field 'work.street', found: " + fieldNames);
     }
 
     // -----------------------------------------------------------------------
@@ -303,33 +292,20 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoverCollectsDistinctCategories() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(User.class, Patient.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(User.class, Patient.class));
         DiscoveryResult result = discovery.discover();
 
-        assertTrue(
-            result.categories().contains("PII"),
-            "Should discover PII category"
-        );
-        assertTrue(
-            result.categories().contains("HEALTH"),
-            "Should discover HEALTH category"
-        );
+        assertTrue(result.categories().contains("PII"), "Should discover PII category");
+        assertTrue(result.categories().contains("HEALTH"), "Should discover HEALTH category");
     }
 
     @Test
     void categoriesDoNotContainBlanks() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class));
         DiscoveryResult result = discovery.discover();
 
         for (String cat : result.categories()) {
-            assertFalse(
-                cat.isBlank(),
-                "Categories should not contain blank strings"
-            );
+            assertFalse(cat.isBlank(), "Categories should not contain blank strings");
         }
     }
 
@@ -344,10 +320,9 @@ class SensitiveAnnotationDiscoveryTest {
 
         for (DiscoveredField field : result.fields()) {
             assertEquals(
-                "Patient",
-                field.entityName(),
-                "Entity name should be the root class simple name"
-            );
+                    "Patient",
+                    field.entityName(),
+                    "Entity name should be the root class simple name");
         }
     }
 
@@ -356,27 +331,22 @@ class SensitiveAnnotationDiscoveryTest {
         discovery.configure(AnnotationDiscoveryConfig.of(User.class));
         DiscoveryResult result = discovery.discover();
 
-        DiscoveredField homeStreet = result
-            .fields()
-            .stream()
-            .filter(f -> "home.street".equals(f.fieldName()))
-            .findFirst()
-            .orElseThrow(() ->
-                new AssertionError(
-                    "home.street not found in: " +
-                        result
-                            .fields()
-                            .stream()
-                            .map(DiscoveredField::fieldName)
-                            .toList()
-                )
-            );
+        DiscoveredField homeStreet =
+                result.fields().stream()
+                        .filter(f -> "home.street".equals(f.fieldName()))
+                        .findFirst()
+                        .orElseThrow(
+                                () ->
+                                        new AssertionError(
+                                                "home.street not found in: "
+                                                        + result.fields().stream()
+                                                                .map(DiscoveredField::fieldName)
+                                                                .toList()));
 
         assertEquals(
-            "User",
-            homeStreet.entityName(),
-            "Nested field should use root entity name 'User', not 'Address'"
-        );
+                "User",
+                homeStreet.entityName(),
+                "Nested field should use root entity name 'User', not 'Address'");
     }
 
     // -----------------------------------------------------------------------
@@ -385,16 +355,13 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoverScansMultipleClasses() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(User.class, Patient.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(User.class, Patient.class));
         DiscoveryResult result = discovery.discover();
 
-        Set<String> entityNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::entityName)
-            .collect(Collectors.toSet());
+        Set<String> entityNames =
+                result.fields().stream()
+                        .map(DiscoveredField::entityName)
+                        .collect(Collectors.toSet());
 
         assertTrue(entityNames.contains("User"), "Should scan User");
         assertTrue(entityNames.contains("Patient"), "Should scan Patient");
@@ -410,10 +377,7 @@ class SensitiveAnnotationDiscoveryTest {
         DiscoveryResult result = discovery.discover();
 
         assertTrue(result.fields().isEmpty(), "Should return no fields");
-        assertTrue(
-            result.categories().isEmpty(),
-            "Should return no categories"
-        );
+        assertTrue(result.categories().isEmpty(), "Should return no categories");
     }
 
     @Test
@@ -441,21 +405,15 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoverFindsAnnotationsOnGetters() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(GetterAnnotated.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(GetterAnnotated.class));
         DiscoveryResult result = discovery.discover();
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
-        assertTrue(
-            fieldNames.contains("secret"),
-            "Should find getter-annotated field 'secret'"
-        );
+        assertTrue(fieldNames.contains("secret"), "Should find getter-annotated field 'secret'");
         assertTrue(result.categories().contains("CREDENTIALS"));
     }
 
@@ -468,23 +426,20 @@ class SensitiveAnnotationDiscoveryTest {
         discovery.configure(AnnotationDiscoveryConfig.of(WithCollection.class));
         DiscoveryResult result = discovery.discover();
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
         // Patient fields should be found under the "patients" path
         assertTrue(
-            fieldNames.contains("patients.diagnosis"),
-            "Should find field inside collection element type: patients.diagnosis, found: " +
-                fieldNames
-        );
+                fieldNames.contains("patients.diagnosis"),
+                "Should find field inside collection element type: patients.diagnosis, found: "
+                        + fieldNames);
         assertTrue(
-            fieldNames.contains("patients.ssn"),
-            "Should find field inside collection element type: patients.ssn, found: " +
-                fieldNames
-        );
+                fieldNames.contains("patients.ssn"),
+                "Should find field inside collection element type: patients.ssn, found: "
+                        + fieldNames);
     }
 
     // -----------------------------------------------------------------------
@@ -493,28 +448,20 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoverHandlesSelfReferencingClassWithoutInfiniteLoop() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(SelfReferencing.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(SelfReferencing.class));
         DiscoveryResult result = discovery.discover();
 
         // Should complete without stack overflow
         assertNotNull(result);
-        assertFalse(
-            result.fields().isEmpty(),
-            "Should find the @Sensitive id field"
-        );
+        assertFalse(result.fields().isEmpty(), "Should find the @Sensitive id field");
 
-        Set<String> fieldNames = result
-            .fields()
-            .stream()
-            .map(DiscoveredField::fieldName)
-            .collect(Collectors.toSet());
+        Set<String> fieldNames =
+                result.fields().stream()
+                        .map(DiscoveredField::fieldName)
+                        .collect(Collectors.toSet());
 
         assertTrue(
-            fieldNames.contains("id"),
-            "Should find 'id' at root level, found: " + fieldNames
-        );
+                fieldNames.contains("id"), "Should find 'id' at root level, found: " + fieldNames);
     }
 
     // -----------------------------------------------------------------------
@@ -526,21 +473,17 @@ class SensitiveAnnotationDiscoveryTest {
         discovery.configure(AnnotationDiscoveryConfig.of(Patient.class));
         DiscoveryResult result = discovery.discover();
 
-        DiscoveredField diagnosis = result
-            .fields()
-            .stream()
-            .filter(f -> "diagnosis".equals(f.fieldName()))
-            .findFirst()
-            .orElseThrow(() ->
-                new AssertionError(
-                    "diagnosis not found in: " +
-                        result
-                            .fields()
-                            .stream()
-                            .map(DiscoveredField::fieldName)
-                            .toList()
-                )
-            );
+        DiscoveredField diagnosis =
+                result.fields().stream()
+                        .filter(f -> "diagnosis".equals(f.fieldName()))
+                        .findFirst()
+                        .orElseThrow(
+                                () ->
+                                        new AssertionError(
+                                                "diagnosis not found in: "
+                                                        + result.fields().stream()
+                                                                .map(DiscoveredField::fieldName)
+                                                                .toList()));
 
         assertEquals("treatment", diagnosis.purpose());
     }
@@ -551,57 +494,38 @@ class SensitiveAnnotationDiscoveryTest {
         DiscoveryResult result = discovery.discover();
 
         for (DiscoveredField field : result.fields()) {
-            assertNotNull(
-                field.description(),
-                "Description should be auto-generated"
-            );
+            assertNotNull(field.description(), "Description should be auto-generated");
             assertTrue(
-                field.description().contains("@Sensitive annotation"),
-                "Description should mention the annotation source"
-            );
+                    field.description().contains("@Sensitive annotation"),
+                    "Description should mention the annotation source");
             assertTrue(
-                field.description().contains(field.fieldName()),
-                "Description should contain the field name"
-            );
+                    field.description().contains(field.fieldName()),
+                    "Description should contain the field name");
         }
     }
 
     @Test
     void blankCategoryNormalizedToNull() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class));
         DiscoveryResult result = discovery.discover();
 
-        assertFalse(
-            result.fields().isEmpty(),
-            "Should still discover the field"
-        );
+        assertFalse(result.fields().isEmpty(), "Should still discover the field");
         DiscoveredField rawField = result.fields().iterator().next();
         // @Sensitive with default category="" should be normalized to null
-        assertNull(
-            rawField.category(),
-            "Blank category should be normalized to null"
-        );
+        assertNull(rawField.category(), "Blank category should be normalized to null");
     }
 
     @Test
     void blankPurposeNormalizedToNull() {
-        discovery.configure(
-            AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class)
-        );
+        discovery.configure(AnnotationDiscoveryConfig.of(NoCategoryOrPurpose.class));
         DiscoveryResult result = discovery.discover();
 
         assertFalse(
-            result.fields().isEmpty(),
-            "Should discover the @Sensitive field even with blank defaults"
-        );
+                result.fields().isEmpty(),
+                "Should discover the @Sensitive field even with blank defaults");
         DiscoveredField rawField = result.fields().iterator().next();
         // @Sensitive with default purpose="" should be normalized to null
-        assertNull(
-            rawField.purpose(),
-            "Blank purpose should be normalized to null"
-        );
+        assertNull(rawField.purpose(), "Blank purpose should be normalized to null");
     }
 
     // -----------------------------------------------------------------------
@@ -620,10 +544,7 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void configurationTypeIsAnnotationDiscoveryConfig() {
-        assertEquals(
-            AnnotationDiscoveryConfig.class,
-            discovery.getConfigurationType()
-        );
+        assertEquals(AnnotationDiscoveryConfig.class, discovery.getConfigurationType());
     }
 
     // -----------------------------------------------------------------------
@@ -637,15 +558,13 @@ class SensitiveAnnotationDiscoveryTest {
         DiscoveryResult second = discovery.discover();
 
         assertEquals(
-            first.fields().size(),
-            second.fields().size(),
-            "Repeated discover() calls should return the same number of fields"
-        );
+                first.fields().size(),
+                second.fields().size(),
+                "Repeated discover() calls should return the same number of fields");
         assertEquals(
-            first.categories(),
-            second.categories(),
-            "Repeated discover() calls should return the same categories"
-        );
+                first.categories(),
+                second.categories(),
+                "Repeated discover() calls should return the same categories");
     }
 
     // -----------------------------------------------------------------------
@@ -654,17 +573,12 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void configRejectsNull() {
-        assertThrows(NullPointerException.class, () ->
-            new AnnotationDiscoveryConfig(null)
-        );
+        assertThrows(NullPointerException.class, () -> new AnnotationDiscoveryConfig(null));
     }
 
     @Test
     void configVarargsFactory() {
-        AnnotationDiscoveryConfig config = AnnotationDiscoveryConfig.of(
-            User.class,
-            Patient.class
-        );
+        AnnotationDiscoveryConfig config = AnnotationDiscoveryConfig.of(User.class, Patient.class);
         assertEquals(2, config.scanClasses().size());
         assertTrue(config.scanClasses().contains(User.class));
         assertTrue(config.scanClasses().contains(Patient.class));
@@ -672,12 +586,9 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void configScanClassesIsUnmodifiable() {
-        AnnotationDiscoveryConfig config = AnnotationDiscoveryConfig.of(
-            User.class
-        );
-        assertThrows(UnsupportedOperationException.class, () ->
-            config.scanClasses().add(Patient.class)
-        );
+        AnnotationDiscoveryConfig config = AnnotationDiscoveryConfig.of(User.class);
+        assertThrows(
+                UnsupportedOperationException.class, () -> config.scanClasses().add(Patient.class));
     }
 
     // -----------------------------------------------------------------------
@@ -686,16 +597,16 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoveredFieldRejectsNullFieldName() {
-        assertThrows(NullPointerException.class, () ->
-            new DiscoveredField(null, "Entity", "PII", "purpose", "desc")
-        );
+        assertThrows(
+                NullPointerException.class,
+                () -> new DiscoveredField(null, "Entity", "PII", "purpose", "desc"));
     }
 
     @Test
     void discoveredFieldRejectsBlankFieldName() {
-        assertThrows(IllegalArgumentException.class, () ->
-            new DiscoveredField("   ", "Entity", "PII", "purpose", "desc")
-        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DiscoveredField("   ", "Entity", "PII", "purpose", "desc"));
     }
 
     @Test
@@ -710,13 +621,8 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoveredFieldOfFactoryWorksWithFiveArgs() {
-        DiscoveredField field = DiscoveredField.of(
-            "email",
-            "User",
-            "PII",
-            "marketing",
-            "User email"
-        );
+        DiscoveredField field =
+                DiscoveredField.of("email", "User", "PII", "marketing", "User email");
         assertEquals("email", field.fieldName());
         assertEquals("User", field.entityName());
         assertEquals("PII", field.category());
@@ -739,23 +645,17 @@ class SensitiveAnnotationDiscoveryTest {
 
     @Test
     void discoveryResultFieldsAreUnmodifiable() {
-        DiscoveryResult result = new DiscoveryResult(
-            Set.of(DiscoveredField.of("x", "E", "C")),
-            Set.of("C")
-        );
-        assertThrows(UnsupportedOperationException.class, () ->
-            result.fields().add(DiscoveredField.of("y", "E2", "C2"))
-        );
+        DiscoveryResult result =
+                new DiscoveryResult(Set.of(DiscoveredField.of("x", "E", "C")), Set.of("C"));
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> result.fields().add(DiscoveredField.of("y", "E2", "C2")));
     }
 
     @Test
     void discoveryResultCategoriesAreUnmodifiable() {
-        DiscoveryResult result = new DiscoveryResult(
-            Set.of(DiscoveredField.of("x", "E", "C")),
-            Set.of("C")
-        );
-        assertThrows(UnsupportedOperationException.class, () ->
-            result.categories().add("NEW")
-        );
+        DiscoveryResult result =
+                new DiscoveryResult(Set.of(DiscoveredField.of("x", "E", "C")), Set.of("C"));
+        assertThrows(UnsupportedOperationException.class, () -> result.categories().add("NEW"));
     }
 }

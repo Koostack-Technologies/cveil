@@ -9,11 +9,10 @@ import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
 import com.koostack.operio.core.platform.billing.events.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Instant;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class JooqBillingCommandService implements BillingCommandService<JooqBillingCommandConfig> {
 
@@ -21,9 +20,20 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
 
     private EventService<?> eventService;
 
-    @Override public String getName() { return "jooq-billing-command"; }
-    @Override public int getPriority() { return 100; }
-    @Override public Class<JooqBillingCommandConfig> getConfigurationType() { return JooqBillingCommandConfig.class; }
+    @Override
+    public String getName() {
+        return "jooq-billing-command";
+    }
+
+    @Override
+    public int getPriority() {
+        return 100;
+    }
+
+    @Override
+    public Class<JooqBillingCommandConfig> getConfigurationType() {
+        return JooqBillingCommandConfig.class;
+    }
 
     @Override
     public void configure(JooqBillingCommandConfig config) {
@@ -66,17 +76,25 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
     // -- Subscription commands ------------------------------------------------
 
     @Override
-    public void createSubscription(String tenantId, String planTier,
-                                   int evalLimit, int subjectLimit, int burstLimit) {
-        var payload = new SubscriptionCreatedEvent(tenantId, planTier, evalLimit, subjectLimit, burstLimit);
+    public void createSubscription(
+            String tenantId, String planTier, int evalLimit, int subjectLimit, int burstLimit) {
+        var payload =
+                new SubscriptionCreatedEvent(
+                        tenantId, planTier, evalLimit, subjectLimit, burstLimit);
         publishEvent(BillingEventTypes.SUBSCRIPTION_CREATED, tenantId, payload);
     }
 
     @Override
-    public void changeSubscriptionPlan(String tenantId, String oldPlanTier, String newPlanTier,
-                                       int evalLimit, int subjectLimit, int burstLimit) {
-        var payload = new SubscriptionPlanChangedEvent(
-            tenantId, oldPlanTier, newPlanTier, evalLimit, subjectLimit, burstLimit);
+    public void changeSubscriptionPlan(
+            String tenantId,
+            String oldPlanTier,
+            String newPlanTier,
+            int evalLimit,
+            int subjectLimit,
+            int burstLimit) {
+        var payload =
+                new SubscriptionPlanChangedEvent(
+                        tenantId, oldPlanTier, newPlanTier, evalLimit, subjectLimit, burstLimit);
         publishEvent(BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED, tenantId, payload);
     }
 
@@ -96,10 +114,13 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
 
     private void publishEvent(String eventType, String tenantId, DomainEvent payload) {
         UUID aggregateId = BillingProfileAggregate.deriveId(tenantId);
-        AggregateKey key = new AggregateKey(
-            aggregateId, BillingProfileAggregate.AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        BillingProfileAggregate.AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
         eventService.publishEvent(
-            PublishDomainEventInput.of(PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
+                PublishDomainEventInput.of(
+                        PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
     }
-
 }

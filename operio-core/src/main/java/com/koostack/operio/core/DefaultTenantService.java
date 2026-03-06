@@ -22,22 +22,19 @@ import java.util.logging.Logger;
 import javax.crypto.KeyGenerator;
 
 /**
- * Default {@link TenantService} implementation that composes command and
- * query services into cohesive business operations.
+ * Default {@link TenantService} implementation that composes command and query services into
+ * cohesive business operations.
  *
- * <p>Extends {@link Operio} to inherit the builder and plugin-wiring
- * infrastructure. All orchestration logic lives here — validation
- * (ensuring referenced policies exist), enrichment (resolving
- * ConsentScope to denormalized event payloads), and routing to the
- * appropriate command or query service.
+ * <p>Extends {@link Operio} to inherit the builder and plugin-wiring infrastructure. All
+ * orchestration logic lives here — validation (ensuring referenced policies exist), enrichment
+ * (resolving ConsentScope to denormalized event payloads), and routing to the appropriate command
+ * or query service.
  *
  * <p>Command services beneath this layer are pure event publishers.
  */
 public class DefaultTenantService extends Operio implements TenantService {
 
-    private static final Logger LOG = Logger.getLogger(
-        DefaultTenantService.class.getName()
-    );
+    private static final Logger LOG = Logger.getLogger(DefaultTenantService.class.getName());
 
     private final ConsentAdminCommandService<?> commandService;
     private final ConsentAdminQueryService<?> queryService;
@@ -47,20 +44,21 @@ public class DefaultTenantService extends Operio implements TenantService {
     private SubjectDsarService<?> subjectDsarService;
 
     public DefaultTenantService(
-        Builder builder,
-        ConsentAdminCommandService<?> commandService,
-        ConsentAdminQueryService<?> queryService
-    ) {
+            Builder builder,
+            ConsentAdminCommandService<?> commandService,
+            ConsentAdminQueryService<?> queryService) {
         super(builder);
         this.commandService = commandService;
         this.queryService = queryService;
     }
 
-    public void setPlatformMetricPublisher(com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
+    public void setPlatformMetricPublisher(
+            com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
         this.platformMetricPublisher = publisher;
     }
 
-    public void setTenantMetricPublisher(com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
+    public void setTenantMetricPublisher(
+            com.koostack.operio.core.metrics.MetricPublisherService<?> publisher) {
         this.tenantMetricPublisher = publisher;
     }
 
@@ -137,9 +135,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     private void requireDsarService() {
         if (subjectDsarService == null) {
             throw new OperioConfigurationException(
-                "SubjectDsarService is not configured — cannot perform DSAR key operations. "
-                + "Ensure a SubjectDsarService plugin is registered."
-            );
+                    "SubjectDsarService is not configured — cannot perform DSAR key operations. "
+                            + "Ensure a SubjectDsarService plugin is registered.");
         }
     }
 
@@ -150,41 +147,50 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public void grantConsent(String subject, ConsentScope scope, Instant expiresAt) {
         var policy = resolvePolicy(scope);
-        commandService().grantConsentCommand(
-            subject, policy.policyId(),
-            scope.purposeName(), policyTypeStr(policy),
-            fieldNameOrNull(policy), entityNameOrNull(policy),
-            categoryNameOrNull(policy),
-            RequestContext.actor(), RequestContext.ipAddress(),
-            RequestContext.userAgent(), expiresAt
-        );
+        commandService()
+                .grantConsentCommand(
+                        subject,
+                        policy.policyId(),
+                        scope.purposeName(),
+                        policyTypeStr(policy),
+                        fieldNameOrNull(policy),
+                        entityNameOrNull(policy),
+                        categoryNameOrNull(policy),
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent(),
+                        expiresAt);
     }
 
     @Override
     public void revokeConsent(String subject, ConsentScope scope) {
         var policy = resolvePolicy(scope);
-        commandService().revokeConsentCommand(
-            subject, policy.policyId(),
-            scope.purposeName(), policyTypeStr(policy),
-            fieldNameOrNull(policy), entityNameOrNull(policy),
-            categoryNameOrNull(policy),
-            RequestContext.actor(), RequestContext.ipAddress(),
-            RequestContext.userAgent()
-        );
+        commandService()
+                .revokeConsentCommand(
+                        subject,
+                        policy.policyId(),
+                        scope.purposeName(),
+                        policyTypeStr(policy),
+                        fieldNameOrNull(policy),
+                        entityNameOrNull(policy),
+                        categoryNameOrNull(policy),
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent());
     }
 
     @Override
     public void revokeAllConsent(String subject) {
-        commandService().revokeAllConsentCommand(
-            subject, RequestContext.actor(),
-            RequestContext.ipAddress(), RequestContext.userAgent()
-        );
+        commandService()
+                .revokeAllConsentCommand(
+                        subject,
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent());
     }
 
     @Override
-    public BatchConsentResult grantAllConsent(
-        String subject, List<BatchConsentEntry> entries
-    ) {
+    public BatchConsentResult grantAllConsent(String subject, List<BatchConsentEntry> entries) {
         int succeeded = 0;
         List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
 
@@ -205,9 +211,7 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public BatchConsentResult revokeAllConsent(
-        String subject, List<BatchConsentEntry> entries
-    ) {
+    public BatchConsentResult revokeAllConsent(String subject, List<BatchConsentEntry> entries) {
         int succeeded = 0;
         List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
 
@@ -243,13 +247,17 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void removeEntity(String entityName) {
-        boolean hasFields = listFields().stream()
-            .anyMatch(f -> f.entity() != null
-                && entityName.equals(f.entity().entityName()));
+        boolean hasFields =
+                listFields().stream()
+                        .anyMatch(
+                                f ->
+                                        f.entity() != null
+                                                && entityName.equals(f.entity().entityName()));
         if (hasFields) {
             throw new IllegalStateException(
-                "Cannot remove entity '" + entityName
-                + "' — it still has fields assigned. Remove them first.");
+                    "Cannot remove entity '"
+                            + entityName
+                            + "' — it still has fields assigned. Remove them first.");
         }
         commandService().removeEntityCommand(entityName);
     }
@@ -270,13 +278,20 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void removeCategory(String categoryName) {
-        boolean hasAssignments = listFields().stream()
-            .anyMatch(f -> f.categories().stream()
-                .anyMatch(c -> categoryName.equals(c.categoryName())));
+        boolean hasAssignments =
+                listFields().stream()
+                        .anyMatch(
+                                f ->
+                                        f.categories().stream()
+                                                .anyMatch(
+                                                        c ->
+                                                                categoryName.equals(
+                                                                        c.categoryName())));
         if (hasAssignments) {
             throw new IllegalStateException(
-                "Cannot remove category '" + categoryName
-                + "' — it is still assigned to fields. Unassign it first.");
+                    "Cannot remove category '"
+                            + categoryName
+                            + "' — it is still assigned to fields. Unassign it first.");
         }
         commandService().removeCategoryCommand(categoryName);
     }
@@ -286,9 +301,10 @@ public class DefaultTenantService extends Operio implements TenantService {
     // -----------------------------------------------------------------------
 
     @Override
-    public void registerField(String fieldName, String entityName,
-                              String description, String entityDescription) {
-        commandService().registerFieldCommand(fieldName, entityName, description, entityDescription);
+    public void registerField(
+            String fieldName, String entityName, String description, String entityDescription) {
+        commandService()
+                .registerFieldCommand(fieldName, entityName, description, entityDescription);
     }
 
     @Override
@@ -303,8 +319,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public void assignFieldCategory(String fieldName, String entityName,
-                                    String categoryName, String categoryDescription) {
+    public void assignFieldCategory(
+            String fieldName, String entityName, String categoryName, String categoryDescription) {
         FieldView current = queryService().getField(fieldName, entityName);
         List<String> newCategories = new ArrayList<>();
         if (current != null) {
@@ -313,33 +329,35 @@ public class DefaultTenantService extends Operio implements TenantService {
         if (!newCategories.contains(categoryName)) {
             newCategories.add(categoryName);
         }
-        var snapshot = new FieldSnapshot(
-                fieldName,
-                entityName,
-                current != null ? current.description() : null,
-                List.copyOf(newCategories));
-        commandService().assignFieldCategoryCommand(
-            fieldName, entityName, categoryName, categoryDescription, snapshot
-        );
+        var snapshot =
+                new FieldSnapshot(
+                        fieldName,
+                        entityName,
+                        current != null ? current.description() : null,
+                        List.copyOf(newCategories));
+        commandService()
+                .assignFieldCategoryCommand(
+                        fieldName, entityName, categoryName, categoryDescription, snapshot);
     }
 
     @Override
-    public void unassignFieldCategory(String fieldName, String entityName,
-                                      String categoryName) {
+    public void unassignFieldCategory(String fieldName, String entityName, String categoryName) {
         FieldView current = queryService().getField(fieldName, entityName);
         List<String> newCategories = new ArrayList<>();
         if (current != null) {
             current.categories().stream()
-                .map(FieldView.CategoryView::categoryName)
-                .filter(name -> !name.equals(categoryName))
-                .forEach(newCategories::add);
+                    .map(FieldView.CategoryView::categoryName)
+                    .filter(name -> !name.equals(categoryName))
+                    .forEach(newCategories::add);
         }
-        var snapshot = new FieldSnapshot(
-                fieldName,
-                entityName,
-                current != null ? current.description() : null,
-                List.copyOf(newCategories));
-        commandService().unassignFieldCategoryCommand(fieldName, entityName, categoryName, snapshot);
+        var snapshot =
+                new FieldSnapshot(
+                        fieldName,
+                        entityName,
+                        current != null ? current.description() : null,
+                        List.copyOf(newCategories));
+        commandService()
+                .unassignFieldCategoryCommand(fieldName, entityName, categoryName, snapshot);
     }
 
     // -----------------------------------------------------------------------
@@ -363,29 +381,40 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public void linkPurposeToRegulation(String purposeName, String regulationName,
-                                        String lawfulBasis, String onGranted,
-                                        String onDenied) {
+    public void linkPurposeToRegulation(
+            String purposeName,
+            String regulationName,
+            String lawfulBasis,
+            String onGranted,
+            String onDenied) {
         PurposeView current = queryService().getPurpose(purposeName);
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();
         List<PurposeSnapshot.PolicySnapshot> policies = List.of();
         if (current != null) {
             current.regulations().stream()
-                .filter(r -> !r.regulationName().equals(regulationName))
-                .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
-                    r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
-                .forEach(regs::add);
+                    .filter(r -> !r.regulationName().equals(regulationName))
+                    .map(
+                            r ->
+                                    new PurposeSnapshot.RegulationLinkSnapshot(
+                                            r.regulationName(),
+                                            r.lawfulBasis(),
+                                            r.onGranted(),
+                                            r.onDenied()))
+                    .forEach(regs::add);
             policies = toPolicySnapshots(current);
         }
-        regs.add(new PurposeSnapshot.RegulationLinkSnapshot(
-            regulationName, lawfulBasis, onGranted, onDenied));
-        var snapshot = new PurposeSnapshot(
-                purposeName,
-                current != null ? current.description() : null,
-                List.copyOf(regs), policies);
-        commandService().linkPurposeToRegulationCommand(
-            purposeName, regulationName, lawfulBasis, onGranted, onDenied, snapshot
-        );
+        regs.add(
+                new PurposeSnapshot.RegulationLinkSnapshot(
+                        regulationName, lawfulBasis, onGranted, onDenied));
+        var snapshot =
+                new PurposeSnapshot(
+                        purposeName,
+                        current != null ? current.description() : null,
+                        List.copyOf(regs),
+                        policies);
+        commandService()
+                .linkPurposeToRegulationCommand(
+                        purposeName, regulationName, lawfulBasis, onGranted, onDenied, snapshot);
     }
 
     @Override
@@ -395,23 +424,33 @@ public class DefaultTenantService extends Operio implements TenantService {
         List<PurposeSnapshot.PolicySnapshot> policies = List.of();
         if (current != null) {
             current.regulations().stream()
-                .filter(r -> !r.regulationName().equals(regulationName))
-                .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
-                    r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
-                .forEach(regs::add);
+                    .filter(r -> !r.regulationName().equals(regulationName))
+                    .map(
+                            r ->
+                                    new PurposeSnapshot.RegulationLinkSnapshot(
+                                            r.regulationName(),
+                                            r.lawfulBasis(),
+                                            r.onGranted(),
+                                            r.onDenied()))
+                    .forEach(regs::add);
             policies = toPolicySnapshots(current);
         }
-        var snapshot = new PurposeSnapshot(
-                purposeName,
-                current != null ? current.description() : null,
-                List.copyOf(regs), policies);
+        var snapshot =
+                new PurposeSnapshot(
+                        purposeName,
+                        current != null ? current.description() : null,
+                        List.copyOf(regs),
+                        policies);
         commandService().unlinkPurposeFromRegulationCommand(purposeName, regulationName, snapshot);
     }
 
     @Override
-    public void addPurposePolicy(String purposeName, String policyType,
-                                 String fieldName, String entityName,
-                                 String categoryName) {
+    public void addPurposePolicy(
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName) {
         PurposeView current = queryService().getPurpose(purposeName);
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
         List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
@@ -419,43 +458,55 @@ public class DefaultTenantService extends Operio implements TenantService {
             regs = toRegulationLinkSnapshots(current);
             toPolicySnapshots(current).forEach(policies::add);
         }
-        policies.add(new PurposeSnapshot.PolicySnapshot(
-            policyType, fieldName, entityName, categoryName));
-        var snapshot = new PurposeSnapshot(
-                purposeName,
-                current != null ? current.description() : null,
-                regs, List.copyOf(policies));
-        commandService().addPurposePolicyCommand(
-            purposeName, policyType, fieldName, entityName, categoryName, snapshot
-        );
+        policies.add(
+                new PurposeSnapshot.PolicySnapshot(
+                        policyType, fieldName, entityName, categoryName));
+        var snapshot =
+                new PurposeSnapshot(
+                        purposeName,
+                        current != null ? current.description() : null,
+                        regs,
+                        List.copyOf(policies));
+        commandService()
+                .addPurposePolicyCommand(
+                        purposeName, policyType, fieldName, entityName, categoryName, snapshot);
     }
 
     @Override
-    public void removePurposePolicy(String purposeName, String policyType,
-                                    String fieldName, String entityName,
-                                    String categoryName) {
+    public void removePurposePolicy(
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName) {
         PurposeView current = queryService().getPurpose(purposeName);
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
         List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
         if (current != null) {
             regs = toRegulationLinkSnapshots(current);
             current.policies().stream()
-                .filter(p -> !(p.policyType().equals(policyType)
-                    && equalsNullable(fieldNameOrNull(p), fieldName)
-                    && equalsNullable(entityNameOrNull(p), entityName)
-                    && equalsNullable(categoryNameOrNull(p), categoryName)))
-                .map(p -> new PurposeSnapshot.PolicySnapshot(
-                    p.policyType(), fieldNameOrNull(p),
-                    entityNameOrNull(p), categoryNameOrNull(p)))
-                .forEach(policies::add);
+                    .filter(
+                            p ->
+                                    !(p.policyType().equals(policyType)
+                                            && equalsNullable(fieldNameOrNull(p), fieldName)
+                                            && equalsNullable(entityNameOrNull(p), entityName)
+                                            && equalsNullable(categoryNameOrNull(p), categoryName)))
+                    .map(
+                            p ->
+                                    new PurposeSnapshot.PolicySnapshot(
+                                            p.policyType(), fieldNameOrNull(p),
+                                            entityNameOrNull(p), categoryNameOrNull(p)))
+                    .forEach(policies::add);
         }
-        var snapshot = new PurposeSnapshot(
-                purposeName,
-                current != null ? current.description() : null,
-                regs, List.copyOf(policies));
-        commandService().removePurposePolicyCommand(
-            purposeName, policyType, fieldName, entityName, categoryName, snapshot
-        );
+        var snapshot =
+                new PurposeSnapshot(
+                        purposeName,
+                        current != null ? current.description() : null,
+                        regs,
+                        List.copyOf(policies));
+        commandService()
+                .removePurposePolicyCommand(
+                        purposeName, policyType, fieldName, entityName, categoryName, snapshot);
     }
 
     // -----------------------------------------------------------------------
@@ -474,13 +525,20 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void removeJurisdiction(String jurisdictionName) {
-        boolean hasAssignments = listRegulations().stream()
-            .anyMatch(r -> r.activeJurisdictions().stream()
-                .anyMatch(j -> jurisdictionName.equals(j.jurisdictionName())));
+        boolean hasAssignments =
+                listRegulations().stream()
+                        .anyMatch(
+                                r ->
+                                        r.activeJurisdictions().stream()
+                                                .anyMatch(
+                                                        j ->
+                                                                jurisdictionName.equals(
+                                                                        j.jurisdictionName())));
         if (hasAssignments) {
             throw new IllegalStateException(
-                "Cannot remove jurisdiction '" + jurisdictionName
-                + "' — it is still assigned to regulations. Remove it first.");
+                    "Cannot remove jurisdiction '"
+                            + jurisdictionName
+                            + "' — it is still assigned to regulations. Remove it first.");
         }
         commandService().removeJurisdictionCommand(jurisdictionName);
     }
@@ -506,44 +564,41 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public void addRegulationJurisdiction(String regulationName,
-                                          String jurisdictionName,
-                                          String description) {
+    public void addRegulationJurisdiction(
+            String regulationName, String jurisdictionName, String description) {
         RegulationView current = queryService().getRegulation(regulationName);
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
         if (current != null) {
-            current.activeJurisdictions().forEach(
-                j -> jurisdictions.add(j.jurisdictionName()));
+            current.activeJurisdictions().forEach(j -> jurisdictions.add(j.jurisdictionName()));
             regDescription = current.description();
         }
         if (!jurisdictions.contains(jurisdictionName)) {
             jurisdictions.add(jurisdictionName);
         }
-        var snapshot = new RegulationSnapshot(
-                regulationName, regDescription, List.copyOf(jurisdictions));
-        commandService().addRegulationJurisdictionCommand(
-            regulationName, jurisdictionName, description, snapshot
-        );
+        var snapshot =
+                new RegulationSnapshot(regulationName, regDescription, List.copyOf(jurisdictions));
+        commandService()
+                .addRegulationJurisdictionCommand(
+                        regulationName, jurisdictionName, description, snapshot);
     }
 
     @Override
-    public void removeRegulationJurisdiction(String regulationName,
-                                             String jurisdictionName) {
+    public void removeRegulationJurisdiction(String regulationName, String jurisdictionName) {
         RegulationView current = queryService().getRegulation(regulationName);
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
         if (current != null) {
             current.activeJurisdictions().stream()
-                .map(RegulationView.JurisdictionView::jurisdictionName)
-                .filter(name -> !name.equals(jurisdictionName))
-                .forEach(jurisdictions::add);
+                    .map(RegulationView.JurisdictionView::jurisdictionName)
+                    .filter(name -> !name.equals(jurisdictionName))
+                    .forEach(jurisdictions::add);
             regDescription = current.description();
         }
-        var snapshot = new RegulationSnapshot(
-                regulationName, regDescription, List.copyOf(jurisdictions));
-        commandService().removeRegulationJurisdictionCommand(
-            regulationName, jurisdictionName, snapshot);
+        var snapshot =
+                new RegulationSnapshot(regulationName, regDescription, List.copyOf(jurisdictions));
+        commandService()
+                .removeRegulationJurisdictionCommand(regulationName, jurisdictionName, snapshot);
     }
 
     // -----------------------------------------------------------------------
@@ -630,9 +685,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     }
 
     @Override
-    public ConsentGraph getConsentGraph(String cursor, int limit,
-                                        String rootType, String rootName,
-                                        Integer depth) {
+    public ConsentGraph getConsentGraph(
+            String cursor, int limit, String rootType, String rootName, Integer depth) {
         ConsentGraphQueryService<?> graphService = consentGraphService();
         if (graphService == null) {
             throw new UnsupportedOperationException("Consent graph not available");
@@ -648,17 +702,14 @@ public class DefaultTenantService extends Operio implements TenantService {
     public Object access(Object rawData) {
         var identity = identityResolver().resolve();
         var scopes = sensitiveFieldResolver().resolveScopes(rawData);
-        var response = consentService().evaluateConsent(
-            identity.subject(), scopes
-        );
+        var response = consentService().evaluateConsent(identity.subject(), scopes);
         for (ConsentScope scope : response.granted()) {
             auditLogger().logAccessGranted(identity.subject(), scope);
         }
         for (ConsentScope scope : response.denied()) {
-            auditLogger().logAccessDenied(
-                identity.subject(), scope,
-                response.reasons().get(scope.fieldName())
-            );
+            auditLogger()
+                    .logAccessDenied(
+                            identity.subject(), scope, response.reasons().get(scope.fieldName()));
         }
         return maskingStrategy().mask(rawData, response.denied());
     }
@@ -671,23 +722,24 @@ public class DefaultTenantService extends Operio implements TenantService {
     public DiscoveryResult syncDiscoveredFields() {
         var discovery = sensitiveDiscovery();
         if (discovery == null) {
-            throw new OperioConfigurationException(
-                "No SensitiveDiscovery plugin configured."
-            );
+            throw new OperioConfigurationException("No SensitiveDiscovery plugin configured.");
         }
 
         DiscoveryResult result = discovery.discover();
-        LOG.info(() -> "SensitiveDiscovery found " + result.fields().size()
-            + " field(s) and " + result.categories().size() + " category/ies");
+        LOG.info(
+                () ->
+                        "SensitiveDiscovery found "
+                                + result.fields().size()
+                                + " field(s) and "
+                                + result.categories().size()
+                                + " category/ies");
 
         for (DiscoveredField field : result.fields()) {
             registerField(field.fieldName(), field.entityName(), field.description(), null);
         }
         for (DiscoveredField field : result.fields()) {
             if (field.category() != null && !field.category().isBlank()) {
-                assignFieldCategory(
-                    field.fieldName(), field.entityName(), field.category(), null
-                );
+                assignFieldCategory(field.fieldName(), field.entityName(), field.category(), null);
             }
         }
         return result;
@@ -699,11 +751,13 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void deleteSubjectAudit(String subject, String deletionRequestId) {
-        commandService().deleteSubjectAuditCommand(
-            subject, deletionRequestId,
-            RequestContext.actor(), RequestContext.ipAddress(),
-            RequestContext.userAgent()
-        );
+        commandService()
+                .deleteSubjectAuditCommand(
+                        subject,
+                        deletionRequestId,
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent());
     }
 
     @Override
@@ -717,8 +771,10 @@ public class DefaultTenantService extends Operio implements TenantService {
             ledgerEntriesRevoked = countSubjectConsentEntries(subjectId);
             revokeAllConsent(subjectId);
         } catch (Exception e) {
-            LOG.log(java.util.logging.Level.SEVERE,
-                "eraseSubject: failed to revoke consent for " + subjectId, e);
+            LOG.log(
+                    java.util.logging.Level.SEVERE,
+                    "eraseSubject: failed to revoke consent for " + subjectId,
+                    e);
             status = "PARTIAL_FAILURE";
         }
 
@@ -726,8 +782,10 @@ public class DefaultTenantService extends Operio implements TenantService {
         try {
             cachedKeysDeleted = deleteCachedKeysForSubject(subjectId);
         } catch (Exception e) {
-            LOG.log(java.util.logging.Level.SEVERE,
-                "eraseSubject: failed to delete cached keys for " + subjectId, e);
+            LOG.log(
+                    java.util.logging.Level.SEVERE,
+                    "eraseSubject: failed to delete cached keys for " + subjectId,
+                    e);
             status = "PARTIAL_FAILURE";
         }
 
@@ -735,8 +793,10 @@ public class DefaultTenantService extends Operio implements TenantService {
         try {
             removeSubject(subjectId);
         } catch (Exception e) {
-            LOG.log(java.util.logging.Level.SEVERE,
-                "eraseSubject: failed to remove subject " + subjectId, e);
+            LOG.log(
+                    java.util.logging.Level.SEVERE,
+                    "eraseSubject: failed to remove subject " + subjectId,
+                    e);
             status = "PARTIAL_FAILURE";
         }
 
@@ -744,23 +804,28 @@ public class DefaultTenantService extends Operio implements TenantService {
         try {
             deleteSubjectAudit(subjectId, requestId);
         } catch (Exception e) {
-            LOG.log(java.util.logging.Level.SEVERE,
-                "eraseSubject: failed to log DSAR audit for " + subjectId, e);
+            LOG.log(
+                    java.util.logging.Level.SEVERE,
+                    "eraseSubject: failed to log DSAR audit for " + subjectId,
+                    e);
             status = "PARTIAL_FAILURE";
         }
 
         return new ErasureReceipt(
-            subjectId, requestId, ledgerEntriesRevoked, cachedKeysDeleted,
-            status, Instant.now()
-        );
+                subjectId,
+                requestId,
+                ledgerEntriesRevoked,
+                cachedKeysDeleted,
+                status,
+                Instant.now());
     }
 
     @Override
     public long countCachedKeysForSubject(String subject) {
         var decisionService = consentService();
         try {
-            var method = decisionService.getClass()
-                .getMethod("countCachedKeysForSubject", String.class);
+            var method =
+                    decisionService.getClass().getMethod("countCachedKeysForSubject", String.class);
             return (long) method.invoke(decisionService, subject);
         } catch (NoSuchMethodException e) {
             return 0;
@@ -773,8 +838,10 @@ public class DefaultTenantService extends Operio implements TenantService {
     public long deleteCachedKeysForSubject(String subject) {
         var decisionService = consentService();
         try {
-            var method = decisionService.getClass()
-                .getMethod("deleteAllCachedKeysForSubject", String.class);
+            var method =
+                    decisionService
+                            .getClass()
+                            .getMethod("deleteAllCachedKeysForSubject", String.class);
             return (long) method.invoke(decisionService, subject);
         } catch (NoSuchMethodException e) {
             return 0;
@@ -792,7 +859,7 @@ public class DefaultTenantService extends Operio implements TenantService {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
             throw new UnsupportedOperationException(
-                "IAM role management not available — no AuthzProvider configured");
+                    "IAM role management not available — no AuthzProvider configured");
         }
         authz.assignRole(TenantContext.require(), userId, role);
     }
@@ -802,7 +869,7 @@ public class DefaultTenantService extends Operio implements TenantService {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
             throw new UnsupportedOperationException(
-                "IAM role management not available — no AuthzProvider configured");
+                    "IAM role management not available — no AuthzProvider configured");
         }
         authz.removeRole(TenantContext.require(), userId, role);
     }
@@ -812,7 +879,7 @@ public class DefaultTenantService extends Operio implements TenantService {
         AuthzProvider<?> authz = authzProvider();
         if (authz == null) {
             throw new UnsupportedOperationException(
-                "IAM role management not available — no AuthzProvider configured");
+                    "IAM role management not available — no AuthzProvider configured");
         }
         return authz.getUserRoles(TenantContext.require(), userId);
     }
@@ -824,8 +891,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     public ConsentAdminCommandService<?> commandService() {
         if (commandService == null) {
             throw new OperioConfigurationException(
-                "ConsentAdminCommandService is not configured — " +
-                "write operations require a command service implementation");
+                    "ConsentAdminCommandService is not configured — "
+                            + "write operations require a command service implementation");
         }
         return commandService;
     }
@@ -833,8 +900,8 @@ public class DefaultTenantService extends Operio implements TenantService {
     public ConsentAdminQueryService<?> queryService() {
         if (queryService == null) {
             throw new OperioConfigurationException(
-                "ConsentAdminQueryService is not configured — " +
-                "query operations require a query service implementation");
+                    "ConsentAdminQueryService is not configured — "
+                            + "query operations require a query service implementation");
         }
         return queryService;
     }
@@ -845,17 +912,20 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     private PurposeView.PolicyView resolvePolicy(ConsentScope scope) {
         String policyType = !isWildcardOrBlank(scope.fieldName()) ? "FIELD" : "CATEGORY";
-        PurposeView.PolicyView policy = queryService().findPolicy(
-            scope.purposeName(), policyType,
-            isWildcardOrBlank(scope.fieldName()) ? null : scope.fieldName(),
-            isWildcardOrBlank(scope.entityName()) ? null : scope.entityName(),
-            isWildcardOrBlank(scope.category()) ? null : scope.category()
-        );
+        PurposeView.PolicyView policy =
+                queryService()
+                        .findPolicy(
+                                scope.purposeName(),
+                                policyType,
+                                isWildcardOrBlank(scope.fieldName()) ? null : scope.fieldName(),
+                                isWildcardOrBlank(scope.entityName()) ? null : scope.entityName(),
+                                isWildcardOrBlank(scope.category()) ? null : scope.category());
         if (policy == null) {
             throw new IllegalArgumentException(
-                "No matching policy found for scope: " + scope
-                + " — policies must be created before consent can be granted or revoked"
-            );
+                    "No matching policy found for scope: "
+                            + scope
+                            + " — policies must be created before consent can be granted or"
+                            + " revoked");
         }
         return policy;
     }
@@ -884,51 +954,62 @@ public class DefaultTenantService extends Operio implements TenantService {
     // Snapshot builders — compute post-mutation aggregate state for enrichment
     // -----------------------------------------------------------------------
 
-    private FieldSnapshot buildFieldSnapshot(String fieldName, String entityName,
-                                             String newDescription) {
+    private FieldSnapshot buildFieldSnapshot(
+            String fieldName, String entityName, String newDescription) {
         FieldView current = queryService().getField(fieldName, entityName);
-        List<String> categoryNames = current != null
-            ? current.categories().stream()
-                .map(FieldView.CategoryView::categoryName).toList()
-            : List.of();
+        List<String> categoryNames =
+                current != null
+                        ? current.categories().stream()
+                                .map(FieldView.CategoryView::categoryName)
+                                .toList()
+                        : List.of();
         return new FieldSnapshot(fieldName, entityName, newDescription, categoryNames);
     }
 
     private PurposeSnapshot buildPurposeSnapshot(String purposeName, String newDescription) {
         PurposeView current = queryService().getPurpose(purposeName);
-        List<PurposeSnapshot.RegulationLinkSnapshot> regs = current != null
-            ? toRegulationLinkSnapshots(current) : List.of();
-        List<PurposeSnapshot.PolicySnapshot> policies = current != null
-            ? toPolicySnapshots(current) : List.of();
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs =
+                current != null ? toRegulationLinkSnapshots(current) : List.of();
+        List<PurposeSnapshot.PolicySnapshot> policies =
+                current != null ? toPolicySnapshots(current) : List.of();
         return new PurposeSnapshot(purposeName, newDescription, regs, policies);
     }
 
-    private RegulationSnapshot buildRegulationSnapshot(String regulationName,
-                                                       String newDescription) {
+    private RegulationSnapshot buildRegulationSnapshot(
+            String regulationName, String newDescription) {
         RegulationView current = queryService().getRegulation(regulationName);
-        List<String> jurisdictions = current != null
-            ? current.activeJurisdictions().stream()
-                .map(RegulationView.JurisdictionView::jurisdictionName).toList()
-            : List.of();
+        List<String> jurisdictions =
+                current != null
+                        ? current.activeJurisdictions().stream()
+                                .map(RegulationView.JurisdictionView::jurisdictionName)
+                                .toList()
+                        : List.of();
         return new RegulationSnapshot(regulationName, newDescription, jurisdictions);
     }
 
     private static List<PurposeSnapshot.RegulationLinkSnapshot> toRegulationLinkSnapshots(
             PurposeView view) {
         return view.regulations().stream()
-            .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
-                r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
-            .toList();
+                .map(
+                        r ->
+                                new PurposeSnapshot.RegulationLinkSnapshot(
+                                        r.regulationName(),
+                                        r.lawfulBasis(),
+                                        r.onGranted(),
+                                        r.onDenied()))
+                .toList();
     }
 
     private static List<PurposeSnapshot.PolicySnapshot> toPolicySnapshots(PurposeView view) {
         return view.policies().stream()
-            .map(p -> new PurposeSnapshot.PolicySnapshot(
-                p.policyType(),
-                fieldNameOrNull(p),
-                entityNameOrNull(p),
-                categoryNameOrNull(p)))
-            .toList();
+                .map(
+                        p ->
+                                new PurposeSnapshot.PolicySnapshot(
+                                        p.policyType(),
+                                        fieldNameOrNull(p),
+                                        entityNameOrNull(p),
+                                        categoryNameOrNull(p)))
+                .toList();
     }
 
     private static boolean equalsNullable(String a, String b) {

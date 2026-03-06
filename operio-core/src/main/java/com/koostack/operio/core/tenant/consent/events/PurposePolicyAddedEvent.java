@@ -8,5 +8,5 @@ public record PurposePolicyAddedEvent(
         String fieldName,
         String entityName,
         String categoryName,
-        PurposeSnapshot snapshot
-) implements DomainEvent {}
+        PurposeSnapshot snapshot)
+        implements DomainEvent {}

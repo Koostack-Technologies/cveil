@@ -14,20 +14,19 @@ import org.junit.jupiter.api.Test;
  * Contract tests for the core SPI interface: {@link TokenValidationService}.
  *
  * <p>These tests verify the structural contracts of the SPI interface:
- * <ul>
- *   <li>It is an interface (not an abstract class)</li>
- *   <li>It extends {@link Plugin}</li>
- *   <li>{@code verifyToken(String)} on {@code TokenValidationService} is abstract (no default)</li>
  *
- *   <li>Stub implementations can be created and wired into {@code Operio}</li>
- *   <li>The {@code Plugin} super-interface provides sensible defaults for
- *       {@code isReady()}, {@code name()}, {@code priority()}, and
- *       {@code configure()}</li>
+ * <ul>
+ *   <li>It is an interface (not an abstract class)
+ *   <li>It extends {@link Plugin}
+ *   <li>{@code verifyToken(String)} on {@code TokenValidationService} is abstract (no default)
+ *   <li>Stub implementations can be created and wired into {@code Operio}
+ *   <li>The {@code Plugin} super-interface provides sensible defaults for {@code isReady()}, {@code
+ *       name()}, {@code priority()}, and {@code configure()}
  * </ul>
  *
- * <p>These tests do NOT verify runtime behaviour of concrete implementations
- * (that belongs in Phase 7.3 / 7.5). They verify the <em>shape</em> of the
- * SPI so that implementors know what they must provide.
+ * <p>These tests do NOT verify runtime behaviour of concrete implementations (that belongs in Phase
+ * 7.3 / 7.5). They verify the <em>shape</em> of the SPI so that implementors know what they must
+ * provide.
  */
 @DisplayName("SPI contract tests")
 class SpiContractTest {
@@ -44,57 +43,43 @@ class SpiContractTest {
         @DisplayName("TokenValidationService is an interface")
         void isInterface() {
             assertTrue(
-                TokenValidationService.class.isInterface(),
-                "TokenValidationService must be an interface, not an abstract class"
-            );
+                    TokenValidationService.class.isInterface(),
+                    "TokenValidationService must be an interface, not an abstract class");
         }
 
         @Test
         @DisplayName("TokenValidationService extends Plugin")
         void extendsPlugin() {
             assertTrue(
-                Plugin.class.isAssignableFrom(TokenValidationService.class),
-                "TokenValidationService must extend Plugin"
-            );
+                    Plugin.class.isAssignableFrom(TokenValidationService.class),
+                    "TokenValidationService must extend Plugin");
         }
 
         @Test
         @DisplayName("verifyToken(String) is declared on TokenValidationService")
         void verifyTokenDeclared() throws NoSuchMethodException {
-            Method method = TokenValidationService.class.getMethod(
-                "verifyToken",
-                String.class
-            );
+            Method method = TokenValidationService.class.getMethod("verifyToken", String.class);
             assertNotNull(method);
             assertEquals(
-                IdentityContext.class,
-                method.getReturnType(),
-                "verifyToken must return IdentityContext"
-            );
+                    IdentityContext.class,
+                    method.getReturnType(),
+                    "verifyToken must return IdentityContext");
         }
 
         @Test
-        @DisplayName(
-            "verifyToken(String) is abstract (no default implementation)"
-        )
+        @DisplayName("verifyToken(String) is abstract (no default implementation)")
         void verifyTokenIsAbstract() throws NoSuchMethodException {
-            Method method = TokenValidationService.class.getMethod(
-                "verifyToken",
-                String.class
-            );
+            Method method = TokenValidationService.class.getMethod("verifyToken", String.class);
             assertFalse(
-                method.isDefault(),
-                "verifyToken must be abstract — implementations MUST provide verification logic"
-            );
+                    method.isDefault(),
+                    "verifyToken must be abstract — implementations MUST provide verification"
+                            + " logic");
         }
 
         @Test
         @DisplayName("verifyToken takes exactly one String parameter")
         void verifyTokenParameterTypes() throws NoSuchMethodException {
-            Method method = TokenValidationService.class.getMethod(
-                "verifyToken",
-                String.class
-            );
+            Method method = TokenValidationService.class.getMethod("verifyToken", String.class);
             Class<?>[] params = method.getParameterTypes();
             assertEquals(1, params.length);
             assertEquals(String.class, params[0]);
@@ -104,10 +89,7 @@ class SpiContractTest {
         @DisplayName("Plugin defaults are inherited: isReady() returns true")
         void isReadyDefault() {
             TokenValidationService<?> stub = new StubTokenVerifier();
-            assertTrue(
-                stub.isReady(),
-                "Default isReady() from Plugin should return true"
-            );
+            assertTrue(stub.isReady(), "Default isReady() from Plugin should return true");
         }
 
         @Test
@@ -125,7 +107,10 @@ class SpiContractTest {
         @DisplayName("stub can be wired into Operio via builder")
         void stubCanBeWiredIntoOperio() {
             StubTokenVerifier stub = new StubTokenVerifier();
-            Operio operio = Operio.builder().withTokenValidationService(stub).buildTenantService(null, null);
+            Operio operio =
+                    Operio.builder()
+                            .withTokenValidationService(stub)
+                            .buildTenantService(null, null);
 
             assertNotNull(operio.tokenValidationService());
             assertSame(stub, operio.tokenValidationService());
@@ -144,16 +129,11 @@ class SpiContractTest {
         @DisplayName("isReady() has a default implementation returning true")
         void isReadyHasDefault() throws NoSuchMethodException {
             Method method = Plugin.class.getMethod("isReady");
-            assertTrue(
-                method.isDefault(),
-                "isReady() should be a default method on Plugin"
-            );
+            assertTrue(method.isDefault(), "isReady() should be a default method on Plugin");
         }
 
         @Test
-        @DisplayName(
-            "isReady() default returns true (optimistic local-resource assumption)"
-        )
+        @DisplayName("isReady() default returns true (optimistic local-resource assumption)")
         void isReadyDefaultReturnsTrue() {
             // Stub inherits the default
             assertTrue(new StubTokenVerifier().isReady());
@@ -169,30 +149,24 @@ class SpiContractTest {
     class CrossWiring {
 
         @Test
-        @DisplayName(
-            "TokenValidationService can be wired into Operio"
-        )
+        @DisplayName("TokenValidationService can be wired into Operio")
         void tokenVerifierCanBeWired() {
             StubTokenVerifier tv = new StubTokenVerifier();
 
-            Operio operio = Operio.builder()
-                .withTokenValidationService(tv)
-                .buildTenantService(null, null);
+            Operio operio =
+                    Operio.builder().withTokenValidationService(tv).buildTenantService(null, null);
 
             assertSame(tv, operio.tokenValidationService());
         }
 
         @Test
-        @DisplayName(
-            "Operio can be built without TokenValidationService (embedded mode)"
-        )
+        @DisplayName("Operio can be built without TokenValidationService (embedded mode)")
         void canBuildWithoutPlatformPlugins() {
             Operio operio = Operio.builder().buildTenantService(null, null);
 
             assertNull(
-                operio.tokenValidationService(),
-                "TokenValidationService should be null in embedded mode (no platform plugins)"
-            );
+                    operio.tokenValidationService(),
+                    "TokenValidationService should be null in embedded mode (no platform plugins)");
         }
     }
 
@@ -201,8 +175,8 @@ class SpiContractTest {
     // =======================================================================
 
     /**
-     * Minimal {@link TokenValidationService} implementation for contract testing.
-     * Returns a fixed {@link IdentityContext} for any token.
+     * Minimal {@link TokenValidationService} implementation for contract testing. Returns a fixed
+     * {@link IdentityContext} for any token.
      */
     private static class StubTokenVerifier implements TokenValidationService<Void> {
 
@@ -226,5 +200,4 @@ class SpiContractTest {
             // no-op
         }
     }
-
 }

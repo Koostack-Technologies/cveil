@@ -1,20 +1,20 @@
 package com.koostack.operio.plugin.jooq.common;
 
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 
 /**
- * Manages schema migration locations and Flyway execution for a single
- * named schema.
+ * Manages schema migration locations and Flyway execution for a single named schema.
  *
  * <p>Can be used directly for inline cases:
+ *
  * <pre>{@code
  * SchemaManager sm = new SchemaManager("tenant-event");
  * sm.runMigration(dataSource);
  * }</pre>
  *
  * <p>Or subclassed for per-module singletons:
+ *
  * <pre>{@code
  * public final class AuthzSchemaManager extends SchemaManager {
  *     public static final AuthzSchemaManager INSTANCE = new AuthzSchemaManager();
@@ -47,19 +47,19 @@ public class SchemaManager {
     }
 
     /**
-     * Returns a dialect-specific classpath migration location.
-     * Uses the {@link Dialect} enum for normalisation — {@code "postgres"}
-     * becomes {@code "postgresql"}.
+     * Returns a dialect-specific classpath migration location. Uses the {@link Dialect} enum for
+     * normalisation — {@code "postgres"} becomes {@code "postgresql"}.
      */
     public String getMigrationLocation(String dialect) {
         Dialect d = Dialect.fromString(dialect);
         if (d == null) {
             return migrationLocation;
         }
-        String normalised = switch (d) {
-            case POSTGRES, POSTGRESQL -> "postgresql";
-            default -> d.name().toLowerCase(java.util.Locale.ROOT);
-        };
+        String normalised =
+                switch (d) {
+                    case POSTGRES, POSTGRESQL -> "postgresql";
+                    default -> d.name().toLowerCase(java.util.Locale.ROOT);
+                };
         return migrationLocation + "-" + normalised;
     }
 
@@ -76,14 +76,12 @@ public class SchemaManager {
     /** Runs Flyway migrations against the given datasource using the specified location. */
     public void runMigration(DataSource dataSource, String location) {
         Flyway.configure()
-              .dataSource(dataSource)
-              .locations(location)
-              .table(historyTable)
-              .baselineOnMigrate(true)
-              .baselineVersion("0")
-              .load()
-              .migrate();
+                .dataSource(dataSource)
+                .locations(location)
+                .table(historyTable)
+                .baselineOnMigrate(true)
+                .baselineVersion("0")
+                .load()
+                .migrate();
     }
-
-
 }

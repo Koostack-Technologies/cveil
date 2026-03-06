@@ -1,6 +1,10 @@
 package com.koostack.operio.tenant.authz.keycloak;
 
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -8,21 +12,16 @@ import org.keycloak.representations.idm.RoleRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 /**
- * Keycloak-backed authorization provider — manages realm-level role
- * assignments for users within a tenant.
+ * Keycloak-backed authorization provider — manages realm-level role assignments for users within a
+ * tenant.
  *
- * <p>Each Operio tenant maps to a Keycloak realm. This provider uses the
- * Keycloak Admin REST API to assign, remove, and query realm-level roles.
+ * <p>Each Operio tenant maps to a Keycloak realm. This provider uses the Keycloak Admin REST API to
+ * assign, remove, and query realm-level roles.
  *
  * <h2>Thread Safety</h2>
- * <p>This class is thread-safe. The Keycloak admin client is shared
- * across threads.
+ *
+ * <p>This class is thread-safe. The Keycloak admin client is shared across threads.
  */
 public class KeycloakAuthzProvider implements AuthzProvider<KeycloakAuthzConfig> {
 
@@ -59,13 +58,14 @@ public class KeycloakAuthzProvider implements AuthzProvider<KeycloakAuthzConfig>
     @Override
     public void configure(KeycloakAuthzConfig config) {
         this.config = config;
-        this.adminClient = KeycloakBuilder.builder()
-            .serverUrl(config.serverUrl())
-            .realm(config.adminRealm())
-            .clientId(config.adminClientId())
-            .username(config.adminUsername())
-            .password(config.adminPassword())
-            .build();
+        this.adminClient =
+                KeycloakBuilder.builder()
+                        .serverUrl(config.serverUrl())
+                        .realm(config.adminRealm())
+                        .clientId(config.adminClientId())
+                        .username(config.adminUsername())
+                        .password(config.adminPassword())
+                        .build();
     }
 
     @Override
@@ -104,9 +104,14 @@ public class KeycloakAuthzProvider implements AuthzProvider<KeycloakAuthzConfig>
 
     @Override
     public Set<String> getUserRoles(String tenantId, String userId) {
-        List<RoleRepresentation> roles = adminClient.realm(tenantId)
-            .users().get(userId)
-            .roles().realmLevel().listEffective();
+        List<RoleRepresentation> roles =
+                adminClient
+                        .realm(tenantId)
+                        .users()
+                        .get(userId)
+                        .roles()
+                        .realmLevel()
+                        .listEffective();
 
         Set<String> roleNames = new HashSet<>();
         for (RoleRepresentation r : roles) {

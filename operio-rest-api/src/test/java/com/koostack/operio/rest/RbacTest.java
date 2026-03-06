@@ -3,12 +3,12 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.ConsentResponse;
-import com.koostack.operio.core.models.TenantInfo;
+import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.PlatformService;
+import com.koostack.operio.core.models.BatchConsentResult;
+import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IamCommandService;
@@ -20,7 +20,6 @@ import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
-import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchConsentEntryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchRevokeRequest;
@@ -53,16 +52,17 @@ import org.junit.jupiter.params.provider.ValueSource;
  * Comprehensive RBAC unit tests for the Operio REST API.
  *
  * <p>Covers:
+ *
  * <ul>
- *   <li>{@link Roles} utility class — requireRole, requireAnyRole,
- *       super-admin bypass, null context handling</li>
- *   <li>{@link ConsentResource} — consent:read for evaluate/summary/history,
- *       consent:write for grant/revoke/batch operations</li>
- *   <li>{@link CatalogueResource} — admin:read for listing fields,
- *       admin:write for register/remove/category endpoints</li>
- *   <li>{@link GovernanceResource} — admin:read for listing purposes/regulations,
- *       admin:write for register/link endpoints</li>
- *   <li>{@link PlatformResource} — super-admin requirement for all endpoints</li>
+ *   <li>{@link Roles} utility class — requireRole, requireAnyRole, super-admin bypass, null context
+ *       handling
+ *   <li>{@link ConsentResource} — consent:read for evaluate/summary/history, consent:write for
+ *       grant/revoke/batch operations
+ *   <li>{@link CatalogueResource} — admin:read for listing fields, admin:write for
+ *       register/remove/category endpoints
+ *   <li>{@link GovernanceResource} — admin:read for listing purposes/regulations, admin:write for
+ *       register/link endpoints
+ *   <li>{@link PlatformResource} — super-admin requirement for all endpoints
  * </ul>
  */
 @DisplayName("RBAC (Role-Based Access Control)")
@@ -72,9 +72,7 @@ class RbacTest {
     // Helpers
     // -------------------------------------------------------------------
 
-    /**
-     * Creates a SecurityContext backed by the given set of roles.
-     */
+    /** Creates a SecurityContext backed by the given set of roles. */
     private static SecurityContext securityContextWith(Set<String> roles) {
         return new SecurityContext() {
             @Override
@@ -99,16 +97,12 @@ class RbacTest {
         };
     }
 
-    /**
-     * Creates a SecurityContext with a single role.
-     */
+    /** Creates a SecurityContext with a single role. */
     private static SecurityContext securityContextWith(String role) {
         return securityContextWith(Set.of(role));
     }
 
-    /**
-     * Creates a SecurityContext with no roles.
-     */
+    /** Creates a SecurityContext with no roles. */
     private static SecurityContext emptySecurityContext() {
         return securityContextWith(Set.of());
     }
@@ -128,74 +122,60 @@ class RbacTest {
             @Test
             @DisplayName("null SecurityContext → OperioAuthException")
             void nullContextThrows() {
-                OperioAuthException ex = assertThrows(
-                    OperioAuthException.class,
-                    () -> Roles.requireRole(null, Roles.CONSENT_READ)
-                );
+                OperioAuthException ex =
+                        assertThrows(
+                                OperioAuthException.class,
+                                () -> Roles.requireRole(null, Roles.CONSENT_READ));
                 assertTrue(
-                    ex.getMessage().contains("consent:read"),
-                    "Error message should mention the required role"
-                );
+                        ex.getMessage().contains("consent:read"),
+                        "Error message should mention the required role");
             }
 
             @Test
             @DisplayName("empty roles → OperioAuthException")
             void noRolesThrows() {
                 SecurityContext ctx = emptySecurityContext();
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("wrong role → OperioAuthException")
             void wrongRoleThrows() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
             }
 
             @Test
             @DisplayName("matching role → no exception")
             void matchingRolePasses() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_READ));
             }
 
             @Test
             @DisplayName("super-admin bypasses any role check")
             void superAdminBypassesAll() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.ADMIN_READ)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.ADMIN_WRITE)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.SUPER_ADMIN)
-                );
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.ADMIN_READ));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.ADMIN_WRITE));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.SUPER_ADMIN));
             }
 
             @ParameterizedTest
             @ValueSource(
-                strings = {
-                    "consent:read",
-                    "consent:write",
-                    "admin:read",
-                    "admin:write",
-                    "super-admin",
-                }
-            )
+                    strings = {
+                        "consent:read",
+                        "consent:write",
+                        "admin:read",
+                        "admin:write",
+                        "super-admin",
+                    })
             @DisplayName("each role constant accepted when present")
             void eachRoleAccepted(String role) {
                 SecurityContext ctx = securityContextWith(role);
@@ -206,10 +186,10 @@ class RbacTest {
             @DisplayName("error message mentions required role name")
             void errorMessageFormat() {
                 SecurityContext ctx = emptySecurityContext();
-                OperioAuthException ex = assertThrows(
-                    OperioAuthException.class,
-                    () -> Roles.requireRole(ctx, "admin:write")
-                );
+                OperioAuthException ex =
+                        assertThrows(
+                                OperioAuthException.class,
+                                () -> Roles.requireRole(ctx, "admin:write"));
                 assertTrue(ex.getMessage().contains("admin:write"));
                 assertTrue(ex.getMessage().contains("Access denied"));
             }
@@ -222,80 +202,54 @@ class RbacTest {
             @Test
             @DisplayName("null context → OperioAuthException")
             void nullContextThrows() {
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireAnyRole(
-                        null,
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireAnyRole(null, Roles.CONSENT_READ, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("no matching role → OperioAuthException")
             void noMatchingRoleThrows() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireAnyRole(
-                        ctx,
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireAnyRole(ctx, Roles.CONSENT_READ, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("first role matches → passes")
             void firstRoleMatches() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertDoesNotThrow(() ->
-                    Roles.requireAnyRole(
-                        ctx,
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE
-                    )
-                );
+                assertDoesNotThrow(
+                        () -> Roles.requireAnyRole(ctx, Roles.CONSENT_READ, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("second role matches → passes")
             void secondRoleMatches() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertDoesNotThrow(() ->
-                    Roles.requireAnyRole(
-                        ctx,
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE
-                    )
-                );
+                assertDoesNotThrow(
+                        () -> Roles.requireAnyRole(ctx, Roles.CONSENT_READ, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("super-admin bypasses → passes")
             void superAdminBypasses() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                assertDoesNotThrow(() ->
-                    Roles.requireAnyRole(
-                        ctx,
-                        Roles.CONSENT_READ,
-                        Roles.ADMIN_WRITE
-                    )
-                );
+                assertDoesNotThrow(
+                        () -> Roles.requireAnyRole(ctx, Roles.CONSENT_READ, Roles.ADMIN_WRITE));
             }
 
             @Test
             @DisplayName("error message lists all required roles")
             void errorMessageListsRoles() {
                 SecurityContext ctx = emptySecurityContext();
-                OperioAuthException ex = assertThrows(
-                    OperioAuthException.class,
-                    () ->
-                        Roles.requireAnyRole(
-                            ctx,
-                            Roles.CONSENT_READ,
-                            Roles.ADMIN_WRITE
-                        )
-                );
+                OperioAuthException ex =
+                        assertThrows(
+                                OperioAuthException.class,
+                                () ->
+                                        Roles.requireAnyRole(
+                                                ctx, Roles.CONSENT_READ, Roles.ADMIN_WRITE));
                 assertTrue(ex.getMessage().contains("consent:read"));
                 assertTrue(ex.getMessage().contains("admin:write"));
             }
@@ -344,64 +298,58 @@ class RbacTest {
             @DisplayName("consent:write does NOT imply consent:read")
             void writeDoesNotImplyRead() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
             }
 
             @Test
             @DisplayName("consent:read does NOT imply consent:write")
             void readDoesNotImplyWrite() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("admin:write does NOT imply admin:read")
             void adminWriteDoesNotImplyRead() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.ADMIN_READ)
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> Roles.requireRole(ctx, Roles.ADMIN_READ));
             }
 
             @Test
             @DisplayName("admin:read does NOT imply admin:write")
             void adminReadDoesNotImplyWrite() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.ADMIN_WRITE)
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> Roles.requireRole(ctx, Roles.ADMIN_WRITE));
             }
 
             @Test
             @DisplayName("consent roles do NOT grant admin access")
             void consentDoesNotGrantAdmin() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.ADMIN_READ)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.ADMIN_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE));
+                assertThrows(
+                        OperioAuthException.class, () -> Roles.requireRole(ctx, Roles.ADMIN_READ));
+                assertThrows(
+                        OperioAuthException.class, () -> Roles.requireRole(ctx, Roles.ADMIN_WRITE));
             }
 
             @Test
             @DisplayName("admin roles do NOT grant consent access")
             void adminDoesNotGrantConsent() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
             }
         }
 
@@ -410,44 +358,28 @@ class RbacTest {
         class MultipleRoles {
 
             @Test
-            @DisplayName(
-                "context with both consent roles satisfies either check"
-            )
+            @DisplayName("context with both consent roles satisfies either check")
             void bothConsentRoles() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
             }
 
             @Test
             @DisplayName("context with all roles satisfies any check")
             void allRoles() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE,
-                        Roles.ADMIN_READ,
-                        Roles.ADMIN_WRITE
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_READ)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.CONSENT_WRITE)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.ADMIN_READ)
-                );
-                assertDoesNotThrow(() ->
-                    Roles.requireRole(ctx, Roles.ADMIN_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(
+                                Set.of(
+                                        Roles.CONSENT_READ,
+                                        Roles.CONSENT_WRITE,
+                                        Roles.ADMIN_READ,
+                                        Roles.ADMIN_WRITE));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.ADMIN_READ));
+                assertDoesNotThrow(() -> Roles.requireRole(ctx, Roles.ADMIN_WRITE));
             }
         }
     }
@@ -490,18 +422,12 @@ class RbacTest {
         }
 
         private BatchGrantRequest testBatchGrantRequest() {
-            BatchConsentEntryDto entry = new BatchConsentEntryDto(
-                testScope(),
-                null
-            );
+            BatchConsentEntryDto entry = new BatchConsentEntryDto(testScope(), null);
             return new BatchGrantRequest("subject-1", List.of(entry));
         }
 
         private BatchRevokeRequest testBatchRevokeRequest() {
-            BatchConsentEntryDto entry = new BatchConsentEntryDto(
-                testScope(),
-                null
-            );
+            BatchConsentEntryDto entry = new BatchConsentEntryDto(testScope(), null);
             return new BatchRevokeRequest("subject-1", List.of(entry));
         }
 
@@ -535,35 +461,31 @@ class RbacTest {
             @DisplayName("consent:read → 403 (OperioAuthException)")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(ctx, testGrantRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(ctx, testGrantRequest()));
             }
 
             @Test
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(ctx, testGrantRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(ctx, testGrantRequest()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
                 SecurityContext ctx = emptySecurityContext();
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(ctx, testGrantRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(ctx, testGrantRequest()));
             }
 
             @Test
             @DisplayName("null context → 403")
             void nullContextDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(null, testGrantRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(null, testGrantRequest()));
             }
         }
 
@@ -593,17 +515,16 @@ class RbacTest {
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revoke(ctx, testRevokeRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.revoke(ctx, testRevokeRequest()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revoke(emptySecurityContext(), testRevokeRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.revoke(emptySecurityContext(), testRevokeRequest()));
             }
         }
 
@@ -615,21 +536,15 @@ class RbacTest {
 
             @BeforeEach
             void stubBatch() {
-                when(
-                    tenantService.grantAllConsent(anyString(), anyList())
-                ).thenReturn(
-                    new BatchConsentResult(1, 0, Collections.emptyList())
-                );
+                when(tenantService.grantAllConsent(anyString(), anyList()))
+                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
             }
 
             @Test
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                Response response = resource.grantAll(
-                    ctx,
-                    testBatchGrantRequest()
-                );
+                Response response = resource.grantAll(ctx, testBatchGrantRequest());
                 assertEquals(200, response.getStatus());
             }
 
@@ -637,10 +552,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.grantAll(
-                    ctx,
-                    testBatchGrantRequest()
-                );
+                Response response = resource.grantAll(ctx, testBatchGrantRequest());
                 assertEquals(200, response.getStatus());
             }
 
@@ -648,20 +560,17 @@ class RbacTest {
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grantAll(ctx, testBatchGrantRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.grantAll(ctx, testBatchGrantRequest()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grantAll(
-                        emptySecurityContext(),
-                        testBatchGrantRequest()
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.grantAll(emptySecurityContext(), testBatchGrantRequest()));
             }
         }
 
@@ -673,21 +582,15 @@ class RbacTest {
 
             @BeforeEach
             void stubBatch() {
-                when(
-                    tenantService.revokeAllConsent(anyString(), anyList())
-                ).thenReturn(
-                    new BatchConsentResult(1, 0, Collections.emptyList())
-                );
+                when(tenantService.revokeAllConsent(anyString(), anyList()))
+                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
             }
 
             @Test
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                Response response = resource.revokeAll(
-                    ctx,
-                    testBatchRevokeRequest()
-                );
+                Response response = resource.revokeAll(ctx, testBatchRevokeRequest());
                 assertEquals(200, response.getStatus());
             }
 
@@ -695,19 +598,16 @@ class RbacTest {
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revokeAll(ctx, testBatchRevokeRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.revokeAll(ctx, testBatchRevokeRequest()));
             }
 
             @Test
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.revokeAll(
-                    ctx,
-                    testBatchRevokeRequest()
-                );
+                Response response = resource.revokeAll(ctx, testBatchRevokeRequest());
                 assertEquals(200, response.getStatus());
             }
         }
@@ -721,27 +621,21 @@ class RbacTest {
             @BeforeEach
             @SuppressWarnings("unchecked")
             void stubEvaluate() {
-                ConsentResponse stubResponse = new ConsentResponse(
-                    "subject-1",
-                    Collections.emptySet(),
-                    Collections.emptySet(),
-                    Collections.emptyMap(),
-                    Collections.emptyMap()
-                );
-                doReturn(stubResponse)
-                    .when(tenantService)
-                    .evaluateConsent(anyString(), anySet());
+                ConsentResponse stubResponse =
+                        new ConsentResponse(
+                                "subject-1",
+                                Collections.emptySet(),
+                                Collections.emptySet(),
+                                Collections.emptyMap(),
+                                Collections.emptyMap());
+                doReturn(stubResponse).when(tenantService).evaluateConsent(anyString(), anySet());
             }
 
             @Test
             @DisplayName("consent:read → 200")
             void consentReadAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                Response response = resource.evaluate(
-                    ctx,
-                    "subject-1",
-                    testEvaluateRequest()
-                );
+                Response response = resource.evaluate(ctx, "subject-1", testEvaluateRequest());
                 assertEquals(200, response.getStatus());
             }
 
@@ -749,11 +643,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.evaluate(
-                    ctx,
-                    "subject-1",
-                    testEvaluateRequest()
-                );
+                Response response = resource.evaluate(ctx, "subject-1", testEvaluateRequest());
                 assertEquals(200, response.getStatus());
             }
 
@@ -761,38 +651,38 @@ class RbacTest {
             @DisplayName("consent:write → 403 (read-only endpoint)")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, "subject-1", testEvaluateRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.evaluate(ctx, "subject-1", testEvaluateRequest()));
             }
 
             @Test
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, "subject-1", testEvaluateRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.evaluate(ctx, "subject-1", testEvaluateRequest()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(
-                        emptySecurityContext(),
-                        "subject-1",
-                        testEvaluateRequest()
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () ->
+                                resource.evaluate(
+                                        emptySecurityContext(),
+                                        "subject-1",
+                                        testEvaluateRequest()));
             }
 
             @Test
             @DisplayName("null context → 403")
             void nullContextDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(null, "subject-1", testEvaluateRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.evaluate(null, "subject-1", testEvaluateRequest()));
             }
         }
 
@@ -804,9 +694,8 @@ class RbacTest {
 
             @BeforeEach
             void stubSummary() {
-                when(
-                    tenantService.getSubjectConsent(anyString())
-                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
+                when(tenantService.getSubjectConsent(anyString()))
+                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
@@ -829,17 +718,16 @@ class RbacTest {
             @DisplayName("consent:write → 403")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectSummary(ctx, "subj-1")
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.subjectSummary(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectSummary(emptySecurityContext(), "subj-1")
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.subjectSummary(emptySecurityContext(), "subj-1"));
             }
         }
 
@@ -851,19 +739,15 @@ class RbacTest {
 
             @BeforeEach
             void stubHistory() {
-                when(
-                    tenantService.getSubjectConsent(anyString())
-                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
+                when(tenantService.getSubjectConsent(anyString()))
+                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
             @DisplayName("consent:read → 200")
             void consentReadAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                Response response = resource.subjectHistory(
-                    ctx,
-                    "subj-1"
-                );
+                Response response = resource.subjectHistory(ctx, "subj-1");
                 assertEquals(200, response.getStatus());
             }
 
@@ -871,10 +755,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.subjectHistory(
-                    ctx,
-                    "subj-1"
-                );
+                Response response = resource.subjectHistory(ctx, "subj-1");
                 assertEquals(200, response.getStatus());
             }
 
@@ -882,20 +763,16 @@ class RbacTest {
             @DisplayName("consent:write → 403")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectHistory(ctx, "subj-1")
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.subjectHistory(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectHistory(
-                        emptySecurityContext(),
-                        "subj-1"
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.subjectHistory(emptySecurityContext(), "subj-1"));
             }
         }
 
@@ -908,99 +785,70 @@ class RbacTest {
             @BeforeEach
             @SuppressWarnings("unchecked")
             void stubAll() {
-                when(
-                    tenantService.grantAllConsent(anyString(), anyList())
-                ).thenReturn(
-                    new BatchConsentResult(1, 0, Collections.emptyList())
-                );
-                when(
-                    tenantService.revokeAllConsent(anyString(), anyList())
-                ).thenReturn(
-                    new BatchConsentResult(1, 0, Collections.emptyList())
-                );
-                ConsentResponse stubResponse = new ConsentResponse(
-                    "subject-1",
-                    Collections.emptySet(),
-                    Collections.emptySet(),
-                    Collections.emptyMap(),
-                    Collections.emptyMap()
-                );
-                doReturn(stubResponse)
-                    .when(tenantService)
-                    .evaluateConsent(anyString(), anySet());
-                when(
-                    tenantService.getSubjectConsent(anyString())
-                ).thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
+                when(tenantService.grantAllConsent(anyString(), anyList()))
+                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
+                when(tenantService.revokeAllConsent(anyString(), anyList()))
+                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
+                ConsentResponse stubResponse =
+                        new ConsentResponse(
+                                "subject-1",
+                                Collections.emptySet(),
+                                Collections.emptySet(),
+                                Collections.emptyMap(),
+                                Collections.emptyMap());
+                doReturn(stubResponse).when(tenantService).evaluateConsent(anyString(), anySet());
+                when(tenantService.getSubjectConsent(anyString()))
+                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
             }
 
             @Test
             @DisplayName("admin:read cannot access any consent endpoint")
             void adminReadCannotAccessConsent() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(ctx, testGrantRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revoke(ctx, testRevokeRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grantAll(ctx, testBatchGrantRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revokeAll(ctx, testBatchRevokeRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectSummary(ctx, "subj-1")
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.subjectHistory(ctx, "subj-1")
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(ctx, testGrantRequest()));
+                assertThrows(
+                        OperioAuthException.class, () -> resource.revoke(ctx, testRevokeRequest()));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.grantAll(ctx, testBatchGrantRequest()));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.revokeAll(ctx, testBatchRevokeRequest()));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.evaluate(ctx, "subj-1", testEvaluateRequest()));
+                assertThrows(
+                        OperioAuthException.class, () -> resource.subjectSummary(ctx, "subj-1"));
+                assertThrows(
+                        OperioAuthException.class, () -> resource.subjectHistory(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("admin:write cannot access any consent endpoint")
             void adminWriteCannotAccessConsent() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.grant(ctx, testGrantRequest())
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.grant(ctx, testGrantRequest()));
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.evaluate(ctx, "subj-1", testEvaluateRequest()));
             }
 
             @Test
             @DisplayName("both consent roles → full consent access")
             void bothConsentRolesGrantFullAccess() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.CONSENT_READ, Roles.CONSENT_WRITE));
                 // Write endpoints
-                assertDoesNotThrow(() ->
-                    resource.grant(ctx, testGrantRequest())
-                );
-                assertDoesNotThrow(() ->
-                    resource.revoke(ctx, testRevokeRequest())
-                );
-                assertDoesNotThrow(() ->
-                    resource.grantAll(ctx, testBatchGrantRequest())
-                );
-                assertDoesNotThrow(() ->
-                    resource.revokeAll(ctx, testBatchRevokeRequest())
-                );
+                assertDoesNotThrow(() -> resource.grant(ctx, testGrantRequest()));
+                assertDoesNotThrow(() -> resource.revoke(ctx, testRevokeRequest()));
+                assertDoesNotThrow(() -> resource.grantAll(ctx, testBatchGrantRequest()));
+                assertDoesNotThrow(() -> resource.revokeAll(ctx, testBatchRevokeRequest()));
                 // Read endpoints
-                assertDoesNotThrow(() ->
-                    resource.evaluate(ctx, "subj-1", testEvaluateRequest())
-                );
-                assertDoesNotThrow(() ->
-                    resource.subjectSummary(ctx, "subj-1")
-                );
-                assertDoesNotThrow(() ->
-                    resource.subjectHistory(ctx, "subj-1")
-                );
+                assertDoesNotThrow(() -> resource.evaluate(ctx, "subj-1", testEvaluateRequest()));
+                assertDoesNotThrow(() -> resource.subjectSummary(ctx, "subj-1"));
+                assertDoesNotThrow(() -> resource.subjectHistory(ctx, "subj-1"));
             }
         }
     }
@@ -1022,9 +870,7 @@ class RbacTest {
             resource = new CatalogueResource();
             tenantService = mock(TenantService.class);
 
-            when(tenantService.listFields()).thenReturn(
-                Collections.emptyList()
-            );
+            when(tenantService.listFields()).thenReturn(Collections.emptyList());
 
             var field = CatalogueResource.class.getDeclaredField("tenantService");
             field.setAccessible(true);
@@ -1057,34 +903,28 @@ class RbacTest {
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listFields(ctx));
             }
 
             @Test
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listFields(ctx));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(emptySecurityContext())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.listFields(emptySecurityContext()));
             }
 
             @Test
             @DisplayName("null context → 403")
             void nullContextDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(null)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listFields(null));
             }
         }
 
@@ -1096,11 +936,7 @@ class RbacTest {
 
             private RegisterFieldRequest request() {
                 return new RegisterFieldRequest(
-                    "email",
-                    "user",
-                    "User email address",
-                    "User entity"
-                );
+                        "email", "user", "User email address", "User entity");
             }
 
             @Test
@@ -1123,34 +959,31 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.registerField(ctx, request()));
             }
 
             @Test
             @DisplayName("consent:write → 403")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.registerField(ctx, request()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(emptySecurityContext(), request())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.registerField(emptySecurityContext(), request()));
             }
 
             @Test
             @DisplayName("null context → 403")
             void nullContextDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(null, request())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.registerField(null, request()));
             }
         }
 
@@ -1166,10 +999,7 @@ class RbacTest {
             @DisplayName("admin:write → 200")
             void adminWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.assignFieldCategory(
-                    ctx,
-                    request()
-                );
+                Response response = resource.assignFieldCategory(ctx, request());
                 assertEquals(200, response.getStatus());
             }
 
@@ -1177,10 +1007,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                Response response = resource.assignFieldCategory(
-                    ctx,
-                    request()
-                );
+                Response response = resource.assignFieldCategory(ctx, request());
                 assertEquals(200, response.getStatus());
             }
 
@@ -1188,20 +1015,17 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.assignFieldCategory(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.assignFieldCategory(ctx, request()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.assignFieldCategory(
-                        emptySecurityContext(),
-                        request()
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.assignFieldCategory(emptySecurityContext(), request()));
             }
         }
 
@@ -1215,51 +1039,41 @@ class RbacTest {
             @DisplayName("consent:read cannot access any catalogue endpoint")
             void consentReadCannotAccessCatalogue() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listFields(ctx));
+                assertThrows(
+                        OperioAuthException.class,
+                        () ->
+                                resource.registerField(
+                                        ctx, new RegisterFieldRequest("f", "e", "d", "ed")));
             }
 
             @Test
             @DisplayName("consent:write cannot access any catalogue endpoint")
             void consentWriteCannotAccessCatalogue() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listFields(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listFields(ctx));
+                assertThrows(
+                        OperioAuthException.class,
+                        () ->
+                                resource.registerField(
+                                        ctx, new RegisterFieldRequest("f", "e", "d", "ed")));
             }
 
             @Test
             @DisplayName("both admin roles → full catalogue access")
             void bothAdminRolesGrantFullAccess() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE));
                 assertDoesNotThrow(() -> resource.listFields(ctx));
-                assertDoesNotThrow(() ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.assignFieldCategory(
-                        ctx,
-                        new AssignFieldCategoryRequest("f", "e", "c", "desc")
-                    )
-                );
+                assertDoesNotThrow(
+                        () ->
+                                resource.registerField(
+                                        ctx, new RegisterFieldRequest("f", "e", "d", "ed")));
+                assertDoesNotThrow(
+                        () ->
+                                resource.assignFieldCategory(
+                                        ctx,
+                                        new AssignFieldCategoryRequest("f", "e", "c", "desc")));
             }
 
             @Test
@@ -1267,12 +1081,10 @@ class RbacTest {
             void superAdminFullCatalogueAccess() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 assertDoesNotThrow(() -> resource.listFields(ctx));
-                assertDoesNotThrow(() ->
-                    resource.registerField(
-                        ctx,
-                        new RegisterFieldRequest("f", "e", "d", "ed")
-                    )
-                );
+                assertDoesNotThrow(
+                        () ->
+                                resource.registerField(
+                                        ctx, new RegisterFieldRequest("f", "e", "d", "ed")));
             }
         }
     }
@@ -1294,12 +1106,8 @@ class RbacTest {
             resource = new GovernanceResource();
             tenantService = mock(TenantService.class);
 
-            when(tenantService.listPurposes()).thenReturn(
-                Collections.emptyList()
-            );
-            when(tenantService.listRegulations()).thenReturn(
-                Collections.emptyList()
-            );
+            when(tenantService.listPurposes()).thenReturn(Collections.emptyList());
+            when(tenantService.listRegulations()).thenReturn(Collections.emptyList());
 
             var field = GovernanceResource.class.getDeclaredField("tenantService");
             field.setAccessible(true);
@@ -1323,9 +1131,9 @@ class RbacTest {
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listPurposes(emptySecurityContext())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.listPurposes(emptySecurityContext()));
             }
         }
 
@@ -1344,9 +1152,9 @@ class RbacTest {
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listRegulations(emptySecurityContext())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.listRegulations(emptySecurityContext()));
             }
         }
 
@@ -1357,10 +1165,7 @@ class RbacTest {
         class RegisterPurpose {
 
             private RegisterPurposeRequest request() {
-                return new RegisterPurposeRequest(
-                    "marketing",
-                    "Marketing communications"
-                );
+                return new RegisterPurposeRequest("marketing", "Marketing communications");
             }
 
             @Test
@@ -1375,9 +1180,8 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerPurpose(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.registerPurpose(ctx, request()));
             }
         }
 
@@ -1386,10 +1190,7 @@ class RbacTest {
         class RegisterRegulation {
 
             private RegisterRegulationRequest request() {
-                return new RegisterRegulationRequest(
-                    "gdpr",
-                    "General Data Protection Regulation"
-                );
+                return new RegisterRegulationRequest("gdpr", "General Data Protection Regulation");
             }
 
             @Test
@@ -1404,20 +1205,17 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerRegulation(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.registerRegulation(ctx, request()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerRegulation(
-                        emptySecurityContext(),
-                        request()
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.registerRegulation(emptySecurityContext(), request()));
             }
         }
 
@@ -1427,22 +1225,14 @@ class RbacTest {
 
             private LinkPurposeRegulationRequest request() {
                 return new LinkPurposeRegulationRequest(
-                    "marketing",
-                    "gdpr",
-                    "consent",
-                    "Granted action",
-                    "Denied action"
-                );
+                        "marketing", "gdpr", "consent", "Granted action", "Denied action");
             }
 
             @Test
             @DisplayName("admin:write → 200")
             void adminWriteAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                Response response = resource.linkPurposeToRegulation(
-                    ctx,
-                    request()
-                );
+                Response response = resource.linkPurposeToRegulation(ctx, request());
                 assertEquals(200, response.getStatus());
             }
 
@@ -1450,20 +1240,17 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.linkPurposeToRegulation(ctx, request())
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.linkPurposeToRegulation(ctx, request()));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.linkPurposeToRegulation(
-                        emptySecurityContext(),
-                        request()
-                    )
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.linkPurposeToRegulation(emptySecurityContext(), request()));
             }
         }
 
@@ -1477,55 +1264,43 @@ class RbacTest {
             @DisplayName("consent:read cannot access any legal endpoint")
             void consentReadCannotAccessLegal() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listPurposes(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listRegulations(ctx)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listPurposes(ctx));
+                assertThrows(OperioAuthException.class, () -> resource.listRegulations(ctx));
             }
 
             @Test
             @DisplayName("consent:write cannot access any legal endpoint")
             void consentWriteCannotAccessLegal() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listPurposes(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.registerPurpose(
-                        ctx,
-                        new RegisterPurposeRequest("p", "desc")
-                    )
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listPurposes(ctx));
+                assertThrows(
+                        OperioAuthException.class,
+                        () ->
+                                resource.registerPurpose(
+                                        ctx, new RegisterPurposeRequest("p", "desc")));
             }
 
             @Test
             @DisplayName("both admin roles → full legal access")
             void bothAdminRolesGrantFullAccess() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)
-                );
+                SecurityContext ctx =
+                        securityContextWith(Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE));
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
-                assertDoesNotThrow(() ->
-                    resource.registerPurpose(
-                        ctx,
-                        new RegisterPurposeRequest("p", "desc")
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.registerRegulation(
-                        ctx,
-                        new RegisterRegulationRequest("r", "desc")
-                    )
-                );
-                assertDoesNotThrow(() ->
-                    resource.linkPurposeToRegulation(
-                        ctx,
-                        new LinkPurposeRegulationRequest("p", "r", "consent", "granted", "denied")
-                    )
-                );
+                assertDoesNotThrow(
+                        () ->
+                                resource.registerPurpose(
+                                        ctx, new RegisterPurposeRequest("p", "desc")));
+                assertDoesNotThrow(
+                        () ->
+                                resource.registerRegulation(
+                                        ctx, new RegisterRegulationRequest("r", "desc")));
+                assertDoesNotThrow(
+                        () ->
+                                resource.linkPurposeToRegulation(
+                                        ctx,
+                                        new LinkPurposeRegulationRequest(
+                                                "p", "r", "consent", "granted", "denied")));
             }
 
             @Test
@@ -1534,12 +1309,10 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 assertDoesNotThrow(() -> resource.listPurposes(ctx));
                 assertDoesNotThrow(() -> resource.listRegulations(ctx));
-                assertDoesNotThrow(() ->
-                    resource.registerPurpose(
-                        ctx,
-                        new RegisterPurposeRequest("p", "desc")
-                    )
-                );
+                assertDoesNotThrow(
+                        () ->
+                                resource.registerPurpose(
+                                        ctx, new RegisterPurposeRequest("p", "desc")));
             }
         }
     }
@@ -1580,11 +1353,12 @@ class RbacTest {
             doReturn(iamQueryService).when(cqrsHolder).iamQueryService();
 
             // Inject via reflection
-            for (var entry : java.util.Map.of(
-                "cqrs", cqrsHolder,
-                "platformService", platformService,
-                "bootstrapLifecycle", bootstrapLifecycle
-            ).entrySet()) {
+            for (var entry :
+                    java.util.Map.of(
+                                    "cqrs", cqrsHolder,
+                                    "platformService", platformService,
+                                    "bootstrapLifecycle", bootstrapLifecycle)
+                            .entrySet()) {
                 var field = PlatformResource.class.getDeclaredField(entry.getKey());
                 field.setAccessible(true);
                 field.set(resource, entry.getValue());
@@ -1599,12 +1373,8 @@ class RbacTest {
             @DisplayName("super-admin → 201")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                CreateTenantRequest request = new CreateTenantRequest(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    null
-                );
+                CreateTenantRequest request =
+                        new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
                 Response response = resource.createTenant(ctx, request);
                 assertEquals(201, response.getStatus());
             }
@@ -1613,58 +1383,36 @@ class RbacTest {
             @DisplayName("consent:write → 403")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                CreateTenantRequest request = new CreateTenantRequest(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    null
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createTenant(ctx, request)
-                );
+                CreateTenantRequest request =
+                        new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
+                assertThrows(OperioAuthException.class, () -> resource.createTenant(ctx, request));
             }
 
             @Test
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                CreateTenantRequest request = new CreateTenantRequest(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    null
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createTenant(ctx, request)
-                );
+                CreateTenantRequest request =
+                        new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
+                assertThrows(OperioAuthException.class, () -> resource.createTenant(ctx, request));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                CreateTenantRequest request = new CreateTenantRequest(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    null
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createTenant(emptySecurityContext(), request)
-                );
+                CreateTenantRequest request =
+                        new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.createTenant(emptySecurityContext(), request));
             }
 
             @Test
             @DisplayName("null context → 403")
             void nullContextDenied() {
-                CreateTenantRequest request = new CreateTenantRequest(
-                    "tenant-1",
-                    "Tenant One",
-                    "free",
-                    null
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createTenant(null, request)
-                );
+                CreateTenantRequest request =
+                        new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
+                assertThrows(OperioAuthException.class, () -> resource.createTenant(null, request));
             }
         }
 
@@ -1676,9 +1424,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(coreQueryService.listTenants()).thenReturn(
-                    Collections.emptyList()
-                );
+                when(coreQueryService.listTenants()).thenReturn(Collections.emptyList());
                 Response response = resource.listTenants(ctx);
                 assertEquals(200, response.getStatus());
             }
@@ -1687,34 +1433,27 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listTenants(ctx)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listTenants(ctx));
             }
 
             @Test
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listTenants(ctx)
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listTenants(ctx));
             }
 
             @Test
             @DisplayName("all non-super-admin roles → 403")
             void allNonSuperAdminRolesDenied() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE,
-                        Roles.ADMIN_READ,
-                        Roles.ADMIN_WRITE
-                    )
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listTenants(ctx)
-                );
+                SecurityContext ctx =
+                        securityContextWith(
+                                Set.of(
+                                        Roles.CONSENT_READ,
+                                        Roles.CONSENT_WRITE,
+                                        Roles.ADMIN_READ,
+                                        Roles.ADMIN_WRITE));
+                assertThrows(OperioAuthException.class, () -> resource.listTenants(ctx));
             }
         }
 
@@ -1726,19 +1465,17 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                var tenantInfo = new com.koostack.operio.core.platform.core.models.TenantInfo(
-                    "t1",
-                    "Tenant",
-                    "free",
-                    "active",
-                    "t_t1",
-                    null,
-                    Instant.now(),
-                    null
-                );
-                when(coreQueryService.getTenant("t1")).thenReturn(
-                    tenantInfo
-                );
+                var tenantInfo =
+                        new com.koostack.operio.core.platform.core.models.TenantInfo(
+                                "t1",
+                                "Tenant",
+                                "free",
+                                "active",
+                                "t_t1",
+                                null,
+                                Instant.now(),
+                                null);
+                when(coreQueryService.getTenant("t1")).thenReturn(tenantInfo);
                 Response response = resource.getTenant(ctx, "t1");
                 assertEquals(200, response.getStatus());
             }
@@ -1747,9 +1484,7 @@ class RbacTest {
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.getTenant(ctx, "t1")
-                );
+                assertThrows(OperioAuthException.class, () -> resource.getTenant(ctx, "t1"));
             }
         }
 
@@ -1769,9 +1504,7 @@ class RbacTest {
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.deleteTenant(ctx, "t1")
-                );
+                assertThrows(OperioAuthException.class, () -> resource.deleteTenant(ctx, "t1"));
             }
         }
 
@@ -1783,23 +1516,15 @@ class RbacTest {
             @DisplayName("super-admin → 201")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(
-                    iamCommandService.createApiToken(
-                        anyString(),
-                        anyString(),
-                        anyString(),
-                        any()
-                    )
-                ).thenReturn(new IamCommandService.CreateApiTokenResult(
-                    "key-id-1",
-                    "opr_live",
-                    "opr_live_test1234567890abcdef"
-                ));
-                CreateApiKeyRequest request = new CreateApiKeyRequest(
-                    "tenant-1",
-                    "test-subject",
-                    Set.of("consent:read", "consent:write")
-                );
+                when(iamCommandService.createApiToken(anyString(), anyString(), anyString(), any()))
+                        .thenReturn(
+                                new IamCommandService.CreateApiTokenResult(
+                                        "key-id-1", "opr_live", "opr_live_test1234567890abcdef"));
+                CreateApiKeyRequest request =
+                        new CreateApiKeyRequest(
+                                "tenant-1",
+                                "test-subject",
+                                Set.of("consent:read", "consent:write"));
                 Response response = resource.createApiKey(ctx, request);
                 assertEquals(201, response.getStatus());
             }
@@ -1808,14 +1533,9 @@ class RbacTest {
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                CreateApiKeyRequest request = new CreateApiKeyRequest(
-                    "tenant-1",
-                    "test-subject",
-                    Set.of("consent:read")
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createApiKey(ctx, request)
-                );
+                CreateApiKeyRequest request =
+                        new CreateApiKeyRequest("tenant-1", "test-subject", Set.of("consent:read"));
+                assertThrows(OperioAuthException.class, () -> resource.createApiKey(ctx, request));
             }
         }
 
@@ -1827,9 +1547,7 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(iamQueryService.listApiKeys("t1")).thenReturn(
-                    Collections.emptyList()
-                );
+                when(iamQueryService.listApiKeys("t1")).thenReturn(Collections.emptyList());
                 Response response = resource.listApiKeys(ctx, "t1");
                 assertEquals(200, response.getStatus());
             }
@@ -1838,9 +1556,7 @@ class RbacTest {
             @DisplayName("consent:read → 403")
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listApiKeys(ctx, "t1")
-                );
+                assertThrows(OperioAuthException.class, () -> resource.listApiKeys(ctx, "t1"));
             }
         }
 
@@ -1852,9 +1568,19 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(iamQueryService.findByKeyPrefix("opr_live")).thenReturn(
-                    new IamQueryService.ApiKeyInfo("key-1", "opr_live", "test", "t1", "PROD", null, null, "active", Instant.now(), null)
-                );
+                when(iamQueryService.findByKeyPrefix("opr_live"))
+                        .thenReturn(
+                                new IamQueryService.ApiKeyInfo(
+                                        "key-1",
+                                        "opr_live",
+                                        "test",
+                                        "t1",
+                                        "PROD",
+                                        null,
+                                        null,
+                                        "active",
+                                        Instant.now(),
+                                        null));
                 Response response = resource.revokeApiKey(ctx, "opr_live");
                 assertEquals(200, response.getStatus());
             }
@@ -1863,17 +1589,16 @@ class RbacTest {
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revokeApiKey(ctx, "opr_live")
-                );
+                assertThrows(
+                        OperioAuthException.class, () -> resource.revokeApiKey(ctx, "opr_live"));
             }
 
             @Test
             @DisplayName("no roles → 403")
             void noRolesDenied() {
-                assertThrows(OperioAuthException.class, () ->
-                    resource.revokeApiKey(emptySecurityContext(), "opr_live")
-                );
+                assertThrows(
+                        OperioAuthException.class,
+                        () -> resource.revokeApiKey(emptySecurityContext(), "opr_live"));
             }
         }
 
@@ -1885,60 +1610,50 @@ class RbacTest {
             @DisplayName("only super-admin can access platform endpoints")
             void onlySuperAdminCanAccess() {
                 // Try every non-super-admin role individually
-                for (String role : List.of(
-                    Roles.CONSENT_READ,
-                    Roles.CONSENT_WRITE,
-                    Roles.ADMIN_READ,
-                    Roles.ADMIN_WRITE
-                )) {
+                for (String role :
+                        List.of(
+                                Roles.CONSENT_READ,
+                                Roles.CONSENT_WRITE,
+                                Roles.ADMIN_READ,
+                                Roles.ADMIN_WRITE)) {
                     SecurityContext ctx = securityContextWith(role);
                     assertThrows(
-                        OperioAuthException.class,
-                        () -> resource.listTenants(ctx),
-                        "Role '" + role + "' should not access listTenants"
-                    );
+                            OperioAuthException.class,
+                            () -> resource.listTenants(ctx),
+                            "Role '" + role + "' should not access listTenants");
                     assertThrows(
-                        OperioAuthException.class,
-                        () -> resource.getTenant(ctx, "t1"),
-                        "Role '" + role + "' should not access getTenant"
-                    );
+                            OperioAuthException.class,
+                            () -> resource.getTenant(ctx, "t1"),
+                            "Role '" + role + "' should not access getTenant");
                     assertThrows(
-                        OperioAuthException.class,
-                        () -> resource.deleteTenant(ctx, "t1"),
-                        "Role '" + role + "' should not access deleteTenant"
-                    );
+                            OperioAuthException.class,
+                            () -> resource.deleteTenant(ctx, "t1"),
+                            "Role '" + role + "' should not access deleteTenant");
                     assertThrows(
-                        OperioAuthException.class,
-                        () ->
-                            resource.createTenant(
-                                ctx,
-                                new CreateTenantRequest("t1", "T", "free", null)
-                            ),
-                        "Role '" + role + "' should not access createTenant"
-                    );
+                            OperioAuthException.class,
+                            () ->
+                                    resource.createTenant(
+                                            ctx, new CreateTenantRequest("t1", "T", "free", null)),
+                            "Role '" + role + "' should not access createTenant");
                 }
             }
 
             @Test
             @DisplayName("combined non-super-admin roles still denied")
             void combinedNonSuperAdminDenied() {
-                SecurityContext ctx = securityContextWith(
-                    Set.of(
-                        Roles.CONSENT_READ,
-                        Roles.CONSENT_WRITE,
-                        Roles.ADMIN_READ,
-                        Roles.ADMIN_WRITE
-                    )
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.listTenants(ctx)
-                );
-                assertThrows(OperioAuthException.class, () ->
-                    resource.createTenant(
-                        ctx,
-                        new CreateTenantRequest("t1", "T", "free", null)
-                    )
-                );
+                SecurityContext ctx =
+                        securityContextWith(
+                                Set.of(
+                                        Roles.CONSENT_READ,
+                                        Roles.CONSENT_WRITE,
+                                        Roles.ADMIN_READ,
+                                        Roles.ADMIN_WRITE));
+                assertThrows(OperioAuthException.class, () -> resource.listTenants(ctx));
+                assertThrows(
+                        OperioAuthException.class,
+                        () ->
+                                resource.createTenant(
+                                        ctx, new CreateTenantRequest("t1", "T", "free", null)));
             }
         }
     }
@@ -1952,9 +1667,8 @@ class RbacTest {
     class RoleEndpointMatrix {
 
         /**
-         * Validates that the exception thrown for unauthorized access
-         * is specifically OperioAuthException (which maps to 403),
-         * and that the message contains "Access denied".
+         * Validates that the exception thrown for unauthorized access is specifically
+         * OperioAuthException (which maps to 403), and that the message contains "Access denied".
          */
         @Test
         @DisplayName("unauthorized responses have consistent error format")
@@ -1963,30 +1677,35 @@ class RbacTest {
 
             OperioAuthException ex;
 
-            ex = assertThrows(OperioAuthException.class, () ->
-                Roles.requireRole(noRoles, Roles.CONSENT_READ)
-            );
+            ex =
+                    assertThrows(
+                            OperioAuthException.class,
+                            () -> Roles.requireRole(noRoles, Roles.CONSENT_READ));
             assertTrue(ex.getMessage().startsWith("Access denied"));
             assertTrue(ex.getMessage().contains("consent:read"));
 
-            ex = assertThrows(OperioAuthException.class, () ->
-                Roles.requireRole(noRoles, Roles.CONSENT_WRITE)
-            );
+            ex =
+                    assertThrows(
+                            OperioAuthException.class,
+                            () -> Roles.requireRole(noRoles, Roles.CONSENT_WRITE));
             assertTrue(ex.getMessage().contains("consent:write"));
 
-            ex = assertThrows(OperioAuthException.class, () ->
-                Roles.requireRole(noRoles, Roles.ADMIN_READ)
-            );
+            ex =
+                    assertThrows(
+                            OperioAuthException.class,
+                            () -> Roles.requireRole(noRoles, Roles.ADMIN_READ));
             assertTrue(ex.getMessage().contains("admin:read"));
 
-            ex = assertThrows(OperioAuthException.class, () ->
-                Roles.requireRole(noRoles, Roles.ADMIN_WRITE)
-            );
+            ex =
+                    assertThrows(
+                            OperioAuthException.class,
+                            () -> Roles.requireRole(noRoles, Roles.ADMIN_WRITE));
             assertTrue(ex.getMessage().contains("admin:write"));
 
-            ex = assertThrows(OperioAuthException.class, () ->
-                Roles.requireRole(noRoles, Roles.SUPER_ADMIN)
-            );
+            ex =
+                    assertThrows(
+                            OperioAuthException.class,
+                            () -> Roles.requireRole(noRoles, Roles.SUPER_ADMIN));
             assertTrue(ex.getMessage().contains("super-admin"));
         }
 
@@ -2004,28 +1723,21 @@ class RbacTest {
             };
             for (String role : allRoles) {
                 assertDoesNotThrow(
-                    () -> Roles.requireRole(superAdmin, role),
-                    "super-admin should satisfy requirement for: " + role
-                );
+                        () -> Roles.requireRole(superAdmin, role),
+                        "super-admin should satisfy requirement for: " + role);
             }
         }
 
         @Test
-        @DisplayName(
-            "requireAnyRole with empty varargs → throws for non-super-admin"
-        )
+        @DisplayName("requireAnyRole with empty varargs → throws for non-super-admin")
         void requireAnyRoleEmptyVarargs() {
             // edge case: no roles specified — should throw
             SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-            assertThrows(OperioAuthException.class, () ->
-                Roles.requireAnyRole(ctx)
-            );
+            assertThrows(OperioAuthException.class, () -> Roles.requireAnyRole(ctx));
         }
 
         @Test
-        @DisplayName(
-            "requireAnyRole with empty varargs → passes for super-admin"
-        )
+        @DisplayName("requireAnyRole with empty varargs → passes for super-admin")
         void requireAnyRoleEmptyVarargsSuperAdmin() {
             SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
             assertDoesNotThrow(() -> Roles.requireAnyRole(ctx));

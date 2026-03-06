@@ -3,15 +3,13 @@ package com.koostack.operio.core.platform.billing;
 import com.koostack.operio.core.platform.billing.models.BillingProfileInfo;
 import com.koostack.operio.core.platform.billing.models.SubscriptionInfo;
 import com.koostack.operio.core.spi.Plugin;
-
 import java.util.List;
 
 /**
  * Query service for the billing platform domain (billing read model).
  *
- * <p>Reads from the materialized {@code platform_billing.billing_profile}
- * and {@code platform_billing.subscription} tables populated by the
- * {@link BillingProjection}.
+ * <p>Reads from the materialized {@code platform_billing.billing_profile} and {@code
+ * platform_billing.subscription} tables populated by the {@link BillingProjection}.
  */
 public interface BillingQueryService<T> extends Plugin<T> {
 

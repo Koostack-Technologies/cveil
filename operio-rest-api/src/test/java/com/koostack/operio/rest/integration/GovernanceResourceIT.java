@@ -12,21 +12,20 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.operio.rest.resource.GovernanceResource}
- * exercising purpose, regulation, and jurisdiction CRUD — plus policy management,
- * cross-entity linking, and deletion constraints — against real Postgres + Redis.
+ * Integration test for {@link com.koostack.operio.rest.resource.GovernanceResource} exercising
+ * purpose, regulation, and jurisdiction CRUD — plus policy management, cross-entity linking, and
+ * deletion constraints — against real Postgres + Redis.
  *
  * <p>Every mutating operation is verified at three layers:
+ *
  * <ol>
- *   <li>REST API response (status code + body)</li>
- *   <li>Postgres — direct JDBC queries on governance tables + event store</li>
- *   <li>Redis — event stream entries</li>
+ *   <li>REST API response (status code + body)
+ *   <li>Postgres — direct JDBC queries on governance tables + event store
+ *   <li>Redis — event stream entries
  * </ol>
  */
 @QuarkusTest
@@ -36,8 +35,7 @@ import org.junit.jupiter.api.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class GovernanceResourceIT {
 
-    private static final String BOOTSTRAP_KEY =
-        "test-bootstrap-key-for-integration-tests";
+    private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
     private static final String TENANT_ID = "governance_it_tenant";
 
@@ -58,8 +56,7 @@ class GovernanceResourceIT {
     private static volatile String readOnlyApiKey;
     private static volatile IntegrationTestSupport support;
 
-    @Inject
-    OperioConfig config;
+    @Inject OperioConfig config;
 
     // =======================================================================
     // 1. Setup & Auth
@@ -75,19 +72,20 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "tenantId": "%s",
                       "displayName": "Governance IT Tenant",
                       "plan": "enterprise"
                     }
-                    """.formatted(TENANT_ID))
-                .when()
+                    """
+                                    .formatted(TENANT_ID))
+                    .when()
                     .post("/api/v1/platform/tenants")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("tenantId", equalTo(TENANT_ID));
         }
@@ -96,21 +94,24 @@ class GovernanceResourceIT {
         @Order(2)
         @DisplayName("Create full-access API key")
         void createApiKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "governance-it-admin",
                       "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
@@ -125,21 +126,24 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("Create read-only API key")
         void createReadOnlyKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "governance-it-reader",
                       "roles": ["admin:read"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
@@ -150,26 +154,22 @@ class GovernanceResourceIT {
         @Order(4)
         @DisplayName("Unauthenticated request → 401")
         void unauthenticatedRejected() {
-            given()
-                .when()
-                    .get("/api/v1/governance/purposes")
-                .then()
-                    .statusCode(401);
+            given().when().get("/api/v1/governance/purposes").then().statusCode(401);
         }
 
         @Test
         @Order(5)
         @DisplayName("Read-only key cannot register purpose → 403")
         void readOnlyCannotWrite() {
-            given()
-                .header("Authorization", "Bearer " + readOnlyApiKey)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + readOnlyApiKey)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "purposeName": "forbidden", "description": "should fail" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(403);
         }
     }
@@ -193,15 +193,16 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Register purpose: marketing")
         void registerMarketing() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "purposeName": "%s", "description": "Marketing communications" }
-                    """.formatted(PURPOSE_MARKETING))
-                .when()
+                    """
+                                    .formatted(PURPOSE_MARKETING))
+                    .when()
                     .post("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString(PURPOSE_MARKETING));
 
@@ -212,15 +213,16 @@ class GovernanceResourceIT {
         @Order(2)
         @DisplayName("Register purpose: analytics")
         void registerAnalytics() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "purposeName": "%s", "description": "Data analytics" }
-                    """.formatted(PURPOSE_ANALYTICS))
-                .when()
+                    """
+                                    .formatted(PURPOSE_ANALYTICS))
+                    .when()
                     .post("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("purpose", "purpose_name", PURPOSE_ANALYTICS);
@@ -230,11 +232,10 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("List purposes includes both")
         void listPurposes() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(2)));
         }
@@ -243,11 +244,10 @@ class GovernanceResourceIT {
         @Order(4)
         @DisplayName("Get purpose by name")
         void getMarketing() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("purposeName", equalTo(PURPOSE_MARKETING))
                     .body("description", equalTo("Marketing communications"));
@@ -257,11 +257,10 @@ class GovernanceResourceIT {
         @Order(5)
         @DisplayName("Delete purpose: analytics")
         void deleteAnalytics() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/governance/purposes/" + PURPOSE_ANALYTICS)
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.assertRowAbsent("purpose", "purpose_name", PURPOSE_ANALYTICS);
@@ -271,15 +270,16 @@ class GovernanceResourceIT {
         @Order(6)
         @DisplayName("Re-register analytics (upsert)")
         void reRegisterAnalytics() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "purposeName": "%s", "description": "Re-registered analytics" }
-                    """.formatted(PURPOSE_ANALYTICS))
-                .when()
+                    """
+                                    .formatted(PURPOSE_ANALYTICS))
+                    .when()
                     .post("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("purpose", "purpose_name", PURPOSE_ANALYTICS);
@@ -289,15 +289,15 @@ class GovernanceResourceIT {
         @Order(7)
         @DisplayName("Register purpose with blank name → 400")
         void registerBlankName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "purposeName": "", "description": "invalid" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/governance/purposes")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -305,11 +305,10 @@ class GovernanceResourceIT {
         @Order(8)
         @DisplayName("Get non-existent purpose → 404")
         void getNonExistent() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/purposes/does-not-exist")
-                .then()
+                    .then()
                     .statusCode(404);
         }
     }
@@ -333,15 +332,16 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Register regulation: GDPR")
         void registerGdpr() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "regulationName": "%s", "description": "EU General Data Protection Regulation" }
-                    """.formatted(REGULATION_GDPR))
-                .when()
+                    """
+                                    .formatted(REGULATION_GDPR))
+                    .when()
                     .post("/api/v1/governance/regulations")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString(REGULATION_GDPR));
 
@@ -352,15 +352,16 @@ class GovernanceResourceIT {
         @Order(2)
         @DisplayName("Register regulation: CCPA")
         void registerCcpa() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "regulationName": "%s", "description": "California Consumer Privacy Act" }
-                    """.formatted(REGULATION_CCPA))
-                .when()
+                    """
+                                    .formatted(REGULATION_CCPA))
+                    .when()
                     .post("/api/v1/governance/regulations")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("regulation", "regulation_name", REGULATION_CCPA);
@@ -370,11 +371,10 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("List regulations includes both")
         void listRegulations() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/regulations")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(2)));
         }
@@ -383,11 +383,10 @@ class GovernanceResourceIT {
         @Order(4)
         @DisplayName("Get regulation by name")
         void getGdpr() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/regulations/" + REGULATION_GDPR)
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("regulationName", equalTo(REGULATION_GDPR));
         }
@@ -396,11 +395,10 @@ class GovernanceResourceIT {
         @Order(5)
         @DisplayName("Delete regulation: CCPA")
         void deleteCcpa() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/governance/regulations/" + REGULATION_CCPA)
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.assertRowAbsent("regulation", "regulation_name", REGULATION_CCPA);
@@ -410,15 +408,15 @@ class GovernanceResourceIT {
         @Order(6)
         @DisplayName("Register regulation with blank name → 400")
         void registerBlankName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "regulationName": "", "description": "invalid" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/governance/regulations")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -426,11 +424,10 @@ class GovernanceResourceIT {
         @Order(7)
         @DisplayName("Get non-existent regulation → 404")
         void getNonExistent() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/regulations/does-not-exist")
-                .then()
+                    .then()
                     .statusCode(404);
         }
     }
@@ -454,15 +451,16 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Register jurisdiction: EU")
         void registerEu() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "jurisdictionName": "%s", "description": "European Union" }
-                    """.formatted(JURISDICTION_EU))
-                .when()
+                    """
+                                    .formatted(JURISDICTION_EU))
+                    .when()
                     .post("/api/v1/governance/jurisdictions")
-                .then()
+                    .then()
                     .statusCode(201)
                     .body("message", containsString(JURISDICTION_EU));
 
@@ -473,15 +471,16 @@ class GovernanceResourceIT {
         @Order(2)
         @DisplayName("Register jurisdiction: California")
         void registerCalifornia() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "jurisdictionName": "%s", "description": "State of California" }
-                    """.formatted(JURISDICTION_CA))
-                .when()
+                    """
+                                    .formatted(JURISDICTION_CA))
+                    .when()
                     .post("/api/v1/governance/jurisdictions")
-                .then()
+                    .then()
                     .statusCode(201);
 
             support.assertRowExists("jurisdiction", "jurisdiction_name", JURISDICTION_CA);
@@ -491,11 +490,10 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("List jurisdictions includes both")
         void listJurisdictions() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/jurisdictions")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(2)));
         }
@@ -504,11 +502,10 @@ class GovernanceResourceIT {
         @Order(4)
         @DisplayName("Get jurisdiction by name")
         void getEu() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/jurisdictions/" + JURISDICTION_EU)
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("jurisdictionName", equalTo(JURISDICTION_EU))
                     .body("description", equalTo("European Union"));
@@ -518,34 +515,33 @@ class GovernanceResourceIT {
         @Order(5)
         @DisplayName("Update jurisdiction: EU description")
         void updateEu() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "description": "European Union (updated)" }
                     """)
-                .when()
+                    .when()
                     .put("/api/v1/governance/jurisdictions/" + JURISDICTION_EU)
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Async projection — use Awaitility
             support.awaitQueryValue(
-                "SELECT description FROM jurisdiction WHERE jurisdiction_name = ?",
-                "description", "European Union (updated)",
-                JURISDICTION_EU
-            );
+                    "SELECT description FROM jurisdiction WHERE jurisdiction_name = ?",
+                    "description",
+                    "European Union (updated)",
+                    JURISDICTION_EU);
         }
 
         @Test
         @Order(6)
         @DisplayName("Delete jurisdiction: California")
         void deleteCalifornia() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .delete("/api/v1/governance/jurisdictions/" + JURISDICTION_CA)
-                .then()
+                    .then()
                     .statusCode(200);
 
             support.assertRowAbsent("jurisdiction", "jurisdiction_name", JURISDICTION_CA);
@@ -555,15 +551,15 @@ class GovernanceResourceIT {
         @Order(7)
         @DisplayName("Register jurisdiction with blank name → 400")
         void registerBlankName() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "jurisdictionName": "", "description": "invalid" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/governance/jurisdictions")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -571,11 +567,10 @@ class GovernanceResourceIT {
         @Order(8)
         @DisplayName("Get non-existent jurisdiction → 404")
         void getNonExistent() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/governance/jurisdictions/does-not-exist")
-                .then()
+                    .then()
                     .statusCode(404);
         }
     }
@@ -601,15 +596,16 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Register prerequisite entity: User")
         void registerEntity() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "entityName": "%s", "description": "Application user" }
-                    """.formatted(ENTITY_USER))
-                .when()
+                    """
+                                    .formatted(ENTITY_USER))
+                    .when()
                     .post("/api/v1/catalogue/entities")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -617,15 +613,16 @@ class GovernanceResourceIT {
         @Order(2)
         @DisplayName("Register prerequisite category: PII")
         void registerCategory() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "categoryName": "%s", "description": "Personal data" }
-                    """.formatted(CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(CATEGORY_PII))
+                    .when()
                     .post("/api/v1/catalogue/categories")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -633,19 +630,20 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("Register prerequisite field: email on User")
         void registerField() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "%s",
                       "entityName": "%s",
                       "description": "User email address"
                     }
-                    """.formatted(FIELD_EMAIL, ENTITY_USER))
-                .when()
+                    """
+                                    .formatted(FIELD_EMAIL, ENTITY_USER))
+                    .when()
                     .post("/api/v1/catalogue/fields")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -653,19 +651,20 @@ class GovernanceResourceIT {
         @Order(4)
         @DisplayName("Assign field email to category PII")
         void assignFieldCategory() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "fieldName": "%s",
                       "entityName": "%s",
                       "categoryName": "%s"
                     }
-                    """.formatted(FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
+                    .when()
                     .post("/api/v1/catalogue/fields/categories")
-                .then()
+                    .then()
                     .statusCode(200);
         }
 
@@ -675,10 +674,10 @@ class GovernanceResourceIT {
         @Order(10)
         @DisplayName("Add field-scope policy to marketing")
         void addFieldPolicy() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "policyType": "field",
@@ -686,66 +685,81 @@ class GovernanceResourceIT {
                       "entityName": "%s",
                       "categoryName": "%s"
                     }
-                    """.formatted(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(
+                                            PURPOSE_MARKETING,
+                                            FIELD_EMAIL,
+                                            ENTITY_USER,
+                                            CATEGORY_PII))
+                    .when()
                     .post("/api/v1/governance/purposes/policies")
-                .then()
+                    .then()
                     .statusCode(201);
 
             // Async projection — use Awaitility
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var policies = support.query(
-                        "SELECT p.policy_type, pu.purpose_name, f.field_name "
-                            + "FROM policy p "
-                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                            + "JOIN field f ON p.field_id = f.field_id "
-                            + "WHERE pu.purpose_name = ? AND f.field_name = ?",
-                        PURPOSE_MARKETING, FIELD_EMAIL
-                    );
-                    assertThat(policies).isNotEmpty();
-                    assertThat(policies.get(0).get("policy_type").toString().toLowerCase())
-                        .as("Policy type should be 'field'")
-                        .isEqualTo("field");
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var policies =
+                                        support.query(
+                                                "SELECT p.policy_type, pu.purpose_name,"
+                                                    + " f.field_name FROM policy p JOIN purpose pu"
+                                                    + " ON p.purpose_id = pu.purpose_id JOIN field"
+                                                    + " f ON p.field_id = f.field_id WHERE"
+                                                    + " pu.purpose_name = ? AND f.field_name = ?",
+                                                PURPOSE_MARKETING,
+                                                FIELD_EMAIL);
+                                assertThat(policies).isNotEmpty();
+                                assertThat(
+                                                policies.get(0)
+                                                        .get("policy_type")
+                                                        .toString()
+                                                        .toLowerCase())
+                                        .as("Policy type should be 'field'")
+                                        .isEqualTo("field");
+                            });
         }
 
         @Test
         @Order(11)
         @DisplayName("Add category-scope policy to marketing")
         void addCategoryPolicy() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "policyType": "category",
                       "categoryName": "%s"
                     }
-                    """.formatted(PURPOSE_MARKETING, CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(PURPOSE_MARKETING, CATEGORY_PII))
+                    .when()
                     .post("/api/v1/governance/purposes/policies")
-                .then()
+                    .then()
                     .statusCode(201);
 
             // Async projection — use Awaitility
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var policies = support.query(
-                        "SELECT p.policy_type, c.category_name "
-                            + "FROM policy p "
-                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                            + "JOIN category c ON p.category_id = c.category_id "
-                            + "WHERE pu.purpose_name = ? AND c.category_name = ?",
-                        PURPOSE_MARKETING, CATEGORY_PII
-                    );
-                    assertThat(policies).isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var policies =
+                                        support.query(
+                                                "SELECT p.policy_type, c.category_name FROM policy"
+                                                    + " p JOIN purpose pu ON p.purpose_id ="
+                                                    + " pu.purpose_id JOIN category c ON"
+                                                    + " p.category_id = c.category_id WHERE"
+                                                    + " pu.purpose_name = ? AND c.category_name ="
+                                                    + " ?",
+                                                PURPOSE_MARKETING,
+                                                CATEGORY_PII);
+                                assertThat(policies).isNotEmpty();
+                            });
         }
 
         @Test
@@ -754,17 +768,16 @@ class GovernanceResourceIT {
         void getPurposeWithPolicies() {
             // Async projection — policies populate asynchronously
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .when()
-                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                        .then()
-                            .statusCode(200)
-                            .body("policies", hasSize(greaterThanOrEqualTo(2)))
-                );
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .when()
+                                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
+                                            .then()
+                                            .statusCode(200)
+                                            .body("policies", hasSize(greaterThanOrEqualTo(2))));
         }
 
         @Test
@@ -773,26 +786,28 @@ class GovernanceResourceIT {
         void removeFieldPolicy() {
             // Wait for the policy to be projected before attempting removal
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var before = support.query(
-                        "SELECT p.* FROM policy p "
-                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                            + "JOIN field f ON p.field_id = f.field_id "
-                            + "WHERE pu.purpose_name = ? AND f.field_name = ? "
-                            + "AND p.policy_type::text = 'FIELD'",
-                        PURPOSE_MARKETING, FIELD_EMAIL
-                    );
-                    assertThat(before)
-                        .as("Field-scope policy should exist before removal")
-                        .isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var before =
+                                        support.query(
+                                                "SELECT p.* FROM policy p JOIN purpose pu ON"
+                                                    + " p.purpose_id = pu.purpose_id JOIN field f"
+                                                    + " ON p.field_id = f.field_id WHERE"
+                                                    + " pu.purpose_name = ? AND f.field_name = ?"
+                                                    + " AND p.policy_type::text = 'FIELD'",
+                                                PURPOSE_MARKETING,
+                                                FIELD_EMAIL);
+                                assertThat(before)
+                                        .as("Field-scope policy should exist before removal")
+                                        .isNotEmpty();
+                            });
 
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "policyType": "field",
@@ -800,39 +815,46 @@ class GovernanceResourceIT {
                       "entityName": "%s",
                       "categoryName": "%s"
                     }
-                    """.formatted(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(
+                                            PURPOSE_MARKETING,
+                                            FIELD_EMAIL,
+                                            ENTITY_USER,
+                                            CATEGORY_PII))
+                    .when()
                     .delete("/api/v1/governance/purposes/policies")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Verify the field-scope policy row is gone (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var policies = support.query(
-                        "SELECT p.* FROM policy p "
-                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                            + "JOIN field f ON p.field_id = f.field_id "
-                            + "WHERE pu.purpose_name = ? AND f.field_name = ? "
-                            + "AND p.policy_type::text = 'FIELD'",
-                        PURPOSE_MARKETING, FIELD_EMAIL
-                    );
-                    assertThat(policies)
-                        .as("Field-scope policy should be removed after DELETE")
-                        .isEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var policies =
+                                        support.query(
+                                                "SELECT p.* FROM policy p JOIN purpose pu ON"
+                                                    + " p.purpose_id = pu.purpose_id JOIN field f"
+                                                    + " ON p.field_id = f.field_id WHERE"
+                                                    + " pu.purpose_name = ? AND f.field_name = ?"
+                                                    + " AND p.policy_type::text = 'FIELD'",
+                                                PURPOSE_MARKETING,
+                                                FIELD_EMAIL);
+                                assertThat(policies)
+                                        .as("Field-scope policy should be removed after DELETE")
+                                        .isEmpty();
+                            });
         }
 
         @Test
         @Order(14)
         @DisplayName("Re-add field-scope policy for later phases")
         void reAddFieldPolicy() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "policyType": "field",
@@ -840,10 +862,15 @@ class GovernanceResourceIT {
                       "entityName": "%s",
                       "categoryName": "%s"
                     }
-                    """.formatted(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
-                .when()
+                    """
+                                    .formatted(
+                                            PURPOSE_MARKETING,
+                                            FIELD_EMAIL,
+                                            ENTITY_USER,
+                                            CATEGORY_PII))
+                    .when()
                     .post("/api/v1/governance/purposes/policies")
-                .then()
+                    .then()
                     .statusCode(201);
         }
     }
@@ -867,37 +894,43 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Link marketing → GDPR")
         void linkPurposeToRegulation() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "regulationName": "%s",
                       "lawfulBasis": "consent"
                     }
-                    """.formatted(PURPOSE_MARKETING, REGULATION_GDPR))
-                .when()
+                    """
+                                    .formatted(PURPOSE_MARKETING, REGULATION_GDPR))
+                    .when()
                     .post("/api/v1/governance/purposes/regulations")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // JDBC: verify purpose_regulation join table (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var links = support.query(
-                        "SELECT pr.lawful_basis, pu.purpose_name, r.regulation_name "
-                            + "FROM purpose_regulation pr "
-                            + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
-                            + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
-                            + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
-                        PURPOSE_MARKETING, REGULATION_GDPR
-                    );
-                    assertThat(links).hasSize(1);
-                    assertThat(links.get(0).get("lawful_basis").toString()).isEqualTo("consent");
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var links =
+                                        support.query(
+                                                "SELECT pr.lawful_basis, pu.purpose_name,"
+                                                    + " r.regulation_name FROM purpose_regulation"
+                                                    + " pr JOIN purpose pu ON pr.purpose_id ="
+                                                    + " pu.purpose_id JOIN regulation r ON"
+                                                    + " pr.regulation_id = r.regulation_id WHERE"
+                                                    + " pu.purpose_name = ? AND r.regulation_name ="
+                                                    + " ?",
+                                                PURPOSE_MARKETING,
+                                                REGULATION_GDPR);
+                                assertThat(links).hasSize(1);
+                                assertThat(links.get(0).get("lawful_basis").toString())
+                                        .isEqualTo("consent");
+                            });
         }
 
         @Test
@@ -906,65 +939,72 @@ class GovernanceResourceIT {
         void getPurposeShowsRegulation() {
             // Async projection — regulations populate asynchronously
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .when()
-                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                        .then()
-                            .statusCode(200)
-                            .body("regulations", hasSize(greaterThanOrEqualTo(1)))
-                            .body("regulations.regulationName", hasItem(REGULATION_GDPR))
-                );
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .when()
+                                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
+                                            .then()
+                                            .statusCode(200)
+                                            .body("regulations", hasSize(greaterThanOrEqualTo(1)))
+                                            .body(
+                                                    "regulations.regulationName",
+                                                    hasItem(REGULATION_GDPR)));
         }
 
         @Test
         @Order(3)
         @DisplayName("Unlink marketing → GDPR")
         void unlinkPurposeFromRegulation() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .delete("/api/v1/governance/purposes/" + PURPOSE_MARKETING
-                        + "/regulations/" + REGULATION_GDPR)
-                .then()
+            given().header("Authorization", auth())
+                    .when()
+                    .delete(
+                            "/api/v1/governance/purposes/"
+                                    + PURPOSE_MARKETING
+                                    + "/regulations/"
+                                    + REGULATION_GDPR)
+                    .then()
                     .statusCode(200);
 
             // Async projection — wait for unlink to propagate
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var links = support.query(
-                        "SELECT * FROM purpose_regulation pr "
-                            + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
-                            + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
-                            + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
-                        PURPOSE_MARKETING, REGULATION_GDPR
-                    );
-                    assertThat(links).isEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var links =
+                                        support.query(
+                                                "SELECT * FROM purpose_regulation pr JOIN purpose"
+                                                    + " pu ON pr.purpose_id = pu.purpose_id JOIN"
+                                                    + " regulation r ON pr.regulation_id ="
+                                                    + " r.regulation_id WHERE pu.purpose_name = ?"
+                                                    + " AND r.regulation_name = ?",
+                                                PURPOSE_MARKETING,
+                                                REGULATION_GDPR);
+                                assertThat(links).isEmpty();
+                            });
         }
 
         @Test
         @Order(4)
         @DisplayName("Re-link marketing → GDPR for later phases")
         void reLinkForLater() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "purposeName": "%s",
                       "regulationName": "%s",
                       "lawfulBasis": "consent"
                     }
-                    """.formatted(PURPOSE_MARKETING, REGULATION_GDPR))
-                .when()
+                    """
+                                    .formatted(PURPOSE_MARKETING, REGULATION_GDPR))
+                    .when()
                     .post("/api/v1/governance/purposes/regulations")
-                .then()
+                    .then()
                     .statusCode(200);
         }
     }
@@ -988,36 +1028,41 @@ class GovernanceResourceIT {
         @Order(1)
         @DisplayName("Add EU to GDPR")
         void addJurisdictionToRegulation() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "regulationName": "%s",
                       "jurisdictionName": "%s",
                       "description": "EU territory scope"
                     }
-                    """.formatted(REGULATION_GDPR, JURISDICTION_EU))
-                .when()
+                    """
+                                    .formatted(REGULATION_GDPR, JURISDICTION_EU))
+                    .when()
                     .post("/api/v1/governance/regulations/jurisdictions")
-                .then()
+                    .then()
                     .statusCode(201);
 
             // JDBC: verify regulation_jurisdiction join table (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var links = support.query(
-                        "SELECT rj.*, r.regulation_name, j.jurisdiction_name "
-                            + "FROM regulation_jurisdiction rj "
-                            + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
-                            + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
-                            + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
-                        REGULATION_GDPR, JURISDICTION_EU
-                    );
-                    assertThat(links).hasSize(1);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var links =
+                                        support.query(
+                                                "SELECT rj.*, r.regulation_name,"
+                                                    + " j.jurisdiction_name FROM"
+                                                    + " regulation_jurisdiction rj JOIN regulation"
+                                                    + " r ON rj.regulation_id = r.regulation_id"
+                                                    + " JOIN jurisdiction j ON rj.jurisdiction_id ="
+                                                    + " j.jurisdiction_id WHERE r.regulation_name ="
+                                                    + " ? AND j.jurisdiction_name = ?",
+                                                REGULATION_GDPR,
+                                                JURISDICTION_EU);
+                                assertThat(links).hasSize(1);
+                            });
         }
 
         @Test
@@ -1026,46 +1071,57 @@ class GovernanceResourceIT {
         void getRegulationShowsJurisdiction() {
             // Async projection — jurisdictions populate asynchronously
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .when()
-                            .get("/api/v1/governance/regulations/" + REGULATION_GDPR)
-                        .then()
-                            .statusCode(200)
-                            .body("activeJurisdictions", hasSize(greaterThanOrEqualTo(1)))
-                            .body("activeJurisdictions.jurisdictionName", hasItem(JURISDICTION_EU))
-                );
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .when()
+                                            .get(
+                                                    "/api/v1/governance/regulations/"
+                                                            + REGULATION_GDPR)
+                                            .then()
+                                            .statusCode(200)
+                                            .body(
+                                                    "activeJurisdictions",
+                                                    hasSize(greaterThanOrEqualTo(1)))
+                                            .body(
+                                                    "activeJurisdictions.jurisdictionName",
+                                                    hasItem(JURISDICTION_EU)));
         }
 
         @Test
         @Order(3)
         @DisplayName("Remove EU from GDPR")
         void removeJurisdictionFromRegulation() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .delete("/api/v1/governance/regulations/" + REGULATION_GDPR
-                        + "/jurisdictions/" + JURISDICTION_EU)
-                .then()
+            given().header("Authorization", auth())
+                    .when()
+                    .delete(
+                            "/api/v1/governance/regulations/"
+                                    + REGULATION_GDPR
+                                    + "/jurisdictions/"
+                                    + JURISDICTION_EU)
+                    .then()
                     .statusCode(200);
 
             // Async projection — wait for unlink to propagate
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var links = support.query(
-                        "SELECT * FROM regulation_jurisdiction rj "
-                            + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
-                            + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
-                            + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
-                        REGULATION_GDPR, JURISDICTION_EU
-                    );
-                    assertThat(links).isEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var links =
+                                        support.query(
+                                                "SELECT * FROM regulation_jurisdiction rj JOIN"
+                                                        + " regulation r ON rj.regulation_id ="
+                                                        + " r.regulation_id JOIN jurisdiction j ON"
+                                                        + " rj.jurisdiction_id = j.jurisdiction_id"
+                                                        + " WHERE r.regulation_name = ? AND"
+                                                        + " j.jurisdiction_name = ?",
+                                                REGULATION_GDPR,
+                                                JURISDICTION_EU);
+                                assertThat(links).isEmpty();
+                            });
         }
     }
 
@@ -1089,33 +1145,35 @@ class GovernanceResourceIT {
         @DisplayName("Delete purpose with policies → verify behavior")
         void deletePurposeWithPolicies() {
             // marketing has policies and regulation links — attempt delete
-            int status = given()
-                .header("Authorization", auth())
-                .when()
-                    .delete("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                .then()
-                    .extract().statusCode();
+            int status =
+                    given().header("Authorization", auth())
+                            .when()
+                            .delete("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
+                            .then()
+                            .extract()
+                            .statusCode();
 
             // Accept either: cascading delete (200) or integrity check (409)
             assertThat(status).isIn(200, 409);
 
             if (status == 200) {
                 // Re-register purpose + policy + regulation link for event verification phase
-                given()
-                    .header("Authorization", auth())
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", auth())
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         { "purposeName": "%s", "description": "Re-registered" }
-                        """.formatted(PURPOSE_MARKETING))
-                    .when()
+                        """
+                                        .formatted(PURPOSE_MARKETING))
+                        .when()
                         .post("/api/v1/governance/purposes")
-                    .then()
+                        .then()
                         .statusCode(201);
 
-                given()
-                    .header("Authorization", auth())
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", auth())
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "purposeName": "%s",
                           "policyType": "field",
@@ -1123,25 +1181,31 @@ class GovernanceResourceIT {
                           "entityName": "%s",
                           "categoryName": "%s"
                         }
-                        """.formatted(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII))
-                    .when()
+                        """
+                                        .formatted(
+                                                PURPOSE_MARKETING,
+                                                FIELD_EMAIL,
+                                                ENTITY_USER,
+                                                CATEGORY_PII))
+                        .when()
                         .post("/api/v1/governance/purposes/policies")
-                    .then()
+                        .then()
                         .statusCode(201);
 
-                given()
-                    .header("Authorization", auth())
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", auth())
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "purposeName": "%s",
                           "regulationName": "%s",
                           "lawfulBasis": "consent"
                         }
-                        """.formatted(PURPOSE_MARKETING, REGULATION_GDPR))
-                    .when()
+                        """
+                                        .formatted(PURPOSE_MARKETING, REGULATION_GDPR))
+                        .when()
                         .post("/api/v1/governance/purposes/regulations")
-                    .then()
+                        .then()
                         .statusCode(200);
             }
         }
@@ -1151,27 +1215,29 @@ class GovernanceResourceIT {
         @DisplayName("Delete regulation that had links → verify behavior")
         void deleteRegulationWithLinks() {
             // GDPR may still have purpose links — attempt delete
-            int status = given()
-                .header("Authorization", auth())
-                .when()
-                    .delete("/api/v1/governance/regulations/" + REGULATION_GDPR)
-                .then()
-                    .extract().statusCode();
+            int status =
+                    given().header("Authorization", auth())
+                            .when()
+                            .delete("/api/v1/governance/regulations/" + REGULATION_GDPR)
+                            .then()
+                            .extract()
+                            .statusCode();
 
             // Accept either: cascading delete (200) or integrity check (409)
             assertThat(status).isIn(200, 409);
 
             if (status == 200) {
                 // Re-register for event verification
-                given()
-                    .header("Authorization", auth())
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", auth())
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         { "regulationName": "%s", "description": "Re-registered" }
-                        """.formatted(REGULATION_GDPR))
-                    .when()
+                        """
+                                        .formatted(REGULATION_GDPR))
+                        .when()
                         .post("/api/v1/governance/regulations")
-                    .then()
+                        .then()
                         .statusCode(201);
             }
         }
@@ -1215,7 +1281,8 @@ class GovernanceResourceIT {
             var events = support.queryEventsByAggregate("consent-regulation");
             assertThat(events).hasSizeGreaterThanOrEqualTo(2);
 
-            var registered = support.queryEvents("consent-regulation", "consent.regulation.registered");
+            var registered =
+                    support.queryEvents("consent-regulation", "consent.regulation.registered");
             assertThat(registered).isNotEmpty();
         }
 
@@ -1226,7 +1293,8 @@ class GovernanceResourceIT {
             var events = support.queryEventsByAggregate("consent-jurisdiction");
             assertThat(events).hasSizeGreaterThanOrEqualTo(2);
 
-            var registered = support.queryEvents("consent-jurisdiction", "consent.jurisdiction.registered");
+            var registered =
+                    support.queryEvents("consent-jurisdiction", "consent.jurisdiction.registered");
             assertThat(registered).isNotEmpty();
         }
 
@@ -1243,40 +1311,44 @@ class GovernanceResourceIT {
         @Order(6)
         @DisplayName("Purpose regulation-linked events exist")
         void purposeRegulationLinkedEvents() {
-            var events = support.queryEvents("consent-purpose", "consent.purpose.regulation-linked");
-            assertThat(events)
-                .as("At least one regulation-linked event should exist")
-                .isNotEmpty();
+            var events =
+                    support.queryEvents("consent-purpose", "consent.purpose.regulation-linked");
+            assertThat(events).as("At least one regulation-linked event should exist").isNotEmpty();
         }
 
         @Test
         @Order(7)
         @DisplayName("Purpose regulation-unlinked events exist")
         void purposeRegulationUnlinkedEvents() {
-            var events = support.queryEvents("consent-purpose", "consent.purpose.regulation-unlinked");
+            var events =
+                    support.queryEvents("consent-purpose", "consent.purpose.regulation-unlinked");
             assertThat(events)
-                .as("At least one regulation-unlinked event should exist")
-                .isNotEmpty();
+                    .as("At least one regulation-unlinked event should exist")
+                    .isNotEmpty();
         }
 
         @Test
         @Order(8)
         @DisplayName("Regulation jurisdiction-added events exist")
         void regulationJurisdictionAddedEvents() {
-            var events = support.queryEvents("consent-regulation", "consent.regulation.jurisdiction-added");
+            var events =
+                    support.queryEvents(
+                            "consent-regulation", "consent.regulation.jurisdiction-added");
             assertThat(events)
-                .as("At least one jurisdiction-added event should exist")
-                .isNotEmpty();
+                    .as("At least one jurisdiction-added event should exist")
+                    .isNotEmpty();
         }
 
         @Test
         @Order(9)
         @DisplayName("Regulation jurisdiction-removed events exist")
         void regulationJurisdictionRemovedEvents() {
-            var events = support.queryEvents("consent-regulation", "consent.regulation.jurisdiction-removed");
+            var events =
+                    support.queryEvents(
+                            "consent-regulation", "consent.regulation.jurisdiction-removed");
             assertThat(events)
-                .as("At least one jurisdiction-removed event should exist")
-                .isNotEmpty();
+                    .as("At least one jurisdiction-removed event should exist")
+                    .isNotEmpty();
         }
     }
 

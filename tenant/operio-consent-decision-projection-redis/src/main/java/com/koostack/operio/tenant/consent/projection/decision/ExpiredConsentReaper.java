@@ -4,9 +4,6 @@ import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationPublisher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -15,14 +12,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Background scheduled task that scans for subject→policy consent edges
- * whose {@code expiresAt} timestamp has passed, marks them as
- * {@code action=EXPIRE}, and publishes invalidation signals.
+ * Background scheduled task that scans for subject→policy consent edges whose {@code expiresAt}
+ * timestamp has passed, marks them as {@code action=EXPIRE}, and publishes invalidation signals.
  *
- * <p>Follows the same lifecycle pattern as {@code OutboxPoller}:
- * call {@link #start()} to begin periodic reaping, {@link #stop()} to halt.
+ * <p>Follows the same lifecycle pattern as {@code OutboxPoller}: call {@link #start()} to begin
+ * periodic reaping, {@link #stop()} to halt.
  */
 public class ExpiredConsentReaper {
 
@@ -40,18 +38,24 @@ public class ExpiredConsentReaper {
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public ExpiredConsentReaper(ConsentGraphRedisRepository graph,
-                                InvalidationPublisher invalidationPublisher,
-                                Supplier<List<String>> tenantDiscovery) {
-        this(graph, invalidationPublisher, tenantDiscovery,
-                DEFAULT_INTERVAL_SECONDS, DEFAULT_SCAN_BATCH_SIZE);
+    public ExpiredConsentReaper(
+            ConsentGraphRedisRepository graph,
+            InvalidationPublisher invalidationPublisher,
+            Supplier<List<String>> tenantDiscovery) {
+        this(
+                graph,
+                invalidationPublisher,
+                tenantDiscovery,
+                DEFAULT_INTERVAL_SECONDS,
+                DEFAULT_SCAN_BATCH_SIZE);
     }
 
-    public ExpiredConsentReaper(ConsentGraphRedisRepository graph,
-                                InvalidationPublisher invalidationPublisher,
-                                Supplier<List<String>> tenantDiscovery,
-                                long intervalSeconds,
-                                int scanBatchSize) {
+    public ExpiredConsentReaper(
+            ConsentGraphRedisRepository graph,
+            InvalidationPublisher invalidationPublisher,
+            Supplier<List<String>> tenantDiscovery,
+            long intervalSeconds,
+            int scanBatchSize) {
         this.graph = graph;
         this.invalidationPublisher = invalidationPublisher;
         this.tenantDiscovery = tenantDiscovery;
@@ -59,23 +63,25 @@ public class ExpiredConsentReaper {
         this.scanBatchSize = scanBatchSize;
     }
 
-    /**
-     * Starts the periodic reaper. Idempotent — calling again while running is a no-op.
-     */
+    /** Starts the periodic reaper. Idempotent — calling again while running is a no-op. */
     public void start() {
         if (!running.compareAndSet(false, true)) return;
-        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "expired-consent-reaper");
-            t.setDaemon(true);
-            return t;
-        });
-        scheduler.scheduleAtFixedRate(this::reapAll, intervalSeconds, intervalSeconds, TimeUnit.SECONDS);
-        log.info("ExpiredConsentReaper started — interval={}s, batchSize={}", intervalSeconds, scanBatchSize);
+        scheduler =
+                Executors.newSingleThreadScheduledExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "expired-consent-reaper");
+                            t.setDaemon(true);
+                            return t;
+                        });
+        scheduler.scheduleAtFixedRate(
+                this::reapAll, intervalSeconds, intervalSeconds, TimeUnit.SECONDS);
+        log.info(
+                "ExpiredConsentReaper started — interval={}s, batchSize={}",
+                intervalSeconds,
+                scanBatchSize);
     }
 
-    /**
-     * Stops the periodic reaper. Blocks up to 5 seconds for graceful shutdown.
-     */
+    /** Stops the periodic reaper. Blocks up to 5 seconds for graceful shutdown. */
     public void stop() {
         if (!running.compareAndSet(true, false)) return;
         if (scheduler != null) {
@@ -97,8 +103,8 @@ public class ExpiredConsentReaper {
     }
 
     /**
-     * Runs a single reap cycle across all tenants. Can also be called
-     * manually for on-demand cleanup.
+     * Runs a single reap cycle across all tenants. Can also be called manually for on-demand
+     * cleanup.
      */
     public void reapAll() {
         try {
@@ -122,7 +128,10 @@ public class ExpiredConsentReaper {
         List<String> expiredKeys = graph.scanExpiredConsentEdges(cutoff, scanBatchSize);
         if (expiredKeys.isEmpty()) return;
 
-        log.debug("Reaping {} candidate expired consent edge(s) for tenant {}", expiredKeys.size(), tenantId);
+        log.debug(
+                "Reaping {} candidate expired consent edge(s) for tenant {}",
+                expiredKeys.size(),
+                tenantId);
         int marked = graph.markEdgesExpired(expiredKeys, cutoff);
         if (marked == 0) return;
 
@@ -139,12 +148,26 @@ public class ExpiredConsentReaper {
     private void publishInvalidation(String tenantId, String subjectId) {
         if (invalidationPublisher == null) return;
         try {
-            invalidationPublisher.publish(new CacheInvalidationMessage(
-                    UUID.randomUUID().toString(), tenantId, subjectId,
-                    null, null, null, null, InvalidationAction.REVOKED));
-            invalidationPublisher.publish(new CacheInvalidationMessage(
-                    UUID.randomUUID().toString(), tenantId, subjectId,
-                    null, null, null, null, InvalidationAction.CONSENT_ENTRY_CHANGED));
+            invalidationPublisher.publish(
+                    new CacheInvalidationMessage(
+                            UUID.randomUUID().toString(),
+                            tenantId,
+                            subjectId,
+                            null,
+                            null,
+                            null,
+                            null,
+                            InvalidationAction.REVOKED));
+            invalidationPublisher.publish(
+                    new CacheInvalidationMessage(
+                            UUID.randomUUID().toString(),
+                            tenantId,
+                            subjectId,
+                            null,
+                            null,
+                            null,
+                            null,
+                            InvalidationAction.CONSENT_ENTRY_CHANGED));
         } catch (Exception e) {
             log.warn("Failed to publish reaper invalidation for subject={}", subjectId, e);
         }

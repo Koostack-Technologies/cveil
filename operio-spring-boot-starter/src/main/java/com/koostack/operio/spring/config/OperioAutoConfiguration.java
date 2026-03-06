@@ -21,51 +21,43 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Spring Boot auto-configuration for the Operio consent SDK.
  *
- * <p>This starter is a <strong>client SDK</strong> for developers embedding
- * Operio in their Spring Boot applications. It auto-wires an {@link Operio}
- * instance from Spring properties ({@code operio.*}) and provides AOP aspects
- * for annotation-driven consent enforcement ({@code @ConsentRequired},
- * {@code @Sensitive}).
+ * <p>This starter is a <strong>client SDK</strong> for developers embedding Operio in their Spring
+ * Boot applications. It auto-wires an {@link Operio} instance from Spring properties ({@code
+ * operio.*}) and provides AOP aspects for annotation-driven consent enforcement
+ * ({@code @ConsentRequired}, {@code @Sensitive}).
  *
  * <p>The {@code operio.mode} property controls which consent bundle is used:
+ *
  * <ul>
- *   <li>{@code embedded} (default) — {@code EmbeddedConsentBundle}
- *       (H2 + Caffeine, zero external infra, ideal for dev/testing)</li>
- *   <li>{@code production} — {@code CoreConsentBundle}
- *       (Postgres + Redis, server-grade infrastructure)</li>
+ *   <li>{@code embedded} (default) — {@code EmbeddedConsentBundle} (H2 + Caffeine, zero external
+ *       infra, ideal for dev/testing)
+ *   <li>{@code production} — {@code CoreConsentBundle} (Postgres + Redis, server-grade
+ *       infrastructure)
  * </ul>
  *
- * <p><strong>What is NOT in this starter:</strong> REST controllers, auth
- * filters, rate limiting, CORS, DTOs, exception handlers, platform admin
- * wiring, bootstrap key logic. All of that lives in the Quarkus REST API
- * module ({@code operio-rest-api}).
+ * <p><strong>What is NOT in this starter:</strong> REST controllers, auth filters, rate limiting,
+ * CORS, DTOs, exception handlers, platform admin wiring, bootstrap key logic. All of that lives in
+ * the Quarkus REST API module ({@code operio-rest-api}).
  */
 @AutoConfiguration
 @EnableConfigurationProperties(OperioProperties.class)
 public class OperioAutoConfiguration {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        OperioAutoConfiguration.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(OperioAutoConfiguration.class);
 
     // ------------------------------------------------------------------ Bundles
 
     /**
-     * Embedded bundle (H2 + Caffeine) — activated when {@code operio.mode}
-     * is {@code "embedded"} or absent (the default for development/testing).
+     * Embedded bundle (H2 + Caffeine) — activated when {@code operio.mode} is {@code "embedded"} or
+     * absent (the default for development/testing).
      *
-     * <p>Uses reflection to instantiate {@code EmbeddedConsentBundle} so that
-     * the starter module only needs a {@code compileOnly} dependency on the
-     * bundle. If the bundle is not on the runtime classpath the bean is
-     * simply not created, and the user must provide their own
-     * {@link PluginBundle} or {@link Operio} bean.
+     * <p>Uses reflection to instantiate {@code EmbeddedConsentBundle} so that the starter module
+     * only needs a {@code compileOnly} dependency on the bundle. If the bundle is not on the
+     * runtime classpath the bean is simply not created, and the user must provide their own {@link
+     * PluginBundle} or {@link Operio} bean.
      */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(
-        name = "operio.mode",
-        havingValue = "embedded",
-        matchIfMissing = true
-    )
+    @ConditionalOnProperty(name = "operio.mode", havingValue = "embedded", matchIfMissing = true)
     static class EmbeddedBundleConfiguration {
 
         @Bean
@@ -73,47 +65,37 @@ public class OperioAutoConfiguration {
         PluginBundle embeddedConsentBundle(OperioProperties props) {
             LOG.info("Operio SDK: configuring embedded bundle (H2 + Caffeine)");
             try {
-                Class<?> bundleClass = Class.forName(
-                    "com.koostack.operio.bundle.embedded.EmbeddedConsentBundle"
-                );
+                Class<?> bundleClass =
+                        Class.forName("com.koostack.operio.bundle.embedded.EmbeddedConsentBundle");
 
-                if (
-                    props.getAppName() != null && !props.getAppName().isBlank()
-                ) {
-                    // EmbeddedConsentBundle(String appName, AnnotationDiscoveryConfig discoveryConfig)
+                if (props.getAppName() != null && !props.getAppName().isBlank()) {
+                    // EmbeddedConsentBundle(String appName, AnnotationDiscoveryConfig
+                    // discoveryConfig)
                     // We use the (String) constructor via the two-arg form with null discovery
                     var ctor = bundleClass.getConstructor(String.class);
                     return (PluginBundle) ctor.newInstance(props.getAppName());
                 }
 
                 // Default no-arg constructor
-                return (PluginBundle) bundleClass
-                    .getConstructor()
-                    .newInstance();
+                return (PluginBundle) bundleClass.getConstructor().newInstance();
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(
-                    "operio.mode=embedded but 'operio-bundle-embedded' is not on the classpath. " +
-                        "Add a runtime dependency on operio-bundle-embedded, or switch to " +
-                        "operio.mode=production with operio-bundle-core on the classpath.",
-                    e
-                );
+                        "operio.mode=embedded but 'operio-bundle-embedded' is not on the classpath."
+                            + " Add a runtime dependency on operio-bundle-embedded, or switch to"
+                            + " operio.mode=production with operio-bundle-core on the classpath.",
+                        e);
             } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException(
-                    "Failed to instantiate EmbeddedConsentBundle",
-                    e
-                );
+                throw new IllegalStateException("Failed to instantiate EmbeddedConsentBundle", e);
             }
         }
     }
 
     /**
-     * Production bundle (Postgres + Redis) — activated when
-     * {@code operio.mode=production}.
+     * Production bundle (Postgres + Redis) — activated when {@code operio.mode=production}.
      *
-     * <p>Uses reflection to instantiate {@code CoreConsentBundle} so that
-     * the starter module only needs a {@code compileOnly} dependency on the
-     * bundle. Requires {@code operio.db.url} and {@code operio.redis.host}
-     * to be configured.
+     * <p>Uses reflection to instantiate {@code CoreConsentBundle} so that the starter module only
+     * needs a {@code compileOnly} dependency on the bundle. Requires {@code operio.db.url} and
+     * {@code operio.redis.host} to be configured.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(name = "operio.mode", havingValue = "production")
@@ -122,107 +104,80 @@ public class OperioAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean(PluginBundle.class)
         PluginBundle coreConsentBundle(OperioProperties props) {
-            LOG.info(
-                "Operio SDK: configuring production bundle (Postgres + Redis)"
-            );
+            LOG.info("Operio SDK: configuring production bundle (Postgres + Redis)");
 
             OperioProperties.DbProperties db = props.getDb();
             OperioProperties.RedisProperties redis = props.getRedis();
 
             if (db == null || db.getUrl() == null || db.getUrl().isBlank()) {
                 throw new IllegalStateException(
-                    "operio.mode=production requires operio.db.url to be set"
-                );
+                        "operio.mode=production requires operio.db.url to be set");
             }
-            if (
-                redis == null ||
-                redis.getHost() == null ||
-                redis.getHost().isBlank()
-            ) {
+            if (redis == null || redis.getHost() == null || redis.getHost().isBlank()) {
                 throw new IllegalStateException(
-                    "operio.mode=production requires operio.redis.host to be set"
-                );
+                        "operio.mode=production requires operio.redis.host to be set");
             }
 
             try {
                 // Build JooqConsentAdminServiceConfig
-                Class<?> jooqConfigClass = Class.forName(
-                    "com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig"
-                );
-                Object jooqConfig = jooqConfigClass
-                    .getConstructor(String.class, String.class)
-                    .newInstance(db.getUrl(), db.getDialect());
+                Class<?> jooqConfigClass =
+                        Class.forName(
+                                "com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig");
+                Object jooqConfig =
+                        jooqConfigClass
+                                .getConstructor(String.class, String.class)
+                                .newInstance(db.getUrl(), db.getDialect());
 
                 // Build Redis config (try new ConsentGraphRedisConfig first, fall back to legacy)
                 Object redisConfig;
                 Class<?> redisConfigClass;
                 try {
-                    redisConfigClass = Class.forName(
-                        "com.koostack.operio.plugin.redis.common.ConsentGraphRedisConfig"
-                    );
+                    redisConfigClass =
+                            Class.forName(
+                                    "com.koostack.operio.plugin.redis.common.ConsentGraphRedisConfig");
                 } catch (ClassNotFoundException ignored) {
-                    redisConfigClass = Class.forName(
-                        "com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig"
-                    );
+                    redisConfigClass =
+                            Class.forName(
+                                    "com.koostack.operio.plugin.consent.redis.RedisConsentDecisionServiceConfig");
                 }
-                if (
-                    redis.getPassword() != null &&
-                    !redis.getPassword().isBlank()
-                ) {
-                    redisConfig = redisConfigClass
-                        .getConstructor(String.class, int.class, String.class)
-                        .newInstance(
-                            redis.getHost(),
-                            redis.getPort(),
-                            redis.getPassword()
-                        );
+                if (redis.getPassword() != null && !redis.getPassword().isBlank()) {
+                    redisConfig =
+                            redisConfigClass
+                                    .getConstructor(String.class, int.class, String.class)
+                                    .newInstance(
+                                            redis.getHost(), redis.getPort(), redis.getPassword());
                 } else {
-                    redisConfig = redisConfigClass
-                        .getConstructor(String.class, int.class)
-                        .newInstance(redis.getHost(), redis.getPort());
+                    redisConfig =
+                            redisConfigClass
+                                    .getConstructor(String.class, int.class)
+                                    .newInstance(redis.getHost(), redis.getPort());
                 }
 
                 // Build CoreConsentBundle
-                Class<?> bundleClass = Class.forName(
-                    "com.koostack.operio.bundle.core.CoreConsentBundle"
-                );
+                Class<?> bundleClass =
+                        Class.forName("com.koostack.operio.bundle.core.CoreConsentBundle");
                 // Constructor parameter is RedisPluginConfig (interface), not the concrete class
-                Class<?> redisPluginConfigClass = Class.forName(
-                    "com.koostack.operio.plugin.redis.common.RedisPluginConfig"
-                );
+                Class<?> redisPluginConfigClass =
+                        Class.forName("com.koostack.operio.plugin.redis.common.RedisPluginConfig");
 
-                if (
-                    props.getAppName() != null && !props.getAppName().isBlank()
-                ) {
-                    var ctor = bundleClass.getConstructor(
-                        String.class,
-                        jooqConfigClass,
-                        redisPluginConfigClass
-                    );
-                    return (PluginBundle) ctor.newInstance(
-                        props.getAppName(),
-                        jooqConfig,
-                        redisConfig
-                    );
+                if (props.getAppName() != null && !props.getAppName().isBlank()) {
+                    var ctor =
+                            bundleClass.getConstructor(
+                                    String.class, jooqConfigClass, redisPluginConfigClass);
+                    return (PluginBundle)
+                            ctor.newInstance(props.getAppName(), jooqConfig, redisConfig);
                 }
 
-                var ctor = bundleClass.getConstructor(
-                    jooqConfigClass,
-                    redisPluginConfigClass
-                );
+                var ctor = bundleClass.getConstructor(jooqConfigClass, redisPluginConfigClass);
                 return (PluginBundle) ctor.newInstance(jooqConfig, redisConfig);
             } catch (ClassNotFoundException e) {
                 throw new IllegalStateException(
-                    "operio.mode=production but 'operio-bundle-core' is not on the classpath. " +
-                        "Add a runtime dependency on operio-bundle-core, or switch to " +
-                        "operio.mode=embedded with operio-bundle-embedded on the classpath.",
-                    e
-                );
+                        "operio.mode=production but 'operio-bundle-core' is not on the classpath."
+                            + " Add a runtime dependency on operio-bundle-core, or switch to"
+                            + " operio.mode=embedded with operio-bundle-embedded on the classpath.",
+                        e);
             } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException(
-                    "Failed to instantiate CoreConsentBundle",
-                    e
-                );
+                throw new IllegalStateException("Failed to instantiate CoreConsentBundle", e);
             }
         }
     }
@@ -230,44 +185,40 @@ public class OperioAutoConfiguration {
     // ------------------------------------------------------------------ Operio
 
     /**
-     * The primary {@link Operio} bean — wired from the auto-configured (or
-     * user-provided) {@link PluginBundle} and any {@link IdentityResolver}
-     * found on the classpath.
+     * The primary {@link Operio} bean — wired from the auto-configured (or user-provided) {@link
+     * PluginBundle} and any {@link IdentityResolver} found on the classpath.
      *
-     * <p>If the user has already defined their own {@code Operio} bean this
-     * one backs off via {@code @ConditionalOnMissingBean}.
+     * <p>If the user has already defined their own {@code Operio} bean this one backs off via
+     * {@code @ConditionalOnMissingBean}.
      *
-     * <p>Identity resolver auto-discovery: if exactly one
-     * {@link IdentityResolver} bean exists in the context it is wired into
-     * the builder. If none are found, Operio's built-in SPI ServiceLoader
-     * discovery is used (e.g. {@code IdentitySpringSecurity} registered via
-     * {@code META-INF/services}). If multiple are found, a warning is logged
-     * and SPI discovery is used as a fallback.
+     * <p>Identity resolver auto-discovery: if exactly one {@link IdentityResolver} bean exists in
+     * the context it is wired into the builder. If none are found, Operio's built-in SPI
+     * ServiceLoader discovery is used (e.g. {@code IdentitySpringSecurity} registered via {@code
+     * META-INF/services}). If multiple are found, a warning is logged and SPI discovery is used as
+     * a fallback.
      */
     @Bean
     @ConditionalOnMissingBean
     public Operio operio(
-        ObjectProvider<PluginBundle> bundles,
-        ObjectProvider<IdentityResolver<?>> identityResolvers,
-        ObjectProvider<ConsentAdminCommandService<?>> commandServices,
-        ObjectProvider<ConsentAdminQueryService<?>> queryServices,
-        OperioProperties props
-    ) {
+            ObjectProvider<PluginBundle> bundles,
+            ObjectProvider<IdentityResolver<?>> identityResolvers,
+            ObjectProvider<ConsentAdminCommandService<?>> commandServices,
+            ObjectProvider<ConsentAdminQueryService<?>> queryServices,
+            OperioProperties props) {
         Operio.Builder builder = Operio.builder();
 
         // Apply app name if set (bundle may also set it; explicit property wins
         // because withAppName is called after withBundle)
-        boolean hasAppName =
-            props.getAppName() != null && !props.getAppName().isBlank();
+        boolean hasAppName = props.getAppName() != null && !props.getAppName().isBlank();
 
         // Apply all available bundles (typically exactly one from the
         // conditional configurations above, but the user could provide extras)
-        bundles
-            .orderedStream()
-            .forEach(bundle -> {
-                LOG.debug("Operio SDK: applying bundle '{}'", bundle.name());
-                builder.withBundle(bundle);
-            });
+        bundles.orderedStream()
+                .forEach(
+                        bundle -> {
+                            LOG.debug("Operio SDK: applying bundle '{}'", bundle.name());
+                            builder.withBundle(bundle);
+                        });
 
         // Override app name after bundles so the property takes precedence
         if (hasAppName) {
@@ -279,57 +230,66 @@ public class OperioAutoConfiguration {
         if (resolverList.size() == 1) {
             IdentityResolver<?> resolver = resolverList.getFirst();
             LOG.info(
-                "Operio SDK: using IdentityResolver bean '{}'",
-                resolver.getClass().getSimpleName()
-            );
+                    "Operio SDK: using IdentityResolver bean '{}'",
+                    resolver.getClass().getSimpleName());
             builder.withIdentityProvider(resolver.getName());
         } else if (resolverList.isEmpty()) {
             LOG.debug(
-                "Operio SDK: no IdentityResolver bean found — " +
-                    "falling back to SPI ServiceLoader discovery"
-            );
+                    "Operio SDK: no IdentityResolver bean found — "
+                            + "falling back to SPI ServiceLoader discovery");
             // Operio.Builder will discover via ServiceLoader if nothing is set
         } else {
             LOG.warn(
-                "Operio SDK: found {} IdentityResolver beans — " +
-                    "falling back to SPI ServiceLoader discovery. " +
-                    "Define a single IdentityResolver bean or configure one explicitly.",
-                resolverList.size()
-            );
+                    "Operio SDK: found {} IdentityResolver beans — "
+                            + "falling back to SPI ServiceLoader discovery. "
+                            + "Define a single IdentityResolver bean or configure one explicitly.",
+                    resolverList.size());
         }
 
         // Resolve command + query services (from Spring beans or SPI ServiceLoader)
         @SuppressWarnings("rawtypes")
-        ConsentAdminCommandService commandService = commandServices
-            .orderedStream().findFirst()
-            .orElseGet(() -> java.util.ServiceLoader
-                .load(ConsentAdminCommandService.class)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                    "No ConsentAdminCommandService found on classpath")));
+        ConsentAdminCommandService commandService =
+                commandServices
+                        .orderedStream()
+                        .findFirst()
+                        .orElseGet(
+                                () ->
+                                        java.util.ServiceLoader.load(
+                                                        ConsentAdminCommandService.class)
+                                                .findFirst()
+                                                .orElseThrow(
+                                                        () ->
+                                                                new IllegalStateException(
+                                                                        "No ConsentAdminCommandService"
+                                                                            + " found on"
+                                                                            + " classpath")));
         @SuppressWarnings("rawtypes")
-        ConsentAdminQueryService queryService = queryServices
-            .orderedStream().findFirst()
-            .orElseGet(() -> java.util.ServiceLoader
-                .load(ConsentAdminQueryService.class)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                    "No ConsentAdminQueryService found on classpath")));
+        ConsentAdminQueryService queryService =
+                queryServices
+                        .orderedStream()
+                        .findFirst()
+                        .orElseGet(
+                                () ->
+                                        java.util.ServiceLoader.load(ConsentAdminQueryService.class)
+                                                .findFirst()
+                                                .orElseThrow(
+                                                        () ->
+                                                                new IllegalStateException(
+                                                                        "No ConsentAdminQueryService"
+                                                                            + " found on"
+                                                                            + " classpath")));
 
         DefaultTenantService operio = builder.buildTenantService(commandService, queryService);
         LOG.info(
-            "Operio SDK: initialized (mode={}, appName={})",
-            props.getMode(),
-            operio.appName()
-        );
+                "Operio SDK: initialized (mode={}, appName={})", props.getMode(), operio.appName());
         return operio;
     }
 
     // ------------------------------------------------------------------ Aspects
 
     /**
-     * AOP aspect for {@code @ConsentRequired} annotation-driven consent
-     * enforcement. Injected with the auto-configured {@link Operio} bean.
+     * AOP aspect for {@code @ConsentRequired} annotation-driven consent enforcement. Injected with
+     * the auto-configured {@link Operio} bean.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -338,8 +298,8 @@ public class OperioAutoConfiguration {
     }
 
     /**
-     * AOP aspect for {@code @Sensitive} annotation-driven field masking.
-     * Injected with the auto-configured {@link Operio} bean.
+     * AOP aspect for {@code @Sensitive} annotation-driven field masking. Injected with the
+     * auto-configured {@link Operio} bean.
      */
     @Bean
     @ConditionalOnMissingBean

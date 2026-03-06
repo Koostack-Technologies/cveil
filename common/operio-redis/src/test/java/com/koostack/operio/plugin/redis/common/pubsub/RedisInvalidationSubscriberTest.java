@@ -1,18 +1,17 @@
 package com.koostack.operio.plugin.redis.common.pubsub;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.fppt.jedismock.RedisServer;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSink;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
-import org.junit.jupiter.api.*;
-import redis.clients.jedis.JedisPooled;
-
 import java.util.List;
 import java.util.concurrent.*;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.*;
+import redis.clients.jedis.JedisPooled;
 
 /**
  * Integration tests for {@link RedisInvalidationSubscriber} using jedis-mock.
@@ -46,14 +45,14 @@ class RedisInvalidationSubscriberTest {
     @Test
     @DisplayName("channelFor() produces correct channel name")
     void channelFormat() {
-        assertEquals("operio:consent-cache-invalidation:acme",
-                subscriber.channelFor("acme"));
+        assertEquals("operio:consent-cache-invalidation:acme", subscriber.channelFor("acme"));
     }
 
     @Test
     @DisplayName("Control channel uses __control__ sentinel")
     void controlChannel() {
-        assertEquals("operio:consent-cache-invalidation:__control__",
+        assertEquals(
+                "operio:consent-cache-invalidation:__control__",
                 RedisInvalidationSubscriber.DEFAULT_CHANNEL_PREFIX + "__control__");
     }
 
@@ -78,9 +77,16 @@ class RedisInvalidationSubscriberTest {
 
         // Publish via a separate publisher
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                "msg-1", "acme", "user-42", "User", "email",
-                null, "marketing", InvalidationAction.GRANTED);
+        CacheInvalidationMessage msg =
+                new CacheInvalidationMessage(
+                        "msg-1",
+                        "acme",
+                        "user-42",
+                        "User",
+                        "email",
+                        null,
+                        "marketing",
+                        InvalidationAction.GRANTED);
 
         publisher.publish(msg);
 
@@ -105,8 +111,16 @@ class RedisInvalidationSubscriberTest {
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
 
         // Publish to tenant-a only
-        publisher.publish(new CacheInvalidationMessage(
-                "msg-a", "tenant-a", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
+        publisher.publish(
+                new CacheInvalidationMessage(
+                        "msg-a",
+                        "tenant-a",
+                        "s1",
+                        "E",
+                        "f",
+                        null,
+                        "p",
+                        InvalidationAction.GRANTED));
 
         CacheInvalidationMessage resultA = sinkA.poll(3, TimeUnit.SECONDS);
         assertNotNull(resultA, "Tenant A sink should receive the message");
@@ -128,8 +142,9 @@ class RedisInvalidationSubscriberTest {
         Thread.sleep(300);
 
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        publisher.publish(new CacheInvalidationMessage(
-                "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.REVOKED));
+        publisher.publish(
+                new CacheInvalidationMessage(
+                        "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.REVOKED));
 
         assertNotNull(sink1.poll(3, TimeUnit.SECONDS), "Sink 1 should receive");
         assertNotNull(sink2.poll(3, TimeUnit.SECONDS), "Sink 2 should receive");
@@ -147,8 +162,9 @@ class RedisInvalidationSubscriberTest {
 
         // Publish after cancel — sink should NOT receive
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        publisher.publish(new CacheInvalidationMessage(
-                "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
+        publisher.publish(
+                new CacheInvalidationMessage(
+                        "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
 
         CacheInvalidationMessage result = sink.poll(500, TimeUnit.MILLISECONDS);
         assertNull(result, "Cancelled subscription should not receive messages");
@@ -165,8 +181,9 @@ class RedisInvalidationSubscriberTest {
         Thread.sleep(100);
 
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        publisher.publish(new CacheInvalidationMessage(
-                "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
+        publisher.publish(
+                new CacheInvalidationMessage(
+                        "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
 
         assertNull(sink.poll(500, TimeUnit.MILLISECONDS));
     }
@@ -177,23 +194,26 @@ class RedisInvalidationSubscriberTest {
         subscriber.close();
         Thread.sleep(200);
 
-        assertThrows(IllegalStateException.class,
-                () -> subscriber.subscribe("acme", msg -> {}));
+        assertThrows(IllegalStateException.class, () -> subscriber.subscribe("acme", msg -> {}));
     }
 
     @Test
     @DisplayName("Failing sink does not affect other sinks on the same channel")
     void failingSinkIsolation() throws Exception {
         BlockingQueue<CacheInvalidationMessage> goodSink = new LinkedBlockingQueue<>();
-        InvalidationSink badSink = msg -> { throw new RuntimeException("boom"); };
+        InvalidationSink badSink =
+                msg -> {
+                    throw new RuntimeException("boom");
+                };
 
         subscriber.subscribe("acme", badSink);
         subscriber.subscribe("acme", goodSink::put);
         Thread.sleep(300);
 
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        publisher.publish(new CacheInvalidationMessage(
-                "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
+        publisher.publish(
+                new CacheInvalidationMessage(
+                        "msg-1", "acme", "s1", "E", "f", null, "p", InvalidationAction.GRANTED));
 
         CacheInvalidationMessage result = goodSink.poll(3, TimeUnit.SECONDS);
         assertNotNull(result, "Good sink should still receive messages despite bad sink");
@@ -207,11 +227,35 @@ class RedisInvalidationSubscriberTest {
         Thread.sleep(300);
 
         RedisInvalidationPublisher publisher = new RedisInvalidationPublisher(jedis, objectMapper);
-        publisher.publishBatch(List.of(
-                new CacheInvalidationMessage("m1", "acme", "s1", "E", "f1", null, "p", InvalidationAction.GRANTED),
-                new CacheInvalidationMessage("m2", "acme", "s2", "E", "f2", null, "p", InvalidationAction.REVOKED),
-                new CacheInvalidationMessage("m3", "acme", null, null, null, null, null, InvalidationAction.ALL_REVOKED)
-        ));
+        publisher.publishBatch(
+                List.of(
+                        new CacheInvalidationMessage(
+                                "m1",
+                                "acme",
+                                "s1",
+                                "E",
+                                "f1",
+                                null,
+                                "p",
+                                InvalidationAction.GRANTED),
+                        new CacheInvalidationMessage(
+                                "m2",
+                                "acme",
+                                "s2",
+                                "E",
+                                "f2",
+                                null,
+                                "p",
+                                InvalidationAction.REVOKED),
+                        new CacheInvalidationMessage(
+                                "m3",
+                                "acme",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                InvalidationAction.ALL_REVOKED)));
 
         // Collect all 3
         List<CacheInvalidationMessage> results = new java.util.ArrayList<>();
@@ -233,21 +277,22 @@ class RedisInvalidationSubscriberTest {
 
         for (int i = 0; i < threadCount; i++) {
             final String tenantId = "stress-tenant-" + i;
-            Thread.ofPlatform().start(() -> {
-                try {
-                    startLatch.await(5, TimeUnit.SECONDS);
-                    subscriber.subscribe(tenantId, msg -> {});
-                } catch (Exception e) {
-                    errors.add(e);
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
+            Thread.ofPlatform()
+                    .start(
+                            () -> {
+                                try {
+                                    startLatch.await(5, TimeUnit.SECONDS);
+                                    subscriber.subscribe(tenantId, msg -> {});
+                                } catch (Exception e) {
+                                    errors.add(e);
+                                } finally {
+                                    doneLatch.countDown();
+                                }
+                            });
         }
 
         startLatch.countDown(); // release all threads simultaneously
         assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "All threads should finish");
-        assertTrue(errors.isEmpty(),
-                "No exceptions expected, but got: " + errors);
+        assertTrue(errors.isEmpty(), "No exceptions expected, but got: " + errors);
     }
 }

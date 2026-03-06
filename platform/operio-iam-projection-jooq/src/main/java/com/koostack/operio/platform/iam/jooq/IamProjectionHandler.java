@@ -1,22 +1,21 @@
 package com.koostack.operio.platform.iam.jooq;
 
+import static org.jooq.impl.DSL.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
+import java.time.OffsetDateTime;
+import java.util.Map;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.OffsetDateTime;
-import java.util.Map;
-
-import static org.jooq.impl.DSL.*;
-
 /**
- * Platform stream event handler that materializes IAM domain events
- * into the {@code platform_iam.api_key} read model.
+ * Platform stream event handler that materializes IAM domain events into the {@code
+ * platform_iam.api_key} read model.
  *
- * <p>All operations are idempotent upserts so that replaying the event
- * stream produces the same result.
+ * <p>All operations are idempotent upserts so that replaying the event stream produces the same
+ * result.
  */
 public class IamProjectionHandler {
 
@@ -25,16 +24,21 @@ public class IamProjectionHandler {
     private static final org.jooq.Table<?> API_KEY = table(name("platform_iam", "api_key"));
     private static final org.jooq.Field<String> KEY_ID = field(name("key_id"), String.class);
     private static final org.jooq.Field<String> KEY_HASH = field(name("key_hash"), String.class);
-    private static final org.jooq.Field<String> KEY_PREFIX = field(name("key_prefix"), String.class);
+    private static final org.jooq.Field<String> KEY_PREFIX =
+            field(name("key_prefix"), String.class);
     private static final org.jooq.Field<String> NAME = field(name("name"), String.class);
     private static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
-    private static final org.jooq.Field<String> ENVIRONMENT = field(name("environment"), String.class);
+    private static final org.jooq.Field<String> ENVIRONMENT =
+            field(name("environment"), String.class);
     private static final org.jooq.Field<String> SUBJECT = field(name("subject"), String.class);
     private static final org.jooq.Field<String> ROLES = field(name("roles"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    private static final org.jooq.Field<OffsetDateTime> EXPIRES_AT = field(name("expires_at"), OffsetDateTime.class);
-    private static final org.jooq.Field<OffsetDateTime> CREATED_AT = field(name("created_at"), OffsetDateTime.class);
-    private static final org.jooq.Field<OffsetDateTime> UPDATED_AT = field(name("updated_at"), OffsetDateTime.class);
+    private static final org.jooq.Field<OffsetDateTime> EXPIRES_AT =
+            field(name("expires_at"), OffsetDateTime.class);
+    private static final org.jooq.Field<OffsetDateTime> CREATED_AT =
+            field(name("created_at"), OffsetDateTime.class);
+    private static final org.jooq.Field<OffsetDateTime> UPDATED_AT =
+            field(name("updated_at"), OffsetDateTime.class);
 
     private final DSLContext dsl;
     private final ObjectMapper mapper;
@@ -44,9 +48,7 @@ public class IamProjectionHandler {
         this.mapper = new ObjectMapper();
     }
 
-    /**
-     * Handle a platform stream event.
-     */
+    /** Handle a platform stream event. */
     public void onEvent(String streamKey, String messageId, Map<String, String> fields) {
         String eventType = fields.get("eventType");
         String payload = fields.get("payload");
@@ -73,31 +75,37 @@ public class IamProjectionHandler {
         String keyId = node.get("keyId").asText();
         String keyHash = node.get("keyHash").asText();
         String keyPrefix = node.get("keyPrefix").asText();
-        String name = node.has("name") && !node.get("name").isNull()
-            ? node.get("name").asText() : "Default Key";
-        String environment = node.has("environment") && !node.get("environment").isNull()
-            ? node.get("environment").asText() : "PROD";
-        String roles = node.has("roles") && !node.get("roles").isNull()
-            ? node.get("roles").asText() : null;
+        String name =
+                node.has("name") && !node.get("name").isNull()
+                        ? node.get("name").asText()
+                        : "Default Key";
+        String environment =
+                node.has("environment") && !node.get("environment").isNull()
+                        ? node.get("environment").asText()
+                        : "PROD";
+        String roles =
+                node.has("roles") && !node.get("roles").isNull()
+                        ? node.get("roles").asText()
+                        : null;
         OffsetDateTime now = OffsetDateTime.now();
 
         dsl.insertInto(API_KEY)
-            .set(KEY_ID, keyId)
-            .set(KEY_HASH, keyHash)
-            .set(KEY_PREFIX, keyPrefix)
-            .set(NAME, name)
-            .set(SUBJECT, name)
-            .set(TENANT_ID, tenantId)
-            .set(ENVIRONMENT, environment)
-            .set(ROLES, roles)
-            .set(STATUS, "active")
-            .set(CREATED_AT, now)
-            .set(UPDATED_AT, now)
-            .onConflict(KEY_ID)
-            .doUpdate()
-            .set(STATUS, "active")
-            .set(UPDATED_AT, now)
-            .execute();
+                .set(KEY_ID, keyId)
+                .set(KEY_HASH, keyHash)
+                .set(KEY_PREFIX, keyPrefix)
+                .set(NAME, name)
+                .set(SUBJECT, name)
+                .set(TENANT_ID, tenantId)
+                .set(ENVIRONMENT, environment)
+                .set(ROLES, roles)
+                .set(STATUS, "active")
+                .set(CREATED_AT, now)
+                .set(UPDATED_AT, now)
+                .onConflict(KEY_ID)
+                .doUpdate()
+                .set(STATUS, "active")
+                .set(UPDATED_AT, now)
+                .execute();
 
         LOG.debug("Projected API key: tenantId={}, keyId={}, env={}", tenantId, keyId, environment);
     }
@@ -107,10 +115,10 @@ public class IamProjectionHandler {
         String keyId = node.get("keyId").asText();
 
         dsl.update(API_KEY)
-            .set(STATUS, "revoked")
-            .set(UPDATED_AT, OffsetDateTime.now())
-            .where(KEY_ID.eq(keyId))
-            .execute();
+                .set(STATUS, "revoked")
+                .set(UPDATED_AT, OffsetDateTime.now())
+                .where(KEY_ID.eq(keyId))
+                .execute();
 
         LOG.debug("Revoked API key: keyId={}", keyId);
     }

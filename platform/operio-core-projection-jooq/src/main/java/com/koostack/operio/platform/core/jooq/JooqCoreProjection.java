@@ -10,9 +10,20 @@ public class JooqCoreProjection implements CoreProjection<JooqCoreProjectionConf
 
     private CoreProjectionHandler handler;
 
-    @Override public String getName() { return "jooq-core-projection"; }
-    @Override public int getPriority() { return 100; }
-    @Override public Class<JooqCoreProjectionConfig> getConfigurationType() { return JooqCoreProjectionConfig.class; }
+    @Override
+    public String getName() {
+        return "jooq-core-projection";
+    }
+
+    @Override
+    public int getPriority() {
+        return 100;
+    }
+
+    @Override
+    public Class<JooqCoreProjectionConfig> getConfigurationType() {
+        return JooqCoreProjectionConfig.class;
+    }
 
     @Override
     public void configure(JooqCoreProjectionConfig config) {

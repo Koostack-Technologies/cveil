@@ -32,13 +32,13 @@ dependencies {
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.22.3"))
 
     // -- Quarkus core ---------------------------------------------------------
-    implementation("io.quarkus:quarkus-rest-jackson")        // RESTEasy Reactive + Jackson
-    implementation("io.quarkus:quarkus-hibernate-validator")  // Bean Validation (JSR 380)
-    implementation("io.quarkus:quarkus-smallrye-health")     // MicroProfile Health
-    implementation("io.quarkus:quarkus-smallrye-openapi")    // OpenAPI spec + Swagger UI
-    implementation("io.quarkus:quarkus-config-yaml")         // YAML config support
-    implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs
-    implementation("io.quarkus:quarkus-rest-qute")           // Qute templating for site pages
+    implementation("io.quarkus:quarkus-rest-jackson") // RESTEasy Reactive + Jackson
+    implementation("io.quarkus:quarkus-hibernate-validator") // Bean Validation (JSR 380)
+    implementation("io.quarkus:quarkus-smallrye-health") // MicroProfile Health
+    implementation("io.quarkus:quarkus-smallrye-openapi") // OpenAPI spec + Swagger UI
+    implementation("io.quarkus:quarkus-config-yaml") // YAML config support
+    implementation("io.quarkus:quarkus-scheduler") // @Scheduled jobs
+    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for site pages
 
     // -- Operio core (framework-agnostic) -------------------------------------
     implementation(project(":operio-core"))
@@ -56,38 +56,36 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":common:operio-jooq"))
     implementation(project(":common:operio-redis"))
-    implementation(project(":tenant:operio-consent-admin-projection-jooq"))       // Admin schema projection handler
-    implementation(project(":tenant:operio-consent-decision-projection-redis"))  // Graph projection handler + query service
-    implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer
-    implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
-    implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
-    implementation(project(":tenant:operio-subject-dsar-jooq"))                  // JooqSubjectDsarService
+    implementation(project(":tenant:operio-consent-admin-projection-jooq")) // Admin schema projection handler
+    implementation(project(":tenant:operio-consent-decision-projection-redis")) // Graph projection handler + query service
+    implementation(project(":tenant:operio-tenant-event-jooq")) // TenantStreamConsumer
+    implementation(project(":tenant:operio-consent-admin-command")) // ConsentAdminCommandService
+    implementation(project(":tenant:operio-consent-admin-query-jooq")) // ConsentAdminQueryService
+    implementation(project(":tenant:operio-subject-dsar-jooq")) // JooqSubjectDsarService
 
     // -- Platform CQRS modules ------------------------------------------------
-    implementation(project(":platform:operio-platform-event-jooq"))              // JooqPlatformEventService
-    implementation(project(":platform:operio-core-command"))                      // JooqCoreCommandService
-    implementation(project(":platform:operio-billing-command"))                   // JooqBillingCommandService
-    implementation(project(":platform:operio-core-query-jooq"))                  // JooqCoreQueryService
-    implementation(project(":platform:operio-billing-query-jooq"))               // JooqBillingQueryService
-    implementation(project(":platform:operio-core-projection-jooq"))             // CoreProjectionHandler
-    implementation(project(":platform:operio-billing-projection-jooq"))          // BillingProjectionHandler
-    implementation(project(":platform:operio-tenant-manager-jooq"))              // TenantManagerProjectionHandler
-    implementation(project(":platform:operio-iam-command"))                       // JooqIamCommandService
-    implementation(project(":platform:operio-iam-query"))                         // JooqIamQueryService
-    implementation(project(":platform:operio-iam-projection-jooq"))              // IamProjectionHandler
+    implementation(project(":platform:operio-platform-event-jooq")) // JooqPlatformEventService
+    implementation(project(":platform:operio-core-command")) // JooqCoreCommandService
+    implementation(project(":platform:operio-billing-command")) // JooqBillingCommandService
+    implementation(project(":platform:operio-core-query-jooq")) // JooqCoreQueryService
+    implementation(project(":platform:operio-billing-query-jooq")) // JooqBillingQueryService
+    implementation(project(":platform:operio-core-projection-jooq")) // CoreProjectionHandler
+    implementation(project(":platform:operio-billing-projection-jooq")) // BillingProjectionHandler
+    implementation(project(":platform:operio-tenant-manager-jooq")) // TenantManagerProjectionHandler
+    implementation(project(":platform:operio-iam-command")) // JooqIamCommandService
+    implementation(project(":platform:operio-iam-query")) // JooqIamQueryService
+    implementation(project(":platform:operio-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:operio-plan-query-jooq"))
-
 
     // platform schemas
 
-    implementation(project(":platform:operio-core-schema"))                     // Core schema (tenants, subjects, consents, etc.)
-    implementation(project(":platform:operio-iam-schema"))                      // IAM schema (users,
-    implementation(project(":platform:operio-billing-schema"))                  // Billing schema (plans, subscriptions, etc.)
-
+    implementation(project(":platform:operio-core-schema")) // Core schema (tenants, subjects, consents, etc.)
+    implementation(project(":platform:operio-iam-schema")) // IAM schema (users,
+    implementation(project(":platform:operio-billing-schema")) // Billing schema (plans, subscriptions, etc.)
 
     // -- Metrics modules (MetricPublisherService + projections) ----------------
-    implementation(project(":tenant:operio-tenant-metrics-redis"))               // TenantRedisMetricPublisher + projections
-    implementation(project(":platform:operio-platform-metrics-redis"))           // PlatformRedisMetricPublisher + projections
+    implementation(project(":tenant:operio-tenant-metrics-redis")) // TenantRedisMetricPublisher + projections
+    implementation(project(":platform:operio-platform-metrics-redis")) // PlatformRedisMetricPublisher + projections
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")

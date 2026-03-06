@@ -6,5 +6,5 @@ public record RegulationJurisdictionAddedEvent(
         String regulationName,
         String jurisdictionName,
         String description,
-        RegulationSnapshot snapshot
-) implements DomainEvent {}
+        RegulationSnapshot snapshot)
+        implements DomainEvent {}

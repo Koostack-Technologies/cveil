@@ -7,8 +7,8 @@ import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.core.models.TenantInfo;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
-import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
+import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -25,43 +25,37 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link BootstrapKeyLifecycleService} — the service that
- * manages the lifecycle of the bootstrap super-admin key (active, consumed,
- * force-override).
+ * Unit tests for {@link BootstrapKeyLifecycleService} — the service that manages the lifecycle of
+ * the bootstrap super-admin key (active, consumed, force-override).
  *
  * <p>Covers:
+ *
  * <ul>
- *   <li>No bootstrap key configured — all queries return inactive/false</li>
- *   <li>Active bootstrap key — token matching, isActive</li>
- *   <li>Auto-disable after API key creation — markBootstrapConsumed()</li>
- *   <li>Force override — isBootstrapKeyActive when force=true</li>
- *   <li>Startup check — existing API keys auto-disable, no tenants = active</li>
- *   <li>Token matching — isActiveBootstrapKey, isBootstrapKeyValue</li>
- *   <li>Idempotent consumption — double markBootstrapConsumed()</li>
- *   <li>Null/blank token edge cases</li>
+ *   <li>No bootstrap key configured — all queries return inactive/false
+ *   <li>Active bootstrap key — token matching, isActive
+ *   <li>Auto-disable after API key creation — markBootstrapConsumed()
+ *   <li>Force override — isBootstrapKeyActive when force=true
+ *   <li>Startup check — existing API keys auto-disable, no tenants = active
+ *   <li>Token matching — isActiveBootstrapKey, isBootstrapKeyValue
+ *   <li>Idempotent consumption — double markBootstrapConsumed()
+ *   <li>Null/blank token edge cases
  * </ul>
  */
 @DisplayName("BootstrapKeyLifecycleService")
 @ExtendWith(MockitoExtension.class)
 class BootstrapKeyLifecycleServiceTest {
 
-    private static final String BOOTSTRAP_KEY =
-        "super-secret-bootstrap-key-12345";
+    private static final String BOOTSTRAP_KEY = "super-secret-bootstrap-key-12345";
 
-    @Mock
-    private OperioConfig config;
+    @Mock private OperioConfig config;
 
-    @Mock
-    private OperioConfig.SuperAdminConfig superAdminConfig;
+    @Mock private OperioConfig.SuperAdminConfig superAdminConfig;
 
-    @Mock
-    private CoreQueryService<?> coreQueryService;
+    @Mock private CoreQueryService<?> coreQueryService;
 
-    @Mock
-    private IamQueryService<?> iamQueryService;
+    @Mock private IamQueryService<?> iamQueryService;
 
-    @Mock
-    private PlatformCqrsHolder cqrs;
+    @Mock private PlatformCqrsHolder cqrs;
 
     private BootstrapKeyLifecycleService service;
 
@@ -82,11 +76,8 @@ class BootstrapKeyLifecycleServiceTest {
     // Reflection helpers
     // -----------------------------------------------------------------------
 
-    private static void injectField(
-        Object target,
-        String fieldName,
-        Object value
-    ) throws Exception {
+    private static void injectField(Object target, String fieldName, Object value)
+            throws Exception {
         Field field = findField(target.getClass(), fieldName);
         field.setAccessible(true);
         field.set(target, value);
@@ -101,30 +92,24 @@ class BootstrapKeyLifecycleServiceTest {
                 current = current.getSuperclass();
             }
         }
-        throw new RuntimeException(
-            "Field '" + name + "' not found in " + clazz
-        );
+        throw new RuntimeException("Field '" + name + "' not found in " + clazz);
     }
 
-    private static void setBootstrapConsumed(
-        BootstrapKeyLifecycleService svc,
-        boolean value
-    ) throws Exception {
+    private static void setBootstrapConsumed(BootstrapKeyLifecycleService svc, boolean value)
+            throws Exception {
         Field field = findField(svc.getClass(), "bootstrapConsumed");
         field.setAccessible(true);
         ((AtomicBoolean) field.get(svc)).set(value);
     }
 
     /**
-     * Invokes the package-private {@code onStartup(StartupEvent)} method
-     * via reflection so the test (in a different package) can exercise it.
+     * Invokes the package-private {@code onStartup(StartupEvent)} method via reflection so the test
+     * (in a different package) can exercise it.
      */
-    private static void invokeOnStartup(BootstrapKeyLifecycleService svc)
-        throws Exception {
-        Method m = BootstrapKeyLifecycleService.class.getDeclaredMethod(
-            "onStartup",
-            io.quarkus.runtime.StartupEvent.class
-        );
+    private static void invokeOnStartup(BootstrapKeyLifecycleService svc) throws Exception {
+        Method m =
+                BootstrapKeyLifecycleService.class.getDeclaredMethod(
+                        "onStartup", io.quarkus.runtime.StartupEvent.class);
         m.setAccessible(true);
         m.invoke(svc, (Object) null);
     }
@@ -138,19 +123,10 @@ class BootstrapKeyLifecycleServiceTest {
         givenBootstrapKeyConfigured(BOOTSTRAP_KEY, false);
     }
 
-    private void givenBootstrapKeyConfigured(
-        String key,
-        boolean forceBootstrap
-    ) {
-        lenient()
-            .when(superAdminConfig.bootstrapKey())
-            .thenReturn(Optional.of(key));
-        lenient()
-            .when(superAdminConfig.forceBootstrap())
-            .thenReturn(forceBootstrap);
-        lenient()
-            .when(config.superAdmin())
-            .thenReturn(Optional.of(superAdminConfig));
+    private void givenBootstrapKeyConfigured(String key, boolean forceBootstrap) {
+        lenient().when(superAdminConfig.bootstrapKey()).thenReturn(Optional.of(key));
+        lenient().when(superAdminConfig.forceBootstrap()).thenReturn(forceBootstrap);
+        lenient().when(config.superAdmin()).thenReturn(Optional.of(superAdminConfig));
     }
 
     /** Configures mocks so that NO bootstrap key is present. */
@@ -160,13 +136,9 @@ class BootstrapKeyLifecycleServiceTest {
 
     /** Configures mocks so the bootstrap key is blank. */
     private void givenBlankBootstrapKeyConfigured() {
-        lenient()
-            .when(superAdminConfig.bootstrapKey())
-            .thenReturn(Optional.of("   "));
+        lenient().when(superAdminConfig.bootstrapKey()).thenReturn(Optional.of("   "));
         lenient().when(superAdminConfig.forceBootstrap()).thenReturn(false);
-        lenient()
-            .when(config.superAdmin())
-            .thenReturn(Optional.of(superAdminConfig));
+        lenient().when(config.superAdmin()).thenReturn(Optional.of(superAdminConfig));
     }
 
     /** Configures mocks so force-bootstrap is enabled. */
@@ -180,45 +152,42 @@ class BootstrapKeyLifecycleServiceTest {
 
     private static TenantInfo tenantInfo(String tenantId) {
         return new TenantInfo(
-            tenantId,
-            "Tenant " + tenantId,
-            "STANDARD",
-            "ACTIVE",
-            "t_" + tenantId,
-            null,
-            Instant.now(),
-            Instant.now()
-        );
+                tenantId,
+                "Tenant " + tenantId,
+                "STANDARD",
+                "ACTIVE",
+                "t_" + tenantId,
+                null,
+                Instant.now(),
+                Instant.now());
     }
 
     private static IamQueryService.ApiKeyInfo activeApiKey(String tenantId) {
         return new IamQueryService.ApiKeyInfo(
-            "key-id",
-            "key-prefix",
-            "key-name",
-            tenantId,
-            "production",
-            "admin@" + tenantId,
-            "admin",
-            "ACTIVE",
-            Instant.now(),
-            null
-        );
+                "key-id",
+                "key-prefix",
+                "key-name",
+                tenantId,
+                "production",
+                "admin@" + tenantId,
+                "admin",
+                "ACTIVE",
+                Instant.now(),
+                null);
     }
 
     private static IamQueryService.ApiKeyInfo revokedApiKey(String tenantId) {
         return new IamQueryService.ApiKeyInfo(
-            "key-id",
-            "key-prefix",
-            "key-name",
-            tenantId,
-            "production",
-            "admin@" + tenantId,
-            "admin",
-            "REVOKED",
-            Instant.now(),
-            null
-        );
+                "key-id",
+                "key-prefix",
+                "key-name",
+                tenantId,
+                "production",
+                "admin@" + tenantId,
+                "admin",
+                "REVOKED",
+                Instant.now(),
+                null);
     }
 
     // ===================================================================
@@ -261,9 +230,7 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "markBootstrapConsumed() is safe to call (no-op in practice)"
-        )
+        @DisplayName("markBootstrapConsumed() is safe to call (no-op in practice)")
         void markConsumedSafe() {
             assertDoesNotThrow(() -> service.markBootstrapConsumed());
             // isBootstrapConsumed is true because the AtomicBoolean was set,
@@ -315,9 +282,7 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "isBootstrapKeyActive() returns false when key is Optional.empty"
-        )
+        @DisplayName("isBootstrapKeyActive() returns false when key is Optional.empty")
         void isNotActive() {
             assertFalse(service.isBootstrapKeyActive());
         }
@@ -432,18 +397,14 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "isActiveBootstrapKey(correct token) returns false after consumption"
-        )
+        @DisplayName("isActiveBootstrapKey(correct token) returns false after consumption")
         void tokenRejectedAfterConsumption() {
             service.markBootstrapConsumed();
             assertFalse(service.isActiveBootstrapKey(BOOTSTRAP_KEY));
         }
 
         @Test
-        @DisplayName(
-            "isBootstrapKeyValue(correct token) still returns true after consumption"
-        )
+        @DisplayName("isBootstrapKeyValue(correct token) still returns true after consumption")
         void valueStillMatchesAfterConsumption() {
             service.markBootstrapConsumed();
             // isBootstrapKeyValue checks the value regardless of active state
@@ -489,24 +450,19 @@ class BootstrapKeyLifecycleServiceTest {
             service.markBootstrapConsumed();
             assertTrue(service.isBootstrapConsumed());
             assertTrue(
-                service.isBootstrapKeyActive(),
-                "Force override should keep bootstrap key active"
-            );
+                    service.isBootstrapKeyActive(),
+                    "Force override should keep bootstrap key active");
         }
 
         @Test
-        @DisplayName(
-            "isActiveBootstrapKey(correct token) returns true when consumed + force"
-        )
+        @DisplayName("isActiveBootstrapKey(correct token) returns true when consumed + force")
         void tokenAcceptedWhenConsumedWithForce() {
             service.markBootstrapConsumed();
             assertTrue(service.isActiveBootstrapKey(BOOTSTRAP_KEY));
         }
 
         @Test
-        @DisplayName(
-            "isActiveBootstrapKey(wrong token) returns false even with force"
-        )
+        @DisplayName("isActiveBootstrapKey(wrong token) returns false even with force")
         void wrongTokenRejectedWithForce() {
             assertFalse(service.isActiveBootstrapKey("wrong-key"));
         }
@@ -518,9 +474,7 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "isBootstrapConsumed() reflects consumed state independent of force"
-        )
+        @DisplayName("isBootstrapConsumed() reflects consumed state independent of force")
         void consumedStateIndependentOfForce() {
             assertFalse(service.isBootstrapConsumed());
             service.markBootstrapConsumed();
@@ -544,9 +498,7 @@ class BootstrapKeyLifecycleServiceTest {
         @DisplayName("no tenants, no API keys — bootstrap key stays active")
         void noTenantsKeepsActive() throws Exception {
             givenBootstrapKeyConfigured();
-            when(coreQueryService.listTenants()).thenReturn(
-                Collections.emptyList()
-            );
+            when(coreQueryService.listTenants()).thenReturn(Collections.emptyList());
 
             invokeOnStartup(service);
 
@@ -555,18 +507,12 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "tenants exist but no API keys — bootstrap key stays active"
-        )
+        @DisplayName("tenants exist but no API keys — bootstrap key stays active")
         void tenantsNoKeysStaysActive() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                Collections.emptyList()
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(Collections.emptyList());
 
             invokeOnStartup(service);
 
@@ -575,18 +521,12 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "tenants with only revoked API keys — bootstrap key stays active"
-        )
+        @DisplayName("tenants with only revoked API keys — bootstrap key stays active")
         void onlyRevokedKeysStaysActive() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(revokedApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(revokedApiKey("acme")));
 
             invokeOnStartup(service);
 
@@ -595,18 +535,12 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "tenants with active API key — bootstrap key auto-disabled"
-        )
+        @DisplayName("tenants with active API key — bootstrap key auto-disabled")
         void activeKeyAutoDisables() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(activeApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(activeApiKey("acme")));
 
             invokeOnStartup(service);
 
@@ -615,22 +549,15 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "active key in second tenant — auto-disables (short-circuit)"
-        )
+        @DisplayName("active key in second tenant — auto-disables (short-circuit)")
         void activeKeyInSecondTenant() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo t1 = tenantInfo("tenant-1");
             TenantInfo t2 = tenantInfo("tenant-2");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(t1, t2)
-            );
-            when(iamQueryService.listApiKeys("tenant-1")).thenReturn(
-                Collections.emptyList()
-            );
-            when(iamQueryService.listApiKeys("tenant-2")).thenReturn(
-                List.of(activeApiKey("tenant-2"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(t1, t2));
+            when(iamQueryService.listApiKeys("tenant-1")).thenReturn(Collections.emptyList());
+            when(iamQueryService.listApiKeys("tenant-2"))
+                    .thenReturn(List.of(activeApiKey("tenant-2")));
 
             invokeOnStartup(service);
 
@@ -638,14 +565,11 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "platform admin throws exception — bootstrap key stays in default state"
-        )
+        @DisplayName("platform admin throws exception — bootstrap key stays in default state")
         void exceptionDuringCheckKeepsDefault() {
             givenBootstrapKeyConfigured();
-            when(coreQueryService.listTenants()).thenThrow(
-                new RuntimeException("DB connection failed")
-            );
+            when(coreQueryService.listTenants())
+                    .thenThrow(new RuntimeException("DB connection failed"));
 
             assertDoesNotThrow(() -> invokeOnStartup(service));
             assertFalse(service.isBootstrapConsumed());
@@ -653,9 +577,7 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "null query services — startup skips check gracefully"
-        )
+        @DisplayName("null query services — startup skips check gracefully")
         void nullQueryServices() throws Exception {
             givenBootstrapKeyConfigured();
 
@@ -681,15 +603,11 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "listApiKeys returns null — treated as no keys for that tenant"
-        )
+        @DisplayName("listApiKeys returns null — treated as no keys for that tenant")
         void nullApiKeysList() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
             when(iamQueryService.listApiKeys("acme")).thenReturn(null);
 
             invokeOnStartup(service);
@@ -699,29 +617,21 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "force override with existing keys — consumed but still active"
-        )
+        @DisplayName("force override with existing keys — consumed but still active")
         void forceOverrideWithExistingKeys() throws Exception {
             givenForceBootstrapEnabled();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(activeApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(activeApiKey("acme")));
 
             invokeOnStartup(service);
 
             assertTrue(
-                service.isBootstrapConsumed(),
-                "Should be marked consumed even with force override"
-            );
+                    service.isBootstrapConsumed(),
+                    "Should be marked consumed even with force override");
             assertTrue(
-                service.isBootstrapKeyActive(),
-                "Force override should keep bootstrap key active"
-            );
+                    service.isBootstrapKeyActive(),
+                    "Force override should keep bootstrap key active");
         }
     }
 
@@ -744,9 +654,7 @@ class BootstrapKeyLifecycleServiceTest {
         @Test
         @DisplayName("token must be exact match (case-sensitive)")
         void caseSensitive() {
-            assertFalse(
-                service.isActiveBootstrapKey(BOOTSTRAP_KEY.toUpperCase())
-            );
+            assertFalse(service.isActiveBootstrapKey(BOOTSTRAP_KEY.toUpperCase()));
         }
 
         @Test
@@ -805,18 +713,12 @@ class BootstrapKeyLifecycleServiceTest {
         }
 
         @Test
-        @DisplayName(
-            "startup auto-disable → markBootstrapConsumed: no double-log issue"
-        )
+        @DisplayName("startup auto-disable → markBootstrapConsumed: no double-log issue")
         void startupThenExplicitMark() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(activeApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(activeApiKey("acme")));
 
             invokeOnStartup(service);
             assertTrue(service.isBootstrapConsumed());
@@ -836,56 +738,46 @@ class BootstrapKeyLifecycleServiceTest {
         void activeUppercase() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
 
-            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
-                "key-id",
-                "pfx",
-                "key-name",
-                "acme",
-                "production",
-                "admin",
-                "admin",
-                "ACTIVE",
-                Instant.now(),
-                null
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(key)
-            );
+            IamQueryService.ApiKeyInfo key =
+                    new IamQueryService.ApiKeyInfo(
+                            "key-id",
+                            "pfx",
+                            "key-name",
+                            "acme",
+                            "production",
+                            "admin",
+                            "admin",
+                            "ACTIVE",
+                            Instant.now(),
+                            null);
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(key));
 
             invokeOnStartup(service);
             assertTrue(service.isBootstrapConsumed());
         }
 
         @Test
-        @DisplayName(
-            "active status (lowercase) triggers auto-disable (case-insensitive)"
-        )
+        @DisplayName("active status (lowercase) triggers auto-disable (case-insensitive)")
         void activeLowercase() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
 
-            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
-                "key-id",
-                "pfx",
-                "key-name",
-                "acme",
-                "production",
-                "admin",
-                "admin",
-                "active",
-                Instant.now(),
-                null
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(key)
-            );
+            IamQueryService.ApiKeyInfo key =
+                    new IamQueryService.ApiKeyInfo(
+                            "key-id",
+                            "pfx",
+                            "key-name",
+                            "acme",
+                            "production",
+                            "admin",
+                            "admin",
+                            "active",
+                            Instant.now(),
+                            null);
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(key));
 
             invokeOnStartup(service);
             assertTrue(service.isBootstrapConsumed());
@@ -896,12 +788,8 @@ class BootstrapKeyLifecycleServiceTest {
         void revokedDoesNotTrigger() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(revokedApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(revokedApiKey("acme")));
 
             invokeOnStartup(service);
             assertFalse(service.isBootstrapConsumed());
@@ -912,25 +800,21 @@ class BootstrapKeyLifecycleServiceTest {
         void suspendedDoesNotTrigger() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
 
-            IamQueryService.ApiKeyInfo key = new IamQueryService.ApiKeyInfo(
-                "key-id",
-                "pfx",
-                "key-name",
-                "acme",
-                "production",
-                "admin",
-                "admin",
-                "SUSPENDED",
-                Instant.now(),
-                null
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(key)
-            );
+            IamQueryService.ApiKeyInfo key =
+                    new IamQueryService.ApiKeyInfo(
+                            "key-id",
+                            "pfx",
+                            "key-name",
+                            "acme",
+                            "production",
+                            "admin",
+                            "admin",
+                            "SUSPENDED",
+                            Instant.now(),
+                            null);
+            when(iamQueryService.listApiKeys("acme")).thenReturn(List.of(key));
 
             invokeOnStartup(service);
             assertFalse(service.isBootstrapConsumed());
@@ -941,12 +825,9 @@ class BootstrapKeyLifecycleServiceTest {
         void mixedStatuses() throws Exception {
             givenBootstrapKeyConfigured();
             TenantInfo tenant = tenantInfo("acme");
-            when(coreQueryService.listTenants()).thenReturn(
-                List.of(tenant)
-            );
-            when(iamQueryService.listApiKeys("acme")).thenReturn(
-                List.of(revokedApiKey("acme"), activeApiKey("acme"))
-            );
+            when(coreQueryService.listTenants()).thenReturn(List.of(tenant));
+            when(iamQueryService.listApiKeys("acme"))
+                    .thenReturn(List.of(revokedApiKey("acme"), activeApiKey("acme")));
 
             invokeOnStartup(service);
             assertTrue(service.isBootstrapConsumed());
@@ -965,9 +846,12 @@ class BootstrapKeyLifecycleServiceTest {
             // Run multiple threads calling markBootstrapConsumed concurrently
             Thread[] threads = new Thread[10];
             for (int i = 0; i < threads.length; i++) {
-                threads[i] = Thread.ofVirtual().unstarted(() -> {
-                    service.markBootstrapConsumed();
-                });
+                threads[i] =
+                        Thread.ofVirtual()
+                                .unstarted(
+                                        () -> {
+                                            service.markBootstrapConsumed();
+                                        });
             }
             for (Thread t : threads) t.start();
             for (Thread t : threads) t.join(5000);
@@ -988,18 +872,18 @@ class BootstrapKeyLifecycleServiceTest {
             boolean[] results = new boolean[10];
             for (int i = 0; i < readers.length; i++) {
                 final int idx = i;
-                readers[i] = Thread.ofVirtual().unstarted(() -> {
-                    results[idx] = service.isBootstrapConsumed();
-                });
+                readers[i] =
+                        Thread.ofVirtual()
+                                .unstarted(
+                                        () -> {
+                                            results[idx] = service.isBootstrapConsumed();
+                                        });
             }
             for (Thread t : readers) t.start();
             for (Thread t : readers) t.join(5000);
 
             for (int i = 0; i < results.length; i++) {
-                assertTrue(
-                    results[i],
-                    "Reader " + i + " should see consumed=true"
-                );
+                assertTrue(results[i], "Reader " + i + " should see consumed=true");
             }
         }
     }
@@ -1010,51 +894,33 @@ class BootstrapKeyLifecycleServiceTest {
 
         @Test
         @DisplayName(
-            "fresh deploy → bootstrap active → create key → auto-disabled → force re-enable"
-        )
+                "fresh deploy → bootstrap active → create key → auto-disabled → force re-enable")
         void fullLifecycleScenario() throws Exception {
             // Phase 1: Fresh deployment with bootstrap key configured
             givenBootstrapKeyConfigured();
-            when(coreQueryService.listTenants()).thenReturn(
-                Collections.emptyList()
-            );
+            when(coreQueryService.listTenants()).thenReturn(Collections.emptyList());
 
             invokeOnStartup(service);
 
             assertTrue(service.isBootstrapKeyActive(), "Phase 1: active");
-            assertTrue(
-                service.isActiveBootstrapKey(BOOTSTRAP_KEY),
-                "Phase 1: token match"
-            );
+            assertTrue(service.isActiveBootstrapKey(BOOTSTRAP_KEY), "Phase 1: token match");
             assertFalse(service.isBootstrapConsumed(), "Phase 1: not consumed");
 
             // Phase 2: After first API key is created
             service.markBootstrapConsumed();
 
             assertFalse(service.isBootstrapKeyActive(), "Phase 2: inactive");
-            assertFalse(
-                service.isActiveBootstrapKey(BOOTSTRAP_KEY),
-                "Phase 2: token rejected"
-            );
+            assertFalse(service.isActiveBootstrapKey(BOOTSTRAP_KEY), "Phase 2: token rejected");
             assertTrue(service.isBootstrapConsumed(), "Phase 2: consumed");
             // But the value still matches (for 403 vs 401 differentiation)
-            assertTrue(
-                service.isBootstrapKeyValue(BOOTSTRAP_KEY),
-                "Phase 2: value still matches"
-            );
+            assertTrue(service.isBootstrapKeyValue(BOOTSTRAP_KEY), "Phase 2: value still matches");
 
             // Phase 3: Force override re-enables (simulated by swapping config)
             givenForceBootstrapEnabled();
 
             assertTrue(service.isBootstrapKeyActive(), "Phase 3: force-active");
-            assertTrue(
-                service.isActiveBootstrapKey(BOOTSTRAP_KEY),
-                "Phase 3: token accepted"
-            );
-            assertTrue(
-                service.isBootstrapConsumed(),
-                "Phase 3: still consumed"
-            );
+            assertTrue(service.isActiveBootstrapKey(BOOTSTRAP_KEY), "Phase 3: token accepted");
+            assertTrue(service.isBootstrapConsumed(), "Phase 3: still consumed");
         }
     }
 }

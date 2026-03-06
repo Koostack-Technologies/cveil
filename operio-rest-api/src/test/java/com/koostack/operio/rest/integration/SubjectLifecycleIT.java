@@ -13,20 +13,20 @@ import jakarta.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
 
 /**
  * Integration test for subject lifecycle endpoints:
+ *
  * <ul>
- *   <li>{@code DELETE /api/v1/subjects/{name}} — removeSubject</li>
- *   <li>{@code DELETE /api/v1/subjects/{name}/dsar-key} — shredSubject</li>
+ *   <li>{@code DELETE /api/v1/subjects/{name}} — removeSubject
+ *   <li>{@code DELETE /api/v1/subjects/{name}/dsar-key} — shredSubject
  * </ul>
  *
- * <p>Also provides deep DSAR verification with direct JDBC/Redis assertions
- * that go beyond REST-response-only checking.
+ * <p>Also provides deep DSAR verification with direct JDBC/Redis assertions that go beyond
+ * REST-response-only checking.
  */
 @QuarkusTest
 @QuarkusTestResource(OperioTestResourceManager.class)
@@ -62,34 +62,44 @@ public class SubjectLifecycleIT {
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class Setup {
 
-        @Test @Order(1) @DisplayName("Create tenant")
+        @Test
+        @Order(1)
+        @DisplayName("Create tenant")
         void createTenant() {
-            Response r = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response r =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {"tenantId": "%s", "displayName": "Subject Lifecycle IT", "plan": "pro"}
-                    """.formatted(TENANT_ID))
-                .post("/api/v1/platform/tenants");
+                    """
+                                            .formatted(TENANT_ID))
+                            .post("/api/v1/platform/tenants");
             assertThat(r.statusCode()).as("Tenant creation").isIn(201, 200, 409);
         }
 
-        @Test @Order(2) @DisplayName("Create API key")
+        @Test
+        @Order(2)
+        @DisplayName("Create API key")
         void createApiKey() {
-            Response r = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response r =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {"tenantId": "%s", "keyName": "sl-it-key", "environment": "TEST",
                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]}
-                    """.formatted(TENANT_ID))
-                .post("/api/v1/platform/api-keys");
+                    """
+                                            .formatted(TENANT_ID))
+                            .post("/api/v1/platform/api-keys");
             assertThat(r.statusCode()).isEqualTo(201);
             apiKey = r.jsonPath().getString("rawKey");
             assertThat(apiKey).isNotBlank();
         }
 
-        @Test @Order(3) @DisplayName("Init support")
+        @Test
+        @Order(3)
+        @DisplayName("Init support")
         void initSupport() {
             support = new IntegrationTestSupport(config, TENANT_ID);
             support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
@@ -109,72 +119,130 @@ public class SubjectLifecycleIT {
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class Prerequisites {
 
-        private String auth() { return "Bearer " + apiKey; }
+        private String auth() {
+            return "Bearer " + apiKey;
+        }
 
-        @Test @Order(1) void registerEntity() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(1)
+        void registerEntity() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"entityName": "%s", "description": "d"}
-                    """.formatted(ENTITY))
-                .post("/api/v1/catalogue/entities").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(ENTITY))
+                    .post("/api/v1/catalogue/entities")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(2) void registerCategory() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(2)
+        void registerCategory() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"categoryName": "%s", "description": "d"}
-                    """.formatted(CATEGORY))
-                .post("/api/v1/catalogue/categories").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(CATEGORY))
+                    .post("/api/v1/catalogue/categories")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(3) void registerField() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(3)
+        void registerField() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"fieldName": "%s", "entityName": "%s", "description": "d"}
-                    """.formatted(FIELD, ENTITY))
-                .post("/api/v1/catalogue/fields").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(FIELD, ENTITY))
+                    .post("/api/v1/catalogue/fields")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(4) void assignFieldCategory() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(4)
+        void assignFieldCategory() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"fieldName": "%s", "entityName": "%s", "categoryName": "%s"}
-                    """.formatted(FIELD, ENTITY, CATEGORY))
-                .post("/api/v1/catalogue/fields/categories").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(FIELD, ENTITY, CATEGORY))
+                    .post("/api/v1/catalogue/fields/categories")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(5) void registerPurpose() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(5)
+        void registerPurpose() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"purposeName": "%s", "description": "d"}
-                    """.formatted(PURPOSE))
-                .post("/api/v1/governance/purposes").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(PURPOSE))
+                    .post("/api/v1/governance/purposes")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(6) void registerRegulation() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(6)
+        void registerRegulation() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"regulationName": "%s", "description": "d"}
-                    """.formatted(REGULATION))
-                .post("/api/v1/governance/regulations").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(REGULATION))
+                    .post("/api/v1/governance/regulations")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
 
-        @Test @Order(7) void linkPurposeRegulation() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(7)
+        void linkPurposeRegulation() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"purposeName": "%s", "regulationName": "%s",
                     "lawfulBasis": "consent", "onGranted": "allow", "onDenied": "deny"}
-                    """.formatted(PURPOSE, REGULATION))
-                .post("/api/v1/governance/purposes/regulations").then().statusCode(200);
+                    """
+                                    .formatted(PURPOSE, REGULATION))
+                    .post("/api/v1/governance/purposes/regulations")
+                    .then()
+                    .statusCode(200);
         }
 
-        @Test @Order(8) void addPolicy() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+        @Test
+        @Order(8)
+        void addPolicy() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"purposeName": "%s", "policyType": "field",
                     "fieldName": "%s", "entityName": "%s", "categoryName": "%s"}
-                    """.formatted(PURPOSE, FIELD, ENTITY, CATEGORY))
-                .post("/api/v1/governance/purposes/policies").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(PURPOSE, FIELD, ENTITY, CATEGORY))
+                    .post("/api/v1/governance/purposes/policies")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
         }
     }
 
@@ -188,96 +256,133 @@ public class SubjectLifecycleIT {
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class RemoveSubject {
 
-        private String auth() { return "Bearer " + apiKey; }
-
-        @Test @Order(1) @DisplayName("Register subject for removal")
-        void registerSubject() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
-                    {"subjectName": "%s"}
-                    """.formatted(SUBJECT_REMOVE))
-                .post("/api/v1/subjects").then().statusCode(anyOf(is(200), is(201)));
+        private String auth() {
+            return "Bearer " + apiKey;
         }
 
-        @Test @Order(2) @DisplayName("Grant consent to subject")
+        @Test
+        @Order(1)
+        @DisplayName("Register subject for removal")
+        void registerSubject() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
+                    {"subjectName": "%s"}
+                    """
+                                    .formatted(SUBJECT_REMOVE))
+                    .post("/api/v1/subjects")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
+        }
+
+        @Test
+        @Order(2)
+        @DisplayName("Grant consent to subject")
         void grantConsent() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"subject": "%s",
                      "scope": {"category": "%s", "fieldName": "%s",
                                "entityName": "%s", "purposeName": "%s"}}
-                    """.formatted(SUBJECT_REMOVE, CATEGORY, FIELD, ENTITY, PURPOSE))
-                .post("/api/v1/subjects/consent/grant").then().statusCode(200);
+                    """
+                                    .formatted(SUBJECT_REMOVE, CATEGORY, FIELD, ENTITY, PURPOSE))
+                    .post("/api/v1/subjects/consent/grant")
+                    .then()
+                    .statusCode(200);
         }
 
-        @Test @Order(3) @DisplayName("Verify subject exists in DB before removal")
+        @Test
+        @Order(3)
+        @DisplayName("Verify subject exists in DB before removal")
         void subjectExistsInDb() {
             support.assertRowExists("subject", "subject_name", SUBJECT_REMOVE);
         }
 
-        @Test @Order(4) @DisplayName("Verify subject has consent ledger entries")
+        @Test
+        @Order(4)
+        @DisplayName("Verify subject has consent ledger entries")
         void ledgerEntriesExist() {
             assertThat(support.countConsentLedgerEntries(SUBJECT_REMOVE))
-                .as("Subject should have consent entries before removal")
-                .isGreaterThan(0);
+                    .as("Subject should have consent entries before removal")
+                    .isGreaterThan(0);
         }
 
-        @Test @Order(5) @DisplayName("removeSubject on non-existent subject returns 404 or 200")
+        @Test
+        @Order(5)
+        @DisplayName("removeSubject on non-existent subject returns 404 or 200")
         void removeNonExistent() {
-            int status = given().header("Authorization", auth())
-                .delete("/api/v1/subjects/non-existent-subject-xyz")
-                .statusCode();
+            int status =
+                    given().header("Authorization", auth())
+                            .delete("/api/v1/subjects/non-existent-subject-xyz")
+                            .statusCode();
             // May return 404 (not found) or 200 (idempotent no-op)
             assertThat(status).isIn(200, 404);
         }
 
-        @Test @Order(6) @DisplayName("removeSubject with active consent — verify behavior")
+        @Test
+        @Order(6)
+        @DisplayName("removeSubject with active consent — verify behavior")
         void removeWithActiveConsent() {
-            int status = given().header("Authorization", auth())
-                .delete("/api/v1/subjects/" + SUBJECT_REMOVE)
-                .statusCode();
+            int status =
+                    given().header("Authorization", auth())
+                            .delete("/api/v1/subjects/" + SUBJECT_REMOVE)
+                            .statusCode();
             // May return 409 (has active consent) or 200 (cascades)
             if (status == 409) {
                 // Revoke consent first, then retry
-                given().header("Authorization", auth()).contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", auth())
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {"subject": "%s",
                          "scope": {"category": "%s", "fieldName": "%s",
                                    "entityName": "%s", "purposeName": "%s"}}
-                        """.formatted(SUBJECT_REMOVE, CATEGORY, FIELD, ENTITY, PURPOSE))
-                    .post("/api/v1/subjects/consent/revoke").then().statusCode(200);
+                        """
+                                        .formatted(
+                                                SUBJECT_REMOVE, CATEGORY, FIELD, ENTITY, PURPOSE))
+                        .post("/api/v1/subjects/consent/revoke")
+                        .then()
+                        .statusCode(200);
 
                 given().header("Authorization", auth())
-                    .delete("/api/v1/subjects/" + SUBJECT_REMOVE)
-                    .then().statusCode(200);
+                        .delete("/api/v1/subjects/" + SUBJECT_REMOVE)
+                        .then()
+                        .statusCode(200);
             }
         }
 
-        @Test @Order(7) @DisplayName("Verify subject row removed from DB")
+        @Test
+        @Order(7)
+        @DisplayName("Verify subject row removed from DB")
         void subjectRemovedFromDb() {
             support.awaitRedisState(
-                () -> support.countRows("subject", "subject_name", SUBJECT_REMOVE),
-                count -> count == 0,
-                Duration.ofSeconds(10)
-            );
+                    () -> support.countRows("subject", "subject_name", SUBJECT_REMOVE),
+                    count -> count == 0,
+                    Duration.ofSeconds(10));
             support.assertRowAbsent("subject", "subject_name", SUBJECT_REMOVE);
         }
 
-        @Test @Order(8) @DisplayName("Verify subject node removed from graph")
+        @Test
+        @Order(8)
+        @DisplayName("Verify subject node removed from graph")
         void subjectRemovedFromGraph() {
             support.awaitRedisState(
-                () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_REMOVE),
-                node -> node == null || node.isEmpty(),
-                Duration.ofSeconds(10)
-            );
+                    () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_REMOVE),
+                    node -> node == null || node.isEmpty(),
+                    Duration.ofSeconds(10));
         }
 
-        @Test @Order(9) @DisplayName("Verify subject edges cleaned from graph")
+        @Test
+        @Order(9)
+        @DisplayName("Verify subject edges cleaned from graph")
         void subjectEdgesCleaned() {
             Set<String> outEdges = support.getOutgoingEdges(TENANT_ID, "subject", SUBJECT_REMOVE);
             assertThat(outEdges)
-                .as("Subject outgoing edges should be empty after removal")
-                .isEmpty();
+                    .as("Subject outgoing edges should be empty after removal")
+                    .isEmpty();
         }
     }
 
@@ -291,88 +396,109 @@ public class SubjectLifecycleIT {
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class ShredDsarKey {
 
-        private String auth() { return "Bearer " + apiKey; }
-
-        @Test @Order(1) @DisplayName("Register subject for shred testing")
-        void registerSubject() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
-                    {"subjectName": "%s"}
-                    """.formatted(SUBJECT_SHRED))
-                .post("/api/v1/subjects").then().statusCode(anyOf(is(200), is(201)));
+        private String auth() {
+            return "Bearer " + apiKey;
         }
 
-        @Test @Order(2) @DisplayName("Grant consent")
+        @Test
+        @Order(1)
+        @DisplayName("Register subject for shred testing")
+        void registerSubject() {
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
+                    {"subjectName": "%s"}
+                    """
+                                    .formatted(SUBJECT_SHRED))
+                    .post("/api/v1/subjects")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
+        }
+
+        @Test
+        @Order(2)
+        @DisplayName("Grant consent")
         void grantConsent() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"subject": "%s",
                      "scope": {"category": "%s", "fieldName": "%s",
                                "entityName": "%s", "purposeName": "%s"}}
-                    """.formatted(SUBJECT_SHRED, CATEGORY, FIELD, ENTITY, PURPOSE))
-                .post("/api/v1/subjects/consent/grant").then().statusCode(200);
+                    """
+                                    .formatted(SUBJECT_SHRED, CATEGORY, FIELD, ENTITY, PURPOSE))
+                    .post("/api/v1/subjects/consent/grant")
+                    .then()
+                    .statusCode(200);
         }
 
-        @Test @Order(3) @DisplayName("Verify subject has dsar_key in subject_dsar table")
+        @Test
+        @Order(3)
+        @DisplayName("Verify subject has dsar_key in subject_dsar table")
         void dsarKeyExists() {
             // dsar_id is deterministic: UUID.nameUUIDFromBytes("dsar:" + subjectName)
-            UUID dsarId = UUID.nameUUIDFromBytes(
-                ("dsar:" + SUBJECT_SHRED).getBytes(StandardCharsets.UTF_8));
-            var rows = support.query(
-                "SELECT dsar_key FROM subject_dsar WHERE dsar_id = ?", dsarId
-            );
-            assertThat(rows)
-                .as("subject_dsar row should exist for subject")
-                .isNotEmpty();
-            assertThat(rows.get(0).get("dsar_key"))
-                .as("dsar_key should be non-null")
-                .isNotNull();
+            UUID dsarId =
+                    UUID.nameUUIDFromBytes(
+                            ("dsar:" + SUBJECT_SHRED).getBytes(StandardCharsets.UTF_8));
+            var rows = support.query("SELECT dsar_key FROM subject_dsar WHERE dsar_id = ?", dsarId);
+            assertThat(rows).as("subject_dsar row should exist for subject").isNotEmpty();
+            assertThat(rows.get(0).get("dsar_key")).as("dsar_key should be non-null").isNotNull();
         }
 
-        @Test @Order(4) @DisplayName("Erase subject via DSAR endpoint")
+        @Test
+        @Order(4)
+        @DisplayName("Erase subject via DSAR endpoint")
         void eraseSubject() {
             given().header("Authorization", auth())
-                .queryParam("confirm", "DELETE_" + SUBJECT_SHRED)
-                .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/audit")
-                .then().statusCode(200);
+                    .queryParam("confirm", "DELETE_" + SUBJECT_SHRED)
+                    .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/audit")
+                    .then()
+                    .statusCode(200);
         }
 
-        @Test @Order(5) @DisplayName("Wait for all events to be published")
+        @Test
+        @Order(5)
+        @DisplayName("Wait for all events to be published")
         void awaitEventsPublished() {
             support.awaitAllEventsPublished(Duration.ofSeconds(30));
         }
 
-        @Test @Order(6) @DisplayName("shredDsarKey succeeds after events published")
+        @Test
+        @Order(6)
+        @DisplayName("shredDsarKey succeeds after events published")
         void shredDsarKey() {
-            int status = given().header("Authorization", auth())
-                .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/dsar-key")
-                .statusCode();
+            int status =
+                    given().header("Authorization", auth())
+                            .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/dsar-key")
+                            .statusCode();
             // 200 = shredded, 409 = events still pending (retry), 404 = subject already gone
             assertThat(status)
-                .as("shredDsarKey should succeed or report subject gone")
-                .isIn(200, 404);
+                    .as("shredDsarKey should succeed or report subject gone")
+                    .isIn(200, 404);
         }
 
-        @Test @Order(7) @DisplayName("shredDsarKey is idempotent")
+        @Test
+        @Order(7)
+        @DisplayName("shredDsarKey is idempotent")
         void shredIdempotent() {
-            int status = given().header("Authorization", auth())
-                .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/dsar-key")
-                .statusCode();
-            assertThat(status)
-                .as("Second shred should succeed or report gone")
-                .isIn(200, 404);
+            int status =
+                    given().header("Authorization", auth())
+                            .delete("/api/v1/subjects/" + SUBJECT_SHRED + "/dsar-key")
+                            .statusCode();
+            assertThat(status).as("Second shred should succeed or report gone").isIn(200, 404);
         }
 
-        @Test @Order(8) @DisplayName("Verify subject_dsar row deleted after shred")
+        @Test
+        @Order(8)
+        @DisplayName("Verify subject_dsar row deleted after shred")
         void dsarKeyGone() {
-            UUID dsarId = UUID.nameUUIDFromBytes(
-                ("dsar:" + SUBJECT_SHRED).getBytes(StandardCharsets.UTF_8));
-            var rows = support.query(
-                "SELECT dsar_key FROM subject_dsar WHERE dsar_id = ?", dsarId
-            );
-            assertThat(rows)
-                .as("subject_dsar row should be gone after shred")
-                .isEmpty();
+            UUID dsarId =
+                    UUID.nameUUIDFromBytes(
+                            ("dsar:" + SUBJECT_SHRED).getBytes(StandardCharsets.UTF_8));
+            var rows = support.query("SELECT dsar_key FROM subject_dsar WHERE dsar_id = ?", dsarId);
+            assertThat(rows).as("subject_dsar row should be gone after shred").isEmpty();
         }
     }
 
@@ -386,99 +512,131 @@ public class SubjectLifecycleIT {
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class DsarDeepVerification {
 
-        private String auth() { return "Bearer " + apiKey; }
+        private String auth() {
+            return "Bearer " + apiKey;
+        }
 
-        @Test @Order(1) @DisplayName("Register and grant consent to DSAR test subject")
+        @Test
+        @Order(1)
+        @DisplayName("Register and grant consent to DSAR test subject")
         void setupDsarSubject() {
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"subjectName": "%s"}
-                    """.formatted(SUBJECT_DSAR))
-                .post("/api/v1/subjects").then().statusCode(anyOf(is(200), is(201)));
+                    """
+                                    .formatted(SUBJECT_DSAR))
+                    .post("/api/v1/subjects")
+                    .then()
+                    .statusCode(anyOf(is(200), is(201)));
 
-            given().header("Authorization", auth()).contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {"subject": "%s",
                      "scope": {"category": "%s", "fieldName": "%s",
                                "entityName": "%s", "purposeName": "%s"}}
-                    """.formatted(SUBJECT_DSAR, CATEGORY, FIELD, ENTITY, PURPOSE))
-                .post("/api/v1/subjects/consent/grant").then().statusCode(200);
+                    """
+                                    .formatted(SUBJECT_DSAR, CATEGORY, FIELD, ENTITY, PURPOSE))
+                    .post("/api/v1/subjects/consent/grant")
+                    .then()
+                    .statusCode(200);
         }
 
-        @Test @Order(2) @DisplayName("Verify consent ledger entries exist BEFORE delete")
+        @Test
+        @Order(2)
+        @DisplayName("Verify consent ledger entries exist BEFORE delete")
         void ledgerExistsBefore() {
             assertThat(support.countConsentLedgerEntries(SUBJECT_DSAR))
-                .as("Consent ledger should have entries before DSAR delete")
-                .isGreaterThan(0);
+                    .as("Consent ledger should have entries before DSAR delete")
+                    .isGreaterThan(0);
         }
 
-        @Test @Order(3) @DisplayName("Verify subject row exists BEFORE delete")
+        @Test
+        @Order(3)
+        @DisplayName("Verify subject row exists BEFORE delete")
         void subjectExistsBefore() {
             support.assertRowExists("subject", "subject_name", SUBJECT_DSAR);
         }
 
-        @Test @Order(4) @DisplayName("Execute DSAR deletion")
+        @Test
+        @Order(4)
+        @DisplayName("Execute DSAR deletion")
         void deleteDsar() {
-            var response = given().header("Authorization", auth())
-                .queryParam("confirm", "DELETE_" + SUBJECT_DSAR)
-                .delete("/api/v1/subjects/" + SUBJECT_DSAR + "/audit")
-                .then().statusCode(200)
-                .extract().response();
+            var response =
+                    given().header("Authorization", auth())
+                            .queryParam("confirm", "DELETE_" + SUBJECT_DSAR)
+                            .delete("/api/v1/subjects/" + SUBJECT_DSAR + "/audit")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
 
             String status = response.jsonPath().getString("status");
             assertThat(status)
-                .as("DSAR deletion status")
-                .isIn("PENDING_SHRED", "PARTIAL_FAILURE", "SUCCESS");
+                    .as("DSAR deletion status")
+                    .isIn("PENDING_SHRED", "PARTIAL_FAILURE", "SUCCESS");
         }
 
-        @Test @Order(5) @DisplayName("Await event propagation")
+        @Test
+        @Order(5)
+        @DisplayName("Await event propagation")
         void awaitEvents() {
             support.awaitAllEventsPublished(Duration.ofSeconds(30));
         }
 
-        @Test @Order(6) @DisplayName("Verify consent ledger entries GONE after delete")
+        @Test
+        @Order(6)
+        @DisplayName("Verify consent ledger entries GONE after delete")
         void ledgerGoneAfter() {
             // The DSAR delete should have revoked all consent and removed ledger entries
             support.awaitRedisState(
-                () -> support.countConsentLedgerEntries(SUBJECT_DSAR),
-                count -> count == 0,
-                Duration.ofSeconds(10)
-            );
+                    () -> support.countConsentLedgerEntries(SUBJECT_DSAR),
+                    count -> count == 0,
+                    Duration.ofSeconds(10));
         }
 
-        @Test @Order(7) @DisplayName("Verify dsar_audit_log row inserted")
+        @Test
+        @Order(7)
+        @DisplayName("Verify dsar_audit_log row inserted")
         void dsarAuditLogInserted() {
             var auditRows = support.queryDsarAuditLog(SUBJECT_DSAR);
             assertThat(auditRows)
-                .as("DSAR audit log should have at least one entry for subject")
-                .isNotEmpty();
-            assertThat(auditRows.get(0).get("subject_id").toString())
-                .isEqualTo(SUBJECT_DSAR);
+                    .as("DSAR audit log should have at least one entry for subject")
+                    .isNotEmpty();
+            assertThat(auditRows.get(0).get("subject_id").toString()).isEqualTo(SUBJECT_DSAR);
         }
 
-        @Test @Order(8) @DisplayName("Verify Redis consent cache cleared for subject")
+        @Test
+        @Order(8)
+        @DisplayName("Verify Redis consent cache cleared for subject")
         void redisCacheCleared() {
             String cache = support.getAdminConsentCache(TENANT_ID, SUBJECT_DSAR);
             assertThat(cache)
-                .as("Admin consent cache should be null/empty after DSAR delete")
-                .isNullOrEmpty();
+                    .as("Admin consent cache should be null/empty after DSAR delete")
+                    .isNullOrEmpty();
         }
 
-        @Test @Order(9) @DisplayName("Verify graph subject node removed")
+        @Test
+        @Order(9)
+        @DisplayName("Verify graph subject node removed")
         void graphNodeRemoved() {
             support.awaitRedisState(
-                () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_DSAR),
-                node -> node == null || node.isEmpty(),
-                Duration.ofSeconds(10)
-            );
+                    () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_DSAR),
+                    node -> node == null || node.isEmpty(),
+                    Duration.ofSeconds(10));
         }
 
-        @Test @Order(10) @DisplayName("Verify graph subject index cleaned")
+        @Test
+        @Order(10)
+        @DisplayName("Verify graph subject index cleaned")
         void graphIndexCleaned() {
             List<String> subjectIndex = support.getTypeIndex(TENANT_ID, "subject");
             assertThat(subjectIndex)
-                .as("Subject type index should not contain deleted subject")
-                .doesNotContain(SUBJECT_DSAR);
+                    .as("Subject type index should not contain deleted subject")
+                    .doesNotContain(SUBJECT_DSAR);
         }
     }
 

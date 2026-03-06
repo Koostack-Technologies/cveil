@@ -9,10 +9,9 @@ import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.core.aggregates.TenantAggregate;
 import com.koostack.operio.core.platform.core.events.*;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.UUID;
 
 public class JooqCoreCommandService implements CoreCommandService<JooqCoreCommandConfig> {
 
@@ -20,9 +19,20 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
 
     private EventService<?> eventService;
 
-    @Override public String getName() { return "jooq-core-command"; }
-    @Override public int getPriority() { return 100; }
-    @Override public Class<JooqCoreCommandConfig> getConfigurationType() { return JooqCoreCommandConfig.class; }
+    @Override
+    public String getName() {
+        return "jooq-core-command";
+    }
+
+    @Override
+    public int getPriority() {
+        return 100;
+    }
+
+    @Override
+    public Class<JooqCoreCommandConfig> getConfigurationType() {
+        return JooqCoreCommandConfig.class;
+    }
 
     @Override
     public void configure(JooqCoreCommandConfig config) {
@@ -84,10 +94,13 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
 
     private void publishEvent(String eventType, String tenantId, DomainEvent payload) {
         UUID aggregateId = TenantAggregate.deriveId(tenantId);
-        AggregateKey key = new AggregateKey(
-            aggregateId, TenantAggregate.AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        TenantAggregate.AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
         eventService.publishEvent(
-            PublishDomainEventInput.of(PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
+                PublishDomainEventInput.of(
+                        PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
     }
-
 }

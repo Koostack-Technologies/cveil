@@ -1,14 +1,11 @@
 package com.koostack.operio.tenant.event.jooq;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for {@link RedisEventPublisher} per-tenant stream routing.
- */
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+/** Unit tests for {@link RedisEventPublisher} per-tenant stream routing. */
 class RedisEventPublisherTest {
 
     @Test
@@ -31,17 +28,20 @@ class RedisEventPublisherTest {
         for (int i = 0; i < 100; i++) {
             String tenantId = UUID.randomUUID().toString();
             String key = RedisEventPublisher.streamKeyForTenant(tenantId);
-            assertTrue(key.startsWith(RedisEventPublisher.STREAM_KEY_PREFIX),
-                "Key must start with " + RedisEventPublisher.STREAM_KEY_PREFIX);
-            assertEquals(tenantId, key.substring(RedisEventPublisher.STREAM_KEY_PREFIX.length()),
-                "Key suffix must be the tenant ID");
+            assertTrue(
+                    key.startsWith(RedisEventPublisher.STREAM_KEY_PREFIX),
+                    "Key must start with " + RedisEventPublisher.STREAM_KEY_PREFIX);
+            assertEquals(
+                    tenantId,
+                    key.substring(RedisEventPublisher.STREAM_KEY_PREFIX.length()),
+                    "Key suffix must be the tenant ID");
         }
     }
 
     @Test
     void nullInputThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> RedisEventPublisher.streamKeyForTenant(null));
+        assertThrows(
+                IllegalArgumentException.class, () -> RedisEventPublisher.streamKeyForTenant(null));
     }
 
     @Test

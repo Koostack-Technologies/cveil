@@ -2,78 +2,99 @@ package com.koostack.operio.core.tenant.consent.aggregates;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.core.tenant.consent.events.*;
-import com.koostack.operio.core.models.AggregateRoot;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Aggregate representing all consent ledger entries for a single data subject.
- * Keyed by subject ID.
+ * Aggregate representing all consent ledger entries for a single data subject. Keyed by subject ID.
  */
 public record SubjectConsentAggregate(
-    String tenantId,
-    UUID aggregateId,
-    String subjectId,
-    List<LedgerEntry> entries,
-    Long version
-) implements AggregateRoot {
+        String tenantId,
+        UUID aggregateId,
+        String subjectId,
+        List<LedgerEntry> entries,
+        Long version)
+        implements AggregateRoot {
 
     public static final String AGGREGATE_TYPE = "consent-subject";
 
     @Override
-    public String aggregateType() { return AGGREGATE_TYPE; }
+    public String aggregateType() {
+        return AGGREGATE_TYPE;
+    }
 
     public static UUID deriveId(String subjectId) {
         return UUID.nameUUIDFromBytes(
-            ("consent-subject:" + subjectId).getBytes(StandardCharsets.UTF_8)
-        );
+                ("consent-subject:" + subjectId).getBytes(StandardCharsets.UTF_8));
     }
 
     public static SubjectConsentAggregate create(String tenantId, String subjectId) {
-        return new SubjectConsentAggregate(
-            tenantId, deriveId(subjectId), subjectId, List.of(), 0L
-        );
+        return new SubjectConsentAggregate(tenantId, deriveId(subjectId), subjectId, List.of(), 0L);
     }
 
     public static SubjectConsentAggregate apply(
-        SubjectConsentAggregate current, String eventType,
-        JsonNode payloadNode, ObjectMapper mapper
-    ) {
+            SubjectConsentAggregate current,
+            String eventType,
+            JsonNode payloadNode,
+            ObjectMapper mapper) {
         return switch (eventType) {
             case ConsentEventTypes.CONSENT_GRANTED -> {
                 var e = mapper.convertValue(payloadNode, ConsentGrantedEvent.class);
-                yield current.withEntry(new LedgerEntry(
-                    e.policyId(), e.purposeName(), e.policyType(),
-                    e.fieldName(), e.entityName(), e.categoryName(),
-                    "GRANT", e.actor(), e.ipAddress(), e.userAgent(), e.expiresAt()
-                ));
+                yield current.withEntry(
+                        new LedgerEntry(
+                                e.policyId(),
+                                e.purposeName(),
+                                e.policyType(),
+                                e.fieldName(),
+                                e.entityName(),
+                                e.categoryName(),
+                                "GRANT",
+                                e.actor(),
+                                e.ipAddress(),
+                                e.userAgent(),
+                                e.expiresAt()));
             }
             case ConsentEventTypes.CONSENT_REVOKED -> {
                 var e = mapper.convertValue(payloadNode, ConsentRevokedEvent.class);
-                yield current.withEntry(new LedgerEntry(
-                    e.policyId(), e.purposeName(), e.policyType(),
-                    e.fieldName(), e.entityName(), e.categoryName(),
-                    "REVOKE", e.actor(), e.ipAddress(), e.userAgent(), null
-                ));
+                yield current.withEntry(
+                        new LedgerEntry(
+                                e.policyId(),
+                                e.purposeName(),
+                                e.policyType(),
+                                e.fieldName(),
+                                e.entityName(),
+                                e.categoryName(),
+                                "REVOKE",
+                                e.actor(),
+                                e.ipAddress(),
+                                e.userAgent(),
+                                null));
             }
             case ConsentEventTypes.CONSENT_EXPIRED -> {
                 var e = mapper.convertValue(payloadNode, ConsentExpiredEvent.class);
-                yield current.withEntry(new LedgerEntry(
-                    e.policyId(), e.purposeName(), e.policyType(),
-                    e.fieldName(), e.entityName(), e.categoryName(),
-                    "EXPIRE", null, null, null, null
-                ));
+                yield current.withEntry(
+                        new LedgerEntry(
+                                e.policyId(),
+                                e.purposeName(),
+                                e.policyType(),
+                                e.fieldName(),
+                                e.entityName(),
+                                e.categoryName(),
+                                "EXPIRE",
+                                null,
+                                null,
+                                null,
+                                null));
             }
             case ConsentEventTypes.CONSENT_ALL_REVOKED -> current.withAllRevoked();
             default -> throw new IllegalArgumentException(
-                "Unknown event type for SubjectConsentAggregate: " + eventType
-            );
+                    "Unknown event type for SubjectConsentAggregate: " + eventType);
         };
     }
 
@@ -83,35 +104,41 @@ public record SubjectConsentAggregate(
         updated.removeIf(e -> e.policyId() == entry.policyId());
         updated.add(entry);
         return new SubjectConsentAggregate(
-            tenantId, aggregateId, subjectId, List.copyOf(updated), version
-        );
+                tenantId, aggregateId, subjectId, List.copyOf(updated), version);
     }
 
     /** Mark all entries as revoked. */
     public SubjectConsentAggregate withAllRevoked() {
-        var updated = entries.stream()
-            .map(e -> new LedgerEntry(
-                e.policyId(), e.purposeName(), e.policyType(),
-                e.fieldName(), e.entityName(), e.categoryName(),
-                "REVOKE", e.actor(), e.ipAddress(), e.userAgent(), null
-            ))
-            .toList();
-        return new SubjectConsentAggregate(
-            tenantId, aggregateId, subjectId, updated, version
-        );
+        var updated =
+                entries.stream()
+                        .map(
+                                e ->
+                                        new LedgerEntry(
+                                                e.policyId(),
+                                                e.purposeName(),
+                                                e.policyType(),
+                                                e.fieldName(),
+                                                e.entityName(),
+                                                e.categoryName(),
+                                                "REVOKE",
+                                                e.actor(),
+                                                e.ipAddress(),
+                                                e.userAgent(),
+                                                null))
+                        .toList();
+        return new SubjectConsentAggregate(tenantId, aggregateId, subjectId, updated, version);
     }
 
     public record LedgerEntry(
-        long policyId,
-        String purposeName,
-        String policyType,
-        String fieldName,
-        String entityName,
-        String categoryName,
-        String action,
-        String actor,
-        String ipAddress,
-        String userAgent,
-        Instant expiresAt
-    ) {}
+            long policyId,
+            String purposeName,
+            String policyType,
+            String fieldName,
+            String entityName,
+            String categoryName,
+            String action,
+            String actor,
+            String ipAddress,
+            String userAgent,
+            Instant expiresAt) {}
 }

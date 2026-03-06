@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 import redis.clients.jedis.JedisPooled;
 
 /**
- * Unit tests for the {@link JedisProvider} functional interface and its
- * {@link JedisProvider#shared(JedisPooled)} factory method.
+ * Unit tests for the {@link JedisProvider} functional interface and its {@link
+ * JedisProvider#shared(JedisPooled)} factory method.
  */
 @DisplayName("JedisProvider")
 class JedisProviderTest {
@@ -39,14 +39,11 @@ class JedisProviderTest {
         @Test
         @DisplayName("throws NullPointerException when jedis argument is null")
         void nullJedisThrows() {
-            NullPointerException ex = assertThrows(
-                NullPointerException.class,
-                () -> JedisProvider.shared(null)
-            );
+            NullPointerException ex =
+                    assertThrows(NullPointerException.class, () -> JedisProvider.shared(null));
             assertTrue(
-                ex.getMessage().contains("must not be null"),
-                "Exception message should mention null: " + ex.getMessage()
-            );
+                    ex.getMessage().contains("must not be null"),
+                    "Exception message should mention null: " + ex.getMessage());
         }
     }
 

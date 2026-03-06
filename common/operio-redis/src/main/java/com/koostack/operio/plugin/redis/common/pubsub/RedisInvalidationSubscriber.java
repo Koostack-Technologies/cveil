@@ -4,11 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSink;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.JedisPubSub;
-
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,28 +12,30 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.JedisPubSub;
 
 /**
  * Redis Pub/Sub-backed {@link InvalidationSubscriber}.
  *
- * <p><b>Threading model:</b> A single dedicated daemon thread runs the blocking
- * {@link JedisPubSub#subscribe} call.  Dynamic channel subscribe/unsubscribe is
- * performed via {@link JedisPubSub#subscribe(String...)} and
- * {@link JedisPubSub#unsubscribe(String...)} which are thread-safe and signal
- * the blocking read loop.
+ * <p><b>Threading model:</b> A single dedicated daemon thread runs the blocking {@link
+ * JedisPubSub#subscribe} call. Dynamic channel subscribe/unsubscribe is performed via {@link
+ * JedisPubSub#subscribe(String...)} and {@link JedisPubSub#unsubscribe(String...)} which are
+ * thread-safe and signal the blocking read loop.
  *
- * <p><b>Bootstrap:</b> A sentinel control channel
- * ({@code operio:consent-cache-invalidation:__control__}) is always subscribed
- * to avoid the chicken-and-egg problem of starting the blocking thread with no
- * channels.
+ * <p><b>Bootstrap:</b> A sentinel control channel ({@code
+ * operio:consent-cache-invalidation:__control__}) is always subscribed to avoid the chicken-and-egg
+ * problem of starting the blocking thread with no channels.
  *
- * <p><b>Reconnection:</b> If the subscriber thread dies (Redis disconnect), it
- * re-connects with exponential backoff (1s → 2s → 4s → max 30s) and
- * re-subscribes all channels that have active sinks.
+ * <p><b>Reconnection:</b> If the subscriber thread dies (Redis disconnect), it re-connects with
+ * exponential backoff (1s → 2s → 4s → max 30s) and re-subscribes all channels that have active
+ * sinks.
  *
- * <p><b>Important:</b> The {@code adminJedis} connection must be an admin pool,
- * not a tenant-scoped pool.  Tenant ACL users lack {@code &channels} permissions
- * and {@code SUBSCRIBE} will fail with {@code NOPERM}.
+ * <p><b>Important:</b> The {@code adminJedis} connection must be an admin pool, not a tenant-scoped
+ * pool. Tenant ACL users lack {@code &channels} permissions and {@code SUBSCRIBE} will fail with
+ * {@code NOPERM}.
  */
 public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
@@ -62,12 +59,14 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
             new ConcurrentHashMap<>();
 
     /** Tracks consecutive send() failures per sink for error isolation. */
-    private final ConcurrentHashMap<SinkEntry, Integer> sinkErrorCounts =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SinkEntry, Integer> sinkErrorCounts = new ConcurrentHashMap<>();
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    /** Resettable latch — replaced on each reconnect so awaitSubscribed() blocks until the new handler is active. */
+    /**
+     * Resettable latch — replaced on each reconnect so awaitSubscribed() blocks until the new
+     * handler is active.
+     */
     private volatile CountDownLatch subscribedLatch = new CountDownLatch(1);
 
     private volatile InternalPubSub pubSubHandler;
@@ -77,7 +76,8 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
         this(adminJedis, objectMapper, DEFAULT_CHANNEL_PREFIX);
     }
 
-    public RedisInvalidationSubscriber(JedisPooled adminJedis, ObjectMapper objectMapper, String channelPrefix) {
+    public RedisInvalidationSubscriber(
+            JedisPooled adminJedis, ObjectMapper objectMapper, String channelPrefix) {
         this.adminJedis = Objects.requireNonNull(adminJedis, "adminJedis");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
         this.channelPrefix = Objects.requireNonNull(channelPrefix, "channelPrefix");
@@ -98,8 +98,8 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
         String channel = channelFor(tenantId);
         SinkEntry entry = new SinkEntry(tenantId, sink);
 
-        CopyOnWriteArraySet<SinkEntry> sinks = channelSinks.computeIfAbsent(
-                channel, k -> new CopyOnWriteArraySet<>());
+        CopyOnWriteArraySet<SinkEntry> sinks =
+                channelSinks.computeIfAbsent(channel, k -> new CopyOnWriteArraySet<>());
 
         // Two threads may both see isEmpty()==true and call handler.subscribe(channel).
         // This is benign: JedisPubSub deduplicates, and getActiveChannels() on reconnect
@@ -152,10 +152,11 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
 
     private void startSubscriberThread() {
         pubSubHandler = new InternalPubSub();
-        subscriberThread = Thread.ofPlatform()
-                .daemon(true)
-                .name("operio-invalidation-subscriber")
-                .start(() -> runSubscribeLoop());
+        subscriberThread =
+                Thread.ofPlatform()
+                        .daemon(true)
+                        .name("operio-invalidation-subscriber")
+                        .start(() -> runSubscribeLoop());
     }
 
     private void runSubscribeLoop() {
@@ -179,7 +180,10 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
             } catch (Exception e) {
                 if (closed.get()) break;
                 long currentBackoff = backoffMs.get();
-                log.error("Redis Pub/Sub subscriber thread error, reconnecting in {}ms", currentBackoff, e);
+                log.error(
+                        "Redis Pub/Sub subscriber thread error, reconnecting in {}ms",
+                        currentBackoff,
+                        e);
 
                 try {
                     Thread.sleep(currentBackoff);
@@ -219,14 +223,16 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
         // channel mapping.  computeIfPresent holds the bucket lock, preventing a
         // concurrent subscribe() from inserting into a set we're about to discard.
         boolean[] lastSinkRemoved = {false};
-        channelSinks.computeIfPresent(channel, (k, sinks) -> {
-            sinks.remove(entry);
-            if (sinks.isEmpty()) {
-                lastSinkRemoved[0] = true;
-                return null;
-            }
-            return sinks;
-        });
+        channelSinks.computeIfPresent(
+                channel,
+                (k, sinks) -> {
+                    sinks.remove(entry);
+                    if (sinks.isEmpty()) {
+                        lastSinkRemoved[0] = true;
+                        return null;
+                    }
+                    return sinks;
+                });
 
         if (lastSinkRemoved[0]) {
             JedisPubSub handler = this.pubSubHandler;
@@ -282,11 +288,17 @@ public class RedisInvalidationSubscriber implements InvalidationSubscriber {
                     sinkErrorCounts.remove(entry);
                 } catch (Exception e) {
                     int count = sinkErrorCounts.merge(entry, 1, Integer::sum);
-                    log.warn("Sink send() failed on channel {} (consecutive errors: {})",
-                            channel, count, e);
+                    log.warn(
+                            "Sink send() failed on channel {} (consecutive errors: {})",
+                            channel,
+                            count,
+                            e);
                     if (count >= MAX_CONSECUTIVE_SINK_ERRORS) {
-                        log.warn("Removing persistently-failing sink from channel {} after {} errors",
-                                channel, count);
+                        log.warn(
+                                "Removing persistently-failing sink from channel {} after {}"
+                                        + " errors",
+                                channel,
+                                count);
                         removeSink(entry, channel);
                     }
                 }

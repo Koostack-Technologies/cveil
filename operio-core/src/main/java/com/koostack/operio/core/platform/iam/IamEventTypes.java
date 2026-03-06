@@ -1,9 +1,6 @@
 package com.koostack.operio.core.platform.iam;
 
-/**
- * String constants for IAM domain event types published to the platform
- * event store.
- */
+/** String constants for IAM domain event types published to the platform event store. */
 public final class IamEventTypes {
 
     private IamEventTypes() {}

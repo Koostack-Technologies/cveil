@@ -18,18 +18,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Splits the SmallRye-generated OpenAPI specification into two filtered
- * documents: one for tenant-facing (non-platform) endpoints and one for
- * platform administration endpoints.
+ * Splits the SmallRye-generated OpenAPI specification into two filtered documents: one for
+ * tenant-facing (non-platform) endpoints and one for platform administration endpoints.
  *
- * <p>The split is based on the request path prefix. Any path starting with
- * {@code /api/v1/platform} is considered a platform endpoint; everything
- * else is a tenant endpoint. Unused tags and the docs endpoints themselves
- * are stripped from each filtered spec.
+ * <p>The split is based on the request path prefix. Any path starting with {@code /api/v1/platform}
+ * is considered a platform endpoint; everything else is a tenant endpoint. Unused tags and the docs
+ * endpoints themselves are stripped from each filtered spec.
  *
- * <p>Both specs are computed lazily on first access by fetching the full
- * spec from the built-in {@code /q/openapi} endpoint and cached for the
- * lifetime of the application.
+ * <p>Both specs are computed lazily on first access by fetching the full spec from the built-in
+ * {@code /q/openapi} endpoint and cached for the lifetime of the application.
  */
 @ApplicationScoped
 public class OpenApiSplitService {
@@ -49,17 +46,13 @@ public class OpenApiSplitService {
     private volatile String tenantSpecJson;
     private volatile String platformSpecJson;
 
-    /**
-     * Returns the OpenAPI spec JSON containing only non-platform endpoints.
-     */
+    /** Returns the OpenAPI spec JSON containing only non-platform endpoints. */
     public String getTenantSpec() {
         ensureInitialized();
         return tenantSpecJson;
     }
 
-    /**
-     * Returns the OpenAPI spec JSON containing only platform endpoints.
-     */
+    /** Returns the OpenAPI spec JSON containing only platform endpoints. */
     public String getPlatformSpec() {
         ensureInitialized();
         return platformSpecJson;
@@ -82,34 +75,36 @@ public class OpenApiSplitService {
     }
 
     /**
-     * Fetches the full OpenAPI spec from the built-in SmallRye endpoint.
-     * Called lazily on first request, so the HTTP server is guaranteed to
-     * be running.
+     * Fetches the full OpenAPI spec from the built-in SmallRye endpoint. Called lazily on first
+     * request, so the HTTP server is guaranteed to be running.
      */
     private String fetchOpenApiSpec() throws Exception {
         URI uri = URI.create("http://localhost:" + httpPort + openApiPath + "?format=json");
         HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
-        HttpResponse<String> response = HttpClient.newHttpClient()
-                .send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IllegalStateException(
-                "Failed to fetch OpenAPI spec from " + uri + " — HTTP " + response.statusCode());
+                    "Failed to fetch OpenAPI spec from "
+                            + uri
+                            + " — HTTP "
+                            + response.statusCode());
         }
         return response.body();
     }
 
-    private String buildFilteredSpec(ObjectNode fullTree, boolean platformOnly)
-            throws Exception {
+    private String buildFilteredSpec(ObjectNode fullTree, boolean platformOnly) throws Exception {
         ObjectNode tree = fullTree.deepCopy();
 
         // Customize title and description per audience
         ObjectNode info = (ObjectNode) tree.get("info");
         if (info != null && platformOnly) {
             info.put("title", "Operio Platform Administration API");
-            info.put("description",
-                "Platform administration endpoints for tenant lifecycle "
-                    + "and API key management. Requires the super-admin role "
-                    + "or a valid bootstrap key.");
+            info.put(
+                    "description",
+                    "Platform administration endpoints for tenant lifecycle "
+                            + "and API key management. Requires the super-admin role "
+                            + "or a valid bootstrap key.");
         }
 
         // Filter paths: keep platform or non-platform, and always exclude docs paths
@@ -152,26 +147,36 @@ public class OpenApiSplitService {
         Set<String> usedTags = new HashSet<>();
         ObjectNode paths = (ObjectNode) tree.get("paths");
         if (paths != null) {
-            paths.fields().forEachRemaining(pathEntry ->
-                pathEntry.getValue().fields().forEachRemaining(method -> {
-                    JsonNode tags = method.getValue().get("tags");
-                    if (tags != null && tags.isArray()) {
-                        tags.forEach(tag -> usedTags.add(tag.asText()));
-                    }
-                })
-            );
+            paths.fields()
+                    .forEachRemaining(
+                            pathEntry ->
+                                    pathEntry
+                                            .getValue()
+                                            .fields()
+                                            .forEachRemaining(
+                                                    method -> {
+                                                        JsonNode tags =
+                                                                method.getValue().get("tags");
+                                                        if (tags != null && tags.isArray()) {
+                                                            tags.forEach(
+                                                                    tag ->
+                                                                            usedTags.add(
+                                                                                    tag.asText()));
+                                                        }
+                                                    }));
         }
 
         // Filter the top-level tags array to only include used tags
         ArrayNode tags = (ArrayNode) tree.get("tags");
         if (tags != null) {
             ArrayNode filtered = MAPPER.createArrayNode();
-            tags.forEach(tag -> {
-                JsonNode name = tag.get("name");
-                if (name != null && usedTags.contains(name.asText())) {
-                    filtered.add(tag);
-                }
-            });
+            tags.forEach(
+                    tag -> {
+                        JsonNode name = tag.get("name");
+                        if (name != null && usedTags.contains(name.asText())) {
+                            filtered.add(tag);
+                        }
+                    });
             tree.set("tags", filtered);
         }
     }

@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.platform.keycloak;
 
+import java.util.List;
+import java.util.Map;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.representations.idm.ClientRepresentation;
@@ -10,35 +11,28 @@ import org.keycloak.representations.idm.RoleRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Provisions and deprovisions Keycloak realms for Operio tenants.
  *
  * <p>Each tenant gets its own realm with:
+ *
  * <ul>
- *   <li>A confidential {@code operio-backend} client for token exchange</li>
- *   <li>Default Operio roles ({@code consent:read}, {@code consent:write},
- *       {@code admin:read}, {@code admin:write})</li>
- *   <li>Token lifetimes: 15-minute access, 7-day refresh</li>
- *   <li>Email verification required</li>
- *   <li>Brute-force protection enabled</li>
+ *   <li>A confidential {@code operio-backend} client for token exchange
+ *   <li>Default Operio roles ({@code consent:read}, {@code consent:write}, {@code admin:read},
+ *       {@code admin:write})
+ *   <li>Token lifetimes: 15-minute access, 7-day refresh
+ *   <li>Email verification required
+ *   <li>Brute-force protection enabled
  * </ul>
  */
 public class KeycloakRealmProvisioner {
 
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakRealmProvisioner.class);
 
-    private static final List<String> DEFAULT_ROLES = List.of(
-        "consent:read",
-        "consent:write",
-        "admin:read",
-        "admin:write"
-    );
+    private static final List<String> DEFAULT_ROLES =
+            List.of("consent:read", "consent:write", "admin:read", "admin:write");
 
-    private static final int ACCESS_TOKEN_LIFESPAN_SECONDS = 900;     // 15 minutes
+    private static final int ACCESS_TOKEN_LIFESPAN_SECONDS = 900; // 15 minutes
     private static final int REFRESH_TOKEN_LIFESPAN_SECONDS = 604800; // 7 days
 
     private final Keycloak adminClient;
@@ -52,7 +46,7 @@ public class KeycloakRealmProvisioner {
     /**
      * Create a new Keycloak realm for the given tenant.
      *
-     * @param tenantId    used as the realm name
+     * @param tenantId used as the realm name
      * @param displayName human-readable display name
      * @return the generated client secret for the operio-backend client
      */
@@ -93,8 +87,8 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Delete the Keycloak realm for the given tenant.
-     * Silently ignores the case where the realm does not exist.
+     * Delete the Keycloak realm for the given tenant. Silently ignores the case where the realm
+     * does not exist.
      */
     public void deprovisionRealm(String tenantId) {
         LOG.info("Deprovisioning Keycloak realm for tenant '{}'", tenantId);
@@ -117,26 +111,22 @@ public class KeycloakRealmProvisioner {
         client.setProtocol("openid-connect");
         client.setPublicClient(false);
         client.setServiceAccountsEnabled(true);
-        client.setDirectAccessGrantsEnabled(true);  // Resource Owner Password Credentials
+        client.setDirectAccessGrantsEnabled(true); // Resource Owner Password Credentials
         client.setStandardFlowEnabled(false);
-        client.setAttributes(Map.of(
-            "access.token.lifespan", String.valueOf(ACCESS_TOKEN_LIFESPAN_SECONDS)
-        ));
+        client.setAttributes(
+                Map.of("access.token.lifespan", String.valueOf(ACCESS_TOKEN_LIFESPAN_SECONDS)));
 
         realmResource.clients().create(client);
 
         // Retrieve the generated client secret
-        List<ClientRepresentation> clients = realmResource.clients()
-            .findByClientId(operioClientId);
+        List<ClientRepresentation> clients = realmResource.clients().findByClientId(operioClientId);
         if (clients.isEmpty()) {
             throw new IllegalStateException(
-                "Failed to find operio client after creation in realm " + tenantId
-            );
+                    "Failed to find operio client after creation in realm " + tenantId);
         }
 
         String internalId = clients.get(0).getId();
-        String secret = realmResource.clients().get(internalId)
-            .getSecret().getValue();
+        String secret = realmResource.clients().get(internalId).getSecret().getValue();
 
         LOG.debug("Operio client created in realm '{}', clientId='{}'", tenantId, operioClientId);
         return secret;

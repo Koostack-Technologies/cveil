@@ -12,23 +12,22 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
-import org.awaitility.Awaitility;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.operio.rest.resource.ConsentResource}
- * exercising consent grant, revoke, evaluate, batch ops, subject management,
- * and DSAR against real Postgres + Redis.
+ * Integration test for {@link com.koostack.operio.rest.resource.ConsentResource} exercising consent
+ * grant, revoke, evaluate, batch ops, subject management, and DSAR against real Postgres + Redis.
  *
  * <p>Every mutating operation is verified at three layers:
+ *
  * <ol>
- *   <li>REST API response (status code + body)</li>
- *   <li>Postgres — consent_ledger, event store, subject table</li>
- *   <li>Redis — graph model (nodes/edges/edge-properties), admin cache, event stream</li>
+ *   <li>REST API response (status code + body)
+ *   <li>Postgres — consent_ledger, event store, subject table
+ *   <li>Redis — graph model (nodes/edges/edge-properties), admin cache, event stream
  * </ol>
  *
  * <p>Prerequisite catalogue + governance items are registered in Phase 1.
@@ -40,8 +39,7 @@ import org.junit.jupiter.api.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ConsentResourceIT {
 
-    private static final String BOOTSTRAP_KEY =
-        "test-bootstrap-key-for-integration-tests";
+    private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
     private static final String TENANT_ID = "consent_it_tenant";
 
@@ -70,12 +68,11 @@ class ConsentResourceIT {
     private static volatile String readOnlyApiKey;
     private static volatile IntegrationTestSupport support;
 
-    @Inject
-    OperioConfig config;
+    @Inject OperioConfig config;
 
     // Helper to build a consent scope JSON fragment
-    private static String scope(String category, String fieldName,
-                                String entityName, String purposeName) {
+    private static String scope(
+            String category, String fieldName, String entityName, String purposeName) {
         return """
             {
               "category": "%s",
@@ -83,7 +80,8 @@ class ConsentResourceIT {
               "entityName": "%s",
               "purposeName": "%s"
             }
-            """.formatted(category, fieldName, entityName, purposeName);
+            """
+                .formatted(category, fieldName, entityName, purposeName);
     }
 
     // =======================================================================
@@ -100,19 +98,20 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "tenantId": "%s",
                       "displayName": "Consent IT Tenant",
                       "plan": "enterprise"
                     }
-                    """.formatted(TENANT_ID))
-                .when()
+                    """
+                                    .formatted(TENANT_ID))
+                    .when()
                     .post("/api/v1/platform/tenants")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -120,21 +119,24 @@ class ConsentResourceIT {
         @Order(2)
         @DisplayName("Create full-access API key")
         void createApiKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "consent-it-admin",
                       "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
@@ -148,21 +150,24 @@ class ConsentResourceIT {
         @Order(3)
         @DisplayName("Create read-only API key (consent:read only)")
         void createReadOnlyKey() {
-            Response response = given()
-                .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body("""
+            Response response =
+                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    """
                     {
                       "tenantId": "%s",
                       "subject": "consent-it-reader",
                       "roles": ["consent:read", "admin:read"]
                     }
-                    """.formatted(TENANT_ID))
-                .when()
-                    .post("/api/v1/platform/api-keys")
-                .then()
-                    .statusCode(201)
-                    .extract().response();
+                    """
+                                            .formatted(TENANT_ID))
+                            .when()
+                            .post("/api/v1/platform/api-keys")
+                            .then()
+                            .statusCode(201)
+                            .extract()
+                            .response();
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
@@ -176,15 +181,16 @@ class ConsentResourceIT {
         @DisplayName("Register entities")
         void registerEntities() {
             for (var entity : List.of(ENTITY_USER, ENTITY_PATIENT)) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         { "entityName": "%s", "description": "%s entity" }
-                        """.formatted(entity, entity))
-                    .when()
+                        """
+                                        .formatted(entity, entity))
+                        .when()
                         .post("/api/v1/catalogue/entities")
-                    .then()
+                        .then()
                         .statusCode(201);
             }
         }
@@ -194,15 +200,16 @@ class ConsentResourceIT {
         @DisplayName("Register categories")
         void registerCategories() {
             for (var cat : List.of(CATEGORY_PII, CATEGORY_HEALTH)) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         { "categoryName": "%s", "description": "%s data" }
-                        """.formatted(cat, cat))
-                    .when()
+                        """
+                                        .formatted(cat, cat))
+                        .when()
                         .post("/api/v1/catalogue/categories")
-                    .then()
+                        .then()
                         .statusCode(201);
             }
         }
@@ -212,25 +219,26 @@ class ConsentResourceIT {
         @DisplayName("Register fields")
         void registerFields() {
             record FieldDef(String fieldName, String entityName) {}
-            var fields = List.of(
-                new FieldDef(FIELD_EMAIL, ENTITY_USER),
-                new FieldDef(FIELD_SSN, ENTITY_USER),
-                new FieldDef(FIELD_DIAGNOSIS, ENTITY_PATIENT)
-            );
+            var fields =
+                    List.of(
+                            new FieldDef(FIELD_EMAIL, ENTITY_USER),
+                            new FieldDef(FIELD_SSN, ENTITY_USER),
+                            new FieldDef(FIELD_DIAGNOSIS, ENTITY_PATIENT));
             for (var f : fields) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "fieldName": "%s",
                           "entityName": "%s",
                           "description": "%s field"
                         }
-                        """.formatted(f.fieldName(), f.entityName(), f.fieldName()))
-                    .when()
+                        """
+                                        .formatted(f.fieldName(), f.entityName(), f.fieldName()))
+                        .when()
                         .post("/api/v1/catalogue/fields")
-                    .then()
+                        .then()
                         .statusCode(201);
             }
         }
@@ -240,25 +248,29 @@ class ConsentResourceIT {
         @DisplayName("Assign fields to categories")
         void assignFieldCategories() {
             record Link(String fieldName, String entityName, String categoryName) {}
-            var links = List.of(
-                new Link(FIELD_EMAIL, ENTITY_USER, CATEGORY_PII),
-                new Link(FIELD_SSN, ENTITY_USER, CATEGORY_PII),
-                new Link(FIELD_DIAGNOSIS, ENTITY_PATIENT, CATEGORY_HEALTH)
-            );
+            var links =
+                    List.of(
+                            new Link(FIELD_EMAIL, ENTITY_USER, CATEGORY_PII),
+                            new Link(FIELD_SSN, ENTITY_USER, CATEGORY_PII),
+                            new Link(FIELD_DIAGNOSIS, ENTITY_PATIENT, CATEGORY_HEALTH));
             for (var link : links) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "fieldName": "%s",
                           "entityName": "%s",
                           "categoryName": "%s"
                         }
-                        """.formatted(link.fieldName(), link.entityName(), link.categoryName()))
-                    .when()
+                        """
+                                        .formatted(
+                                                link.fieldName(),
+                                                link.entityName(),
+                                                link.categoryName()))
+                        .when()
                         .post("/api/v1/catalogue/fields/categories")
-                    .then()
+                        .then()
                         .statusCode(200);
             }
         }
@@ -270,15 +282,16 @@ class ConsentResourceIT {
         @DisplayName("Register purposes")
         void registerPurposes() {
             for (var purpose : List.of(PURPOSE_MARKETING, PURPOSE_ANALYTICS)) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         { "purposeName": "%s", "description": "%s purpose" }
-                        """.formatted(purpose, purpose))
-                    .when()
+                        """
+                                        .formatted(purpose, purpose))
+                        .when()
                         .post("/api/v1/governance/purposes")
-                    .then()
+                        .then()
                         .statusCode(201);
             }
         }
@@ -287,15 +300,16 @@ class ConsentResourceIT {
         @Order(21)
         @DisplayName("Register regulation")
         void registerRegulation() {
-            given()
-                .header("Authorization", "Bearer " + apiKey)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + apiKey)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "regulationName": "%s", "description": "EU regulation" }
-                    """.formatted(REGULATION_GDPR))
-                .when()
+                    """
+                                    .formatted(REGULATION_GDPR))
+                    .when()
                     .post("/api/v1/governance/regulations")
-                .then()
+                    .then()
                     .statusCode(201);
         }
 
@@ -304,19 +318,20 @@ class ConsentResourceIT {
         @DisplayName("Link purposes to regulation")
         void linkPurposesToRegulation() {
             for (var purpose : List.of(PURPOSE_MARKETING, PURPOSE_ANALYTICS)) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "purposeName": "%s",
                           "regulationName": "%s",
                           "lawfulBasis": "consent"
                         }
-                        """.formatted(purpose, REGULATION_GDPR))
-                    .when()
+                        """
+                                        .formatted(purpose, REGULATION_GDPR))
+                        .when()
                         .post("/api/v1/governance/purposes/regulations")
-                    .then()
+                        .then()
                         .statusCode(200);
             }
         }
@@ -325,19 +340,23 @@ class ConsentResourceIT {
         @Order(23)
         @DisplayName("Add purpose policies (field-scope)")
         void addPurposePolicies() {
-            record Policy(String purposeName, String fieldName,
-                          String entityName, String categoryName) {}
-            var policies = List.of(
-                new Policy(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII),
-                new Policy(PURPOSE_MARKETING, FIELD_SSN, ENTITY_USER, CATEGORY_PII),
-                new Policy(PURPOSE_ANALYTICS, FIELD_SSN, ENTITY_USER, CATEGORY_PII),
-                new Policy(PURPOSE_ANALYTICS, FIELD_DIAGNOSIS, ENTITY_PATIENT, CATEGORY_HEALTH)
-            );
+            record Policy(
+                    String purposeName, String fieldName, String entityName, String categoryName) {}
+            var policies =
+                    List.of(
+                            new Policy(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_USER, CATEGORY_PII),
+                            new Policy(PURPOSE_MARKETING, FIELD_SSN, ENTITY_USER, CATEGORY_PII),
+                            new Policy(PURPOSE_ANALYTICS, FIELD_SSN, ENTITY_USER, CATEGORY_PII),
+                            new Policy(
+                                    PURPOSE_ANALYTICS,
+                                    FIELD_DIAGNOSIS,
+                                    ENTITY_PATIENT,
+                                    CATEGORY_HEALTH));
             for (var p : policies) {
-                given()
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(ContentType.JSON)
-                    .body("""
+                given().header("Authorization", "Bearer " + apiKey)
+                        .contentType(ContentType.JSON)
+                        .body(
+                                """
                         {
                           "purposeName": "%s",
                           "policyType": "field",
@@ -345,10 +364,15 @@ class ConsentResourceIT {
                           "entityName": "%s",
                           "categoryName": "%s"
                         }
-                        """.formatted(p.purposeName(), p.fieldName(), p.entityName(), p.categoryName()))
-                    .when()
+                        """
+                                        .formatted(
+                                                p.purposeName(),
+                                                p.fieldName(),
+                                                p.entityName(),
+                                                p.categoryName()))
+                        .when()
                         .post("/api/v1/governance/purposes/policies")
-                    .then()
+                        .then()
                         .statusCode(anyOf(is(200), is(201)));
             }
         }
@@ -358,15 +382,17 @@ class ConsentResourceIT {
         @DisplayName("Await governance projection (policies visible in DB)")
         void awaitGovernanceProjected() {
             Awaitility.await()
-                .atMost(Duration.ofSeconds(60))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var policyRows = support.query("SELECT count(*) AS cnt FROM policy");
-                    int policyCnt = ((Number) policyRows.get(0).get("cnt")).intValue();
-                    assertThat(policyCnt)
-                        .as("Expected at least 4 policy rows projected")
-                        .isGreaterThanOrEqualTo(4);
-                });
+                    .atMost(Duration.ofSeconds(60))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var policyRows =
+                                        support.query("SELECT count(*) AS cnt FROM policy");
+                                int policyCnt = ((Number) policyRows.get(0).get("cnt")).intValue();
+                                assertThat(policyCnt)
+                                        .as("Expected at least 4 policy rows projected")
+                                        .isGreaterThanOrEqualTo(4);
+                            });
         }
 
         // -- Auth boundary --
@@ -375,17 +401,23 @@ class ConsentResourceIT {
         @Order(30)
         @DisplayName("Unauthenticated grant → 401")
         void unauthenticatedGrant() {
-            given()
-                .contentType(ContentType.JSON)
-                .body("""
+            given().contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "anon",
                       "scope": %s
                     }
-                    """.formatted(scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(401);
         }
 
@@ -393,18 +425,24 @@ class ConsentResourceIT {
         @Order(31)
         @DisplayName("Read-only key cannot grant consent → 403")
         void readOnlyCannotGrant() {
-            given()
-                .header("Authorization", "Bearer " + readOnlyApiKey)
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", "Bearer " + readOnlyApiKey)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "blocked",
                       "scope": %s
                     }
-                    """.formatted(scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(403);
         }
     }
@@ -427,15 +465,16 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Register subject-alpha")
         void registerAlpha() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "subjectName": "%s", "description": "Alpha test subject" }
-                    """.formatted(SUBJECT_ALPHA))
-                .when()
+                    """
+                                    .formatted(SUBJECT_ALPHA))
+                    .when()
                     .post("/api/v1/subjects")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(200), is(201)));
 
             // DB verify
@@ -446,11 +485,10 @@ class ConsentResourceIT {
         @Order(2)
         @DisplayName("List subjects includes alpha")
         void listSubjects() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/subjects")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(1)));
         }
@@ -459,11 +497,10 @@ class ConsentResourceIT {
         @Order(3)
         @DisplayName("Get subject-alpha by name")
         void getAlpha() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/subjects/" + SUBJECT_ALPHA)
-                .then()
+                    .then()
                     .statusCode(200);
         }
 
@@ -471,15 +508,15 @@ class ConsentResourceIT {
         @Order(4)
         @DisplayName("Update subject-alpha description")
         void updateAlpha() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "description": "Updated alpha subject" }
                     """)
-                .when()
+                    .when()
                     .put("/api/v1/subjects/" + SUBJECT_ALPHA)
-                .then()
+                    .then()
                     .statusCode(200);
         }
 
@@ -487,15 +524,16 @@ class ConsentResourceIT {
         @Order(5)
         @DisplayName("Register subject-beta for isolation tests")
         void registerBeta() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "subjectName": "%s", "description": "Beta test subject" }
-                    """.formatted(SUBJECT_BETA))
-                .when()
+                    """
+                                    .formatted(SUBJECT_BETA))
+                    .when()
                     .post("/api/v1/subjects")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(200), is(201)));
 
             support.assertRowExists("subject", "subject_name", SUBJECT_BETA);
@@ -505,15 +543,15 @@ class ConsentResourceIT {
         @Order(6)
         @DisplayName("Register subject with blank name → 400")
         void registerBlank() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "subjectName": "", "description": "blank" }
                     """)
-                .when()
+                    .when()
                     .post("/api/v1/subjects")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -521,11 +559,10 @@ class ConsentResourceIT {
         @Order(7)
         @DisplayName("Get non-existent subject → 404")
         void getNonExistent() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/subjects/does-not-exist")
-                .then()
+                    .then()
                     .statusCode(404);
         }
     }
@@ -548,19 +585,25 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Grant email/PII/User/marketing to subject-alpha")
         void grantEmailMarketing() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Event verify (sync — event is written in same tx as command)
@@ -569,14 +612,16 @@ class ConsentResourceIT {
 
             // DB verify: consent_ledger row exists (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
-                    assertThat(ledger).isNotEmpty();
-                    var lastEntry = ledger.get(ledger.size() - 1);
-                    assertThat(lastEntry.get("action").toString()).containsIgnoringCase("GRANT");
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
+                                assertThat(ledger).isNotEmpty();
+                                var lastEntry = ledger.get(ledger.size() - 1);
+                                assertThat(lastEntry.get("action").toString())
+                                        .containsIgnoringCase("GRANT");
+                            });
         }
 
         @Test
@@ -586,24 +631,32 @@ class ConsentResourceIT {
             // In combined runs the graph projection may lag — wait for the
             // subject→policy edge to appear before calling evaluate, which
             // reads exclusively from the Redis graph.
-            String policyName = "FIELD:" + ENTITY_USER + "/" + FIELD_EMAIL + ":" + PURPOSE_MARKETING;
+            String policyName =
+                    "FIELD:" + ENTITY_USER + "/" + FIELD_EMAIL + ":" + PURPOSE_MARKETING;
             support.awaitRedisState(
-                () -> support.getEdgeProperties(TENANT_ID, "subject", SUBJECT_ALPHA, "policy", policyName),
-                ep -> ep != null && !ep.isEmpty(),
-                EVALUATE_TIMEOUT
-            );
+                    () ->
+                            support.getEdgeProperties(
+                                    TENANT_ID, "subject", SUBJECT_ALPHA, "policy", policyName),
+                    ep -> ep != null && !ep.isEmpty(),
+                    EVALUATE_TIMEOUT);
 
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "scopes": [%s]
                     }
-                    """.formatted(scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("granted", hasSize(1))
                     .body("denied", hasSize(0));
@@ -613,17 +666,23 @@ class ConsentResourceIT {
         @Order(3)
         @DisplayName("Evaluate: ssn/PII/User/analytics → denied (not yet granted)")
         void evaluateDenied() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "scopes": [%s]
                     }
-                    """.formatted(scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                .when()
+                    """
+                                    .formatted(
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_SSN,
+                                                    ENTITY_USER,
+                                                    PURPOSE_ANALYTICS)))
+                    .when()
                     .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("denied", hasSize(1));
         }
@@ -632,32 +691,45 @@ class ConsentResourceIT {
         @Order(4)
         @DisplayName("Grant ssn/PII/User/analytics to subject-alpha")
         void grantSsnAnalytics() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_SSN,
+                                                    ENTITY_USER,
+                                                    PURPOSE_ANALYTICS)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // DB verify: two consent_ledger entries (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
-                    var grantEntries = ledger.stream()
-                        .filter(r -> r.get("action").toString().toUpperCase().contains("GRANT"))
-                        .toList();
-                    assertThat(grantEntries).hasSizeGreaterThanOrEqualTo(2);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
+                                var grantEntries =
+                                        ledger.stream()
+                                                .filter(
+                                                        r ->
+                                                                r.get("action")
+                                                                        .toString()
+                                                                        .toUpperCase()
+                                                                        .contains("GRANT"))
+                                                .toList();
+                                assertThat(grantEntries).hasSizeGreaterThanOrEqualTo(2);
+                            });
         }
 
         @Test
@@ -665,29 +737,38 @@ class ConsentResourceIT {
         @DisplayName("Evaluate mixed: both scopes → granted=2, denied=0")
         void evaluateMixed() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(2))
-                            .body("denied", hasSize(0))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(2))
+                                            .body("denied", hasSize(0)));
         }
 
         @Test
@@ -698,13 +779,15 @@ class ConsentResourceIT {
             // which may not be active in this build configuration.
             // Verify via graph projection instead — subject node should exist.
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var node = support.getGraphNode(TENANT_ID, "subject", SUBJECT_ALPHA);
-                    assertThat(node).isNotNull();
-                    assertThat(node).isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var node =
+                                        support.getGraphNode(TENANT_ID, "subject", SUBJECT_ALPHA);
+                                assertThat(node).isNotNull();
+                                assertThat(node).isNotEmpty();
+                            });
         }
     }
 
@@ -726,19 +809,25 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Revoke email/PII/User/marketing from subject-alpha")
         void revokeEmailMarketing() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/revoke")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Event verify (sync)
@@ -747,15 +836,22 @@ class ConsentResourceIT {
 
             // DB verify: REVOKE entry in consent_ledger (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
-                    var revokeEntries = ledger.stream()
-                        .filter(r -> r.get("action").toString().toUpperCase().contains("REVOKE"))
-                        .toList();
-                    assertThat(revokeEntries).isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
+                                var revokeEntries =
+                                        ledger.stream()
+                                                .filter(
+                                                        r ->
+                                                                r.get("action")
+                                                                        .toString()
+                                                                        .toUpperCase()
+                                                                        .contains("REVOKE"))
+                                                .toList();
+                                assertThat(revokeEntries).isNotEmpty();
+                            });
         }
 
         @Test
@@ -763,29 +859,38 @@ class ConsentResourceIT {
         @DisplayName("Evaluate: email now denied, ssn still granted")
         void evaluateAfterRevoke() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                            .body("denied", hasSize(1))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1))
+                                            .body("denied", hasSize(1)));
         }
 
         @Test
@@ -793,64 +898,82 @@ class ConsentResourceIT {
         @DisplayName("ssn/analytics still granted after email revoke")
         void ssnStillGranted() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [%s]
                             }
-                            """.formatted(scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                            .body("denied", hasSize(0))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1))
+                                            .body("denied", hasSize(0)));
         }
 
         @Test
         @Order(4)
         @DisplayName("Idempotent grant: re-grant email/marketing")
         void idempotentGrant() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Evaluate: now granted again (wait for graph projection)
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [%s]
                             }
-                            """.formatted(scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1)));
         }
     }
 
@@ -872,10 +995,10 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Batch grant 3 scopes to subject-beta")
         void batchGrant() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "grants": [
@@ -884,27 +1007,48 @@ class ConsentResourceIT {
                         { "scope": %s }
                       ]
                     }
-                    """.formatted(SUBJECT_BETA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                        scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS),
-                        scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_BETA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING),
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_SSN,
+                                                    ENTITY_USER,
+                                                    PURPOSE_ANALYTICS),
+                                            scope(
+                                                    CATEGORY_HEALTH,
+                                                    FIELD_DIAGNOSIS,
+                                                    ENTITY_PATIENT,
+                                                    PURPOSE_ANALYTICS)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant-all")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("succeeded", greaterThanOrEqualTo(3));
 
             // DB verify: 3 GRANT entries for subject-beta (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_BETA);
-                    var grants = ledger.stream()
-                        .filter(r -> r.get("action").toString().toUpperCase().contains("GRANT"))
-                        .toList();
-                    assertThat(grants).hasSizeGreaterThanOrEqualTo(3);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_BETA);
+                                var grants =
+                                        ledger.stream()
+                                                .filter(
+                                                        r ->
+                                                                r.get("action")
+                                                                        .toString()
+                                                                        .toUpperCase()
+                                                                        .contains("GRANT"))
+                                                .toList();
+                                assertThat(grants).hasSizeGreaterThanOrEqualTo(3);
+                            });
         }
 
         @Test
@@ -912,13 +1056,14 @@ class ConsentResourceIT {
         @DisplayName("Evaluate: all 3 batch-granted scopes → granted")
         void evaluateAfterBatchGrant() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
@@ -926,27 +1071,39 @@ class ConsentResourceIT {
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS),
-                                scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(3))
-                            .body("denied", hasSize(0))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS),
+                                                                    scope(
+                                                                            CATEGORY_HEALTH,
+                                                                            FIELD_DIAGNOSIS,
+                                                                            ENTITY_PATIENT,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(3))
+                                            .body("denied", hasSize(0)));
         }
 
         @Test
         @Order(3)
         @DisplayName("Batch revoke 2 of 3 scopes from subject-beta")
         void batchRevoke() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "revokes": [
@@ -954,26 +1111,43 @@ class ConsentResourceIT {
                         { "scope": %s }
                       ]
                     }
-                    """.formatted(SUBJECT_BETA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                        scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_BETA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING),
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_SSN,
+                                                    ENTITY_USER,
+                                                    PURPOSE_ANALYTICS)))
+                    .when()
                     .post("/api/v1/subjects/consent/revoke-all")
-                .then()
+                    .then()
                     .statusCode(200)
                     .body("succeeded", greaterThanOrEqualTo(2));
 
             // DB verify: REVOKE entries (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_BETA);
-                    var revokes = ledger.stream()
-                        .filter(r -> r.get("action").toString().toUpperCase().contains("REVOKE"))
-                        .toList();
-                    assertThat(revokes).hasSizeGreaterThanOrEqualTo(2);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_BETA);
+                                var revokes =
+                                        ledger.stream()
+                                                .filter(
+                                                        r ->
+                                                                r.get("action")
+                                                                        .toString()
+                                                                        .toUpperCase()
+                                                                        .contains("REVOKE"))
+                                                .toList();
+                                assertThat(revokes).hasSizeGreaterThanOrEqualTo(2);
+                            });
         }
 
         @Test
@@ -981,13 +1155,14 @@ class ConsentResourceIT {
         @DisplayName("Evaluate after batch revoke: 1 granted, 2 denied")
         void evaluateAfterBatchRevoke() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
@@ -995,32 +1170,45 @@ class ConsentResourceIT {
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS),
-                                scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                            .body("denied", hasSize(2))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS),
+                                                                    scope(
+                                                                            CATEGORY_HEALTH,
+                                                                            FIELD_DIAGNOSIS,
+                                                                            ENTITY_PATIENT,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1))
+                                            .body("denied", hasSize(2)));
         }
 
         @Test
         @Order(5)
         @DisplayName("Batch grant with empty array → 400")
         void batchGrantEmpty() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     { "subject": "%s", "grants": [] }
-                    """.formatted(SUBJECT_BETA))
-                .when()
+                    """
+                                    .formatted(SUBJECT_BETA))
+                    .when()
                     .post("/api/v1/subjects/consent/grant-all")
-                .then()
+                    .then()
                     .statusCode(400);
         }
 
@@ -1028,20 +1216,26 @@ class ConsentResourceIT {
         @Order(6)
         @DisplayName("Batch grant with blank subject → 400")
         void batchGrantBlankSubject() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "",
                       "grants": [
                         { "scope": %s }
                       ]
                     }
-                    """.formatted(scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant-all")
-                .then()
+                    .then()
                     .statusCode(400);
         }
     }
@@ -1064,13 +1258,14 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Subject-alpha summary has active consents")
         void alphaSummary() {
-            Response response = given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/subjects/" + SUBJECT_ALPHA + "/summary")
-                .then()
-                    .statusCode(200)
-                    .extract().response();
+            Response response =
+                    given().header("Authorization", auth())
+                            .when()
+                            .get("/api/v1/subjects/" + SUBJECT_ALPHA + "/summary")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
 
             String body = response.asString();
             assertThat(body).isNotNull();
@@ -1080,36 +1275,37 @@ class ConsentResourceIT {
         @Order(2)
         @DisplayName("Subject-alpha history has all ledger entries")
         void alphaHistory() {
-            Response response = given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/subjects/" + SUBJECT_ALPHA + "/history")
-                .then()
-                    .statusCode(200)
-                    .extract().response();
+            Response response =
+                    given().header("Authorization", auth())
+                            .when()
+                            .get("/api/v1/subjects/" + SUBJECT_ALPHA + "/history")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
 
             String body = response.asString();
             assertThat(body).isNotNull();
 
             // Cross-verify: history count >= DB consent_ledger count (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    long dbCount = support.countConsentLedgerEntries(SUBJECT_ALPHA);
-                    assertThat(dbCount).isGreaterThan(0);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                long dbCount = support.countConsentLedgerEntries(SUBJECT_ALPHA);
+                                assertThat(dbCount).isGreaterThan(0);
+                            });
         }
 
         @Test
         @Order(3)
         @DisplayName("Unknown subject summary → empty or 404")
         void unknownSummary() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/subjects/nonexistent-subject/summary")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(200), is(404)));
         }
 
@@ -1117,11 +1313,10 @@ class ConsentResourceIT {
         @Order(4)
         @DisplayName("Unknown subject history → empty or 404")
         void unknownHistory() {
-            given()
-                .header("Authorization", auth())
-                .when()
+            given().header("Authorization", auth())
+                    .when()
                     .get("/api/v1/subjects/nonexistent-subject/history")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(200), is(404)));
         }
     }
@@ -1145,21 +1340,27 @@ class ConsentResourceIT {
         @DisplayName("Grant with future expiration")
         void grantWithExpiry() {
             String futureExpiry = Instant.now().plus(365, ChronoUnit.DAYS).toString();
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s,
                       "expiresAt": "%s"
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS),
-                        futureExpiry))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_HEALTH,
+                                                    FIELD_DIAGNOSIS,
+                                                    ENTITY_PATIENT,
+                                                    PURPOSE_ANALYTICS),
+                                            futureExpiry))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(200);
 
             // Wait for ALL events to be published and projected
@@ -1167,15 +1368,17 @@ class ConsentResourceIT {
 
             // DB verify: expires_at column populated (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
-                    var withExpiry = ledger.stream()
-                        .filter(r -> r.get("expires_at") != null)
-                        .toList();
-                    assertThat(withExpiry).isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var ledger = support.queryConsentLedger(SUBJECT_ALPHA);
+                                var withExpiry =
+                                        ledger.stream()
+                                                .filter(r -> r.get("expires_at") != null)
+                                                .toList();
+                                assertThat(withExpiry).isNotEmpty();
+                            });
         }
 
         @Test
@@ -1183,23 +1386,29 @@ class ConsentResourceIT {
         @DisplayName("Evaluate before expiry → granted")
         void evaluateBeforeExpiry() {
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [%s]
                             }
-                            """.formatted(scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_HEALTH,
+                                                                            FIELD_DIAGNOSIS,
+                                                                            ENTITY_PATIENT,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1)));
         }
     }
 
@@ -1223,21 +1432,26 @@ class ConsentResourceIT {
         void separateLedgers() {
             // Ledger entries are populated by async projection — use Awaitility
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var alphaLedger = support.queryConsentLedger(SUBJECT_ALPHA);
-                    var betaLedger = support.queryConsentLedger(SUBJECT_BETA);
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var alphaLedger = support.queryConsentLedger(SUBJECT_ALPHA);
+                                var betaLedger = support.queryConsentLedger(SUBJECT_BETA);
 
-                    assertThat(alphaLedger).isNotEmpty();
-                    assertThat(betaLedger).isNotEmpty();
+                                assertThat(alphaLedger).isNotEmpty();
+                                assertThat(betaLedger).isNotEmpty();
 
-                    // Verify no cross-contamination
-                    alphaLedger.forEach(entry ->
-                        assertThat(entry.get("subject_id").toString()).isEqualTo(SUBJECT_ALPHA));
-                    betaLedger.forEach(entry ->
-                        assertThat(entry.get("subject_id").toString()).isEqualTo(SUBJECT_BETA));
-                });
+                                // Verify no cross-contamination
+                                alphaLedger.forEach(
+                                        entry ->
+                                                assertThat(entry.get("subject_id").toString())
+                                                        .isEqualTo(SUBJECT_ALPHA));
+                                betaLedger.forEach(
+                                        entry ->
+                                                assertThat(entry.get("subject_id").toString())
+                                                        .isEqualTo(SUBJECT_BETA));
+                            });
         }
 
         @Test
@@ -1247,43 +1461,54 @@ class ConsentResourceIT {
             // Alpha has: email/PII/User/marketing (re-granted), ssn/PII/User/analytics,
             //            diagnosis/HEALTH/Patient/analytics (with expiry)
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(2))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_ALPHA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(2)));
         }
 
         @Test
         @Order(3)
         @DisplayName("Evaluate subject-beta: diagnosis still granted, others revoked")
         void evaluateBetaOnly() {
-            // Beta had 3 batch-granted, then 2 revoked → only diagnosis/HEALTH/Patient/analytics remains
+            // Beta had 3 batch-granted, then 2 revoked → only diagnosis/HEALTH/Patient/analytics
+            // remains
             Awaitility.await()
-                .atMost(EVALUATE_TIMEOUT)
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() ->
-                    given()
-                        .header("Authorization", auth())
-                        .contentType(ContentType.JSON)
-                        .body("""
+                    .atMost(EVALUATE_TIMEOUT)
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                             {
                               "scopes": [
                                 %s,
@@ -1291,17 +1516,29 @@ class ConsentResourceIT {
                                 %s
                               ]
                             }
-                            """.formatted(
-                                scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING),
-                                scope(CATEGORY_PII, FIELD_SSN, ENTITY_USER, PURPOSE_ANALYTICS),
-                                scope(CATEGORY_HEALTH, FIELD_DIAGNOSIS, ENTITY_PATIENT, PURPOSE_ANALYTICS)))
-                        .when()
-                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
-                        .then()
-                            .statusCode(200)
-                            .body("granted", hasSize(1))
-                            .body("denied", hasSize(2))
-                );
+                            """
+                                                            .formatted(
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_EMAIL,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_MARKETING),
+                                                                    scope(
+                                                                            CATEGORY_PII,
+                                                                            FIELD_SSN,
+                                                                            ENTITY_USER,
+                                                                            PURPOSE_ANALYTICS),
+                                                                    scope(
+                                                                            CATEGORY_HEALTH,
+                                                                            FIELD_DIAGNOSIS,
+                                                                            ENTITY_PATIENT,
+                                                                            PURPOSE_ANALYTICS)))
+                                            .when()
+                                            .post("/api/v1/subjects/" + SUBJECT_BETA + "/evaluate")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("granted", hasSize(1))
+                                            .body("denied", hasSize(2)));
         }
 
         @Test
@@ -1310,14 +1547,17 @@ class ConsentResourceIT {
         void separateRedisGraphNodes() {
             // Verify via graph projection — both subjects should have distinct nodes
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    var alphaNode = support.getGraphNode(TENANT_ID, "subject", SUBJECT_ALPHA);
-                    var betaNode = support.getGraphNode(TENANT_ID, "subject", SUBJECT_BETA);
-                    assertThat(alphaNode).isNotNull().isNotEmpty();
-                    assertThat(betaNode).isNotNull().isNotEmpty();
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var alphaNode =
+                                        support.getGraphNode(TENANT_ID, "subject", SUBJECT_ALPHA);
+                                var betaNode =
+                                        support.getGraphNode(TENANT_ID, "subject", SUBJECT_BETA);
+                                assertThat(alphaNode).isNotNull().isNotEmpty();
+                                assertThat(betaNode).isNotNull().isNotEmpty();
+                            });
         }
     }
 
@@ -1339,19 +1579,25 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Grant with non-existent purpose → error")
         void grantNonExistentPurpose() {
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, "nonexistent-purpose")))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    "nonexistent-purpose")))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(anyOf(is(400), is(404), is(500)));
         }
 
@@ -1360,19 +1606,25 @@ class ConsentResourceIT {
         @DisplayName("Grant with registered policy succeeds (positive control)")
         void grantWithRegisteredPolicy() {
             // Re-grant something known to work as positive control
-            given()
-                .header("Authorization", auth())
-                .contentType(ContentType.JSON)
-                .body("""
+            given().header("Authorization", auth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
                       "subject": "%s",
                       "scope": %s
                     }
-                    """.formatted(SUBJECT_ALPHA,
-                        scope(CATEGORY_PII, FIELD_EMAIL, ENTITY_USER, PURPOSE_MARKETING)))
-                .when()
+                    """
+                                    .formatted(
+                                            SUBJECT_ALPHA,
+                                            scope(
+                                                    CATEGORY_PII,
+                                                    FIELD_EMAIL,
+                                                    ENTITY_USER,
+                                                    PURPOSE_MARKETING)))
+                    .when()
                     .post("/api/v1/subjects/consent/grant")
-                .then()
+                    .then()
                     .statusCode(200);
         }
     }
@@ -1395,13 +1647,14 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Export subject-beta data")
         void exportSubject() {
-            Response response = given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/subjects/" + SUBJECT_BETA + "/export")
-                .then()
-                    .statusCode(200)
-                    .extract().response();
+            Response response =
+                    given().header("Authorization", auth())
+                            .when()
+                            .get("/api/v1/subjects/" + SUBJECT_BETA + "/export")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
 
             String body = response.asString();
             assertThat(body).isNotNull();
@@ -1409,24 +1662,27 @@ class ConsentResourceIT {
 
             // Cross-verify: consent entries count matches DB (async projection)
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
-                .untilAsserted(() -> {
-                    long dbCount = support.countConsentLedgerEntries(SUBJECT_BETA);
-                    assertThat(dbCount).isGreaterThan(0);
-                });
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                long dbCount = support.countConsentLedgerEntries(SUBJECT_BETA);
+                                assertThat(dbCount).isGreaterThan(0);
+                            });
         }
 
         @Test
         @Order(2)
         @DisplayName("Erase subject-beta audit data")
         void eraseSubject() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .delete("/api/v1/subjects/" + SUBJECT_BETA
-                        + "/audit?confirm=DELETE_" + SUBJECT_BETA)
-                .then()
+            given().header("Authorization", auth())
+                    .when()
+                    .delete(
+                            "/api/v1/subjects/"
+                                    + SUBJECT_BETA
+                                    + "/audit?confirm=DELETE_"
+                                    + SUBJECT_BETA)
+                    .then()
                     .statusCode(200);
 
             // DB verify: consent_ledger entries removed or marked

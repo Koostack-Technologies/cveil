@@ -1,10 +1,9 @@
 package com.koostack.operio.plugin.platform.jooq;
 
-import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.exception.OperioAuthException;
+import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,21 +16,21 @@ import java.util.stream.Collectors;
 /**
  * API key bearer token verifier — the auth filter hot path.
  *
- * <p>Implements {@link TokenValidationService} by SHA-256 hashing the raw bearer token,
- * looking up the hash in the {@code platform_iam.api_key} projection table via
- * {@link IamQueryService}, and validating the key's status and expiration before
- * building an {@link IdentityContext}.
+ * <p>Implements {@link TokenValidationService} by SHA-256 hashing the raw bearer token, looking up
+ * the hash in the {@code platform_iam.api_key} projection table via {@link IamQueryService}, and
+ * validating the key's status and expiration before building an {@link IdentityContext}.
  *
  * <h2>How It Works</h2>
+ *
  * <ol>
- *   <li>Receives the raw bearer token from the {@code Authorization} header.</li>
- *   <li>Computes the SHA-256 hex digest of the token.</li>
- *   <li>Looks up the digest via {@link IamQueryService#findByKeyHash}.</li>
- *   <li>Validates: key must exist, status must be {@code "active"}, and
- *       {@code expiresAt} must be {@code null} or in the future.</li>
- *   <li>On success, builds an {@link IdentityContext} with the key's
- *       subject, roles, tenant ID, and provider {@code "api-key"}.</li>
- *   <li>On failure, throws {@link OperioAuthException}.</li>
+ *   <li>Receives the raw bearer token from the {@code Authorization} header.
+ *   <li>Computes the SHA-256 hex digest of the token.
+ *   <li>Looks up the digest via {@link IamQueryService#findByKeyHash}.
+ *   <li>Validates: key must exist, status must be {@code "active"}, and {@code expiresAt} must be
+ *       {@code null} or in the future.
+ *   <li>On success, builds an {@link IdentityContext} with the key's subject, roles, tenant ID, and
+ *       provider {@code "api-key"}.
+ *   <li>On failure, throws {@link OperioAuthException}.
  * </ol>
  *
  * @see TokenValidationService
@@ -41,16 +40,15 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
     private IamQueryService<?> iamQueryService;
 
     /**
-     * Default constructor for SPI / ServiceLoader discovery.
-     * Call {@link #setIamQueryService(IamQueryService)} before use, or use
-     * the one-argument constructor for programmatic wiring.
+     * Default constructor for SPI / ServiceLoader discovery. Call {@link
+     * #setIamQueryService(IamQueryService)} before use, or use the one-argument constructor for
+     * programmatic wiring.
      */
-    public ApiKeyTokenVerifier() {
-    }
+    public ApiKeyTokenVerifier() {}
 
     /**
-     * Programmatic constructor — uses the CQRS {@link IamQueryService}
-     * to look up API keys from the {@code platform_iam.api_key} projection.
+     * Programmatic constructor — uses the CQRS {@link IamQueryService} to look up API keys from the
+     * {@code platform_iam.api_key} projection.
      *
      * @param iamQueryService the IAM query service instance
      */
@@ -59,8 +57,7 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
     }
 
     /**
-     * Sets the IAM query service after construction (e.g. when wired
-     * from {@code OperioProducers}).
+     * Sets the IAM query service after construction (e.g. when wired from {@code OperioProducers}).
      */
     public void setIamQueryService(IamQueryService<?> iamQueryService) {
         this.iamQueryService = iamQueryService;
@@ -104,15 +101,12 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
      *
      * @param token the raw bearer token from the Authorization header
      * @return the verified identity context — never {@code null}
-     * @throws OperioAuthException if the token is invalid, expired, revoked,
-     *                             or not found
+     * @throws OperioAuthException if the token is invalid, expired, revoked, or not found
      */
     @Override
     public IdentityContext verifyToken(String token) {
         if (iamQueryService == null) {
-            throw new OperioAuthException(
-                "Token verification service not yet initialized"
-            );
+            throw new OperioAuthException("Token verification service not yet initialized");
         }
         if (token == null || token.isBlank()) {
             throw new OperioAuthException("Bearer token must not be null or blank");
@@ -122,47 +116,46 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
 
         IamQueryService.ApiKeyInfo apiKey = iamQueryService.findByKeyHash(keyHash);
         if (apiKey == null) {
-            throw new OperioAuthException(
-                "Invalid API key — no matching key found"
-            );
+            throw new OperioAuthException("Invalid API key — no matching key found");
         }
 
         // Validate status
         if (!"active".equalsIgnoreCase(apiKey.status())) {
             throw new OperioAuthException(
-                "API key is " + apiKey.status() +
-                    " (prefix: " + apiKey.keyPrefix() + ")"
-            );
+                    "API key is " + apiKey.status() + " (prefix: " + apiKey.keyPrefix() + ")");
         }
 
         // Validate expiration
         if (apiKey.expiresAt() != null && apiKey.expiresAt().isBefore(Instant.now())) {
             throw new OperioAuthException(
-                "API key has expired (prefix: " + apiKey.keyPrefix() +
-                    ", expired at: " + apiKey.expiresAt() + ")"
-            );
+                    "API key has expired (prefix: "
+                            + apiKey.keyPrefix()
+                            + ", expired at: "
+                            + apiKey.expiresAt()
+                            + ")");
         }
 
         // Parse roles from comma-separated string
         Set<String> roles;
         if (apiKey.roles() != null && !apiKey.roles().isBlank()) {
-            roles = Arrays.stream(apiKey.roles().split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
+            roles =
+                    Arrays.stream(apiKey.roles().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toUnmodifiableSet());
         } else {
             roles = Set.of();
         }
 
         return new IdentityContext(
-            apiKey.subject(),         // subject
-            token,                    // token (the raw bearer token)
-            null,                     // email (not stored on API keys)
-            roles,                    // roles
-            Map.of(),                 // claims (empty for API keys)
-            apiKey.tenantId(),        // tenantId
-            "api-key"                 // provider
-        );
+                apiKey.subject(), // subject
+                token, // token (the raw bearer token)
+                null, // email (not stored on API keys)
+                roles, // roles
+                Map.of(), // claims (empty for API keys)
+                apiKey.tenantId(), // tenantId
+                "api-key" // provider
+                );
     }
 
     // -----------------------------------------------------------------------
