@@ -45,9 +45,7 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
     }
 
     @Override
-    public void changeTenantPlan(String tenantId, String newPlan) {
-        var aggregate = getAggregate(tenantId);
-        String oldPlan = aggregate != null ? aggregate.plan() : null;
+    public void changeTenantPlan(String tenantId, String oldPlan, String newPlan) {
         var payload = new TenantPlanChangedEvent(tenantId, oldPlan, newPlan);
         publishEvent(CoreEventTypes.TENANT_PLAN_CHANGED, tenantId, payload);
     }
@@ -83,13 +81,6 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
     }
 
     // -- Internal helpers -----------------------------------------------------
-
-    private TenantAggregate getAggregate(String tenantId) {
-        UUID aggregateId = TenantAggregate.deriveId(tenantId);
-        AggregateKey key = new AggregateKey(
-            aggregateId, TenantAggregate.AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
-        return eventService.getAggregate(key, TenantAggregate.class);
-    }
 
     private void publishEvent(String eventType, String tenantId, DomainEvent payload) {
         UUID aggregateId = TenantAggregate.deriveId(tenantId);

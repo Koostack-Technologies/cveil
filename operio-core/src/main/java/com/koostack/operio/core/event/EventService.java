@@ -47,16 +47,6 @@ public interface EventService<T> extends Plugin<T> {
     Long getAggregateVersion(AggregateKey key);
 
     /**
-     * Hydrate the current state of an aggregate by replaying all stored
-     * event payloads, returning the result as a typed object.
-     *
-     * @param key  the aggregate key identifying the aggregate
-     * @param type the class to deserialize the hydrated state into
-     * @return the hydrated aggregate, or an empty instance if no events exist
-     */
-    <U> U getAggregate(AggregateKey key, Class<U> type);
-
-    /**
      * No-op. The {@code event_type} catalog table has been removed.
      * Retained for backward compatibility with existing callers.
      *

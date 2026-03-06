@@ -1,12 +1,18 @@
 package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.event.models.TenantEvent;
+import com.koostack.operio.core.models.AggregateRoot;
+import com.koostack.operio.tenant.event.jooq.AggregateEventApplier;
+import com.koostack.operio.tenant.event.jooq.EventRepository;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -61,6 +67,7 @@ abstract class ConsentAdminCommandTestBase {
 
     static JooqTenantEventService eventService;
     static JooqConsentAdminCommandService commandService;
+    static DSLContext dsl;
     static JedisPooled testJedis;
 
     /** All events consumed from Redis by the background consumer thread. */
@@ -89,6 +96,8 @@ abstract class ConsentAdminCommandTestBase {
 
         eventService = new JooqTenantEventService();
         eventService.configure(eventConfig);
+
+        dsl = DSL.using(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
 
         // -- Command service under test --
         commandService = new JooqConsentAdminCommandService();
@@ -176,5 +185,18 @@ abstract class ConsentAdminCommandTestBase {
         return consumedEvents.stream()
             .filter(e -> eventType.equals(e.get(TenantEvent.FIELD_EVENT_TYPE)))
             .toList();
+    }
+
+    /**
+     * Replays all events for the given aggregate directly via
+     * {@link AggregateEventApplier}, bypassing the removed
+     * {@code EventService.getAggregate()} method.
+     */
+    @SuppressWarnings("unchecked")
+    static <T extends AggregateRoot> T hydrateAggregate(
+            String aggregateType, java.util.UUID aggregateId, Class<T> type) {
+        EventRepository repo = new EventRepository(dsl);
+        var events = repo.fetchChangesForAggregate(aggregateType, aggregateId.toString());
+        return (T) AggregateEventApplier.replay(events, type);
     }
 }

@@ -37,7 +37,7 @@ public interface BillingCommandService<T> extends Plugin<T> {
                             int evalLimit, int subjectLimit, int burstLimit);
 
     /** Change the subscription plan tier and associated limits. */
-    void changeSubscriptionPlan(String tenantId, String newPlanTier,
+    void changeSubscriptionPlan(String tenantId, String oldPlanTier, String newPlanTier,
                                 int evalLimit, int subjectLimit, int burstLimit);
 
     /** Cancel the current subscription. */

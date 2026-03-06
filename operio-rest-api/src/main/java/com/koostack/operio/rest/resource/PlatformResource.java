@@ -645,7 +645,7 @@ public class PlatformResource {
             request.plan()
         );
 
-        cqrs.coreCommandService().changeTenantPlan(tenantId, request.plan());
+        platformService.changeTenantPlan(tenantId, request.plan());
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);

@@ -50,7 +50,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals("email", agg.fieldName());
         assertEquals("User", agg.entityName());
@@ -79,7 +79,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals(FieldAggregate.DEFAULT_ENTITY, agg.entityName());
         assertEquals("globalField", agg.fieldName());
@@ -98,7 +98,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals("Mobile phone number", agg.description());
 
@@ -131,7 +131,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals(1, agg.categories().size());
         assertEquals("PII", agg.categories().getFirst().categoryName());
@@ -155,7 +155,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         long piiCount = agg.categories().stream()
             .filter(c -> "PII".equals(c.categoryName())).count();
@@ -176,7 +176,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals(2, agg.categories().size());
     }
@@ -196,7 +196,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             FieldAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        FieldAggregate agg = eventService.getAggregate(key, FieldAggregate.class);
+        FieldAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), FieldAggregate.class);
 
         assertEquals(1, agg.categories().size());
         assertEquals("CONTACT", agg.categories().getFirst().categoryName());
@@ -222,7 +222,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals("marketing", agg.purposeName());
         assertEquals("Direct marketing communications", agg.description());
@@ -246,7 +246,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals("Advanced usage analytics and reporting", agg.description());
 
@@ -280,7 +280,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals(1, agg.regulationLinks().size());
         var link = agg.regulationLinks().getFirst();
@@ -311,7 +311,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals(2, agg.regulationLinks().size());
     }
@@ -335,7 +335,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals(1, agg.regulationLinks().size());
         assertEquals("CCPA", agg.regulationLinks().getFirst().regulationName());
@@ -358,7 +358,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         assertEquals(1, agg.policies().size());
         var policy = agg.policies().getFirst();
@@ -388,7 +388,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             PurposeAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        PurposeAggregate agg = eventService.getAggregate(key, PurposeAggregate.class);
+        PurposeAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), PurposeAggregate.class);
 
         boolean hasPhonePolicy = agg.policies().stream()
             .anyMatch(p -> "phone".equals(p.fieldName()));
@@ -414,7 +414,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             RegulationAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), RegulationAggregate.class);
 
         assertEquals("GDPR", agg.regulationName());
         assertEquals("General Data Protection Regulation", agg.description());
@@ -437,7 +437,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             RegulationAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), RegulationAggregate.class);
 
         assertEquals("California Consumer Privacy Act (amended)", agg.description());
 
@@ -469,7 +469,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             RegulationAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), RegulationAggregate.class);
 
         assertEquals(1, agg.jurisdictions().size());
         var jurisdiction = agg.jurisdictions().getFirst();
@@ -493,7 +493,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             RegulationAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), RegulationAggregate.class);
 
         // EU from Order(23) + EEA + UK = 3
         assertEquals(3, agg.jurisdictions().size());
@@ -511,7 +511,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             RegulationAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        RegulationAggregate agg = eventService.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), RegulationAggregate.class);
 
         // EU + UK remain (EEA removed)
         assertEquals(2, agg.jurisdictions().size());
@@ -542,7 +542,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         assertEquals("alice", agg.subjectId());
         assertEquals(1, agg.entries().size());
@@ -578,7 +578,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         assertEquals(2, agg.entries().size());
         var phoneEntry = agg.entries().stream()
@@ -605,7 +605,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         long count = agg.entries().stream().filter(e -> e.policyId() == 1001L).count();
         assertEquals(1, count, "Should upsert, not duplicate the same policyId");
@@ -630,7 +630,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         assertEquals(1, agg.entries().size());
         assertEquals("REVOKE", agg.entries().getFirst().action());
@@ -658,7 +658,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         assertEquals(1, agg.entries().size());
         assertEquals("EXPIRE", agg.entries().getFirst().action());
@@ -687,7 +687,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             SubjectConsentAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        SubjectConsentAggregate agg = eventService.getAggregate(key, SubjectConsentAggregate.class);
+        SubjectConsentAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), SubjectConsentAggregate.class);
 
         assertTrue(
             agg.entries().stream().allMatch(e -> "REVOKE".equals(e.action())),
@@ -716,7 +716,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             DsarAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        DsarAggregate agg = eventService.getAggregate(key, DsarAggregate.class);
+        DsarAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), DsarAggregate.class);
 
         assertEquals("eve", agg.subjectId());
         assertEquals("del-req-001", agg.lastDeletionRequestId());
@@ -739,7 +739,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
             DsarAggregate.AGGREGATE_TYPE,
             TENANT
         );
-        DsarAggregate agg = eventService.getAggregate(key, DsarAggregate.class);
+        DsarAggregate agg = hydrateAggregate(key.aggregateType(), key.aggregateId(), DsarAggregate.class);
 
         assertEquals("del-req-002", agg.lastDeletionRequestId());
     }

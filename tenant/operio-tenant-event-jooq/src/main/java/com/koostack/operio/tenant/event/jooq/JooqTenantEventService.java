@@ -9,7 +9,6 @@ import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
@@ -21,7 +20,6 @@ import org.jooq.exception.DataAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -207,6 +205,10 @@ public class JooqTenantEventService
                         "Published event {} for {}/{} (shreddable={})",
                         eventId, aggregateType, aggregateId, isShreddable
                     );
+
+                    if (version % SNAPSHOT_DEPTH_THRESHOLD == 0) {
+                        triggerSnapshot(aggregateType, aggregateId, version);
+                    }
                 });
             } catch (OperioServiceException e) {
                 throw e;
@@ -244,66 +246,19 @@ public class JooqTenantEventService
         }
     }
 
-    @Override
-    public <U> U getAggregate(AggregateKey key, Class<U> type) {
-        if (dslContext == null) {
-            throw new OperioServiceException("JooqTenantEventService is not configured");
-        }
-        try {
-            return TenantContext.callWhere(key.tenantId(), () -> {
-                String aggregateType = key.aggregateType();
-                String aggregateId = key.aggregateId().toString();
-                List<TenantEvent> events;
-
-                var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
-                if (snapshot.isPresent()) {
-                    U baseState = objectMapper.readValue(snapshot.get().snapshot(), type);
-                    events = eventRepository.fetchChangesAfterVersion(
-                        aggregateType, aggregateId, snapshot.get().version()
-                    );
-                    @SuppressWarnings("unchecked")
-                    U result = (U) AggregateEventApplier.replay(
-                        (AggregateRoot) baseState, events
-                    );
-                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
-                    return result;
-                } else {
-                    events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
-                    @SuppressWarnings("unchecked")
-                    Class<? extends AggregateRoot> rootType = (Class<? extends AggregateRoot>) type;
-                    @SuppressWarnings("unchecked")
-                    U result = (U) AggregateEventApplier.replay(events, rootType);
-                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
-                    return result;
-                }
-            });
-        } catch (OperioServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new OperioServiceException(
-                "Failed to hydrate aggregate " + key.aggregateType() + "/" + key.aggregateId(), e);
-        }
-    }
-
     // -----------------------------------------------------------------------
     // Internal
     // -----------------------------------------------------------------------
 
-    private void triggerSnapshotIfNeeded(
-        String aggregateType, String aggregateId, List<TenantEvent> events
-    ) {
-        int depth = events.size();
-        if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
-            AggregateKey key = new AggregateKey(
-                UUID.fromString(aggregateId), aggregateType, TenantContext.get()
-            );
-            long targetVersion = events.getLast().version();
-            snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
-            log.debug(
-                "Snapshot trigger enqueued for {}/{} (depth={})",
-                aggregateType, aggregateId, depth
-            );
-        }
+    private void triggerSnapshot(String aggregateType, String aggregateId, long targetVersion) {
+        AggregateKey key = new AggregateKey(
+            UUID.fromString(aggregateId), aggregateType, TenantContext.get()
+        );
+        snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
+        log.debug(
+            "Snapshot trigger enqueued for {}/{} at version {}",
+            aggregateType, aggregateId, targetVersion
+        );
     }
 
 }

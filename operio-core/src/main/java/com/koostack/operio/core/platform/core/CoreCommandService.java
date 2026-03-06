@@ -19,7 +19,7 @@ public interface CoreCommandService<T> extends Plugin<T> {
     void updateTenantDisplayName(String tenantId, String displayName);
 
     /** Change the plan tier of an existing tenant. */
-    void changeTenantPlan(String tenantId, String newPlan);
+    void changeTenantPlan(String tenantId, String oldPlan, String newPlan);
 
     /** Suspend a tenant, optionally providing a reason. */
     void suspendTenant(String tenantId, String reason);

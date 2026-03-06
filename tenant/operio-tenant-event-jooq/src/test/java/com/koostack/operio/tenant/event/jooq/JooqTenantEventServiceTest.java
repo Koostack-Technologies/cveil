@@ -25,8 +25,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for {@link JooqTenantEventService}.
  *
- * <p>Tests publishEvent, getAggregate, getAggregateVersion, snapshot creation,
+ * <p>Tests publishEvent, getAggregateVersion, snapshot creation,
  * outbox-to-Redis publishing, and multi-tenant isolation.
+ * Aggregate replay is validated via {@link AggregateEventApplier} directly.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
@@ -64,7 +65,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
         assertEquals(1L, record.getVersion());
         assertEquals(TEST_TENANT, record.getTenantId());
 
-        RegulationAggregate hydrated = service.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate hydrated = hydrateAggregate(aggregateId, RegulationAggregate.class);
 
         assertEquals(regulationName, hydrated.regulationName());
         assertEquals("Test regulation description", hydrated.description());
@@ -113,8 +114,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             ));
         }
 
-        // Trigger hydration to enqueue snapshot
-        service.getAggregate(key, RegulationAggregate.class);
+        // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
@@ -147,7 +147,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             ));
         }
 
-        service.getAggregate(key, RegulationAggregate.class);
+        // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
         // Post-snapshot events
@@ -158,7 +158,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             ));
         }
 
-        RegulationAggregate hydrated = service.getAggregate(key, RegulationAggregate.class);
+        RegulationAggregate hydrated = hydrateAggregate(aggregateId, RegulationAggregate.class);
 
         assertEquals(regulationName, hydrated.regulationName());
         assertEquals("post-snap-25", hydrated.description());
@@ -217,7 +217,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload1
         ));
 
-        RegulationAggregate hydratedA = service.getAggregate(keyA, RegulationAggregate.class);
+        RegulationAggregate hydratedA = hydrateAggregate(aggregateId, RegulationAggregate.class);
         assertEquals("TenantA-v1", hydratedA.description());
 
         // Publish a second version under the same tenant and verify version increments
@@ -226,7 +226,7 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             tenantA, ConsentEventTypes.REGULATION_REGISTERED, keyA, payload2
         ));
 
-        RegulationAggregate hydratedA2 = service.getAggregate(keyA, RegulationAggregate.class);
+        RegulationAggregate hydratedA2 = hydrateAggregate(aggregateId, RegulationAggregate.class);
         assertEquals("TenantA-Updated", hydratedA2.description());
     }
 
@@ -252,5 +252,19 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
             assertEquals(TEST_TENANT, event.get(TenantEvent.FIELD_TENANT_ID),
                 "All events should carry the correct tenantId");
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    private <T extends com.koostack.operio.core.models.AggregateRoot> T hydrateAggregate(
+            UUID aggregateId, Class<T> type) {
+        EventRepository repo = new EventRepository(dsl);
+        var events = repo.fetchChangesForAggregate(
+            RegulationAggregate.AGGREGATE_TYPE, aggregateId.toString()
+        );
+        return (T) AggregateEventApplier.replay(events, type);
     }
 }

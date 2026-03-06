@@ -73,11 +73,8 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
     }
 
     @Override
-    public void changeSubscriptionPlan(String tenantId, String newPlanTier,
+    public void changeSubscriptionPlan(String tenantId, String oldPlanTier, String newPlanTier,
                                        int evalLimit, int subjectLimit, int burstLimit) {
-        var aggregate = getAggregate(tenantId);
-        String oldPlanTier = aggregate != null && aggregate.subscription() != null
-            ? aggregate.subscription().planTier() : null;
         var payload = new SubscriptionPlanChangedEvent(
             tenantId, oldPlanTier, newPlanTier, evalLimit, subjectLimit, burstLimit);
         publishEvent(BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED, tenantId, payload);
@@ -96,13 +93,6 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
     }
 
     // -- Internal helpers -----------------------------------------------------
-
-    private BillingProfileAggregate getAggregate(String tenantId) {
-        UUID aggregateId = BillingProfileAggregate.deriveId(tenantId);
-        AggregateKey key = new AggregateKey(
-            aggregateId, BillingProfileAggregate.AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
-        return eventService.getAggregate(key, BillingProfileAggregate.class);
-    }
 
     private void publishEvent(String eventType, String tenantId, DomainEvent payload) {
         UUID aggregateId = BillingProfileAggregate.deriveId(tenantId);

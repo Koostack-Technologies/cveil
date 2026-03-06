@@ -1,6 +1,5 @@
 package com.koostack.operio.plugin.event.jooq;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.PlatformEventService;
@@ -168,6 +167,10 @@ public class JooqPlatformEventService
                         "Published event {} for {}/{}",
                         eventId, aggregateType, aggregateId
                     );
+
+                    if (version % SNAPSHOT_DEPTH_THRESHOLD == 0) {
+                        triggerSnapshot(aggregateType, aggregateId, version);
+                    }
                 });
             } catch (OperioServiceException e) {
                 throw e;
@@ -205,94 +208,19 @@ public class JooqPlatformEventService
         }
     }
 
-    @Override
-    public <U> U getAggregate(AggregateKey key, Class<U> type) {
-        if (dslContext == null) {
-            throw new OperioServiceException("JooqPlatformEventService is not configured");
-        }
-        try {
-            return TenantContext.callWhere(key.tenantId(), () -> {
-                String aggregateType = key.aggregateType();
-                String aggregateId = key.aggregateId().toString();
-                List<PlatformEvent> events;
-
-                var snapshot = eventRepository.fetchLatestSnapshot(aggregateType, aggregateId);
-                if (snapshot.isPresent()) {
-                    JsonNode baseState = objectMapper.readTree(snapshot.get().snapshot());
-                    events = eventRepository.fetchChangesAfterVersion(
-                        aggregateType, aggregateId, snapshot.get().version()
-                    );
-                    JsonNode result = replayPayloads(baseState, events);
-                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
-                    return objectMapper.treeToValue(result, type);
-                } else {
-                    events = eventRepository.fetchChangesForAggregate(aggregateType, aggregateId);
-                    JsonNode result = replayPayloads(objectMapper.createObjectNode(), events);
-                    triggerSnapshotIfNeeded(aggregateType, aggregateId, events);
-                    return objectMapper.treeToValue(result, type);
-                }
-            });
-        } catch (OperioServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new OperioServiceException(
-                "Failed to hydrate aggregate " + key.aggregateType() + "/" + key.aggregateId(), e);
-        }
-    }
-
     // -----------------------------------------------------------------------
     // Internal
     // -----------------------------------------------------------------------
 
-    /**
-     * Replays semantic event payloads by deep-merging each payload into the
-     * running state.  Platform aggregates do not yet have typed {@code apply()}
-     * methods (the command services are empty interfaces), so this performs a
-     * simple JSON overlay: each payload's fields overwrite matching keys in
-     * the current state.
-     */
-    private JsonNode replayPayloads(JsonNode baseState, List<PlatformEvent> events) {
-        if (events.isEmpty()) {
-            return baseState;
-        }
-        com.fasterxml.jackson.databind.node.ObjectNode state =
-            baseState.isObject()
-                ? (com.fasterxml.jackson.databind.node.ObjectNode) baseState.deepCopy()
-                : objectMapper.createObjectNode();
-        for (PlatformEvent event : events) {
-            if (event.payload() != null) {
-                try {
-                    JsonNode payloadNode = objectMapper.readTree(event.payload());
-                    if (payloadNode.isObject()) {
-                        payloadNode.fields().forEachRemaining(
-                            field -> state.set(field.getKey(), field.getValue())
-                        );
-                    }
-                } catch (Exception e) {
-                    throw new OperioServiceException(
-                        "Failed to replay payload for event " + event.eventId()
-                            + " (" + event.eventType() + ")", e);
-                }
-            }
-        }
-        return state;
-    }
-
-    private void triggerSnapshotIfNeeded(
-        String aggregateType, String aggregateId, List<PlatformEvent> events
-    ) {
-        int depth = events.size();
-        if (depth >= SNAPSHOT_DEPTH_THRESHOLD) {
-            AggregateKey key = new AggregateKey(
-                UUID.fromString(aggregateId), aggregateType, TenantContext.get()
-            );
-            long targetVersion = events.getLast().version();
-            snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
-            log.debug(
-                "Snapshot trigger enqueued for {}/{} (depth={})",
-                aggregateType, aggregateId, depth
-            );
-        }
+    private void triggerSnapshot(String aggregateType, String aggregateId, long targetVersion) {
+        AggregateKey key = new AggregateKey(
+            UUID.fromString(aggregateId), aggregateType, TenantContext.get()
+        );
+        snapshotQueue.offer(new AggregateSnapshotTrigger(key, targetVersion));
+        log.debug(
+            "Snapshot trigger enqueued for {}/{} at version {}",
+            aggregateType, aggregateId, targetVersion
+        );
     }
 
 }

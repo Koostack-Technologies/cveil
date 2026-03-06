@@ -102,4 +102,13 @@ public interface PlatformService extends OperioService {
      */
     void createSubscription(String tenantId, String planTier,
                             int evalLimit, int subjectLimit, int burstLimit);
+
+    /**
+     * Change the plan tier of an existing tenant. Enriches the command with
+     * the current plan from the read model before publishing the event.
+     *
+     * @param tenantId the tenant identifier
+     * @param newPlan  the new plan tier
+     */
+    void changeTenantPlan(String tenantId, String newPlan);
 }

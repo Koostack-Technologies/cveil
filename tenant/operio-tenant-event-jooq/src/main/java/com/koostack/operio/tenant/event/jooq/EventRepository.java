@@ -142,22 +142,6 @@ public class EventRepository {
             .fetch(this::toTenantEvent);
     }
 
-    /**
-     * Lists all distinct aggregate IDs for a given aggregate type in the
-     * current tenant.
-     *
-     * @param aggregateType the aggregate type to filter by
-     * @param tenantId      the tenant to scope the query to
-     * @return distinct aggregate IDs, possibly empty
-     */
-    public List<UUID> listAggregateIds(String aggregateType, String tenantId) {
-        return dsl.selectDistinct(EVENT.AGGREGATE_ID)
-            .from(EVENT)
-            .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
-            .and(EVENT.TENANT_ID.eq(tenantId))
-            .fetch(r -> UUID.fromString(r.get(EVENT.AGGREGATE_ID)));
-    }
-
     public record SnapshotRecord(Long version, String snapshot) {}
 
     private TenantEvent toTenantEvent(EventRecord record) {

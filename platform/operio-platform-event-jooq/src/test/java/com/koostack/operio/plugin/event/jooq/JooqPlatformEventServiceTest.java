@@ -99,8 +99,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
             ));
         }
 
-        // Trigger hydration to enqueue snapshot
-        service.getAggregate(key, com.fasterxml.jackson.databind.JsonNode.class);
+        // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
         var snapshot = dsl.selectFrom(AGGREGATE_SNAPSHOT)
