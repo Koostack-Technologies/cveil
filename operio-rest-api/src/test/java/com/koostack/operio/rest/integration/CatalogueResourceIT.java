@@ -34,7 +34,6 @@ import org.junit.jupiter.api.*;
 @TestClassOrder(ClassOrderer.OrderAnnotation.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CatalogueResourceIT {
-
     private static final String BOOTSTRAP_KEY =
         "test-bootstrap-key-for-integration-tests";
 
