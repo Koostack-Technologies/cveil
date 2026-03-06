@@ -1,5 +1,6 @@
 package com.koostack.operio.tenant.event.jooq;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.SubjectDsarService;
@@ -29,6 +30,7 @@ import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT
 public class OutboxPoller {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxPoller.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final int DEFAULT_BATCH_SIZE = 50;
     private static final long DEFAULT_POLL_INTERVAL_MS = 500;
@@ -170,7 +172,10 @@ public class OutboxPoller {
                             continue;
                         } else {
                             String rawKey = FieldEncryptor.decrypt(encryptedKey.get(), this.encryptionKey);
-                            payload = FieldEncryptor.decrypt(payload, rawKey);
+                            // Payload is stored as a JSON string scalar ("cipher...").
+                            // Parse the JSON string to recover the raw ciphertext.
+                            String ciphertext = objectMapper.readValue(payload, String.class);
+                            payload = FieldEncryptor.decrypt(ciphertext, rawKey);
                         }
                     }
 

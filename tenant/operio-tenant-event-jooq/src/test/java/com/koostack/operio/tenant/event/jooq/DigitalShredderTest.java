@@ -90,8 +90,10 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
             "Encrypted payload should not contain the subject name in plaintext"
         );
 
-        // Decrypt and verify the payload is the original JSON
-        String decryptedPayload = FieldEncryptor.decrypt(storedPayload, rawKey);
+        // Unwrap the JSON string scalar, then decrypt and verify
+        String ciphertext = new com.fasterxml.jackson.databind.ObjectMapper()
+            .readValue(storedPayload, String.class);
+        String decryptedPayload = FieldEncryptor.decrypt(ciphertext, rawKey);
         assertTrue(
             decryptedPayload.contains(subjectName),
             "Decrypted payload should contain the subject name"

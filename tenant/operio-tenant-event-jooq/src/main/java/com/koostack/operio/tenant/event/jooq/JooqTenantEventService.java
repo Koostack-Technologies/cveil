@@ -176,7 +176,8 @@ public class JooqTenantEventService
                             "No DSAR key found for dsar_id=" + lookupId
                                 + " — cannot encrypt shreddable event " + input.eventType()));
                     String rawDsarKey = FieldEncryptor.decrypt(encryptedDsarKey, encryptionKey);
-                    serializedPayload = FieldEncryptor.encrypt(serializedPayload, rawDsarKey);
+                    serializedPayload = objectMapper.writeValueAsString(
+                        FieldEncryptor.encrypt(serializedPayload, rawDsarKey));
                     shreddable = true;
                 }
 
