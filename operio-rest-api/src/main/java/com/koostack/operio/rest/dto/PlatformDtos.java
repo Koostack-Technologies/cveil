@@ -144,8 +144,8 @@ public final class PlatformDtos {
      * @param tenantId the owning tenant identifier
      * @param subject the subject (user or service account) this key represents (e.g. {@code
      *     "admin@acme.com"}, {@code "consent-service"})
-     * @param roles the roles/authorities granted to this key (e.g. {@code ["admin",
-     *     "consent-writer"]})
+     * @param roles the roles/authorities granted to this key (e.g. {@code ["admin:read",
+     *     "admin:write", "consent:read", "consent:write"]})
      */
     public record CreateApiKeyRequest(
             @NotBlank(message = "tenantId must not be blank") @Size(max = 63, message = "tenantId must not exceed 63 characters") String tenantId,

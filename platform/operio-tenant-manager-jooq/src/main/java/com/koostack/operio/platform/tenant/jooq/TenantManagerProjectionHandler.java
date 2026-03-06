@@ -29,6 +29,8 @@ public class TenantManagerProjectionHandler {
     private static final Logger LOG = LoggerFactory.getLogger(TenantManagerProjectionHandler.class);
 
     private static final String[] API_KEY_ENVIRONMENTS = {"DEV", "TEST", "PROD"};
+    private static final String DEFAULT_TENANT_ROLES =
+            "admin:read,admin:write,consent:read,consent:write";
 
     private final JooqTenantManagerService tenantManager;
     private final CoreCommandService<?> coreCommandService;
@@ -103,7 +105,7 @@ public class TenantManagerProjectionHandler {
         for (String env : API_KEY_ENVIRONMENTS) {
             String keyName = tenantId + "-" + env.toLowerCase();
             IamCommandService.CreateApiTokenResult tokenResult =
-                    iamCommandService.createApiToken(tenantId, keyName, env, null);
+                    iamCommandService.createApiToken(tenantId, keyName, env, DEFAULT_TENANT_ROLES);
             LOG.info(
                     "Generated {} API token for tenant '{}': keyId={}, prefix={}",
                     env,
