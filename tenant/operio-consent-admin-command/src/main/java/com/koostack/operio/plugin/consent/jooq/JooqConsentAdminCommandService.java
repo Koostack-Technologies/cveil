@@ -7,7 +7,6 @@ import com.koostack.operio.core.tenant.consent.events.*;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import java.time.Instant;
@@ -56,7 +55,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void configure(ConsentAdminCommandConfig config) {
         this.eventService = config.eventService();
-        registerEventTypes();
         LOG.info("JooqConsentAdminCommandService configured (event-sourced)");
     }
 
@@ -523,103 +521,4 @@ public class JooqConsentAdminCommandService
         );
     }
 
-    // -----------------------------------------------------------------------
-    // Internal — event type registration
-    // -----------------------------------------------------------------------
-
-    private void registerEventTypes() {
-        // Entity Aggregate
-        register(ConsentEventTypes.ENTITY_REGISTERED,
-            "Entity Registered", EntityRegisteredEvent.class);
-        register(ConsentEventTypes.ENTITY_UPDATED,
-            "Entity Updated", EntityUpdatedEvent.class);
-        register(ConsentEventTypes.ENTITY_REMOVED,
-            "Entity Removed", EntityRemovedEvent.class);
-
-        // Category Aggregate
-        register(ConsentEventTypes.CATEGORY_REGISTERED,
-            "Category Registered", CategoryRegisteredEvent.class);
-        register(ConsentEventTypes.CATEGORY_UPDATED,
-            "Category Updated", CategoryUpdatedEvent.class);
-        register(ConsentEventTypes.CATEGORY_REMOVED,
-            "Category Removed", CategoryRemovedEvent.class);
-
-        // Field Aggregate
-        register(ConsentEventTypes.FIELD_REGISTERED,
-            "Field Registered", FieldRegisteredEvent.class);
-        register(ConsentEventTypes.FIELD_UPDATED,
-            "Field Updated", FieldUpdatedEvent.class);
-        register(ConsentEventTypes.FIELD_REMOVED,
-            "Field Removed", FieldRemovedEvent.class);
-        register(ConsentEventTypes.FIELD_CATEGORY_ASSIGNED,
-            "Field Category Assigned", FieldCategoryAssignedEvent.class);
-        register(ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED,
-            "Field Category Unassigned", FieldCategoryUnassignedEvent.class);
-
-        // Purpose Aggregate
-        register(ConsentEventTypes.PURPOSE_REGISTERED,
-            "Purpose Registered", PurposeRegisteredEvent.class);
-        register(ConsentEventTypes.PURPOSE_UPDATED,
-            "Purpose Updated", PurposeUpdatedEvent.class);
-        register(ConsentEventTypes.PURPOSE_REMOVED,
-            "Purpose Removed", PurposeRemovedEvent.class);
-        register(ConsentEventTypes.PURPOSE_REGULATION_LINKED,
-            "Purpose Regulation Linked", PurposeRegulationLinkedEvent.class);
-        register(ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
-            "Purpose Regulation Unlinked", PurposeRegulationUnlinkedEvent.class);
-        register(ConsentEventTypes.PURPOSE_POLICY_ADDED,
-            "Purpose Policy Added", PurposePolicyAddedEvent.class);
-        register(ConsentEventTypes.PURPOSE_POLICY_REMOVED,
-            "Purpose Policy Removed", PurposePolicyRemovedEvent.class);
-
-        // Regulation Aggregate
-        register(ConsentEventTypes.REGULATION_REGISTERED,
-            "Regulation Registered", RegulationRegisteredEvent.class);
-        register(ConsentEventTypes.REGULATION_UPDATED,
-            "Regulation Updated", RegulationUpdatedEvent.class);
-        register(ConsentEventTypes.REGULATION_REMOVED,
-            "Regulation Removed", RegulationRemovedEvent.class);
-        register(ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
-            "Regulation Jurisdiction Added", RegulationJurisdictionAddedEvent.class);
-        register(ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
-            "Regulation Jurisdiction Removed", RegulationJurisdictionRemovedEvent.class);
-
-        // Jurisdiction Aggregate
-        register(ConsentEventTypes.JURISDICTION_REGISTERED,
-            "Jurisdiction Registered", JurisdictionRegisteredEvent.class);
-        register(ConsentEventTypes.JURISDICTION_UPDATED,
-            "Jurisdiction Updated", JurisdictionUpdatedEvent.class);
-        register(ConsentEventTypes.JURISDICTION_REMOVED,
-            "Jurisdiction Removed", JurisdictionRemovedEvent.class);
-
-        // SubjectConsent Aggregate
-        register(ConsentEventTypes.CONSENT_GRANTED,
-            "Consent Granted", ConsentGrantedEvent.class);
-        register(ConsentEventTypes.CONSENT_REVOKED,
-            "Consent Revoked", ConsentRevokedEvent.class);
-        register(ConsentEventTypes.CONSENT_EXPIRED,
-            "Consent Expired", ConsentExpiredEvent.class);
-        register(ConsentEventTypes.CONSENT_ALL_REVOKED,
-            "All Consent Revoked", ConsentAllRevokedEvent.class);
-
-        // Subject Aggregate (entity lifecycle)
-        register(ConsentEventTypes.SUBJECT_REGISTERED,
-            "Subject Registered", SubjectRegisteredEvent.class);
-        register(ConsentEventTypes.SUBJECT_UPDATED,
-            "Subject Updated", SubjectUpdatedEvent.class);
-        register(ConsentEventTypes.SUBJECT_REMOVED,
-            "Subject Removed", SubjectRemovedEvent.class);
-
-        // DSAR Aggregate
-        register(ConsentEventTypes.SUBJECT_AUDIT_DELETED,
-            "Subject Audit Deleted", SubjectAuditDeletedEvent.class);
-    }
-
-    private <T> void register(
-        String name, String displayName, Class<T> eventClass
-    ) {
-        eventService.registerEventType(
-            new RegisterEventTypeInput<>(name, displayName, eventClass)
-        );
-    }
 }

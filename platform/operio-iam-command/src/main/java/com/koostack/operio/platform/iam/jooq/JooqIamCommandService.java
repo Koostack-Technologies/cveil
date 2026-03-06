@@ -4,7 +4,6 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.ApiKeyGeneratedEvent;
 import com.koostack.operio.core.platform.events.ApiKeyRevokedEvent;
@@ -36,7 +35,6 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public void configure(JooqIamCommandConfig config) {
         this.eventService = config.eventService();
-        registerEventTypes();
         LOG.info("JooqIamCommandService configured");
     }
 
@@ -81,16 +79,6 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     private static UUID deriveAggregateId(String tenantId) {
         return UUID.nameUUIDFromBytes(("iam:" + tenantId).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private void registerEventTypes() {
-        register(IamEventTypes.API_KEY_GENERATED, "API Key Generated", ApiKeyGeneratedEvent.class);
-        register(IamEventTypes.API_KEY_REVOKED, "API Key Revoked", ApiKeyRevokedEvent.class);
-        register(IamEventTypes.IDP_CONFIG_UPDATED, "IdP Config Updated", IdpConfigUpdatedEvent.class);
-    }
-
-    private <U> void register(String name, String displayName, Class<U> eventClass) {
-        eventService.registerEventType(new RegisterEventTypeInput<>(name, displayName, eventClass));
     }
 
     private static String generateSecureKey() {

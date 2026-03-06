@@ -3,7 +3,6 @@ package com.koostack.operio.plugin.event.jooq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.models.PlatformEvent;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
@@ -13,12 +12,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static com.koostack.operio.plugin.event.jooq.generated.tables.AggregateSnapshot.AGGREGATE_SNAPSHOT;
 import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT;
-import static com.koostack.operio.plugin.event.jooq.generated.tables.EventType.EVENT_TYPE;
 import static org.jooq.impl.DSL.max;
 
 /**
@@ -131,27 +128,6 @@ public class EventRepository {
             .and(EVENT.VERSION.gt(version))
             .orderBy(EVENT.VERSION.asc())
             .fetch(this::toPlatformEvent);
-    }
-
-    /**
-     * Registers an event type (idempotent — conflicts are ignored).
-     */
-    public <U> void insertEventType(RegisterEventTypeInput<U> input) {
-        dsl.insertInto(EVENT_TYPE)
-            .set(EVENT_TYPE.NAME, input.name())
-            .set(EVENT_TYPE.DISPLAY_NAME, input.displayName())
-            .set(EVENT_TYPE.FQN, input.eventClass().getName())
-            .onConflictDoNothing()
-            .execute();
-    }
-
-    /**
-     * Loads all event type names from the database.
-     */
-    public Set<String> fetchAllEventTypeNames() {
-        return dsl.select(EVENT_TYPE.NAME)
-            .from(EVENT_TYPE)
-            .fetchSet(EVENT_TYPE.NAME);
     }
 
     public record SnapshotRecord(Long version, String snapshot) {}

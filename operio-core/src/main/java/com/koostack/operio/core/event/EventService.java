@@ -57,12 +57,12 @@ public interface EventService<T> extends Plugin<T> {
     <U> U getAggregate(AggregateKey key, Class<U> type);
 
     /**
-     * Register an event type so that the store knows how to serialize
-     * and deserialize events of this type.
+     * No-op. The {@code event_type} catalog table has been removed.
+     * Retained for backward compatibility with existing callers.
      *
-     * @param input carries the event type name, display name, and class
-     * @param <U>   the event payload type
+     * @deprecated This method does nothing and will be removed in a future release.
      */
-    <U> void registerEventType(RegisterEventTypeInput<U> input);
+    @Deprecated(forRemoval = true)
+    default <U> void registerEventType(RegisterEventTypeInput<U> input) { }
 
 }

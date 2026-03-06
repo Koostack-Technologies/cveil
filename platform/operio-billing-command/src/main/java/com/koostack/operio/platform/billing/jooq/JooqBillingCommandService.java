@@ -4,7 +4,6 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
@@ -29,7 +28,6 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
     @Override
     public void configure(JooqBillingCommandConfig config) {
         this.eventService = config.eventService();
-        registerEventTypes();
         LOG.info("JooqBillingCommandService configured");
     }
 
@@ -114,19 +112,4 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
             PublishDomainEventInput.of(PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
     }
 
-    private void registerEventTypes() {
-        register(BillingEventTypes.BILLING_PROFILE_CREATED, "Billing Profile Created", BillingProfileCreatedEvent.class);
-        register(BillingEventTypes.BILLING_EMAIL_UPDATED, "Billing Email Updated", BillingEmailUpdatedEvent.class);
-        register(BillingEventTypes.BILLING_TAX_ID_UPDATED, "Billing Tax ID Updated", BillingTaxIdUpdatedEvent.class);
-        register(BillingEventTypes.PAYMENT_PROCESSOR_SET, "Payment Processor Set", PaymentProcessorSetEvent.class);
-        register(BillingEventTypes.PAYMENT_METHOD_STATUS_UPDATED, "Payment Method Status Updated", PaymentMethodStatusUpdatedEvent.class);
-        register(BillingEventTypes.SUBSCRIPTION_CREATED, "Subscription Created", SubscriptionCreatedEvent.class);
-        register(BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED, "Subscription Plan Changed", SubscriptionPlanChangedEvent.class);
-        register(BillingEventTypes.SUBSCRIPTION_CANCELLED, "Subscription Cancelled", SubscriptionCancelledEvent.class);
-        register(BillingEventTypes.SUBSCRIPTION_RENEWED, "Subscription Renewed", SubscriptionRenewedEvent.class);
-    }
-
-    private <U> void register(String name, String displayName, Class<U> eventClass) {
-        eventService.registerEventType(new RegisterEventTypeInput<>(name, displayName, eventClass));
-    }
 }

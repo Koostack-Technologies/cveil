@@ -4,7 +4,6 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
@@ -28,7 +27,6 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
     @Override
     public void configure(JooqCoreCommandConfig config) {
         this.eventService = config.eventService();
-        registerEventTypes();
         LOG.info("JooqCoreCommandService configured");
     }
 
@@ -101,18 +99,4 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
             PublishDomainEventInput.of(PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
     }
 
-    private void registerEventTypes() {
-        register(CoreEventTypes.TENANT_CREATED, "Tenant Created", TenantCreatedEvent.class);
-        register(CoreEventTypes.TENANT_DISPLAY_NAME_UPDATED, "Tenant Display Name Updated", TenantDisplayNameUpdatedEvent.class);
-        register(CoreEventTypes.TENANT_PLAN_CHANGED, "Tenant Plan Changed", TenantPlanChangedEvent.class);
-        register(CoreEventTypes.TENANT_SUSPENDED, "Tenant Suspended", TenantSuspendedEvent.class);
-        register(CoreEventTypes.TENANT_ACTIVATED, "Tenant Activated", TenantActivatedEvent.class);
-        register(CoreEventTypes.TENANT_DELETED, "Tenant Deleted", TenantDeletedEvent.class);
-        register(CoreEventTypes.TENANT_PROVISIONED, "Tenant Provisioned", TenantProvisionedEvent.class);
-        register(CoreEventTypes.TENANT_PROVISIONING_STARTED, "Tenant Provisioning Started", TenantProvisioningStartedEvent.class);
-    }
-
-    private <U> void register(String name, String displayName, Class<U> eventClass) {
-        eventService.registerEventType(new RegisterEventTypeInput<>(name, displayName, eventClass));
-    }
 }

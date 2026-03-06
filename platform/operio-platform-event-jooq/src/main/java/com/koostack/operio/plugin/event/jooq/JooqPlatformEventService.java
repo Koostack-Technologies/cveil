@@ -7,7 +7,6 @@ import com.koostack.operio.core.event.PlatformEventService;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -239,12 +238,6 @@ public class JooqPlatformEventService
             throw new OperioServiceException(
                 "Failed to hydrate aggregate " + key.aggregateType() + "/" + key.aggregateId(), e);
         }
-    }
-
-    @Override
-    public <U> void registerEventType(RegisterEventTypeInput<U> input) {
-        // No-op: event_type catalog table is no longer used for validation.
-        // Event types are stored as VARCHAR directly in the event table.
     }
 
     // -----------------------------------------------------------------------

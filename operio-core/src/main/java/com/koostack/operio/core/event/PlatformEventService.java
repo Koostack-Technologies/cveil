@@ -1,7 +1,6 @@
 package com.koostack.operio.core.event;
 
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.spi.Plugin;
 

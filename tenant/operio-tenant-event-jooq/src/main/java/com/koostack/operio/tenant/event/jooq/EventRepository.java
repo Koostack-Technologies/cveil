@@ -2,7 +2,6 @@ package com.koostack.operio.tenant.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.tenant.event.jooq.generated.tables.records.EventRecord;
 import org.jooq.DSLContext;
@@ -13,12 +12,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static com.koostack.operio.tenant.event.jooq.generated.tables.AggregateSnapshot.AGGREGATE_SNAPSHOT;
 import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT;
-import static com.koostack.operio.tenant.event.jooq.generated.tables.EventType.EVENT_TYPE;
 import static org.jooq.impl.DSL.max;
 
 /**
@@ -146,18 +143,6 @@ public class EventRepository {
     }
 
     /**
-     * Registers an event type (idempotent — conflicts are ignored).
-     */
-    public <U> void insertEventType(RegisterEventTypeInput<U> input) {
-        dsl.insertInto(EVENT_TYPE)
-            .set(EVENT_TYPE.NAME, input.name())
-            .set(EVENT_TYPE.DISPLAY_NAME, input.displayName())
-            .set(EVENT_TYPE.FQN, input.eventClass().getName())
-            .onConflictDoNothing()
-            .execute();
-    }
-
-    /**
      * Lists all distinct aggregate IDs for a given aggregate type in the
      * current tenant.
      *
@@ -171,15 +156,6 @@ public class EventRepository {
             .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
             .and(EVENT.TENANT_ID.eq(tenantId))
             .fetch(r -> UUID.fromString(r.get(EVENT.AGGREGATE_ID)));
-    }
-
-    /**
-     * Loads all event type names from the database.
-     */
-    public Set<String> fetchAllEventTypeNames() {
-        return dsl.select(EVENT_TYPE.NAME)
-            .from(EVENT_TYPE)
-            .fetchSet(EVENT_TYPE.NAME);
     }
 
     public record SnapshotRecord(Long version, String snapshot) {}
