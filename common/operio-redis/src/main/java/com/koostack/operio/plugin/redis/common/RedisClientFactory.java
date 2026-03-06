@@ -229,7 +229,9 @@ public final class RedisClientFactory {
                 var builder =
                     redis.clients.jedis.DefaultJedisClientConfig.builder()
                         .ssl(true)
-                        .sslSocketFactory(sslSocketFactory);
+                        .sslSocketFactory(sslSocketFactory)
+                        .connectionTimeoutMillis(10_000)
+                        .socketTimeoutMillis(10_000);
 
                 if (username != null && !username.isBlank()) {
                     builder.user(username);
@@ -252,7 +254,9 @@ public final class RedisClientFactory {
         }
 
         // Non-TLS path — build a JedisClientConfig with auth credentials
-        var builder = redis.clients.jedis.DefaultJedisClientConfig.builder();
+        var builder = redis.clients.jedis.DefaultJedisClientConfig.builder()
+            .connectionTimeoutMillis(10_000)
+            .socketTimeoutMillis(10_000);
         if (username != null && !username.isBlank()) {
             builder.user(username);
         }

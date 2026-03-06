@@ -223,7 +223,7 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
     }
 
     private void ensureConsumerGroup(String streamKey, String groupName) {
-        int maxRetries = 3;
+        int maxRetries = 5;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             JedisPooled jedis = jedisProvider.get();
             try {
@@ -236,9 +236,10 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
                     return;
                 }
                 if (attempt < maxRetries) {
-                    log.warn("Failed to create consumer group '{}' on stream '{}' (attempt {}/{}): {}",
-                        groupName, streamKey, attempt, maxRetries, e.getMessage());
-                    try { Thread.sleep(1000L * attempt); } catch (InterruptedException ie) {
+                    long sleepMs = 2000L * attempt;
+                    log.warn("Failed to create consumer group '{}' on stream '{}' (attempt {}/{}): {} — retrying in {}ms",
+                        groupName, streamKey, attempt, maxRetries, e.getMessage(), sleepMs);
+                    try { Thread.sleep(sleepMs); } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw new RuntimeException("Interrupted while retrying consumer group creation", ie);
                     }
