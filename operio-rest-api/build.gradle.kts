@@ -61,6 +61,7 @@ dependencies {
     implementation(project(":tenant:operio-tenant-event-jooq"))                  // TenantStreamConsumer
     implementation(project(":tenant:operio-consent-admin-command"))               // ConsentAdminCommandService
     implementation(project(":tenant:operio-consent-admin-query-jooq"))           // ConsentAdminQueryService
+    implementation(project(":tenant:operio-subject-dsar-jooq"))                  // JooqSubjectDsarService
 
     // -- Platform CQRS modules ------------------------------------------------
     implementation(project(":platform:operio-platform-event-jooq"))              // JooqPlatformEventService
@@ -74,7 +75,15 @@ dependencies {
     implementation(project(":platform:operio-iam-command"))                       // JooqIamCommandService
     implementation(project(":platform:operio-iam-query"))                         // JooqIamQueryService
     implementation(project(":platform:operio-iam-projection-jooq"))              // IamProjectionHandler
-    implementation(project(":platform:operio-plan-query-jooq"))                  // JooqPlanQueryService
+    implementation(project(":platform:operio-plan-query-jooq"))
+
+
+    // platform schemas
+
+    implementation(project(":platform:operio-core-schema"))                     // Core schema (tenants, subjects, consents, etc.)
+    implementation(project(":platform:operio-iam-schema"))                      // IAM schema (users,
+    implementation(project(":platform:operio-billing-schema"))                  // Billing schema (plans, subscriptions, etc.)
+
 
     // -- Metrics modules (MetricPublisherService + projections) ----------------
     implementation(project(":tenant:operio-tenant-metrics-redis"))               // TenantRedisMetricPublisher + projections

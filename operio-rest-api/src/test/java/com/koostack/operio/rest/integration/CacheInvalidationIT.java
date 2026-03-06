@@ -98,7 +98,8 @@ public class CacheInvalidationIT {
 
         @Test @Order(3) @DisplayName("Init support")
         void initSupport() {
-            support = new IntegrationTestSupport(config);
+            support = new IntegrationTestSupport(config, TENANT_ID);
+            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(10));
         }
 
         @Test @Order(4) @DisplayName("Start Pub/Sub subscriber")

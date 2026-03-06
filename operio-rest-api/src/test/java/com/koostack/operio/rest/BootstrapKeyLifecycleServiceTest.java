@@ -8,7 +8,7 @@ import com.koostack.operio.core.platform.core.models.TenantInfo;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
-import jakarta.enterprise.inject.Instance;
+import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.Instant;
@@ -61,12 +61,7 @@ class BootstrapKeyLifecycleServiceTest {
     private IamQueryService<?> iamQueryService;
 
     @Mock
-    @SuppressWarnings("rawtypes")
-    private Instance<CoreQueryService> coreQueryServiceInstance;
-
-    @Mock
-    @SuppressWarnings("rawtypes")
-    private Instance<IamQueryService> iamQueryServiceInstance;
+    private PlatformCqrsHolder cqrs;
 
     private BootstrapKeyLifecycleService service;
 
@@ -76,13 +71,11 @@ class BootstrapKeyLifecycleServiceTest {
         service = new BootstrapKeyLifecycleService();
         injectField(service, "config", config);
 
-        lenient().when(coreQueryServiceInstance.isResolvable()).thenReturn(true);
-        lenient().when(coreQueryServiceInstance.get()).thenReturn(coreQueryService);
-        lenient().when(iamQueryServiceInstance.isResolvable()).thenReturn(true);
-        lenient().when(iamQueryServiceInstance.get()).thenReturn(iamQueryService);
+        lenient().when(cqrs.isCqrsAvailable()).thenReturn(true);
+        lenient().doReturn(coreQueryService).when(cqrs).coreQueryService();
+        lenient().doReturn(iamQueryService).when(cqrs).iamQueryService();
 
-        injectField(service, "coreQueryServiceInstance", coreQueryServiceInstance);
-        injectField(service, "iamQueryServiceInstance", iamQueryServiceInstance);
+        injectField(service, "cqrs", cqrs);
     }
 
     // -----------------------------------------------------------------------
@@ -663,17 +656,13 @@ class BootstrapKeyLifecycleServiceTest {
         @DisplayName(
             "null query services — startup skips check gracefully"
         )
-        @SuppressWarnings("unchecked")
         void nullQueryServices() throws Exception {
             givenBootstrapKeyConfigured();
 
-            // Simulate unresolvable instances (embedded mode)
-            Instance<CoreQueryService> nullCqs = mock(Instance.class);
-            Instance<IamQueryService> nullIqs = mock(Instance.class);
-            lenient().when(nullCqs.isResolvable()).thenReturn(false);
-            lenient().when(nullIqs.isResolvable()).thenReturn(false);
-            injectField(service, "coreQueryServiceInstance", nullCqs);
-            injectField(service, "iamQueryServiceInstance", nullIqs);
+            // Simulate unavailable CQRS services (embedded mode)
+            PlatformCqrsHolder nullCqrs = mock(PlatformCqrsHolder.class);
+            when(nullCqrs.isCqrsAvailable()).thenReturn(false);
+            injectField(service, "cqrs", nullCqrs);
 
             assertDoesNotThrow(() -> invokeOnStartup(service));
             assertFalse(service.isBootstrapConsumed());

@@ -152,11 +152,11 @@ class DtoMappingTest {
 
             assertEquals("PII", scope.category());
             assertEquals("email", scope.fieldName());
-            assertNull(scope.entityName());
+            assertEquals(ConsentScope.WILDCARD, scope.entityName());
             assertEquals("marketing", scope.purposeName());
 
             ConsentScopeDto backToDto = ConsentScopeDto.fromModel(scope);
-            assertNull(backToDto.entityName());
+            assertEquals(ConsentScope.WILDCARD, backToDto.entityName());
         }
 
         @Test
@@ -170,10 +170,10 @@ class DtoMappingTest {
             );
             ConsentScope scope = dto.toModel();
 
-            assertNull(scope.purposeName());
+            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
 
             ConsentScopeDto backToDto = ConsentScopeDto.fromModel(scope);
-            assertNull(backToDto.purposeName());
+            assertEquals(ConsentScope.WILDCARD, backToDto.purposeName());
         }
 
         @Test
@@ -189,8 +189,8 @@ class DtoMappingTest {
 
             assertEquals("PII", scope.category());
             assertEquals("email", scope.fieldName());
-            assertNull(scope.entityName());
-            assertNull(scope.purposeName());
+            assertEquals(ConsentScope.WILDCARD, scope.entityName());
+            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
         }
 
         @Test

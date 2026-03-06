@@ -64,12 +64,12 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
     /** Maximum backoff on Redis errors (milliseconds). */
     private static final long MAX_BACKOFF_MS = 30_000;
 
-    private final JedisProvider jedisProvider;
+    private JedisProvider jedisProvider;
     private final List<HandlerRegistration> handlers = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, List<Future<?>>> tenantConsumers = new ConcurrentHashMap<>();
-    private final ExecutorService executor;
-    private final int blockMs;
-    private final int batchSize;
+    private ExecutorService executor;
+    private int blockMs;
+    private int batchSize;
     /** Unique per JVM instance — avoids consumer name collisions in multi-pod deployments. */
     private final String instanceId = System.getenv().getOrDefault("HOSTNAME", "operio")
         + "-" + UUID.randomUUID().toString().substring(0, 8);
@@ -89,6 +89,14 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
         this.blockMs = (int) blockMs;
         this.batchSize = batchSize;
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    /** No-args constructor required by CDI proxy subclasses. */
+    protected AbstractStreamConsumer() {
+        this.jedisProvider = null;
+        this.blockMs = 0;
+        this.batchSize = 0;
+        this.executor = null;
     }
 
     /**
@@ -232,8 +240,8 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void consumeLoop(String tenantId, String streamKey, HandlerRegistration reg) {
         String consumerName = instanceId + "-" + tenantId;
-        log.debug("Consumer started for tenant '{}', group '{}', stream '{}'",
-            tenantId, reg.groupName(), streamKey);
+        log.debug("Consumer loop starting for tenant '{}', group '{}', stream '{}', consumer='{}'",
+            tenantId, reg.groupName(), streamKey, consumerName);
 
         long batchCount = 0;
         long backoffMs = MIN_BACKOFF_MS;
@@ -257,6 +265,10 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
                 if (result == null || result.isEmpty()) {
                     continue;
                 }
+
+                int entryCount = result.stream().mapToInt(r -> r.getValue().size()).sum();
+                log.debug("Consumer read {} entries for tenant '{}', group '{}'",
+                    entryCount, tenantId, reg.groupName());
 
                 for (var streamResult : result) {
                     String key = streamResult.getKey();

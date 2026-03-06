@@ -804,7 +804,8 @@ public class ConsentResource {
     // -------------------------------------------------------------------
 
     @GET
-    @Operation(operationId = "listSubjects", summary = "List all registered subjects")
+    @Operation(operationId = "listSubjects", summary = "List all registered subjects",
+        description = "Returns all subjects registered in the current tenant.")
     @APIResponses({
         @APIResponse(responseCode = "200", description = "Subjects returned",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
@@ -819,7 +820,8 @@ public class ConsentResource {
 
     @GET
     @Path("/{name}")
-    @Operation(operationId = "getSubject", summary = "Get a single registered subject")
+    @Operation(operationId = "getSubject", summary = "Get a single registered subject",
+        description = "Returns a single subject by name, or 404 if not found.")
     @APIResponses({
         @APIResponse(responseCode = "200", description = "Subject found",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
@@ -842,7 +844,8 @@ public class ConsentResource {
     }
 
     @POST
-    @Operation(operationId = "registerSubject", summary = "Register a new subject")
+    @Operation(operationId = "registerSubject", summary = "Register a new subject",
+        description = "Creates a new data subject record in the current tenant.")
     @APIResponses({
         @APIResponse(responseCode = "201", description = "Subject registered",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
@@ -864,7 +867,8 @@ public class ConsentResource {
 
     @PUT
     @Path("/{name}")
-    @Operation(operationId = "updateSubject", summary = "Update a subject's description")
+    @Operation(operationId = "updateSubject", summary = "Update a subject's description",
+        description = "Updates the description of an existing subject.")
     @APIResponses({
         @APIResponse(responseCode = "200", description = "Subject updated",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
@@ -883,7 +887,8 @@ public class ConsentResource {
 
     @DELETE
     @Path("/{name}")
-    @Operation(operationId = "removeSubject", summary = "Remove a registered subject")
+    @Operation(operationId = "removeSubject", summary = "Remove a registered subject",
+        description = "Removes a subject from the current tenant. Returns 409 if the subject still has active consent entries.")
     @APIResponses({
         @APIResponse(responseCode = "200", description = "Subject removed",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,

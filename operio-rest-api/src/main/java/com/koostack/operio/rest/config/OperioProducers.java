@@ -4,6 +4,7 @@ import com.koostack.operio.bundle.core.CoreConsentBundle;
 import com.koostack.operio.core.DefaultPlatformService;
 import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
+import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
@@ -48,12 +49,15 @@ import com.koostack.operio.core.tenant.consent.invalidation.SubscriptionManager;
 import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphRedisRepository;
+import com.koostack.operio.tenant.event.jooq.OutboxPoller;
+import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
 import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.quarkus.arc.ClientProxy;
+import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -175,6 +179,12 @@ public class OperioProducers {
         String mode = config.mode();
         LOG.info("Operio REST API: initializing (mode={})", mode);
 
+        // Validate platform DB credentials upfront in production mode so
+        // misconfiguration is caught before any connections are attempted.
+        if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
+            validatePlatformDbCredentials();
+        }
+
         Operio.Builder builder = Operio.builder();
 
         // -- Consent bundle (wires read-path: Redis decision service) ---------
@@ -234,6 +244,9 @@ public class OperioProducers {
         // Graph replaces Redis admin cache — JOOQ admin query used directly
         com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> effectiveQueryService = queryService;
 
+        // Retained outside the if-block so SubjectDsarService can be wired after buildTenantService()
+        JooqConsentAdminServiceConfig retainedJooqConfig = null;
+
         if (MODE_PRODUCTION.equalsIgnoreCase(mode) && consentBundle instanceof CoreConsentBundle coreBundle) {
             // Event service for the command service (publishes to event store + Redis streams)
             JooqConsentAdminServiceConfig jooqConfig = coreBundle.jooqConfig();
@@ -252,8 +265,15 @@ public class OperioProducers {
             JooqTenantEventService eventService = new JooqTenantEventService();
             eventService.configure(eventConfig);
 
+            // Store the tenant-aware DSLContext so the outbox poller (created
+            // later in tenantStreamConsumer()) can read from per-tenant event
+            // tables and relay events to Redis streams.
+            this.consentEventDsl = com.koostack.operio.plugin.jooq.common.JooqContextFactory
+                .createTenantAwareContext(eventConfig, "operio-tenant-outbox");
+
             commandService.configure(new ConsentAdminCommandConfig(eventService));
             queryService.configure(jooqConfig);
+            retainedJooqConfig = jooqConfig;
 
             LOG.info("Operio REST API: command service (event-sourced) and query service (jOOQ) wired");
         }
@@ -280,6 +300,14 @@ public class OperioProducers {
             });
         }
 
+        // -- SubjectDsarService (DSAR key persistence — production only) ------
+        if (retainedJooqConfig != null) {
+            var dsarService = new com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService();
+            dsarService.configure(retainedJooqConfig);
+            tenantService.setSubjectDsarService(dsarService);
+            LOG.info("Operio REST API: SubjectDsarService wired (jooq)");
+        }
+
         LOG.info(
             "Operio REST API: initialized successfully (appName={})",
             tenantService.appName()
@@ -294,6 +322,7 @@ public class OperioProducers {
     /**
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings({"unchecked", "rawtypes"})
     public CoreCommandService coreCommandService(TenantService tenantService) {
         TenantService unwrapped = ClientProxy.unwrap(tenantService);
@@ -310,6 +339,7 @@ public class OperioProducers {
 
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings({"unchecked", "rawtypes"})
     public CoreQueryService coreQueryService(TenantService tenantService) {
         TenantService unwrapped = ClientProxy.unwrap(tenantService);
@@ -326,8 +356,10 @@ public class OperioProducers {
 
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
-    public com.koostack.operio.core.platform.iam.IamCommandService iamCommandService() {
+    public com.koostack.operio.core.platform.iam.IamCommandService iamCommandService(TenantService tenantService) {
+        tenantService.appName();
         if (iamCommandService != null) {
             LOG.debug("Operio REST API: IamCommandService available");
             return iamCommandService;
@@ -338,8 +370,10 @@ public class OperioProducers {
 
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
-    public com.koostack.operio.core.platform.iam.IamQueryService iamQueryService() {
+    public com.koostack.operio.core.platform.iam.IamQueryService iamQueryService(TenantService tenantService) {
+        tenantService.appName();
         if (iamQueryService != null) {
             LOG.debug("Operio REST API: IamQueryService available");
             return iamQueryService;
@@ -350,8 +384,10 @@ public class OperioProducers {
 
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
-    public com.koostack.operio.core.platform.plan.PlanQueryService planQueryService() {
+    public com.koostack.operio.core.platform.plan.PlanQueryService planQueryService(TenantService tenantService) {
+        tenantService.appName();
         if (planQueryService != null) {
             LOG.debug("Operio REST API: PlanQueryService available");
             return planQueryService;
@@ -374,6 +410,7 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
     public TokenValidationService tokenValidationService(TenantService tenantService) {
         TenantService unwrapped = ClientProxy.unwrap(tenantService);
@@ -391,6 +428,30 @@ public class OperioProducers {
     }
 
     /**
+     * Produces a concrete non-generic {@link PlatformCqrsHolder} that wraps
+     * all platform CQRS services. This avoids Quarkus ArC's inability to
+     * resolve raw parameterized types via {@code Instance<T>}.
+     */
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public PlatformCqrsHolder platformCqrsHolder(TenantService tenantService) {
+        TenantService unwrapped = ClientProxy.unwrap(tenantService);
+        TokenValidationService tvs = null;
+        if (unwrapped instanceof DefaultTenantService dts) {
+            tvs = dts.tokenValidationService();
+        }
+        LOG.debug("PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}, tvs={}",
+            iamCommandService != null, iamQueryService != null,
+            coreQueryService != null, coreCommandService != null, tvs != null);
+        return new PlatformCqrsHolder(
+            iamCommandService, iamQueryService,
+            coreQueryService, coreCommandService,
+            tvs
+        );
+    }
+
+    /**
      * Produces the {@link IdpProvider} singleton — the platform default
      * identity provider (Keycloak).
      *
@@ -401,6 +462,7 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
     public IdpProvider idpProvider() {
         if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
@@ -441,6 +503,7 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
+    @Unremovable
     @SuppressWarnings("rawtypes")
     public AuthzProvider authzProvider() {
         if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
@@ -555,6 +618,10 @@ public class OperioProducers {
     private AbstractStreamConsumer platformStreamConsumer;
     private SubscriptionManager adminSubscriptionManager;
     private com.koostack.operio.tenant.consent.projection.decision.ExpiredConsentReaper expiredConsentReaper;
+    private OutboxPoller tenantOutboxPoller;
+
+    /** Consent-DB DSLContext set during tenantService() — reused by the outbox poller. */
+    private DSLContext consentEventDsl;
 
     /**
      * Produces the {@link TenantStreamConsumer} that runs both the consent
@@ -574,6 +641,7 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
+    @io.quarkus.runtime.Startup
     public TenantStreamConsumer tenantStreamConsumer(TenantService tenantService) {
         if (adminRedisPool == null || tenantAwareJedisProvider == null) {
             LOG.info("Operio REST API: tenant stream consumer not wired (embedded mode)");
@@ -655,6 +723,50 @@ public class OperioProducers {
 
         this.tenantStreamConsumer = consumer;
 
+        // -- Outbox poller: relays tenant events from Postgres → Redis streams.
+        // The event service is configured without Redis (chicken-and-egg:
+        // Redis config is only available after wirePlatformCqrsServices).
+        // We create the outbox poller here with the shared admin Redis pool.
+        if (consentEventDsl != null && coreQueryService != null) {
+            @SuppressWarnings("unchecked")
+            CoreQueryService<?> typedCqs = coreQueryService;
+            java.util.function.Supplier<java.util.List<String>> outboxTenantDiscovery = () -> {
+                try {
+                    // Exclude the platform tenant — it has its own dedicated outbox poller
+                    return typedCqs.listTenants().stream()
+                            .map(t -> t.tenantId())
+                            .filter(id -> !PlatformConstants.PLATFORM_TENANT_ID.equals(id))
+                            .toList();
+                } catch (Exception e) {
+                    LOG.warn("Outbox tenant discovery failed", e);
+                    return java.util.List.of();
+                }
+            };
+            RedisEventPublisher outboxPublisher =
+                new RedisEventPublisher(JedisProvider.shared(adminRedisPool));
+            this.tenantOutboxPoller = new OutboxPoller(consentEventDsl, outboxPublisher, outboxTenantDiscovery);
+            this.tenantOutboxPoller.start(2);
+            LOG.info("Operio REST API: tenant outbox poller started (2 workers)");
+
+            // Register all known tenants with the stream consumer so the
+            // projection handlers start reading events immediately.
+            try {
+                java.util.List<String> knownTenants = outboxTenantDiscovery.get();
+                for (String tid : knownTenants) {
+                    consumer.addTenant(tid);
+                }
+                if (!knownTenants.isEmpty()) {
+                    LOG.info("Operio REST API: registered {} known tenants with stream consumer: {}",
+                        knownTenants.size(), knownTenants);
+                }
+            } catch (Exception e) {
+                LOG.warn("Operio REST API: failed to register known tenants with stream consumer", e);
+            }
+        } else {
+            LOG.warn("Operio REST API: tenant outbox poller NOT started — consentEventDsl={}, coreQueryService={}",
+                consentEventDsl != null, coreQueryService != null);
+        }
+
         LOG.info("Operio REST API: tenant stream consumer created (groups=graph-projection,admin-projection)");
         return consumer;
     }
@@ -677,6 +789,10 @@ public class OperioProducers {
     public void onShutdown(@jakarta.enterprise.event.Observes
                            @jakarta.enterprise.context.BeforeDestroyed(ApplicationScoped.class)
                            Object event) {
+        if (tenantOutboxPoller != null) {
+            LOG.info("Operio REST API: stopping tenant outbox poller");
+            tenantOutboxPoller.stop();
+        }
         if (tenantStreamConsumer != null) {
             LOG.info("Operio REST API: stopping tenant stream consumer");
             tenantStreamConsumer.close();
@@ -874,12 +990,25 @@ public class OperioProducers {
         );
         JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
         tenantManagerSvc.configure(new JooqTenantManagerConfig(
-            platformDsl, tenantMgrDataSource, null,
+            platformDsl, tenantMgrDataSource,
+            new com.koostack.operio.platform.tenant.jooq.JooqTenantRepository(platformDsl),
             redisPluginConfig, appName, "classpath:db/migration/consent"
         ));
 
         TenantManagerProjectionHandler tenantMgrProjection =
             new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc, iamCmdSvc);
+
+        // Wire callback so newly provisioned tenants are registered with the
+        // consent stream consumer (the consumer is created later in
+        // tenantStreamConsumer(), but the callback captures `this` and
+        // accesses the field lazily).
+        tenantMgrProjection.setOnTenantProvisioned(tenantId -> {
+            TenantStreamConsumer tsc = this.tenantStreamConsumer;
+            if (tsc != null) {
+                tsc.addTenant(tenantId);
+                LOG.info("Operio REST API: registered new tenant '{}' with consent stream consumer", tenantId);
+            }
+        });
 
         // Startup reconciliation — run Flyway migrations for all existing
         // active tenants via the new CQRS TenantManagerService.
@@ -1305,6 +1434,30 @@ public class OperioProducers {
                     "application.yml property before starting the API."
             );
         }
+    }
+
+    /**
+     * Validates that platform DB credentials are present and non-blank
+     * in production mode. Called at the top of {@link #tenantService()}
+     * before any connections are attempted.
+     */
+    private void validatePlatformDbCredentials() {
+        OperioConfig.DbConfig platformDb = config
+            .platformDb()
+            .orElseThrow(() ->
+                new IllegalStateException(
+                    "operio.mode=production requires operio.platform-db to be configured"
+                )
+            );
+        requireNonBlank(platformDb.url(), "operio.platform-db.url");
+        requireNonBlank(
+            platformDb.username().orElse(null),
+            "operio.platform-db.username (env: OPERIO_PLATFORM_DB_USERNAME)"
+        );
+        requireNonBlank(
+            platformDb.password().orElse(null),
+            "operio.platform-db.password (env: OPERIO_PLATFORM_DB_PASSWORD)"
+        );
     }
 
     private void runFlyway(DataSource ds, String location, String historyTable) {

@@ -282,6 +282,7 @@ class OpenApiAnnotationTest {
             Method m = ConsentResource.class.getMethod(
                 "evaluate",
                 jakarta.ws.rs.core.SecurityContext.class,
+                String.class,
                 com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest.class
             );
             assertEquals(
@@ -324,15 +325,15 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("consent endpoints have 9 distinct operation IDs")
+        @DisplayName("consent endpoints have 15 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(
                 ConsentResource.class
             );
             assertEquals(
-                9,
+                15,
                 opCount,
-                "ConsentResource should have 9 @Operation methods"
+                "ConsentResource should have 15 @Operation methods"
             );
         }
 
@@ -679,11 +680,11 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 9 consent + 15 catalogue + 19 governance + 8 platform + 1 health = 52
+            // 15 consent + 15 catalogue + 19 governance + 8 platform + 1 health = 58
             assertEquals(
-                52,
+                58,
                 allIds.size(),
-                "Expected 52 globally unique operationIds"
+                "Expected 58 globally unique operationIds"
             );
         }
 

@@ -117,8 +117,7 @@ class RedisTenantAclIsolationIT {
     OperioConfig config;
 
     @Inject
-    @SuppressWarnings("rawtypes")
-    CoreQueryService coreQueryService;
+    com.koostack.operio.rest.config.PlatformCqrsHolder cqrsHolder;
 
     // =======================================================================
     // 1. Setup — create tenants and resolve Redis credentials
@@ -258,8 +257,9 @@ class RedisTenantAclIsolationIT {
 
                 // Retrieve the plaintext passwords from the platform database
                 // via CoreQueryService.getTenantCredentials().
-                var credsA = coreQueryService.getTenantCredentials(TENANT_A);
-                var credsB = coreQueryService.getTenantCredentials(TENANT_B);
+                var cqs = cqrsHolder.coreQueryService();
+                var credsA = cqs.getTenantCredentials(TENANT_A);
+                var credsB = cqs.getTenantCredentials(TENANT_B);
 
                 assertNotNull(credsA, "Tenant A credentials must not be null");
                 assertNotNull(credsB, "Tenant B credentials must not be null");

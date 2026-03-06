@@ -69,6 +69,11 @@ class RequestTracingFilterTest {
     void setUp() throws Exception {
         filter = new RequestTracingFilter();
         injectField(filter, "requestHolder", requestHolder);
+        // Stub UriInfo so the request filter's logging doesn't NPE
+        lenient().when(requestContext.getMethod()).thenReturn("GET");
+        lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
+        lenient().when(uriInfo.getAbsolutePath()).thenReturn(URI.create("http://localhost/test"));
+        lenient().when(uriInfo.getRequestUri()).thenReturn(URI.create("http://localhost/test"));
         // Always clear MDC before each test to avoid state leaking
         MDC.clear();
     }
@@ -279,6 +284,8 @@ class RequestTracingFilterTest {
                     RequestTracingFilter.REQUEST_ID_HEADER
                 )
             ).thenReturn(null);
+            lenient().when(requestContext.getMethod()).thenReturn("GET");
+            lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
 
             filter.filter(requestContext);
 

@@ -36,6 +36,7 @@ public class TenantManagerProjectionHandler {
     private final CoreCommandService<?> coreCommandService;
     private final IamCommandService<?> iamCommandService;
     private final ObjectMapper mapper;
+    private volatile java.util.function.Consumer<String> onTenantProvisioned;
 
     public TenantManagerProjectionHandler(
             JooqTenantManagerService tenantManager,
@@ -45,6 +46,14 @@ public class TenantManagerProjectionHandler {
         this.coreCommandService = coreCommandService;
         this.iamCommandService = iamCommandService;
         this.mapper = new ObjectMapper();
+    }
+
+    /**
+     * Sets a callback invoked after a tenant is fully provisioned.
+     * Used to register the new tenant with the consent stream consumer.
+     */
+    public void setOnTenantProvisioned(java.util.function.Consumer<String> callback) {
+        this.onTenantProvisioned = callback;
     }
 
     /**
@@ -78,6 +87,20 @@ public class TenantManagerProjectionHandler {
         LOG.info("Provisioning infrastructure for tenant '{}'", tenantId);
         JooqTenantManagerService.ProvisionResult result = tenantManager.provisionTenant(tenantId);
 
+        // 1b. Persist Redis ACL credentials so TenantAwareJedisProvider can
+        // look them up later (the ProvisionResult carries the plaintext password
+        // that was used to create the ACL user — we must store it now).
+        if (result.redisAclPassword() != null) {
+            tenantManager.getTenantRepository().updateRedisAclCredentials(
+                tenantId,
+                result.redisAclUser(),
+                result.redisAclPassword(),
+                result.redisAclPassHash(),
+                "tenant-provisioning"
+            );
+            LOG.info("Stored Redis ACL credentials for tenant '{}'", tenantId);
+        }
+
         // 2. Generate 3 API tokens (DEV, TEST, PROD)
         for (String env : API_KEY_ENVIRONMENTS) {
             String keyName = tenantId + "-" + env.toLowerCase();
@@ -91,6 +114,16 @@ public class TenantManagerProjectionHandler {
         coreCommandService.provisionTenant(tenantId, result.schemaName(), result.redisAclUser());
         LOG.info("Tenant '{}' fully provisioned: schema={}, redisUser={}, apiKeys=3",
             tenantId, result.schemaName(), result.redisAclUser());
+
+        // 4. Notify listeners (e.g., register with consent stream consumer)
+        var callback = this.onTenantProvisioned;
+        if (callback != null) {
+            try {
+                callback.accept(tenantId);
+            } catch (Exception e) {
+                LOG.warn("onTenantProvisioned callback failed for tenant '{}'", tenantId, e);
+            }
+        }
     }
 
     private void handleTenantDeleted(String payload) throws Exception {

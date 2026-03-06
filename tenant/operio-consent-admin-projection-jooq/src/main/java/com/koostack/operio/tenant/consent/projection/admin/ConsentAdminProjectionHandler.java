@@ -447,6 +447,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String lawfulBasis = textOrNull(node, "lawfulBasis");
         String onGranted = textOrNull(node, "onGranted");
         String onDenied = textOrNull(node, "onDenied");
+        // DB columns are NOT NULL — apply defaults matching the schema
+        if (onGranted == null) onGranted = "PLAINTEXT";
+        if (onDenied == null) onDenied = "REDACT_ALL";
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         Long purposeId = resolvePurposeId(purposeName);
@@ -492,7 +495,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
     private void handlePurposePolicyAdded(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
-        String policyType = node.get("policyType").asText();
+        String policyType = node.get("policyType").asText().toUpperCase();
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
@@ -539,12 +542,14 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .doUpdate()
                 .set(POLICY.UPDATED_AT, now)
                 .execute();
+        } else {
+            log.warn("Unknown policyType '{}' for purpose '{}' — skipping", policyType, purposeName);
         }
     }
 
     private void handlePurposePolicyRemoved(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
-        String policyType = node.get("policyType").asText();
+        String policyType = node.get("policyType").asText().toUpperCase();
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
@@ -901,6 +906,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private static LocalDateTime instantToLocal(JsonNode node, String field) {
         JsonNode child = node.get(field);
         if (child == null || child.isNull()) return null;
-        return LocalDateTime.ofInstant(Instant.parse(child.asText()), ZoneOffset.UTC);
+        Instant instant;
+        if (child.isNumber()) {
+            // JavaTimeModule default: epoch seconds as numeric
+            long epochSecond = child.longValue();
+            int nano = (int) ((child.decimalValue().remainder(java.math.BigDecimal.ONE)
+                    .movePointRight(9)).intValue());
+            instant = Instant.ofEpochSecond(epochSecond, nano);
+        } else {
+            instant = Instant.parse(child.asText());
+        }
+        return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

@@ -114,6 +114,7 @@ public class OperioTestResourceManager
             .withDatabaseName(DB_NAME)
             .withUsername(DB_USERNAME)
             .withPassword(DB_PASSWORD)
+            .withCommand("postgres", "-c", "max_connections=300")
             .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("postgres"));
 
         postgres.start();

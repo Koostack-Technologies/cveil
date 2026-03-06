@@ -366,7 +366,7 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
 
     private void handlePurposePolicyAdded(String tenantId, JsonNode node) {
         String purposeName = requiredText(node, "purposeName");
-        String policyType = requiredText(node, "policyType");
+        String policyType = requiredText(node, "policyType").toUpperCase();
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
@@ -398,7 +398,7 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
 
     private void handlePurposePolicyRemoved(String tenantId, JsonNode node) {
         String purposeName = requiredText(node, "purposeName");
-        String policyType = requiredText(node, "policyType");
+        String policyType = requiredText(node, "policyType").toUpperCase();
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
@@ -559,7 +559,7 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
     private void upsertConsentEdge(String tenantId, JsonNode node, String action) {
         String subjectId = requiredText(node, "subjectId");
         String purposeName = requiredText(node, "purposeName");
-        String policyType = requiredText(node, "policyType");
+        String policyType = requiredText(node, "policyType").toUpperCase();
         String fieldName = textOrNull(node, "fieldName");
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
@@ -694,6 +694,12 @@ public class ConsentGraphProjectionHandler implements StreamEventHandler {
         JsonNode child = node.get(field);
         if (child == null || child.isNull()) return null;
         try {
+            if (child.isNumber()) {
+                long epochSecond = child.longValue();
+                int nano = (int) ((child.decimalValue().remainder(java.math.BigDecimal.ONE)
+                        .movePointRight(9)).intValue());
+                return Instant.ofEpochSecond(epochSecond, nano);
+            }
             return Instant.parse(child.asText());
         } catch (Exception e) {
             return null;

@@ -14,6 +14,7 @@ import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
@@ -31,7 +32,6 @@ import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.resource.CatalogueResource;
-import jakarta.enterprise.inject.Instance;
 import com.koostack.operio.rest.resource.ConsentResource;
 import com.koostack.operio.rest.resource.GovernanceResource;
 import com.koostack.operio.rest.resource.PlatformResource;
@@ -1571,29 +1571,17 @@ class RbacTest {
             platformService = mock(PlatformService.class);
             bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
 
-            // Create Instance wrappers for CDI programmatic lookup
-            Instance<CoreCommandService> ccsi = mock(Instance.class);
-            when(ccsi.isResolvable()).thenReturn(true);
-            when(ccsi.get()).thenReturn(coreCommandService);
-
-            Instance<CoreQueryService> cqsi = mock(Instance.class);
-            when(cqsi.isResolvable()).thenReturn(true);
-            when(cqsi.get()).thenReturn(coreQueryService);
-
-            Instance<IamCommandService> icsi = mock(Instance.class);
-            when(icsi.isResolvable()).thenReturn(true);
-            when(icsi.get()).thenReturn(iamCommandService);
-
-            Instance<IamQueryService> iqsi = mock(Instance.class);
-            when(iqsi.isResolvable()).thenReturn(true);
-            when(iqsi.get()).thenReturn(iamQueryService);
+            // Create PlatformCqrsHolder mock
+            PlatformCqrsHolder cqrsHolder = mock(PlatformCqrsHolder.class);
+            when(cqrsHolder.isCqrsAvailable()).thenReturn(true);
+            doReturn(coreCommandService).when(cqrsHolder).coreCommandService();
+            doReturn(coreQueryService).when(cqrsHolder).coreQueryService();
+            doReturn(iamCommandService).when(cqrsHolder).iamCommandService();
+            doReturn(iamQueryService).when(cqrsHolder).iamQueryService();
 
             // Inject via reflection
             for (var entry : java.util.Map.of(
-                "coreCommandServiceInstance", ccsi,
-                "coreQueryServiceInstance", cqsi,
-                "iamCommandServiceInstance", icsi,
-                "iamQueryServiceInstance", iqsi,
+                "cqrs", cqrsHolder,
                 "platformService", platformService,
                 "bootstrapLifecycle", bootstrapLifecycle
             ).entrySet()) {

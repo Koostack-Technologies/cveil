@@ -28,7 +28,7 @@ public class CoreProjectionHandler {
     private static final org.jooq.Field<String> DISPLAY_NAME = field(name("display_name"), String.class);
     private static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    private static final org.jooq.Field<String> SCHEMA_NAME = field(name("schema_name"), String.class);
+    private static final org.jooq.Field<String> SCHEMA_NAME = field(name("schema_prefix"), String.class);
     private static final org.jooq.Field<String> REDIS_ACL_USER = field(name("redis_acl_user"), String.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT = field(name("created_at"), OffsetDateTime.class);
     private static final org.jooq.Field<OffsetDateTime> UPDATED_AT = field(name("updated_at"), OffsetDateTime.class);

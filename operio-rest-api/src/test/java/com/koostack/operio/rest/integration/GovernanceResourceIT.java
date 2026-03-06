@@ -14,6 +14,7 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 
 /**
@@ -114,7 +115,8 @@ class GovernanceResourceIT {
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
 
-            support = new IntegrationTestSupport(config);
+            support = new IntegrationTestSupport(config, TENANT_ID);
+            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(10));
         }
 
         @Test
@@ -139,6 +141,7 @@ class GovernanceResourceIT {
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
+            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(10));
         }
 
         @Test
@@ -524,13 +527,12 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(200);
 
-            var rows = support.query(
+            // Async projection — use Awaitility
+            support.awaitQueryValue(
                 "SELECT description FROM jurisdiction WHERE jurisdiction_name = ?",
+                "description", "European Union (updated)",
                 JURISDICTION_EU
             );
-            assertThat(rows).isNotEmpty();
-            assertThat(rows.get(0).get("description").toString())
-                .isEqualTo("European Union (updated)");
         }
 
         @Test
@@ -688,19 +690,24 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(201);
 
-            // Verify policy table via JDBC
-            var policies = support.query(
-                "SELECT p.policy_type, pu.purpose_name, f.field_name "
-                    + "FROM policy p "
-                    + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                    + "JOIN field f ON p.field_id = f.field_id "
-                    + "WHERE pu.purpose_name = ? AND f.field_name = ?",
-                PURPOSE_MARKETING, FIELD_EMAIL
-            );
-            assertThat(policies).isNotEmpty();
-            assertThat(policies.get(0).get("policy_type").toString().toLowerCase())
-                .as("Policy type should be 'field'")
-                .isEqualTo("field");
+            // Async projection — use Awaitility
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var policies = support.query(
+                        "SELECT p.policy_type, pu.purpose_name, f.field_name "
+                            + "FROM policy p "
+                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
+                            + "JOIN field f ON p.field_id = f.field_id "
+                            + "WHERE pu.purpose_name = ? AND f.field_name = ?",
+                        PURPOSE_MARKETING, FIELD_EMAIL
+                    );
+                    assertThat(policies).isNotEmpty();
+                    assertThat(policies.get(0).get("policy_type").toString().toLowerCase())
+                        .as("Policy type should be 'field'")
+                        .isEqualTo("field");
+                });
         }
 
         @Test
@@ -722,46 +729,63 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(201);
 
-            var policies = support.query(
-                "SELECT p.policy_type, c.category_name "
-                    + "FROM policy p "
-                    + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                    + "JOIN category c ON p.category_id = c.category_id "
-                    + "WHERE pu.purpose_name = ? AND c.category_name = ?",
-                PURPOSE_MARKETING, CATEGORY_PII
-            );
-            assertThat(policies).isNotEmpty();
+            // Async projection — use Awaitility
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var policies = support.query(
+                        "SELECT p.policy_type, c.category_name "
+                            + "FROM policy p "
+                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
+                            + "JOIN category c ON p.category_id = c.category_id "
+                            + "WHERE pu.purpose_name = ? AND c.category_name = ?",
+                        PURPOSE_MARKETING, CATEGORY_PII
+                    );
+                    assertThat(policies).isNotEmpty();
+                });
         }
 
         @Test
         @Order(12)
         @DisplayName("Get purpose shows policies in response")
         void getPurposeWithPolicies() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                .then()
-                    .statusCode(200)
-                    .body("policies", hasSize(greaterThanOrEqualTo(2)));
+            // Async projection — policies populate asynchronously
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() ->
+                    given()
+                        .header("Authorization", auth())
+                        .when()
+                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
+                        .then()
+                            .statusCode(200)
+                            .body("policies", hasSize(greaterThanOrEqualTo(2)))
+                );
         }
 
         @Test
         @Order(13)
         @DisplayName("Remove field-scope policy")
         void removeFieldPolicy() {
-            // First verify the policy exists before we remove it
-            var before = support.query(
-                "SELECT p.* FROM policy p "
-                    + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                    + "JOIN field f ON p.field_id = f.field_id "
-                    + "WHERE pu.purpose_name = ? AND f.field_name = ? "
-                    + "AND LOWER(p.policy_type) = 'field'",
-                PURPOSE_MARKETING, FIELD_EMAIL
-            );
-            assertThat(before)
-                .as("Field-scope policy should exist before removal")
-                .isNotEmpty();
+            // Wait for the policy to be projected before attempting removal
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var before = support.query(
+                        "SELECT p.* FROM policy p "
+                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
+                            + "JOIN field f ON p.field_id = f.field_id "
+                            + "WHERE pu.purpose_name = ? AND f.field_name = ? "
+                            + "AND p.policy_type::text = 'FIELD'",
+                        PURPOSE_MARKETING, FIELD_EMAIL
+                    );
+                    assertThat(before)
+                        .as("Field-scope policy should exist before removal")
+                        .isNotEmpty();
+                });
 
             given()
                 .header("Authorization", auth())
@@ -780,18 +804,23 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(200);
 
-            // Verify the field-scope policy row is gone (use LOWER for case safety)
-            var policies = support.query(
-                "SELECT p.* FROM policy p "
-                    + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                    + "JOIN field f ON p.field_id = f.field_id "
-                    + "WHERE pu.purpose_name = ? AND f.field_name = ? "
-                    + "AND LOWER(p.policy_type) = 'field'",
-                PURPOSE_MARKETING, FIELD_EMAIL
-            );
-            assertThat(policies)
-                .as("Field-scope policy should be removed after DELETE")
-                .isEmpty();
+            // Verify the field-scope policy row is gone (async projection)
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var policies = support.query(
+                        "SELECT p.* FROM policy p "
+                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
+                            + "JOIN field f ON p.field_id = f.field_id "
+                            + "WHERE pu.purpose_name = ? AND f.field_name = ? "
+                            + "AND p.policy_type::text = 'FIELD'",
+                        PURPOSE_MARKETING, FIELD_EMAIL
+                    );
+                    assertThat(policies)
+                        .as("Field-scope policy should be removed after DELETE")
+                        .isEmpty();
+                });
         }
 
         @Test
@@ -851,31 +880,42 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(200);
 
-            // JDBC: verify purpose_regulation join table
-            var links = support.query(
-                "SELECT pr.lawful_basis, pu.purpose_name, r.regulation_name "
-                    + "FROM purpose_regulation pr "
-                    + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
-                    + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
-                    + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
-                PURPOSE_MARKETING, REGULATION_GDPR
-            );
-            assertThat(links).hasSize(1);
-            assertThat(links.get(0).get("lawful_basis").toString()).isEqualTo("consent");
+            // JDBC: verify purpose_regulation join table (async projection)
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var links = support.query(
+                        "SELECT pr.lawful_basis, pu.purpose_name, r.regulation_name "
+                            + "FROM purpose_regulation pr "
+                            + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
+                            + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
+                            + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
+                        PURPOSE_MARKETING, REGULATION_GDPR
+                    );
+                    assertThat(links).hasSize(1);
+                    assertThat(links.get(0).get("lawful_basis").toString()).isEqualTo("consent");
+                });
         }
 
         @Test
         @Order(2)
         @DisplayName("Get marketing shows GDPR in regulations")
         void getPurposeShowsRegulation() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
-                .then()
-                    .statusCode(200)
-                    .body("regulations", hasSize(greaterThanOrEqualTo(1)))
-                    .body("regulations.regulationName", hasItem(REGULATION_GDPR));
+            // Async projection — regulations populate asynchronously
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() ->
+                    given()
+                        .header("Authorization", auth())
+                        .when()
+                            .get("/api/v1/governance/purposes/" + PURPOSE_MARKETING)
+                        .then()
+                            .statusCode(200)
+                            .body("regulations", hasSize(greaterThanOrEqualTo(1)))
+                            .body("regulations.regulationName", hasItem(REGULATION_GDPR))
+                );
         }
 
         @Test
@@ -890,14 +930,20 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(200);
 
-            var links = support.query(
-                "SELECT * FROM purpose_regulation pr "
-                    + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
-                    + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
-                    + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
-                PURPOSE_MARKETING, REGULATION_GDPR
-            );
-            assertThat(links).isEmpty();
+            // Async projection — wait for unlink to propagate
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var links = support.query(
+                        "SELECT * FROM purpose_regulation pr "
+                            + "JOIN purpose pu ON pr.purpose_id = pu.purpose_id "
+                            + "JOIN regulation r ON pr.regulation_id = r.regulation_id "
+                            + "WHERE pu.purpose_name = ? AND r.regulation_name = ?",
+                        PURPOSE_MARKETING, REGULATION_GDPR
+                    );
+                    assertThat(links).isEmpty();
+                });
         }
 
         @Test
@@ -955,30 +1001,41 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(201);
 
-            // JDBC: verify regulation_jurisdiction join table
-            var links = support.query(
-                "SELECT rj.*, r.regulation_name, j.jurisdiction_name "
-                    + "FROM regulation_jurisdiction rj "
-                    + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
-                    + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
-                    + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
-                REGULATION_GDPR, JURISDICTION_EU
-            );
-            assertThat(links).hasSize(1);
+            // JDBC: verify regulation_jurisdiction join table (async projection)
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var links = support.query(
+                        "SELECT rj.*, r.regulation_name, j.jurisdiction_name "
+                            + "FROM regulation_jurisdiction rj "
+                            + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
+                            + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
+                            + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
+                        REGULATION_GDPR, JURISDICTION_EU
+                    );
+                    assertThat(links).hasSize(1);
+                });
         }
 
         @Test
         @Order(2)
         @DisplayName("Get GDPR shows EU in jurisdictions")
         void getRegulationShowsJurisdiction() {
-            given()
-                .header("Authorization", auth())
-                .when()
-                    .get("/api/v1/governance/regulations/" + REGULATION_GDPR)
-                .then()
-                    .statusCode(200)
-                    .body("activeJurisdictions", hasSize(greaterThanOrEqualTo(1)))
-                    .body("activeJurisdictions.jurisdictionName", hasItem(JURISDICTION_EU));
+            // Async projection — jurisdictions populate asynchronously
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() ->
+                    given()
+                        .header("Authorization", auth())
+                        .when()
+                            .get("/api/v1/governance/regulations/" + REGULATION_GDPR)
+                        .then()
+                            .statusCode(200)
+                            .body("activeJurisdictions", hasSize(greaterThanOrEqualTo(1)))
+                            .body("activeJurisdictions.jurisdictionName", hasItem(JURISDICTION_EU))
+                );
         }
 
         @Test
@@ -993,14 +1050,20 @@ class GovernanceResourceIT {
                 .then()
                     .statusCode(200);
 
-            var links = support.query(
-                "SELECT * FROM regulation_jurisdiction rj "
-                    + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
-                    + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
-                    + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
-                REGULATION_GDPR, JURISDICTION_EU
-            );
-            assertThat(links).isEmpty();
+            // Async projection — wait for unlink to propagate
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    var links = support.query(
+                        "SELECT * FROM regulation_jurisdiction rj "
+                            + "JOIN regulation r ON rj.regulation_id = r.regulation_id "
+                            + "JOIN jurisdiction j ON rj.jurisdiction_id = j.jurisdiction_id "
+                            + "WHERE r.regulation_name = ? AND j.jurisdiction_name = ?",
+                        REGULATION_GDPR, JURISDICTION_EU
+                    );
+                    assertThat(links).isEmpty();
+                });
         }
     }
 

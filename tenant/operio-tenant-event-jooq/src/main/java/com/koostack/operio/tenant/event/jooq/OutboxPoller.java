@@ -116,6 +116,9 @@ public class OutboxPoller {
     private void discoverAndDispatch() {
         try {
             List<String> tenants = tenantDiscovery.get();
+            if (!tenants.isEmpty()) {
+                log.debug("Outbox discovered {} tenant(s): {}", tenants.size(), tenants);
+            }
             for (String tenantId : tenants) {
                 workers.submit(() ->
                     TenantContext.runWhere(tenantId, this::publishBatch)
@@ -127,27 +130,26 @@ public class OutboxPoller {
     }
 
     private void publishBatch() {
+        String currentTenant = TenantContext.get();
         try {
             dsl.transaction(txConfig -> {
                 DSLContext txDsl = txConfig.dsl();
 
                 var batch = txDsl
                     .selectFrom(EVENT)
-                    .where(EVENT.PUBLISHED.eq(false))
+                    .where(EVENT.PUBLISHED.eq(false)
+                        .and(EVENT.TENANT_ID.eq(currentTenant)))
                     .orderBy(EVENT.EVENT_ID.asc())
                     .limit(batchSize)
                     .forUpdate()
                     .skipLocked()
                     .fetch();
 
+                log.debug("Outbox publishBatch for tenant '{}': found {} unpublished events",
+                    currentTenant, batch.size());
+
                 if (batch.isEmpty()) {
                     return;
-                }
-
-                String tenantId = TenantContext.get();
-                if (tenantId == null) {
-                    throw new IllegalStateException(
-                        "TenantContext.get() returned null — tenant events require a tenant ID");
                 }
 
                 for (var record : batch) {
@@ -174,7 +176,7 @@ public class OutboxPoller {
 
                     Map<String, String> fields = new HashMap<>();
                     fields.put(TenantEvent.FIELD_EVENT_ID, String.valueOf(record.getEventId()));
-                    fields.put(TenantEvent.FIELD_TENANT_ID, tenantId);
+                    fields.put(TenantEvent.FIELD_TENANT_ID, record.getTenantId());
                     fields.put(TenantEvent.FIELD_AGGREGATE_ID, record.getAggregateId());
                     fields.put(TenantEvent.FIELD_AGGREGATE_TYPE, record.getAggregateType());
                     fields.put(TenantEvent.FIELD_EVENT_TYPE, record.getEventType());

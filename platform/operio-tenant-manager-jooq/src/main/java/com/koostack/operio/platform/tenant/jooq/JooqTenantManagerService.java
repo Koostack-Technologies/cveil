@@ -98,6 +98,11 @@ public class JooqTenantManagerService
         return platformDsl != null && dataSource != null;
     }
 
+    /** Returns the underlying {@link TenantRepository} for direct DB access. */
+    public TenantRepository getTenantRepository() {
+        return tenantRepository;
+    }
+
     // -----------------------------------------------------------------------
     // Result records
     // -----------------------------------------------------------------------
@@ -175,7 +180,7 @@ public class JooqTenantManagerService
                 String password = generateSecurePassword();
                 redisAclPassHash = sha256Hex(password);
 
-                String keyPattern = appName + ":" + tenantId + ":*";
+                String keyPattern = tenantId + ":*";
 
                 try (Jedis jedis = createJedisConnection()) {
                     jedis.aclSetUser(redisAclUser, "reset");
@@ -251,7 +256,7 @@ public class JooqTenantManagerService
             TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
         String password = generateSecurePassword();
         String passHash = sha256Hex(password);
-        String keyPattern = appName + ":" + tenantId + ":*";
+        String keyPattern = tenantId + ":*";
 
         log.info(
             "Reprovisioning Redis ACL for tenant '{}' (aclUser='{}', keyPattern='{}')",

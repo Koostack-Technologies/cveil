@@ -6,6 +6,7 @@ import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
+import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import jakarta.annotation.Priority;
@@ -105,13 +106,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * The {@link TokenValidationService} used to verify bearer tokens.
-     * May be {@code null} in embedded mode (no platform DB configured).
-     * Injected as {@code Instance<>} so CDI doesn't fail when the
-     * producer returns {@code null}.
+     * Holder for platform CQRS services including token validation.
+     * Uses a concrete non-generic type to avoid ArC raw-type resolution issues.
      */
     @Inject
-    Instance<TokenValidationService<?>> tokenValidationServiceInstance;
+    PlatformCqrsHolder cqrsHolder;
 
     /**
      * Operio configuration — used to read the bootstrap key from
@@ -285,8 +284,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         // 5. Verify via TokenValidationService (API key hash lookup)
         TokenValidationService<?> tokenValidationService =
-            tokenValidationServiceInstance.isResolvable()
-                ? tokenValidationServiceInstance.get()
+            cqrsHolder.isTokenValidationAvailable()
+                ? cqrsHolder.tokenValidationService()
                 : null;
         if (tokenValidationService == null) {
             LOG.error(

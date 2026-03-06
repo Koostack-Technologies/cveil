@@ -54,8 +54,18 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String dbPassword;
     private final String redisHost;
     private final int redisPort;
+    private final String tenantSchema; // null → no search_path override
 
+    /** Creates support without tenant schema routing (platform queries only). */
     public IntegrationTestSupport(OperioConfig config) {
+        this(config, null);
+    }
+
+    /**
+     * Creates support with tenant schema routing.
+     * JDBC queries will execute with {@code SET search_path TO t_{tenantId}, public}.
+     */
+    public IntegrationTestSupport(OperioConfig config, String tenantId) {
         var redis = config.redis().orElseThrow(
             () -> new IllegalStateException("Redis config is required for integration tests")
         );
@@ -69,6 +79,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.jdbcUrl = db.url();
         this.dbUsername = db.username().orElse("operio_test");
         this.dbPassword = db.password().orElse("operio_test_password");
+        this.tenantSchema = tenantId != null ? "t_" + tenantId : null;
     }
 
     @Override
@@ -82,9 +93,15 @@ public class IntegrationTestSupport implements AutoCloseable {
     // JDBC helpers
     // -----------------------------------------------------------------------
 
-    /** Opens a fresh JDBC connection (caller must close). */
+    /** Opens a fresh JDBC connection with tenant search_path if configured. */
     public Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword);
+        Connection conn = DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword);
+        if (tenantSchema != null) {
+            try (var stmt = conn.createStatement()) {
+                stmt.execute("SET search_path TO " + tenantSchema + ", public");
+            }
+        }
+        return conn;
     }
 
     /**
@@ -120,18 +137,65 @@ public class IntegrationTestSupport implements AutoCloseable {
         }
     }
 
-    /** Asserts that at least one row exists for the given column value. */
+    /** Asserts that at least one row exists, polling until projection catches up. */
     public void assertRowExists(String table, String column, Object value) {
-        assertThat(countRows(table, column, value))
-            .as("Expected row in '%s' where %s = '%s'", table, column, value)
-            .isGreaterThan(0);
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofMillis(500))
+            .untilAsserted(() ->
+                assertThat(countRows(table, column, value))
+                    .as("Expected row in '%s' where %s = '%s'", table, column, value)
+                    .isGreaterThan(0)
+            );
     }
 
-    /** Asserts that no rows exist for the given column value. */
+    /** Asserts that no rows exist, polling until projection catches up. */
     public void assertRowAbsent(String table, String column, Object value) {
-        assertThat(countRows(table, column, value))
-            .as("Expected no rows in '%s' where %s = '%s'", table, column, value)
-            .isEqualTo(0);
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofMillis(500))
+            .untilAsserted(() ->
+                assertThat(countRows(table, column, value))
+                    .as("Expected no rows in '%s' where %s = '%s'", table, column, value)
+                    .isEqualTo(0)
+            );
+    }
+
+    /**
+     * Polls until the given SQL query returns at least one row where the
+     * specified column equals the expected value. Useful for verifying
+     * eventually-consistent projections.
+     */
+    public void awaitQueryValue(String sql, String column, Object expected, Object... params) {
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofMillis(500))
+            .untilAsserted(() -> {
+                var rows = query(sql, params);
+                assertThat(rows)
+                    .as("Expected non-empty result for: %s", sql)
+                    .isNotEmpty();
+                assertThat(rows.get(0).get(column))
+                    .as("Expected %s = '%s' in result of: %s", column, expected, sql)
+                    .isEqualTo(expected);
+            });
+    }
+
+    /**
+     * Polls until the given SQL query returns results satisfying the
+     * predicate. Useful for eventually-consistent assertions.
+     */
+    public void awaitQuery(String sql, Predicate<List<Map<String, Object>>> condition,
+                           String description, Object... params) {
+        Awaitility.await()
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofMillis(500))
+            .untilAsserted(() -> {
+                var rows = query(sql, params);
+                assertThat(condition.test(rows))
+                    .as(description)
+                    .isTrue();
+            });
     }
 
     // -- Catalogue table queries ----------------------------------------------
@@ -309,6 +373,28 @@ public class IntegrationTestSupport implements AutoCloseable {
     }
 
     // -- Polling helpers ------------------------------------------------------
+
+    /**
+     * Polls until an API key is usable for authentication (CQRS projection lag).
+     * Sends a lightweight GET /api/v1/health request with the bearer token
+     * and waits until it returns a non-401 status.
+     */
+    public void awaitApiKeyUsable(String bearerToken, Duration timeout) {
+        Awaitility.await()
+            .atMost(timeout)
+            .pollInterval(Duration.ofMillis(200))
+            .until(() -> {
+                try {
+                    int status = io.restassured.RestAssured.given()
+                        .header("Authorization", "Bearer " + bearerToken)
+                        .get("/api/v1/catalogue/fields")
+                        .statusCode();
+                    return status != 401;
+                } catch (Exception e) {
+                    return false;
+                }
+            });
+    }
 
     /**
      * Polls a supplier until the predicate matches or timeout expires.

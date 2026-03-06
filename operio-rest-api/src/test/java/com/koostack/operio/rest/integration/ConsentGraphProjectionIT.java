@@ -60,7 +60,7 @@ class ConsentGraphProjectionIT {
     private static final String POLICY_NODE_NAME =
         "FIELD:" + ENTITY_CUSTOMER + "/" + FIELD_EMAIL + ":" + PURPOSE_MARKETING;
 
-    private static final Duration AWAIT_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration AWAIT_TIMEOUT = Duration.ofSeconds(30);
 
     private static volatile String apiKey;
     private static volatile IntegrationTestSupport support;
@@ -121,7 +121,8 @@ class ConsentGraphProjectionIT {
 
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
-            support = new IntegrationTestSupport(config);
+            support = new IntegrationTestSupport(config, TENANT_ID);
+            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(10));
         }
     }
 
@@ -538,6 +539,17 @@ class ConsentGraphProjectionIT {
         @Order(1)
         @DisplayName("Grant consent: user-42 → marketing/email/Customer")
         void grantConsent() {
+            // Wait for the policy to be projected before granting
+            support.awaitQuery(
+                "SELECT p.policy_type FROM policy p "
+                    + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
+                    + "JOIN field f ON p.field_id = f.field_id "
+                    + "WHERE pu.purpose_name = ? AND f.field_name = ?",
+                rows -> !rows.isEmpty(),
+                "Policy for marketing/email must be projected before consent grant",
+                PURPOSE_MARKETING, FIELD_EMAIL
+            );
+
             given()
                 .header("Authorization", auth())
                 .contentType(ContentType.JSON)

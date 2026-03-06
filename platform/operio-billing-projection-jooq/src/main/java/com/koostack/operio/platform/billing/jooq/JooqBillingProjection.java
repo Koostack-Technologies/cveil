@@ -1,6 +1,7 @@
 package com.koostack.operio.platform.billing.jooq;
 
 import com.koostack.operio.core.platform.billing.BillingProjection;
+import com.koostack.operio.platform.billing.schema.BillingSchemaManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
