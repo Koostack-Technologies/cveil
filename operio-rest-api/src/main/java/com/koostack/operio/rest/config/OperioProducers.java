@@ -881,10 +881,11 @@ public class OperioProducers {
         runFlywayInSchema(migrationDs, "classpath:db/migration/platform-event-postgresql",
             "flyway_schema_history_platform_event", "t_platform");
 
-        // Domain projection schemas (self-contained — each V1 creates its own schema)
-        runFlyway(migrationDs, "classpath:db/migration/platform-core", "flyway_schema_history_platform_core");
-        runFlyway(migrationDs, "classpath:db/migration/platform-billing", "flyway_schema_history_platform_billing");
-        runFlyway(migrationDs, "classpath:db/migration/platform-iam", "flyway_schema_history_platform_iam");
+        // Domain projection schemas (self-contained — each V1 creates its own schema).
+        // History tables live in their respective schemas to keep public clean.
+        runFlywayInSchema(migrationDs, "classpath:db/migration/platform-core", "flyway_schema_history", "platform_core");
+        runFlywayInSchema(migrationDs, "classpath:db/migration/platform-billing", "flyway_schema_history", "platform_billing");
+        runFlywayInSchema(migrationDs, "classpath:db/migration/platform-iam", "flyway_schema_history", "platform_iam");
 
         JooqPlatformEventService platformEventService = new JooqPlatformEventService();
         platformEventService.configure(eventConfig);

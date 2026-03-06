@@ -8,6 +8,7 @@ plugins {
     // Apply the java Plugin to add support for Java.
     java
     id("io.freefair.lombok")
+    id("com.diffplug.spotless")
     // Generate .project/.classpath files so jdtls (Zed/VS Code) auto-discovers subprojects
     eclipse
 }

@@ -60,8 +60,7 @@ public class JooqSubjectDsarService
     public void configure(JooqConsentAdminServiceConfig config) {
         this.dsl = JooqContextFactory.createTenantAwareContext(
             config,
-            "operio-subject-dsar-jooq",
-            "classpath:db/migration/consent"
+            "operio-subject-dsar-jooq"
         );
         this.subjectDsarRepository = new SubjectDsarRepository(dsl);
         LOG.info("JooqSubjectDsarService configured");

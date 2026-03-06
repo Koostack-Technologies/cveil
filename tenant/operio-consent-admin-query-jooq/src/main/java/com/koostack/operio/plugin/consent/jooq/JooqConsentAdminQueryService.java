@@ -94,8 +94,7 @@ public class JooqConsentAdminQueryService
     public void configure(JooqConsentAdminServiceConfig config) {
         this.dsl = JooqContextFactory.createTenantAwareContext(
             config,
-            "operio-consent-admin-query-jooq",
-            "classpath:db/migration/consent"
+            "operio-consent-admin-query-jooq"
         );
         this.entityRepository = new EntityRepository(dsl);
         this.fieldRepository = new FieldRepository(dsl);
