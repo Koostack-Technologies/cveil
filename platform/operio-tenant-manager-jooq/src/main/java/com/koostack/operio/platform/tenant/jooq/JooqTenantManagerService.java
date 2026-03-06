@@ -52,7 +52,7 @@ public class JooqTenantManagerService
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private DSLContext platformDsl;
-    private DataSource dataSource;
+    private DataSource tenantDataSource;
     private TenantRepository tenantRepository;
     private RedisPluginConfig redisConfig;
     private volatile String appName;
@@ -82,7 +82,7 @@ public class JooqTenantManagerService
     @Override
     public void configure(JooqTenantManagerConfig config) {
         this.platformDsl = config.platformDsl();
-        this.dataSource = config.dataSource();
+        this.tenantDataSource = config.tenantDataSource();
         this.tenantRepository = config.tenantRepository();
         this.redisConfig = config.redisConfig();
         this.appName = config.appName() != null ? config.appName() : "operio";
@@ -97,12 +97,22 @@ public class JooqTenantManagerService
 
     @Override
     public boolean isReady() {
-        return platformDsl != null && dataSource != null;
+        return platformDsl != null && tenantDataSource != null;
     }
 
     /** Returns the underlying {@link TenantRepository} for direct DB access. */
     public TenantRepository getTenantRepository() {
         return tenantRepository;
+    }
+
+    /** Executes a DDL statement against the tenant database. */
+    private void executeTenantDdl(String sql) {
+        try (var conn = tenantDataSource.getConnection();
+             var stmt = conn.createStatement()) {
+            stmt.execute(sql);
+        } catch (Exception e) {
+            throw new OperioServiceException("Tenant DDL failed: " + sql, e);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -135,7 +145,7 @@ public class JooqTenantManagerService
         log.info("Provisioning tenant '{}': schema={}", tenantId, schemaName);
 
         try {
-            platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
+            executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + schemaName);
             log.debug("Created Postgres schema '{}'", schemaName);
         } catch (Exception e) {
             throw new OperioServiceException(
@@ -147,7 +157,7 @@ public class JooqTenantManagerService
 
         try {
             Flyway.configure()
-                .dataSource(dataSource)
+                .dataSource(tenantDataSource)
                 .schemas(schemaName)
                 .defaultSchema(schemaName)
                 .locations(consentMigrationLocation)
@@ -156,7 +166,7 @@ public class JooqTenantManagerService
             log.debug("Applied consent migrations to schema '{}'", schemaName);
         } catch (Exception e) {
             try {
-                platformDsl.execute(
+                executeTenantDdl(
                     "DROP SCHEMA IF EXISTS " + schemaName + " CASCADE"
                 );
             } catch (Exception cleanup) {
@@ -176,9 +186,9 @@ public class JooqTenantManagerService
         String eventSchemaName = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
         if (eventMigrationLocation != null) {
             try {
-                platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchemaName);
+                executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + eventSchemaName);
                 Flyway.configure()
-                    .dataSource(dataSource)
+                    .dataSource(tenantDataSource)
                     .schemas(eventSchemaName)
                     .defaultSchema(eventSchemaName)
                     .locations(eventMigrationLocation)
@@ -187,7 +197,7 @@ public class JooqTenantManagerService
                 log.debug("Applied event migrations to schema '{}'", eventSchemaName);
             } catch (Exception e) {
                 try {
-                    platformDsl.execute(
+                    executeTenantDdl(
                         "DROP SCHEMA IF EXISTS " + eventSchemaName + " CASCADE"
                     );
                 } catch (Exception cleanup) {
@@ -246,9 +256,9 @@ public class JooqTenantManagerService
         if (metricsMigrationLocation != null) {
             String metricsSchema = schemaName + "_metrics";
             try {
-                platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
+                executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
                 Flyway.configure()
-                    .dataSource(dataSource)
+                    .dataSource(tenantDataSource)
                     .schemas(metricsSchema)
                     .defaultSchema(metricsSchema)
                     .locations(metricsMigrationLocation)
@@ -406,7 +416,7 @@ public class JooqTenantManagerService
         log.info("Dropping tenant '{}': schema={}", tenantId, schemaName);
 
         try {
-            platformDsl.execute(
+            executeTenantDdl(
                 "DROP SCHEMA IF EXISTS " + schemaName + " CASCADE"
             );
             log.debug("Dropped Postgres schema '{}'", schemaName);
@@ -421,7 +431,7 @@ public class JooqTenantManagerService
         // Drop per-tenant event store schema
         String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
         try {
-            platformDsl.execute(
+            executeTenantDdl(
                 "DROP SCHEMA IF EXISTS " + eventSchema + " CASCADE"
             );
             log.debug("Dropped event schema '{}'", eventSchema);
@@ -451,7 +461,7 @@ public class JooqTenantManagerService
         if (metricsMigrationLocation != null) {
             String metricsSchema = schemaName + "_metrics";
             try {
-                platformDsl.execute(
+                executeTenantDdl(
                     "DROP SCHEMA IF EXISTS " + metricsSchema + " CASCADE"
                 );
                 log.debug("Dropped metrics schema '{}'", metricsSchema);
@@ -482,7 +492,7 @@ public class JooqTenantManagerService
             String schemaName = tenant.getSchemaName();
             try {
                 Flyway.configure()
-                    .dataSource(dataSource)
+                    .dataSource(tenantDataSource)
                     .schemas(schemaName)
                     .defaultSchema(schemaName)
                     .locations(consentMigrationLocation)
@@ -500,9 +510,9 @@ public class JooqTenantManagerService
             if (eventMigrationLocation != null) {
                 String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
                 try {
-                    platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+                    executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
                     Flyway.configure()
-                        .dataSource(dataSource)
+                        .dataSource(tenantDataSource)
                         .schemas(eventSchema)
                         .defaultSchema(eventSchema)
                         .locations(eventMigrationLocation)
@@ -520,9 +530,9 @@ public class JooqTenantManagerService
             if (metricsMigrationLocation != null) {
                 String metricsSchema = schemaName + "_metrics";
                 try {
-                    platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
+                    executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + metricsSchema);
                     Flyway.configure()
-                        .dataSource(dataSource)
+                        .dataSource(tenantDataSource)
                         .schemas(metricsSchema)
                         .defaultSchema(metricsSchema)
                         .locations(metricsMigrationLocation)

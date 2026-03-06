@@ -1,0 +1,41 @@
+meta {
+  name: Grant All (Batch)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/subjects/consent/grant-all
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "subject": "user-123",
+    "grants": [
+      {
+        "scope": {
+          "category": "PII",
+          "fieldName": "email",
+          "entityName": "User",
+          "purposeName": "marketing"
+        },
+        "expiresAt": null
+      },
+      {
+        "scope": {
+          "category": "PII",
+          "fieldName": "phone",
+          "entityName": "User",
+          "purposeName": "marketing"
+        },
+        "expiresAt": null
+      }
+    ]
+  }
+}

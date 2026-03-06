@@ -7,8 +7,10 @@ import org.jooq.DSLContext;
 /**
  * Configuration for {@link JooqTenantManagerService}.
  *
- * @param platformDsl                the platform {@link DSLContext}
- * @param dataSource                 the {@link DataSource} for Flyway migrations
+ * @param platformDsl                the platform {@link DSLContext} (for platform_core queries)
+ * @param tenantDataSource           the {@link DataSource} targeting the tenant database —
+ *                                   used for CREATE SCHEMA and Flyway migrations on
+ *                                   per-tenant schemas ({@code t_{tenantId}}, etc.)
  * @param tenantRepository           repository for tenant queries
  * @param redisConfig                Redis connection config, or {@code null} to skip Redis
  * @param appName                    application name for Redis key prefix
@@ -20,7 +22,7 @@ import org.jooq.DSLContext;
  */
 public record JooqTenantManagerConfig(
     DSLContext platformDsl,
-    DataSource dataSource,
+    DataSource tenantDataSource,
     TenantRepository tenantRepository,
     RedisPluginConfig redisConfig,
     String appName,
@@ -32,8 +34,8 @@ public record JooqTenantManagerConfig(
         if (platformDsl == null) {
             throw new IllegalArgumentException("platformDsl must not be null");
         }
-        if (dataSource == null) {
-            throw new IllegalArgumentException("dataSource must not be null");
+        if (tenantDataSource == null) {
+            throw new IllegalArgumentException("tenantDataSource must not be null");
         }
     }
 
@@ -42,13 +44,13 @@ public record JooqTenantManagerConfig(
      */
     public JooqTenantManagerConfig(
         DSLContext platformDsl,
-        DataSource dataSource,
+        DataSource tenantDataSource,
         TenantRepository tenantRepository,
         RedisPluginConfig redisConfig,
         String appName,
         String consentMigrationLocation
     ) {
-        this(platformDsl, dataSource, tenantRepository, redisConfig,
+        this(platformDsl, tenantDataSource, tenantRepository, redisConfig,
              appName, consentMigrationLocation, null, null);
     }
 }

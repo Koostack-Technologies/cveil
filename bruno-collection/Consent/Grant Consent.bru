@@ -1,0 +1,28 @@
+meta {
+  name: Grant Consent
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/subjects/consent/grant
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "subject": "user-123",
+    "scope": {
+      "category": "PII",
+      "fieldName": "email",
+      "entityName": "User",
+      "purposeName": "marketing"
+    },
+    "expiresAt": null
+  }
+}

@@ -1,0 +1,15 @@
+meta {
+  name: List API Keys
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/platform/api-keys?tenantId={{tenantId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{platformToken}}
+}

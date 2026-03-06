@@ -1,0 +1,22 @@
+meta {
+  name: Register Purpose
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/governance/purposes
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "purposeName": "marketing",
+    "description": "Marketing communications and promotions"
+  }
+}

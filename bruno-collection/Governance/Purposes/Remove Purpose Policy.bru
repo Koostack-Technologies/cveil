@@ -1,0 +1,25 @@
+meta {
+  name: Remove Purpose Policy
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/governance/purposes/policies
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "purposeName": "marketing",
+    "policyType": "FIELD",
+    "fieldName": "email",
+    "entityName": "User",
+    "categoryName": null
+  }
+}

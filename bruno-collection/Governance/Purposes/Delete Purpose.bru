@@ -1,0 +1,15 @@
+meta {
+  name: Delete Purpose
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/governance/purposes/marketing
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

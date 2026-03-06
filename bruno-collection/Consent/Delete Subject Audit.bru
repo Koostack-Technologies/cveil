@@ -1,0 +1,15 @@
+meta {
+  name: Delete Subject Audit
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/subjects/user-123/audit?confirm=DELETE_user-123
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Register Entity
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/catalogue/entities
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "entityName": "User",
+    "description": "Core user entity"
+  }
+}

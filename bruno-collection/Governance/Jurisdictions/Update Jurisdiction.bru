@@ -1,0 +1,21 @@
+meta {
+  name: Update Jurisdiction
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/governance/jurisdictions/EU
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "description": "Updated EU jurisdiction description"
+  }
+}

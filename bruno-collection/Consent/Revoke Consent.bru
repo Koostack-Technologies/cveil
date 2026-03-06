@@ -1,0 +1,27 @@
+meta {
+  name: Revoke Consent
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/subjects/consent/revoke
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "subject": "user-123",
+    "scope": {
+      "category": "PII",
+      "fieldName": "email",
+      "entityName": "User",
+      "purposeName": "marketing"
+    }
+  }
+}

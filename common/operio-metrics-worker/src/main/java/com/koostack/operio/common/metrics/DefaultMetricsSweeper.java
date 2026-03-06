@@ -24,9 +24,9 @@ import java.util.regex.Pattern;
  * <p>Call {@link #sweep()} periodically (e.g. via a scheduled executor or cron)
  * to clean up stale data.
  */
-public class RedisMetricsSweeper implements MetricsSweeper<MetricsSweeperConfig> {
+public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfig> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RedisMetricsSweeper.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultMetricsSweeper.class);
 
     private static final String DELETE_SQL =
         "DELETE FROM %s.telemetry WHERE time_bucket < ?";

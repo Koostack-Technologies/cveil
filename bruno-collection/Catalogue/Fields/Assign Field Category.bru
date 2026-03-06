@@ -1,0 +1,24 @@
+meta {
+  name: Assign Field Category
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/catalogue/fields/categories
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "fieldName": "email",
+    "entityName": "User",
+    "categoryName": "PII",
+    "categoryDescription": "Personally Identifiable Information"
+  }
+}

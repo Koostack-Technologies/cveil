@@ -1,0 +1,15 @@
+meta {
+  name: Unlink Purpose Regulation
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/governance/purposes/marketing/regulations/GDPR
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

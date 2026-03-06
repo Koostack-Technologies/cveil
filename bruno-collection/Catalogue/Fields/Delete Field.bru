@@ -1,0 +1,15 @@
+meta {
+  name: Delete Field
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/catalogue/fields/User/email
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Add Jurisdiction to Regulation
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/governance/regulations/jurisdictions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "regulationName": "GDPR",
+    "jurisdictionName": "EU",
+    "description": "European Union"
+  }
+}

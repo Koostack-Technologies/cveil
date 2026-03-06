@@ -1,0 +1,15 @@
+meta {
+  name: Remove Jurisdiction from Regulation
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/governance/regulations/GDPR/jurisdictions/EU
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Register Field
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/catalogue/fields
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "fieldName": "email",
+    "entityName": "User",
+    "description": "User email address",
+    "entityDescription": "Core user entity"
+  }
+}

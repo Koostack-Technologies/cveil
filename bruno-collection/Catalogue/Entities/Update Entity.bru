@@ -1,0 +1,21 @@
+meta {
+  name: Update Entity
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/catalogue/entities/User
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "description": "Updated user entity description"
+  }
+}

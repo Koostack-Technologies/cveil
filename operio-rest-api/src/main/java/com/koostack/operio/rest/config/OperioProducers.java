@@ -981,10 +981,32 @@ public class OperioProducers {
         com.koostack.operio.platform.iam.jooq.IamProjectionHandler iamProjection =
             new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(platformDsl);
 
-        // Tenant manager projection handler — provisions infra on TenantProvisioningStarted
-        DataSource tenantMgrDataSource = JooqDataSourceFactory.createDataSource(
-            eventConfig, "operio-tenant-manager"
-        );
+        // Tenant manager projection handler — provisions infra on TenantProvisioningStarted.
+        // The tenant datasource targets OPERIO_DB_URL (the tenant database) so that
+        // per-tenant schemas (t_{tenantId}, t_{tenantId}_event) are created there,
+        // not in the platform database.
+        OperioConfig.DbConfig tenantDb = config.db().orElse(null);
+        DataSource tenantMgrDataSource;
+        if (tenantDb != null) {
+            String tenantDbUrl = appendSslParameters(tenantDb.url(), tenantDb);
+            com.zaxxer.hikari.HikariConfig tenantMgrHikari = new com.zaxxer.hikari.HikariConfig();
+            if (tenantDbUrl != null && tenantDbUrl.startsWith("jdbc:postgresql")) {
+                String sep = tenantDbUrl.contains("?") ? "&" : "?";
+                tenantDbUrl = tenantDbUrl + sep + "stringtype=unspecified";
+            }
+            tenantMgrHikari.setJdbcUrl(tenantDbUrl);
+            tenantMgrHikari.setPoolName("operio-tenant-manager");
+            tenantMgrHikari.setMaximumPoolSize(3);
+            tenantDb.username().ifPresent(tenantMgrHikari::setUsername);
+            tenantDb.password().ifPresent(tenantMgrHikari::setPassword);
+            tenantMgrDataSource = new com.zaxxer.hikari.HikariDataSource(tenantMgrHikari);
+        } else {
+            // Fallback: use platform datasource (single-DB deployments)
+            tenantMgrDataSource = JooqDataSourceFactory.createDataSource(
+                eventConfig, "operio-tenant-manager"
+            );
+            LOG.warn("Operio REST API: operio.db not configured — tenant manager using platform DB for tenant schemas");
+        }
         JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
         tenantManagerSvc.configure(new JooqTenantManagerConfig(
             platformDsl, tenantMgrDataSource,

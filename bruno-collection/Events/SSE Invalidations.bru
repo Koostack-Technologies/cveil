@@ -1,0 +1,19 @@
+meta {
+  name: SSE Invalidations
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/events/invalidations
+  body: none
+  auth: bearer
+}
+
+headers {
+  Accept: text/event-stream
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

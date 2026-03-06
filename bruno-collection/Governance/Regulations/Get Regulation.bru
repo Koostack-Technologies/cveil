@@ -1,0 +1,15 @@
+meta {
+  name: Get Regulation
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/governance/regulations/GDPR
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

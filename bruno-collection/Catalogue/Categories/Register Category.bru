@@ -1,0 +1,22 @@
+meta {
+  name: Register Category
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/catalogue/categories
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "categoryName": "PII",
+    "description": "Personally Identifiable Information"
+  }
+}

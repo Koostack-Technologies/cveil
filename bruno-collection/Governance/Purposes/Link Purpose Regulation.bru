@@ -1,0 +1,25 @@
+meta {
+  name: Link Purpose Regulation
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/governance/purposes/regulations
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "purposeName": "marketing",
+    "regulationName": "GDPR",
+    "lawfulBasis": "consent",
+    "onGranted": "ALLOW",
+    "onDenied": "DENY"
+  }
+}
