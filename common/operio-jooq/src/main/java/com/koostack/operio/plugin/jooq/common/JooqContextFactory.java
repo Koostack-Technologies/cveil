@@ -42,6 +42,11 @@ import org.jooq.impl.DefaultExecuteListenerProvider;
  */
 public final class JooqContextFactory {
 
+    static {
+        System.setProperty("org.jooq.no-tips", "true");
+        System.setProperty("org.jooq.no-logo", "true");
+    }
+
     private JooqContextFactory() {
         // Utility class — not meant to be instantiated
     }

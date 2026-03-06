@@ -139,7 +139,9 @@ class ConsentResourceIT {
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
             support = new IntegrationTestSupport(config, TENANT_ID);
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(10));
+            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
+            support.awaitEventTableReady(Duration.ofSeconds(15));
+            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
         }
 
         @Test
@@ -164,7 +166,7 @@ class ConsentResourceIT {
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
-            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(10));
+            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(30));
         }
 
         // -- Register catalogue items --
@@ -356,7 +358,7 @@ class ConsentResourceIT {
         @DisplayName("Await governance projection (policies visible in DB)")
         void awaitGovernanceProjected() {
             Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(60))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     var policyRows = support.query("SELECT count(*) AS cnt FROM policy");

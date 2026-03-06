@@ -13,6 +13,8 @@ import org.jooq.DSLContext;
  * @param redisConfig                Redis connection config, or {@code null} to skip Redis
  * @param appName                    application name for Redis key prefix
  * @param consentMigrationLocation   Flyway migration location for consent schema
+ * @param eventMigrationLocation     Flyway migration location for per-tenant event store schema,
+ *                                   or {@code null} to skip event schema provisioning
  * @param metricsMigrationLocation   Flyway migration location for per-tenant metrics schema,
  *                                   or {@code null} to skip metrics provisioning
  */
@@ -23,6 +25,7 @@ public record JooqTenantManagerConfig(
     RedisPluginConfig redisConfig,
     String appName,
     String consentMigrationLocation,
+    String eventMigrationLocation,
     String metricsMigrationLocation
 ) {
     public JooqTenantManagerConfig {
@@ -35,7 +38,7 @@ public record JooqTenantManagerConfig(
     }
 
     /**
-     * Backward-compatible constructor without metrics migration location.
+     * Backward-compatible constructor without event or metrics migration locations.
      */
     public JooqTenantManagerConfig(
         DSLContext platformDsl,
@@ -46,6 +49,6 @@ public record JooqTenantManagerConfig(
         String consentMigrationLocation
     ) {
         this(platformDsl, dataSource, tenantRepository, redisConfig,
-             appName, consentMigrationLocation, null);
+             appName, consentMigrationLocation, null, null);
     }
 }

@@ -57,6 +57,7 @@ public class JooqTenantManagerService
     private RedisPluginConfig redisConfig;
     private volatile String appName;
     private String consentMigrationLocation;
+    private String eventMigrationLocation;
     private String metricsMigrationLocation;
 
     // -----------------------------------------------------------------------
@@ -89,6 +90,7 @@ public class JooqTenantManagerService
             config.consentMigrationLocation() != null
                 ? config.consentMigrationLocation()
                 : "classpath:db/migration/consent";
+        this.eventMigrationLocation = config.eventMigrationLocation();
         this.metricsMigrationLocation = config.metricsMigrationLocation();
         log.info("JooqTenantManagerService configured");
     }
@@ -168,6 +170,38 @@ public class JooqTenantManagerService
                     schemaName + "' for tenant '" + tenantId + "'",
                 e
             );
+        }
+
+        // 2. Per-tenant event store schema (t_{tenantId}_event)
+        String eventSchemaName = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+        if (eventMigrationLocation != null) {
+            try {
+                platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchemaName);
+                Flyway.configure()
+                    .dataSource(dataSource)
+                    .schemas(eventSchemaName)
+                    .defaultSchema(eventSchemaName)
+                    .locations(eventMigrationLocation)
+                    .load()
+                    .migrate();
+                log.debug("Applied event migrations to schema '{}'", eventSchemaName);
+            } catch (Exception e) {
+                try {
+                    platformDsl.execute(
+                        "DROP SCHEMA IF EXISTS " + eventSchemaName + " CASCADE"
+                    );
+                } catch (Exception cleanup) {
+                    log.warn(
+                        "Failed to clean up event schema '{}' after migration failure",
+                        eventSchemaName, cleanup
+                    );
+                }
+                throw new OperioServiceException(
+                    "Failed to apply event migrations to schema '" +
+                        eventSchemaName + "' for tenant '" + tenantId + "'",
+                    e
+                );
+            }
         }
 
         String redisAclUser = null;
@@ -384,6 +418,18 @@ public class JooqTenantManagerService
             );
         }
 
+        // Drop per-tenant event store schema
+        String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+        try {
+            platformDsl.execute(
+                "DROP SCHEMA IF EXISTS " + eventSchema + " CASCADE"
+            );
+            log.debug("Dropped event schema '{}'", eventSchema);
+        } catch (Exception e) {
+            log.warn("Failed to drop event schema '{}' for tenant '{}' — can be retried",
+                eventSchema, tenantId, e);
+        }
+
         if (redisConfig != null) {
             try {
                 String redisAclUser =
@@ -448,6 +494,26 @@ public class JooqTenantManagerService
             } catch (Exception e) {
                 log.error("Failed to migrate tenant '{}' schema '{}': {}",
                     tenant.getTenantId(), schemaName, e.getMessage(), e);
+            }
+
+            // Migrate per-tenant event store schema
+            if (eventMigrationLocation != null) {
+                String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+                try {
+                    platformDsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+                    Flyway.configure()
+                        .dataSource(dataSource)
+                        .schemas(eventSchema)
+                        .defaultSchema(eventSchema)
+                        .locations(eventMigrationLocation)
+                        .load()
+                        .migrate();
+                    log.debug("Migrated tenant '{}' event schema '{}'",
+                        tenant.getTenantId(), eventSchema);
+                } catch (Exception e) {
+                    log.error("Failed to migrate tenant '{}' event schema '{}': {}",
+                        tenant.getTenantId(), eventSchema, e.getMessage(), e);
+                }
             }
 
             // Migrate tenant metrics schema

@@ -255,12 +255,9 @@ public class OperioProducers {
                 jooqConfig.username(), jooqConfig.password(),
                 null, null, null
             );
-            // Run tenant-event schema migrations before the event service
-            // tries to register event types (needs the event_type table).
-            DataSource tenantEventDs = JooqDataSourceFactory.createDataSource(
-                eventConfig, "operio-tenant-event-migrations"
-            );
-            runFlyway(tenantEventDs, "classpath:db/migration/tenant-event-postgresql", "flyway_schema_history_tenant_event");
+            // Per-tenant event schemas (t_{tenantId}_event) are created by
+            // JooqTenantManagerService during provisioning and startup
+            // reconciliation — no public-schema migration needed.
 
             JooqTenantEventService eventService = new JooqTenantEventService();
             eventService.configure(eventConfig);
@@ -992,7 +989,10 @@ public class OperioProducers {
         tenantManagerSvc.configure(new JooqTenantManagerConfig(
             platformDsl, tenantMgrDataSource,
             new com.koostack.operio.platform.tenant.jooq.JooqTenantRepository(platformDsl),
-            redisPluginConfig, appName, "classpath:db/migration/consent"
+            redisPluginConfig, appName,
+            "classpath:db/migration/consent",
+            "classpath:db/migration/tenant-event-postgresql",
+            null
         ));
 
         TenantManagerProjectionHandler tenantMgrProjection =

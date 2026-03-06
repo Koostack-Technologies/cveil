@@ -98,7 +98,8 @@ public class IntegrationTestSupport implements AutoCloseable {
         Connection conn = DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword);
         if (tenantSchema != null) {
             try (var stmt = conn.createStatement()) {
-                stmt.execute("SET search_path TO " + tenantSchema + ", public");
+                String eventSchema = tenantSchema + "_event";
+                stmt.execute("SET search_path TO " + tenantSchema + ", " + eventSchema + ", public");
             }
         }
         return conn;
@@ -392,6 +393,46 @@ public class IntegrationTestSupport implements AutoCloseable {
                     return status != 401;
                 } catch (Exception e) {
                     return false;
+                }
+            });
+    }
+
+    /**
+     * Waits until the per-tenant event table is accessible via JDBC.
+     * The event schema ({@code t_{tenantId}_event}) is created asynchronously
+     * during tenant provisioning, so callers must wait before issuing commands
+     * that write events.
+     */
+    public void awaitEventTableReady(Duration timeout) {
+        Awaitility.await()
+            .atMost(timeout)
+            .pollInterval(Duration.ofMillis(200))
+            .ignoreExceptions()
+            .until(() -> {
+                try (var conn = openConnection();
+                     var stmt = conn.createStatement();
+                     var rs = stmt.executeQuery("SELECT count(*) FROM event")) {
+                    return rs.next();
+                }
+            });
+    }
+
+    /**
+     * Waits until the tenant row appears in platform_core.tenant, meaning the
+     * core projection has processed the registration event and the outbox poller
+     * can discover this tenant for event publishing.
+     */
+    public void awaitTenantDiscoverable(String tenantId, Duration timeout) {
+        Awaitility.await()
+            .atMost(timeout)
+            .pollInterval(Duration.ofMillis(200))
+            .ignoreExceptions()
+            .until(() -> {
+                try (var conn = openConnection();
+                     var stmt = conn.createStatement();
+                     var rs = stmt.executeQuery(
+                         "SELECT 1 FROM platform_core.tenant WHERE tenant_id = '" + tenantId + "'")) {
+                    return rs.next();
                 }
             });
     }

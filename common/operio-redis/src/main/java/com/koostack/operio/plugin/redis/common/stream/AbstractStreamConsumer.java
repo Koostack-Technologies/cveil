@@ -223,16 +223,30 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
     }
 
     private void ensureConsumerGroup(String streamKey, String groupName) {
-        JedisPooled jedis = jedisProvider.get();
-        try {
-            jedis.xgroupCreate(streamKey, groupName, StreamEntryID.LAST_ENTRY, true);
-            log.debug("Created consumer group '{}' on stream '{}'", groupName, streamKey);
-        } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
-                log.debug("Consumer group '{}' already exists on stream '{}'", groupName, streamKey);
-            } else {
-                throw new RuntimeException(
-                    "Failed to create consumer group '" + groupName + "' on stream '" + streamKey + "'", e);
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            JedisPooled jedis = jedisProvider.get();
+            try {
+                jedis.xgroupCreate(streamKey, groupName, StreamEntryID.LAST_ENTRY, true);
+                log.debug("Created consumer group '{}' on stream '{}'", groupName, streamKey);
+                return;
+            } catch (Exception e) {
+                if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
+                    log.debug("Consumer group '{}' already exists on stream '{}'", groupName, streamKey);
+                    return;
+                }
+                if (attempt < maxRetries) {
+                    log.warn("Failed to create consumer group '{}' on stream '{}' (attempt {}/{}): {}",
+                        groupName, streamKey, attempt, maxRetries, e.getMessage());
+                    try { Thread.sleep(1000L * attempt); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted while retrying consumer group creation", ie);
+                    }
+                } else {
+                    throw new RuntimeException(
+                        "Failed to create consumer group '" + groupName + "' on stream '" + streamKey +
+                            "' after " + maxRetries + " attempts", e);
+                }
             }
         }
     }

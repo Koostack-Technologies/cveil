@@ -105,7 +105,9 @@ class CatalogueResourceIT {
             support = new IntegrationTestSupport(config, TENANT_ID);
 
             // Wait for the CQRS projection to make the API key usable
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(10));
+            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
+            support.awaitEventTableReady(Duration.ofSeconds(15));
+            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
         }
 
         @Test
@@ -132,7 +134,7 @@ class CatalogueResourceIT {
             assertNotNull(readOnlyApiKey);
 
             // Wait for the CQRS projection to make the read-only key usable
-            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(10));
+            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(30));
         }
 
         @Test

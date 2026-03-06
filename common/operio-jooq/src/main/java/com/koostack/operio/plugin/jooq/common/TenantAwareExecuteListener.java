@@ -69,6 +69,13 @@ public class TenantAwareExecuteListener implements ExecuteListener {
      */
     public static final String SCHEMA_PREFIX = "t_";
 
+    /**
+     * Suffix appended to the tenant schema name to form the per-tenant
+     * event store schema. For tenant ID {@code acme}, the event schema
+     * is {@code t_acme_event}.
+     */
+    public static final String EVENT_SCHEMA_SUFFIX = "_event";
+
     // -----------------------------------------------------------------------
     // ExecuteListener
     // -----------------------------------------------------------------------
@@ -105,7 +112,8 @@ public class TenantAwareExecuteListener implements ExecuteListener {
         // returned to the pool.
         try {
             Statement stmt = ctx.connection().createStatement();
-            stmt.execute("SET search_path TO " + schemaName + ", public");
+            String eventSchema = schemaName + EVENT_SCHEMA_SUFFIX;
+            stmt.execute("SET search_path TO " + schemaName + ", " + eventSchema + ", public");
         } catch (SQLException e) {
             throw new org.jooq.exception.DataAccessException(
                 "Failed to set tenant search path to schema '" +
@@ -166,5 +174,16 @@ public class TenantAwareExecuteListener implements ExecuteListener {
      */
     public static String schemaNameFor(String tenantId) {
         return SCHEMA_PREFIX + sanitizeTenantId(tenantId);
+    }
+
+    /**
+     * Builds the per-tenant event store schema name for the given tenant ID.
+     *
+     * @param tenantId the raw tenant ID
+     * @return the event schema name, e.g. {@code t_acme_event}
+     * @throws IllegalArgumentException if the tenant ID is invalid
+     */
+    public static String eventSchemaNameFor(String tenantId) {
+        return schemaNameFor(tenantId) + EVENT_SCHEMA_SUFFIX;
     }
 }

@@ -45,7 +45,6 @@ public class JooqPlatformEventService
 
     private DSLContext dslContext;
     private EventRepository eventRepository;
-    private EventTypeCache eventTypeCache;
     private RedisEventPublisher redisPublisher;
     private OutboxPoller outboxPoller;
 
@@ -79,7 +78,6 @@ public class JooqPlatformEventService
         );
 
         this.eventRepository = new EventRepository(dslContext);
-        this.eventTypeCache = new EventTypeCache(eventRepository);
 
         if (config.redis() != null) {
             JedisProvider jedisProvider;
@@ -147,12 +145,6 @@ public class JooqPlatformEventService
         }
         TenantContext.runWhere(input.tenantId(), () -> {
             try {
-                if (!eventTypeCache.isValid(input.eventType())) {
-                    throw new OperioServiceException(
-                        "Unknown event type: " + input.eventType()
-                    );
-                }
-
                 String aggregateType = input.key().aggregateType();
                 String aggregateId = input.key().aggregateId().toString();
                 String serializedPayload = objectMapper.writeValueAsString(input.payload());
@@ -251,11 +243,8 @@ public class JooqPlatformEventService
 
     @Override
     public <U> void registerEventType(RegisterEventTypeInput<U> input) {
-        if (dslContext == null) {
-            throw new OperioServiceException("JooqPlatformEventService is not configured");
-        }
-        eventRepository.insertEventType(input);
-        eventTypeCache.refresh();
+        // No-op: event_type catalog table is no longer used for validation.
+        // Event types are stored as VARCHAR directly in the event table.
     }
 
     // -----------------------------------------------------------------------
