@@ -81,6 +81,11 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
                             "Platform administration: tenant lifecycle and "
                                     + "API key management. Requires the super-admin role."),
             @Tag(
+                    name = OperioOpenApiConfig.TAG_IAM,
+                    description =
+                            "Identity and Access Management: user registration, "
+                                    + "service accounts, authentication, and role management."),
+            @Tag(
                     name = OperioOpenApiConfig.TAG_HEALTH,
                     description =
                             "Health and readiness checks. Public endpoint, "
@@ -134,6 +139,9 @@ public class OperioOpenApiConfig {
 
     /** Tag for platform administration endpoints. */
     public static final String TAG_PLATFORM = "Platform";
+
+    /** Tag for IAM endpoints (users, service accounts, authentication). */
+    public static final String TAG_IAM = "IAM";
 
     /** Tag for health/readiness endpoints. */
     public static final String TAG_HEALTH = "Health";

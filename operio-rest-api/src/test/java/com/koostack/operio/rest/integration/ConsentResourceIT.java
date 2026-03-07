@@ -382,7 +382,7 @@ class ConsentResourceIT {
         @DisplayName("Await governance projection (policies visible in DB)")
         void awaitGovernanceProjected() {
             Awaitility.await()
-                    .atMost(Duration.ofSeconds(60))
+                    .atMost(Duration.ofSeconds(30))
                     .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(
                             () -> {

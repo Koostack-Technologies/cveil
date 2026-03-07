@@ -1,5 +1,6 @@
 package com.koostack.operio.platform.tenant.jooq;
 
+import com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import javax.sql.DataSource;
 import org.jooq.DSLContext;
@@ -18,6 +19,10 @@ import org.jooq.DSLContext;
  *     {@code null} to skip event schema provisioning
  * @param metricsMigrationLocation Flyway migration location for per-tenant metrics schema, or
  *     {@code null} to skip metrics provisioning
+ * @param keycloakProvisioner Keycloak realm provisioner, or {@code null} to skip Keycloak realm
+ *     provisioning
+ * @param tenantAdminEmail email address for the tenant root admin user, or {@code null} to skip
+ *     root user creation
  */
 public record JooqTenantManagerConfig(
         DSLContext platformDsl,
@@ -27,7 +32,9 @@ public record JooqTenantManagerConfig(
         String appName,
         String consentMigrationLocation,
         String eventMigrationLocation,
-        String metricsMigrationLocation) {
+        String metricsMigrationLocation,
+        KeycloakRealmProvisioner keycloakProvisioner,
+        String tenantAdminEmail) {
     public JooqTenantManagerConfig {
         if (platformDsl == null) {
             throw new IllegalArgumentException("platformDsl must not be null");
@@ -35,6 +42,29 @@ public record JooqTenantManagerConfig(
         if (tenantDataSource == null) {
             throw new IllegalArgumentException("tenantDataSource must not be null");
         }
+    }
+
+    /** Backward-compatible constructor without Keycloak provisioner. */
+    public JooqTenantManagerConfig(
+            DSLContext platformDsl,
+            DataSource tenantDataSource,
+            TenantRepository tenantRepository,
+            RedisPluginConfig redisConfig,
+            String appName,
+            String consentMigrationLocation,
+            String eventMigrationLocation,
+            String metricsMigrationLocation) {
+        this(
+                platformDsl,
+                tenantDataSource,
+                tenantRepository,
+                redisConfig,
+                appName,
+                consentMigrationLocation,
+                eventMigrationLocation,
+                metricsMigrationLocation,
+                null,
+                null);
     }
 
     /** Backward-compatible constructor without event or metrics migration locations. */
@@ -52,6 +82,8 @@ public record JooqTenantManagerConfig(
                 redisConfig,
                 appName,
                 consentMigrationLocation,
+                null,
+                null,
                 null,
                 null);
     }

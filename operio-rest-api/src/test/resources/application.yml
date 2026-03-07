@@ -105,3 +105,10 @@ operio:
   # Individual test classes override via @QuarkusTestResource properties.
   multi-tenant:
     enabled: false
+
+  keycloak:
+    url: ${operio.test.keycloak.url:}
+    admin-username: ${operio.test.keycloak.admin-username:admin}
+    admin-password: ${operio.test.keycloak.admin-password:admin}
+    client-id: operio-backend
+    client-secret: ${operio.test.keycloak.client-secret:}

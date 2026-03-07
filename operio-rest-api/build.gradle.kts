@@ -52,6 +52,7 @@ dependencies {
     // compileOnly(project(":operio-bundle-embedded"))
     implementation(project(":platform:operio-platform-jooq"))
     implementation(project(":platform:operio-platform-keycloak"))
+    implementation("org.keycloak:keycloak-admin-client:26.0.8")
     implementation(project(":tenant:operio-authz-keycloak"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":common:operio-jooq"))
@@ -76,6 +77,11 @@ dependencies {
     implementation(project(":platform:operio-iam-query")) // JooqIamQueryService
     implementation(project(":platform:operio-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:operio-plan-query-jooq"))
+
+    // -- Tenant IAM modules ---------------------------------------------------
+    implementation(project(":tenant:operio-tenant-iam-command")) // KeycloakTenantIamCommandService
+    implementation(project(":tenant:operio-tenant-iam-query-kc")) // KeycloakTenantIamQueryService
+    implementation(project(":tenant:operio-tenant-iam-projection-kc")) // TenantIamProjectionHandler
 
     // platform schemas
 

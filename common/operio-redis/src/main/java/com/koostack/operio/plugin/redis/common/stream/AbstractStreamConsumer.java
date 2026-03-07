@@ -233,7 +233,9 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             JedisPooled jedis = jedisProvider.get();
             try {
-                jedis.xgroupCreate(streamKey, groupName, StreamEntryID.LAST_ENTRY, true);
+                // Use ID "0" to consume from the beginning of the stream so that
+                // events published before the consumer group was created are not lost.
+                jedis.xgroupCreate(streamKey, groupName, new StreamEntryID(), true);
                 log.debug("Created consumer group '{}' on stream '{}'", groupName, streamKey);
                 return;
             } catch (Exception e) {

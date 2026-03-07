@@ -144,6 +144,12 @@ public class OperioProducers {
 
     private com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier;
 
+    private com.koostack.operio.core.tenant.iam.TenantIamCommandService tenantIamCommandService;
+    private com.koostack.operio.core.tenant.iam.TenantIamQueryService tenantIamQueryService;
+
+    /** Keycloak admin client built during CQRS wiring — shared across projections. */
+    private org.keycloak.admin.client.Keycloak keycloakAdminClient;
+
     @Inject OperioConfig config;
 
     @Inject Instance<IdpProvider<?>> idpProviderInstance;
@@ -261,6 +267,7 @@ public class OperioProducers {
 
             JooqTenantEventService eventService = new JooqTenantEventService();
             eventService.configure(eventConfig);
+            this.tenantEventService = eventService;
 
             // Store the tenant-aware DSLContext so the outbox poller (created
             // later in tenantStreamConsumer()) can read from per-tenant event
@@ -399,6 +406,21 @@ public class OperioProducers {
                 tvs != null);
         return new PlatformCqrsHolder(
                 iamCommandService, iamQueryService, coreQueryService, coreCommandService, tvs);
+    }
+
+    /**
+     * Produces a {@link TenantIamHolder} wrapping the tenant-scoped IAM command/query services.
+     * Services may be {@code null} when Keycloak is not configured.
+     */
+    @Produces
+    @ApplicationScoped
+    @SuppressWarnings("rawtypes")
+    public TenantIamHolder tenantIamHolder(TenantService tenantService) {
+        LOG.debug(
+                "TenantIamHolder — cmd={}, query={}",
+                tenantIamCommandService != null,
+                tenantIamQueryService != null);
+        return new TenantIamHolder(tenantIamCommandService, tenantIamQueryService);
     }
 
     /**
@@ -608,6 +630,10 @@ public class OperioProducers {
     /** Consent-DB DSLContext set during tenantService() — reused by the outbox poller. */
     private DSLContext consentEventDsl;
 
+    /** Tenant event service set during consent bundle creation — reused for tenant IAM commands. */
+    @SuppressWarnings("rawtypes")
+    private com.koostack.operio.core.event.EventService tenantEventService;
+
     /**
      * Produces the {@link TenantStreamConsumer} that runs both the consent decision projection and
      * admin projection — materializing domain events into the Redis decision cache and SQL admin
@@ -716,6 +742,27 @@ public class OperioProducers {
             LOG.info("Operio REST API: SSE publisher wired (channel=consent-cache-invalidation)");
         } catch (Exception e) {
             LOG.warn("Operio REST API: SSE publisher NOT wired — Redis Pub/Sub init failed", e);
+        }
+
+        // Tenant IAM projection — materializes tenant IAM events into Keycloak
+        if (this.keycloakAdminClient != null) {
+            String operioClientId = config.keycloak()
+                    .map(kc -> kc.clientId())
+                    .orElse("operio-backend");
+            com.koostack.operio.tenant.iam.kc.TenantIamProjectionHandler tenantIamProjection =
+                    new com.koostack.operio.tenant.iam.kc.TenantIamProjectionHandler(
+                            this.keycloakAdminClient, operioClientId);
+            consumer.registerHandler(
+                    "tenant-iam-projection",
+                    (com.koostack.operio.tenant.event.jooq.StreamEventHandler)
+                            tenantIamProjection::onEvent);
+            LOG.info(
+                    "Operio REST API: tenant IAM projection handler wired"
+                            + " (group=tenant-iam-projection)");
+        } else {
+            LOG.warn(
+                    "Operio REST API: tenant IAM projection NOT wired — Keycloak admin client not"
+                            + " available");
         }
 
         this.tenantStreamConsumer = consumer;
@@ -922,6 +969,9 @@ public class OperioProducers {
                 "classpath:db/migration/platform-billing",
                 "flyway_schema_history",
                 "platform_billing");
+        // @deprecated — platform_iam Postgres schema is vestigial; all IAM data now lives in
+        // Keycloak. This migration is kept for backward compatibility with existing deployments
+        // that still have the schema. Remove in a future release.
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-iam",
@@ -940,9 +990,7 @@ public class OperioProducers {
 
         com.koostack.operio.platform.iam.jooq.JooqIamCommandService iamCmdSvc =
                 new com.koostack.operio.platform.iam.jooq.JooqIamCommandService();
-        iamCmdSvc.configure(
-                new com.koostack.operio.platform.iam.jooq.JooqIamCommandConfig(
-                        platformEventService));
+        // IAM command service configured later after platformDataSource is available
 
         this.coreCommandService = coreCmdSvc;
         this.billingCommandService = billingCmdSvc;
@@ -986,6 +1034,11 @@ public class OperioProducers {
                                         .decryptIfKeyPresent(raw, encryptionKey)
                         : java.util.function.UnaryOperator.identity();
 
+        // Configure IAM command service now that platformDataSource is available
+        iamCmdSvc.configure(
+                new com.koostack.operio.platform.iam.jooq.JooqIamCommandConfig(
+                        platformEventService, platformDataSource));
+
         JooqCoreQueryService coreQuerySvc = new JooqCoreQueryService();
         coreQuerySvc.configure(new JooqCoreQueryConfig(platformDsl, fieldDecryptor));
 
@@ -1002,15 +1055,55 @@ public class OperioProducers {
 
         com.koostack.operio.platform.iam.jooq.JooqIamQueryService iamQuerySvc =
                 new com.koostack.operio.platform.iam.jooq.JooqIamQueryService();
-        iamQuerySvc.configure(
-                new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(platformDsl));
+
+        // Build KeycloakConfig for IAM query service
+        com.koostack.operio.plugin.platform.keycloak.KeycloakConfig kcIamConfig = null;
+        if (config.keycloak().isPresent()) {
+            var kc = config.keycloak().get();
+            if (kc.url().isPresent() && kc.adminPassword().isPresent()) {
+                kcIamConfig = new com.koostack.operio.plugin.platform.keycloak.KeycloakConfig(
+                        kc.url().get(),
+                        "master",
+                        "admin-cli",
+                        kc.adminUsername(),
+                        kc.adminPassword().get(),
+                        kc.clientId(),
+                        kc.clientSecret().orElse(null));
+            }
+        }
+        if (kcIamConfig != null) {
+            iamQuerySvc.configure(
+                    new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(
+                            kcIamConfig, platformDataSource));
+        } else {
+            LOG.warn("Operio REST API: IamQueryService NOT configured — Keycloak not available");
+        }
         this.iamQueryService = iamQuerySvc;
 
-        // Wire the token verifier with the CQRS IamQueryService so it reads
-        // from platform_iam.api_key instead of the old public.api_key.
+        // Wire API key token verifier to IamQueryService for hash-based lookup
         if (this.tokenVerifier != null) {
             this.tokenVerifier.setIamQueryService(iamQuerySvc);
-            LOG.info("Operio REST API: ApiKeyTokenVerifier wired with IamQueryService");
+            LOG.info("Operio REST API: ApiKeyTokenVerifier wired to IamQueryService");
+        }
+
+        // -- Tenant IAM command + query services (Keycloak-backed) ----------------
+        if (kcIamConfig != null && this.tenantEventService != null) {
+            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandService tenantIamCmdSvc =
+                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandService();
+            tenantIamCmdSvc.configure(
+                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandConfig(this.tenantEventService));
+            this.tenantIamCommandService = tenantIamCmdSvc;
+
+            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryService tenantIamQrySvc =
+                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryService();
+            tenantIamQrySvc.configure(
+                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryConfig(kcIamConfig));
+            this.tenantIamQueryService = tenantIamQrySvc;
+            LOG.info("Operio REST API: tenant IAM command + query services wired (Keycloak)");
+        } else {
+            LOG.warn(
+                    "Operio REST API: tenant IAM command + query NOT wired — Keycloak not"
+                            + " configured");
         }
 
         builder.withCoreQueryService(coreQuerySvc);
@@ -1026,8 +1119,33 @@ public class OperioProducers {
 
         CoreProjectionHandler coreProjection = new CoreProjectionHandler(platformDsl);
         BillingProjectionHandler billingProjection = new BillingProjectionHandler(platformDsl);
+
+        // IAM projection uses Keycloak admin client instead of DSLContext
+        org.keycloak.admin.client.Keycloak iamKeycloakAdmin = null;
+        if (config.keycloak().isPresent()) {
+            var kc = config.keycloak().get();
+            if (kc.url().isPresent() && kc.adminPassword().isPresent()) {
+                iamKeycloakAdmin = org.keycloak.admin.client.KeycloakBuilder.builder()
+                        .serverUrl(kc.url().get())
+                        .realm("master")
+                        .clientId("admin-cli")
+                        .username(kc.adminUsername())
+                        .password(kc.adminPassword().get())
+                        .build();
+            }
+        }
+        this.keycloakAdminClient = iamKeycloakAdmin;
         com.koostack.operio.platform.iam.jooq.IamProjectionHandler iamProjection =
-                new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(platformDsl);
+                new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(
+                        iamKeycloakAdmin != null
+                                ? iamKeycloakAdmin
+                                : org.keycloak.admin.client.KeycloakBuilder.builder()
+                                        .serverUrl("http://localhost:8180")
+                                        .realm("master")
+                                        .clientId("admin-cli")
+                                        .username("admin")
+                                        .password("admin")
+                                        .build());
 
         // Tenant manager projection handler — provisions infra on TenantProvisioningStarted.
         // The tenant datasource targets OPERIO_DB_URL (the tenant database) so that
@@ -1057,6 +1175,14 @@ public class OperioProducers {
                             + " for tenant schemas");
         }
         JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
+
+        // Build Keycloak realm provisioner if Keycloak is configured
+        com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner kcProvisioner = null;
+        if (iamKeycloakAdmin != null && config.keycloak().isPresent()) {
+            kcProvisioner = new com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner(
+                    iamKeycloakAdmin, config.keycloak().get().clientId());
+        }
+
         tenantManagerSvc.configure(
                 new JooqTenantManagerConfig(
                         platformDsl,
@@ -1067,6 +1193,8 @@ public class OperioProducers {
                         appName,
                         "classpath:db/migration/consent",
                         "classpath:db/migration/tenant-event-postgresql",
+                        null,
+                        kcProvisioner,
                         null));
 
         TenantManagerProjectionHandler tenantMgrProjection =

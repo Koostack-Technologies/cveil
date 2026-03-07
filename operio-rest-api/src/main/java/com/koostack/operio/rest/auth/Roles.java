@@ -89,6 +89,17 @@ public final class Roles {
      */
     public static final String SUPER_ADMIN = "super-admin";
 
+    // -- Tenant IAM roles -----------------------------------------------
+
+    /** Full IAM management — CRUD users, service accounts, invite. */
+    public static final String TENANT_ADMIN = "tenant-admin";
+
+    /** CRUD on catalogue, subject, governance, consent. Self-manage only (no IAM for others). */
+    public static final String TENANT_WRITE = "tenant-write";
+
+    /** Read-only access to catalogue, subject, governance, consent. */
+    public static final String TENANT_READ = "tenant-read";
+
     // -- Enforcement helpers --------------------------------------------
 
     /**

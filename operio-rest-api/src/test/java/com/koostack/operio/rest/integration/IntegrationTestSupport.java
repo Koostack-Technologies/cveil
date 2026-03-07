@@ -18,6 +18,11 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.awaitility.Awaitility;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.resps.StreamEntry;
@@ -54,6 +59,8 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String redisHost;
     private final int redisPort;
     private final String tenantSchema; // null → no search_path override
+    private final String keycloakUrl; // null → Keycloak helpers disabled
+    private Keycloak keycloakAdmin; // lazy-initialized
 
     /** Creates support without tenant schema routing (platform queries only). */
     public IntegrationTestSupport(OperioConfig config) {
@@ -85,12 +92,208 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.dbUsername = db.username().orElse("operio_test");
         this.dbPassword = db.password().orElse("operio_test_password");
         this.tenantSchema = tenantId != null ? "t_" + tenantId : null;
+
+        this.keycloakUrl =
+                config.keycloak()
+                        .flatMap(kc -> kc.url())
+                        .filter(u -> !u.isBlank())
+                        .orElse(null);
     }
 
     @Override
     public void close() {
+        if (keycloakAdmin != null) {
+            keycloakAdmin.close();
+        }
         if (jedis != null) {
             jedis.close();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Keycloak helpers
+    // -----------------------------------------------------------------------
+
+    /** Returns a lazily-initialized Keycloak admin client connected to the master realm. */
+    public Keycloak keycloak() {
+        if (keycloakAdmin == null) {
+            if (keycloakUrl == null) {
+                throw new IllegalStateException(
+                        "Keycloak URL not configured — cannot create admin client");
+            }
+            keycloakAdmin =
+                    KeycloakBuilder.builder()
+                            .serverUrl(keycloakUrl)
+                            .realm("master")
+                            .clientId("admin-cli")
+                            .username("admin")
+                            .password("admin")
+                            .build();
+        }
+        return keycloakAdmin;
+    }
+
+    /** Polls until the given Keycloak realm exists. */
+    public void awaitKeycloakRealmExists(String realmName, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(500))
+                .ignoreExceptions()
+                .untilAsserted(
+                        () ->
+                                assertThat(
+                                                keycloak().realms().findAll().stream()
+                                                        .anyMatch(
+                                                                r ->
+                                                                        r.getRealm()
+                                                                                .equals(realmName)))
+                                        .as("Realm '%s' should exist in Keycloak", realmName)
+                                        .isTrue());
+    }
+
+    /** Polls until a user with the given email exists in the specified Keycloak realm. */
+    public void awaitKeycloakUserExists(String realmName, String email, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(500))
+                .ignoreExceptions()
+                .untilAsserted(
+                        () -> {
+                            var users =
+                                    keycloak()
+                                            .realm(realmName)
+                                            .users()
+                                            .searchByEmail(email, true);
+                            assertThat(users)
+                                    .as(
+                                            "User '%s' should exist in realm '%s'",
+                                            email, realmName)
+                                    .isNotEmpty();
+                        });
+    }
+
+    /** Polls until a user with the given email is disabled (suspended) in Keycloak. */
+    public void awaitKeycloakUserDisabled(String realmName, String email, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(500))
+                .ignoreExceptions()
+                .untilAsserted(
+                        () -> {
+                            var users =
+                                    keycloak()
+                                            .realm(realmName)
+                                            .users()
+                                            .searchByEmail(email, true);
+                            assertThat(users).isNotEmpty();
+                            assertThat(users.get(0).isEnabled())
+                                    .as("User '%s' should be disabled", email)
+                                    .isFalse();
+                        });
+    }
+
+    /** Polls until a user with the given email is enabled (active) in Keycloak. */
+    public void awaitKeycloakUserEnabled(String realmName, String email, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(500))
+                .ignoreExceptions()
+                .untilAsserted(
+                        () -> {
+                            var users =
+                                    keycloak()
+                                            .realm(realmName)
+                                            .users()
+                                            .searchByEmail(email, true);
+                            assertThat(users).isNotEmpty();
+                            assertThat(users.get(0).isEnabled())
+                                    .as("User '%s' should be enabled", email)
+                                    .isTrue();
+                        });
+    }
+
+    /** Returns all users in the given Keycloak realm. */
+    public List<UserRepresentation> getKeycloakUsers(String realmName) {
+        return keycloak().realm(realmName).users().list();
+    }
+
+    /** Returns all clients in the given Keycloak realm. */
+    public List<ClientRepresentation> getKeycloakClients(String realmName) {
+        return keycloak().realm(realmName).clients().findAll();
+    }
+
+    /** Returns the realm-level roles assigned to a user. */
+    public List<RoleRepresentation> getKeycloakUserRoles(String realmName, String userId) {
+        return keycloak()
+                .realm(realmName)
+                .users()
+                .get(userId)
+                .roles()
+                .realmLevel()
+                .listEffective();
+    }
+
+    /** Returns the Keycloak URL, or null if not configured. */
+    public String getKeycloakUrl() {
+        return keycloakUrl;
+    }
+
+    /**
+     * Bootstraps a Keycloak realm with the {@code operio-backend} confidential client and default
+     * Operio roles. Idempotent — skips creation if the realm already exists.
+     *
+     * <p>This mirrors the production {@code KeycloakRealmProvisioner.provisionRealm()} and should
+     * be called once at the start of IAM integration tests so the CQRS projection handler can
+     * materialise events into a pre-existing realm.
+     */
+    public void bootstrapKeycloakRealm(String realmName) {
+        var kc = keycloak();
+
+        // Idempotent check
+        boolean exists =
+                kc.realms().findAll().stream().anyMatch(r -> r.getRealm().equals(realmName));
+        if (exists) {
+            return;
+        }
+
+        // Create realm
+        var realm = new org.keycloak.representations.idm.RealmRepresentation();
+        realm.setRealm(realmName);
+        realm.setDisplayName(realmName);
+        realm.setEnabled(true);
+        realm.setAccessTokenLifespan(900);
+        realm.setSsoSessionMaxLifespan(604800);
+        kc.realms().create(realm);
+
+        var realmResource = kc.realm(realmName);
+
+        // Create operio-backend confidential client (ROPC + service account)
+        var client = new org.keycloak.representations.idm.ClientRepresentation();
+        client.setClientId("operio-backend");
+        client.setName("Operio Backend (" + realmName + ")");
+        client.setEnabled(true);
+        client.setProtocol("openid-connect");
+        client.setPublicClient(false);
+        client.setServiceAccountsEnabled(true);
+        client.setDirectAccessGrantsEnabled(true);
+        client.setStandardFlowEnabled(false);
+        realmResource.clients().create(client);
+
+        // Create default roles
+        for (String roleName :
+                List.of(
+                        "consent:read",
+                        "consent:write",
+                        "admin:read",
+                        "admin:write",
+                        "tenant-admin",
+                        "tenant-write",
+                        "tenant-read",
+                        "super-admin")) {
+            var role = new org.keycloak.representations.idm.RoleRepresentation();
+            role.setName(roleName);
+            role.setDescription("Operio default role: " + roleName);
+            realmResource.roles().create(role);
         }
     }
 

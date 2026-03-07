@@ -3,6 +3,7 @@ package com.koostack.operio.platform.tenant.jooq;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.platform.core.TenantManagerService;
 import com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener;
+import com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import java.security.SecureRandom;
@@ -53,6 +54,8 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
     private String consentMigrationLocation;
     private String eventMigrationLocation;
     private String metricsMigrationLocation;
+    private KeycloakRealmProvisioner keycloakProvisioner;
+    private String tenantAdminEmail;
 
     // -----------------------------------------------------------------------
     // Plugin SPI
@@ -86,6 +89,8 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
                         : "classpath:db/migration/consent";
         this.eventMigrationLocation = config.eventMigrationLocation();
         this.metricsMigrationLocation = config.metricsMigrationLocation();
+        this.keycloakProvisioner = config.keycloakProvisioner();
+        this.tenantAdminEmail = config.tenantAdminEmail();
         log.info("JooqTenantManagerService configured");
     }
 
@@ -117,7 +122,19 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
             String schemaName,
             String redisAclUser,
             String redisAclPassword,
-            String redisAclPassHash) {}
+            String redisAclPassHash,
+            String keycloakRealmId,
+            String keycloakClientSecret) {
+
+        /** Backward-compatible constructor without Keycloak fields. */
+        public ProvisionResult(
+                String schemaName,
+                String redisAclUser,
+                String redisAclPassword,
+                String redisAclPassHash) {
+            this(schemaName, redisAclUser, redisAclPassword, redisAclPassHash, null, null);
+        }
+    }
 
     public record ReprovisionResult(
             String tenantId,
@@ -270,13 +287,49 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
             }
         }
 
+        // 5. Provision Keycloak realm (if provisioner is configured)
+        String keycloakRealmId = null;
+        String keycloakClientSecret = null;
+        if (keycloakProvisioner != null) {
+            String realmId = "t_" + sanitized;
+            try {
+                KeycloakRealmProvisioner.ProvisionResult kcResult =
+                        keycloakProvisioner.provisionRealm(realmId);
+                keycloakRealmId = realmId;
+                keycloakClientSecret = kcResult.clientSecret();
+                log.info("Provisioned Keycloak realm '{}' for tenant '{}'", realmId, tenantId);
+
+                // Create root admin user with UPDATE_PASSWORD required action
+                if (tenantAdminEmail != null && !tenantAdminEmail.isBlank()) {
+                    try {
+                        keycloakProvisioner.createRootUser(realmId, tenantAdminEmail);
+                        log.info("Created root admin user in realm '{}': email={}",
+                                realmId, tenantAdminEmail);
+                    } catch (Exception e) {
+                        log.warn(
+                                "Failed to create root admin user in realm '{}' — "
+                                        + "realm was provisioned. User can be created manually.",
+                                realmId, e);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn(
+                        "Failed to provision Keycloak realm for tenant '{}'. "
+                                + "Schema was created successfully — Keycloak can be retried.",
+                        tenantId, e);
+            }
+        }
+
         log.info(
-                "Tenant '{}' provisioned successfully: schema={}, redisUser={}",
+                "Tenant '{}' provisioned successfully: schema={}, redisUser={}, keycloakRealm={}",
                 tenantId,
                 schemaName,
-                redisAclUser);
+                redisAclUser,
+                keycloakRealmId);
 
-        return new ProvisionResult(schemaName, redisAclUser, redisAclPassword, redisAclPassHash);
+        return new ProvisionResult(
+                schemaName, redisAclUser, redisAclPassword, redisAclPassHash,
+                keycloakRealmId, keycloakClientSecret);
     }
 
     // -----------------------------------------------------------------------
@@ -470,6 +523,22 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
                 log.warn(
                         "Failed to drop metrics schema '{}' for tenant '{}' — can be retried",
                         metricsSchema,
+                        tenantId,
+                        e);
+            }
+        }
+
+        // Deprovision Keycloak realm
+        if (keycloakProvisioner != null) {
+            String realmId = "t_" + sanitized;
+            try {
+                keycloakProvisioner.deprovisionRealm(realmId);
+                log.debug("Deprovisioned Keycloak realm '{}'", realmId);
+            } catch (Exception e) {
+                log.warn(
+                        "Failed to deprovision Keycloak realm '{}' for tenant '{}' — "
+                                + "can be retried",
+                        realmId,
                         tenantId,
                         e);
             }

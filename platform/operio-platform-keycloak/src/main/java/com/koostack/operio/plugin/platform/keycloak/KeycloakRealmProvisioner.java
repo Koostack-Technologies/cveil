@@ -8,6 +8,7 @@ import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,8 @@ public class KeycloakRealmProvisioner {
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakRealmProvisioner.class);
 
     private static final List<String> DEFAULT_ROLES =
-            List.of("consent:read", "consent:write", "admin:read", "admin:write");
+            List.of("consent:read", "consent:write", "admin:read", "admin:write",
+                    "tenant-admin", "tenant-write", "tenant-read");
 
     private static final int ACCESS_TOKEN_LIFESPAN_SECONDS = 900; // 15 minutes
     private static final int REFRESH_TOKEN_LIFESPAN_SECONDS = 604800; // 7 days
@@ -38,9 +40,23 @@ public class KeycloakRealmProvisioner {
     private final Keycloak adminClient;
     private final String operioClientId;
 
+    /** Result of provisioning a Keycloak realm. */
+    public record ProvisionResult(String realmId, String clientSecret) {}
+
     public KeycloakRealmProvisioner(Keycloak adminClient, String operioClientId) {
         this.adminClient = adminClient;
         this.operioClientId = operioClientId;
+    }
+
+    /**
+     * Create a new Keycloak realm using the realmId as both the realm name and display name.
+     *
+     * @param realmId used as the realm name (e.g. {@code t_abc123})
+     * @return provision result containing realm ID and client secret
+     */
+    public ProvisionResult provisionRealm(String realmId) {
+        String clientSecret = provisionRealm(realmId, realmId);
+        return new ProvisionResult(realmId, clientSecret);
     }
 
     /**
@@ -101,6 +117,160 @@ public class KeycloakRealmProvisioner {
             LOG.error("Failed to deprovision realm '{}': {}", tenantId, e.getMessage(), e);
             throw e;
         }
+    }
+
+    /**
+     * Create a root admin user in the given realm with the {@code tenant-admin} role and the
+     * Keycloak {@code UPDATE_PASSWORD} required action so the user sets their own password.
+     *
+     * @param realmId the realm (e.g. {@code t_abc123})
+     * @param email the root admin email address
+     */
+    public void createRootUser(String realmId, String email) {
+        RealmResource realm = adminClient.realm(realmId);
+
+        // Idempotent: check if root user already exists
+        List<UserRepresentation> existing = realm.users().searchByEmail(email, true);
+        if (!existing.isEmpty()) {
+            LOG.info("Root user already exists in realm '{}': email={}", realmId, email);
+            return;
+        }
+
+        UserRepresentation user = new UserRepresentation();
+        user.setUsername("root");
+        user.setEmail(email);
+        user.setEnabled(true);
+        user.setEmailVerified(false);
+        user.setRequiredActions(List.of("UPDATE_PASSWORD"));
+
+        var response = realm.users().create(user);
+        try {
+            if (response.getStatus() == 201) {
+                String userId = extractUserId(response);
+                if (userId != null) {
+                    // Assign tenant-admin role
+                    try {
+                        RoleRepresentation adminRole = realm.roles().get("tenant-admin")
+                                .toRepresentation();
+                        realm.users().get(userId).roles().realmLevel().add(List.of(adminRole));
+                    } catch (Exception e) {
+                        LOG.warn("Failed to assign tenant-admin role to root user: {}",
+                                e.getMessage());
+                    }
+                    // Send password setup email
+                    try {
+                        realm.users().get(userId)
+                                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+                    } catch (Exception e) {
+                        LOG.warn("Failed to send password setup email: {}", e.getMessage());
+                    }
+                }
+                LOG.info("Root user created in realm '{}': email={}", realmId, email);
+            } else if (response.getStatus() == 409) {
+                LOG.info("Root user already exists (409) in realm '{}': email={}", realmId, email);
+            } else {
+                throw new IllegalStateException(
+                        "Failed to create root user in realm '" + realmId
+                                + "': HTTP " + response.getStatus());
+            }
+        } finally {
+            response.close();
+        }
+    }
+
+    /**
+     * Ensure the platform realm exists with a root super-admin user.
+     *
+     * @param platformRealmId the platform realm name (e.g. {@code operio-platform})
+     * @param rootEmail the root admin email
+     * @param rootPassword the root admin password (from bootstrap key)
+     * @return provision result containing realm ID and client secret
+     */
+    public ProvisionResult ensurePlatformRealm(
+            String platformRealmId, String rootEmail, String rootPassword) {
+        // Check if realm already exists
+        try {
+            adminClient.realm(platformRealmId).toRepresentation();
+            LOG.info("Platform realm '{}' already exists", platformRealmId);
+            // Get existing client secret
+            RealmResource realm = adminClient.realm(platformRealmId);
+            var clients = realm.clients().findByClientId(operioClientId);
+            String secret = null;
+            if (!clients.isEmpty()) {
+                secret = realm.clients().get(clients.get(0).getId()).getSecret().getValue();
+            }
+            ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
+            return new ProvisionResult(platformRealmId, secret);
+        } catch (jakarta.ws.rs.NotFoundException e) {
+            // Realm doesn't exist — create it
+            String clientSecret = provisionRealm(platformRealmId, "Operio Platform");
+            ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
+            return new ProvisionResult(platformRealmId, clientSecret);
+        }
+    }
+
+    private void ensurePlatformRootUser(
+            String platformRealmId, String email, String password) {
+        RealmResource realm = adminClient.realm(platformRealmId);
+
+        List<UserRepresentation> existing = realm.users().searchByUsername("root", true);
+        if (!existing.isEmpty()) {
+            LOG.debug("Platform root user already exists in realm '{}'", platformRealmId);
+            return;
+        }
+
+        UserRepresentation user = new UserRepresentation();
+        user.setUsername("root");
+        user.setEmail(email);
+        user.setEnabled(true);
+        user.setEmailVerified(true);
+
+        var response = realm.users().create(user);
+        try {
+            if (response.getStatus() == 201) {
+                String userId = extractUserId(response);
+                if (userId != null && password != null) {
+                    org.keycloak.representations.idm.CredentialRepresentation cred =
+                            new org.keycloak.representations.idm.CredentialRepresentation();
+                    cred.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
+                    cred.setValue(password);
+                    cred.setTemporary(false);
+                    realm.users().get(userId).resetPassword(cred);
+
+                    // Assign super-admin role
+                    try {
+                        RoleRepresentation superAdmin = realm.roles().get("super-admin")
+                                .toRepresentation();
+                        realm.users().get(userId).roles().realmLevel()
+                                .add(List.of(superAdmin));
+                    } catch (jakarta.ws.rs.NotFoundException nfe) {
+                        // Create the role first
+                        RoleRepresentation newRole = new RoleRepresentation();
+                        newRole.setName("super-admin");
+                        newRole.setDescription("Super administrator with full platform access");
+                        realm.roles().create(newRole);
+                        RoleRepresentation superAdmin = realm.roles().get("super-admin")
+                                .toRepresentation();
+                        realm.users().get(userId).roles().realmLevel()
+                                .add(List.of(superAdmin));
+                    }
+                }
+                LOG.info("Platform root user created in realm '{}'", platformRealmId);
+            } else if (response.getStatus() == 409) {
+                LOG.debug("Platform root user already exists (409) in realm '{}'",
+                        platformRealmId);
+            }
+        } finally {
+            response.close();
+        }
+    }
+
+    private String extractUserId(jakarta.ws.rs.core.Response response) {
+        String location = response.getHeaderString("Location");
+        if (location != null && location.contains("/")) {
+            return location.substring(location.lastIndexOf('/') + 1);
+        }
+        return null;
     }
 
     private String createOperioClient(RealmResource realmResource, String tenantId) {

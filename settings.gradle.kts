@@ -66,6 +66,11 @@ include("platform:operio-iam-query")
 include("platform:operio-iam-projection-jooq")
 include("platform:operio-platform-keycloak")
 
+// --- Tenant IAM ---
+include("tenant:operio-tenant-iam-command")
+include("tenant:operio-tenant-iam-query-kc")
+include("tenant:operio-tenant-iam-projection-kc")
+
 // --- Platform Tenant Manager ---
 include("platform:operio-tenant-manager-jooq")
 

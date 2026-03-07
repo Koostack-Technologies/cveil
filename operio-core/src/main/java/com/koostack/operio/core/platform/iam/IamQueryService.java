@@ -1,16 +1,129 @@
 package com.koostack.operio.core.platform.iam;
 
+import com.koostack.operio.core.models.AuthResult;
+import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.spi.Plugin;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Query service for IAM key management — reads API key metadata from the projection table.
+ * Query service for IAM operations — reads users, service accounts, and roles from Keycloak.
+ *
+ * <p>Also provides authentication (token exchange) and token verification operations since these
+ * are read-side operations that query the IdP.
  *
  * @param <T> the configuration type for the backing implementation
  */
 public interface IamQueryService<T> extends Plugin<T> {
 
-    /** Projected API key metadata (never exposes the key hash). */
+    /** Projected service account metadata. */
+    record ServiceAccountInfo(
+            String clientId,
+            String name,
+            String realmId,
+            Set<String> roles,
+            String status,
+            java.time.Instant createdAt) {}
+
+    // -- User queries ---------------------------------------------------------
+
+    /**
+     * List all users in the given realm.
+     *
+     * @param realmId the Keycloak realm
+     * @return list of users
+     */
+    List<IdpUser> listUsers(String realmId);
+
+    /**
+     * Get a single user by ID.
+     *
+     * @param realmId the Keycloak realm
+     * @param userId the user's Keycloak ID
+     * @return the user, or {@code null} if not found
+     */
+    IdpUser getUser(String realmId, String userId);
+
+    /**
+     * Find a user by email address.
+     *
+     * @param realmId the Keycloak realm
+     * @param email the email to search for
+     * @return the user, or {@code null} if not found
+     */
+    IdpUser findUserByEmail(String realmId, String email);
+
+    /**
+     * Get all roles assigned to a user.
+     *
+     * @param realmId the Keycloak realm
+     * @param userId the user's Keycloak ID
+     * @return the user's roles, possibly empty — never {@code null}
+     */
+    Set<String> getUserRoles(String realmId, String userId);
+
+    // -- Service account queries ----------------------------------------------
+
+    /**
+     * List all service accounts (confidential clients) in the given realm.
+     *
+     * @param realmId the Keycloak realm
+     * @return list of service accounts
+     */
+    List<ServiceAccountInfo> listServiceAccounts(String realmId);
+
+    /**
+     * Get a single service account by client ID.
+     *
+     * @param realmId the Keycloak realm
+     * @param clientId the Keycloak client ID
+     * @return the service account, or {@code null} if not found
+     */
+    ServiceAccountInfo getServiceAccount(String realmId, String clientId);
+
+    // -- Authentication -------------------------------------------------------
+
+    /**
+     * Authenticate a user with email and password (ROPC grant).
+     *
+     * @param realmId the Keycloak realm
+     * @param email the user's email
+     * @param password the user's password
+     * @return tokens and identity context
+     */
+    AuthResult authenticate(String realmId, String email, String password);
+
+    /**
+     * Refresh an access token.
+     *
+     * @param realmId the Keycloak realm
+     * @param refreshToken the refresh token
+     * @return new tokens and identity context
+     */
+    AuthResult refreshToken(String realmId, String refreshToken);
+
+    /**
+     * Verify a JWT access token and return the identity.
+     *
+     * @param realmId the Keycloak realm
+     * @param accessToken the JWT access token
+     * @return the verified identity context
+     */
+    IdentityContext verifyToken(String realmId, String accessToken);
+
+    /**
+     * Logout — revoke the given refresh token.
+     *
+     * @param realmId the Keycloak realm
+     * @param refreshToken the refresh token to revoke
+     */
+    void logout(String realmId, String refreshToken);
+
+    // -- Legacy API key methods (kept for backward compatibility) --------------
+
+    /** @deprecated Use {@link ServiceAccountInfo} for new code. */
+    @Deprecated(forRemoval = true)
     record ApiKeyInfo(
             String keyId,
             String keyPrefix,
@@ -23,36 +136,27 @@ public interface IamQueryService<T> extends Plugin<T> {
             java.time.Instant createdAt,
             java.time.Instant expiresAt) {}
 
-    /**
-     * List all API keys for the given tenant.
-     *
-     * @param tenantId the tenant identifier
-     * @return list of API key metadata
-     */
-    List<ApiKeyInfo> listApiKeys(String tenantId);
+    /** @deprecated Use {@link #listServiceAccounts} for new code. */
+    @Deprecated(forRemoval = true)
+    default List<ApiKeyInfo> listApiKeys(String tenantId) {
+        return List.of();
+    }
 
-    /**
-     * Get a single API key by ID.
-     *
-     * @param tenantId the tenant identifier
-     * @param keyId the key identifier
-     * @return the API key metadata, or {@code null} if not found
-     */
-    ApiKeyInfo getApiKey(String tenantId, String keyId);
+    /** @deprecated Use {@link #getServiceAccount} for new code. */
+    @Deprecated(forRemoval = true)
+    default ApiKeyInfo getApiKey(String tenantId, String keyId) {
+        return null;
+    }
 
-    /**
-     * Look up an API key by its SHA-256 hash. Used by the token verifier on the auth hot path.
-     *
-     * @param keyHash the SHA-256 hex digest of the raw key
-     * @return the API key metadata, or {@code null} if not found
-     */
-    ApiKeyInfo findByKeyHash(String keyHash);
+    /** @deprecated No longer needed — JWT verification replaces hash lookup. */
+    @Deprecated(forRemoval = true)
+    default ApiKeyInfo findByKeyHash(String keyHash) {
+        return null;
+    }
 
-    /**
-     * Look up an API key by its key prefix.
-     *
-     * @param keyPrefix the key prefix (first 8 characters of the raw key)
-     * @return the API key metadata, or {@code null} if not found
-     */
-    ApiKeyInfo findByKeyPrefix(String keyPrefix);
+    /** @deprecated No longer needed — JWT verification replaces prefix lookup. */
+    @Deprecated(forRemoval = true)
+    default ApiKeyInfo findByKeyPrefix(String keyPrefix) {
+        return null;
+    }
 }

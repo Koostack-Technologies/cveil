@@ -1,11 +1,19 @@
 package com.koostack.operio.rest.integration;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.representations.idm.RealmRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -70,6 +78,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
 
     private static final String POSTGRES_IMAGE = "postgres:16-alpine";
     private static final String REDIS_IMAGE = "redis:7-alpine";
+    private static final String KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.0.8";
 
     // -- Database defaults ----------------------------------------------------
 
@@ -81,12 +90,32 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
 
     private static final int REDIS_PORT = 6379;
 
+    // -- Keycloak defaults ----------------------------------------------------
+
+    private static final int KEYCLOAK_PORT = 8080;
+    private static final String PLATFORM_REALM = "operio-platform";
+    private static final String OPERIO_CLIENT_ID = "operio-backend";
+    private static final List<String> DEFAULT_ROLES =
+            List.of(
+                    "consent:read",
+                    "consent:write",
+                    "admin:read",
+                    "admin:write",
+                    "tenant-admin",
+                    "tenant-write",
+                    "tenant-read",
+                    "super-admin");
+
     // -- Container instances --------------------------------------------------
 
+    private Network network;
     private PostgreSQLContainer<?> postgres;
 
     @SuppressWarnings("resource") // closed in stop()
     private GenericContainer<?> redis;
+
+    @SuppressWarnings("resource") // closed in stop()
+    private GenericContainer<?> keycloak;
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -100,12 +129,17 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
      */
     @Override
     public Map<String, String> start() {
-        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis)...");
+        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis + Keycloak)...");
+
+        // Shared Docker network so Keycloak can reach Postgres by hostname
+        network = Network.newNetwork();
 
         // -- Postgres ---------------------------------------------------------
 
         postgres =
                 new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+                        .withNetwork(network)
+                        .withNetworkAliases("postgres")
                         .withDatabaseName(DB_NAME)
                         .withUsername(DB_USERNAME)
                         .withPassword(DB_PASSWORD)
@@ -116,6 +150,16 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
 
         String jdbcUrl = postgres.getJdbcUrl();
         LOG.info("Postgres started: url={}, user={}", jdbcUrl, DB_USERNAME);
+
+        // Create the 'keycloak' schema so Keycloak can store its tables there
+        try (var conn =
+                        java.sql.DriverManager.getConnection(jdbcUrl, DB_USERNAME, DB_PASSWORD);
+                var stmt = conn.createStatement()) {
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS keycloak");
+            LOG.info("Created 'keycloak' schema in Postgres");
+        } catch (java.sql.SQLException e) {
+            throw new RuntimeException("Failed to create keycloak schema", e);
+        }
 
         // -- Redis ------------------------------------------------------------
 
@@ -130,6 +174,41 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
         String redisHost = redis.getHost();
         int redisPort = redis.getMappedPort(REDIS_PORT);
         LOG.info("Redis started: host={}, port={}", redisHost, redisPort);
+
+        // -- Keycloak ---------------------------------------------------------
+        // Connects to Postgres via the shared Docker network alias.
+
+        keycloak =
+                new GenericContainer<>(DockerImageName.parse(KEYCLOAK_IMAGE))
+                        .withNetwork(network)
+                        .withExposedPorts(KEYCLOAK_PORT)
+                        .withCommand("start-dev")
+                        .withEnv("KC_DB", "postgres")
+                        .withEnv(
+                                "KC_DB_URL",
+                                "jdbc:postgresql://postgres:5432/" + DB_NAME)
+                        .withEnv("KC_DB_SCHEMA", "keycloak")
+                        .withEnv("KC_DB_USERNAME", DB_USERNAME)
+                        .withEnv("KC_DB_PASSWORD", DB_PASSWORD)
+                        .withEnv("KC_HOSTNAME_STRICT", "false")
+                        .withEnv("KC_HTTP_ENABLED", "true")
+                        .withEnv("KEYCLOAK_ADMIN", "admin")
+                        .withEnv("KEYCLOAK_ADMIN_PASSWORD", "admin")
+                        .withEnv("KC_HEALTH_ENABLED", "true")
+                        .waitingFor(
+                                Wait.forLogMessage(".*Keycloak.*started in.*", 1)
+                                        .withStartupTimeout(Duration.ofSeconds(120)))
+                        .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("keycloak"));
+
+        keycloak.start();
+
+        String keycloakUrl =
+                "http://" + keycloak.getHost() + ":" + keycloak.getMappedPort(KEYCLOAK_PORT);
+        LOG.info("Keycloak started: url={}", keycloakUrl);
+
+        // Bootstrap the operio-platform realm so the CQRS projection handler can
+        // materialise events into a pre-existing realm (the app does not auto-create it).
+        String clientSecret = bootstrapPlatformRealm(keycloakUrl);
 
         // -- Build property map -----------------------------------------------
         // Both consent-db and platform-db point at the same Postgres instance
@@ -151,6 +230,12 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
         props.put("operio.test.redis.host", redisHost);
         props.put("operio.test.redis.port", String.valueOf(redisPort));
 
+        // Keycloak
+        props.put("operio.test.keycloak.url", keycloakUrl);
+        props.put("operio.test.keycloak.admin-username", "admin");
+        props.put("operio.test.keycloak.admin-password", "admin");
+        props.put("operio.test.keycloak.client-secret", clientSecret);
+
         LOG.info(
                 "Testcontainers infrastructure ready — {} config properties injected",
                 props.size());
@@ -162,6 +247,15 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
     @Override
     public void stop() {
         LOG.info("Stopping Testcontainers infrastructure...");
+
+        if (keycloak != null) {
+            try {
+                keycloak.stop();
+                LOG.info("Keycloak container stopped");
+            } catch (Exception e) {
+                LOG.warn("Failed to stop Keycloak container cleanly", e);
+            }
+        }
 
         if (redis != null) {
             try {
@@ -179,6 +273,82 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
             } catch (Exception e) {
                 LOG.warn("Failed to stop Postgres container cleanly", e);
             }
+        }
+
+        if (network != null) {
+            try {
+                network.close();
+                LOG.info("Docker network closed");
+            } catch (Exception e) {
+                LOG.warn("Failed to close Docker network cleanly", e);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Keycloak platform-realm bootstrap
+    // -----------------------------------------------------------------------
+
+    /**
+     * Creates the {@code operio-platform} realm in Keycloak with the {@code operio-backend}
+     * confidential client and all default Operio roles.
+     *
+     * @return the auto-generated client secret for {@code operio-backend}
+     */
+    private String bootstrapPlatformRealm(String keycloakUrl) {
+        LOG.info("Bootstrapping '{}' realm in Keycloak...", PLATFORM_REALM);
+
+        try (Keycloak kc =
+                KeycloakBuilder.builder()
+                        .serverUrl(keycloakUrl)
+                        .realm("master")
+                        .clientId("admin-cli")
+                        .username("admin")
+                        .password("admin")
+                        .build()) {
+
+            // Create realm
+            RealmRepresentation realm = new RealmRepresentation();
+            realm.setRealm(PLATFORM_REALM);
+            realm.setDisplayName("Operio Platform");
+            realm.setEnabled(true);
+            realm.setAccessTokenLifespan(900);
+            realm.setSsoSessionMaxLifespan(604800);
+            kc.realms().create(realm);
+
+            var realmResource = kc.realm(PLATFORM_REALM);
+
+            // Create operio-backend confidential client (ROPC + service-account)
+            ClientRepresentation client = new ClientRepresentation();
+            client.setClientId(OPERIO_CLIENT_ID);
+            client.setName("Operio Backend (" + PLATFORM_REALM + ")");
+            client.setEnabled(true);
+            client.setProtocol("openid-connect");
+            client.setPublicClient(false);
+            client.setServiceAccountsEnabled(true);
+            client.setDirectAccessGrantsEnabled(true);
+            client.setStandardFlowEnabled(false);
+            realmResource.clients().create(client);
+
+            // Retrieve auto-generated client secret
+            var clients = realmResource.clients().findByClientId(OPERIO_CLIENT_ID);
+            String internalId = clients.get(0).getId();
+            String secret = realmResource.clients().get(internalId).getSecret().getValue();
+
+            // Create default roles
+            for (String roleName : DEFAULT_ROLES) {
+                RoleRepresentation role = new RoleRepresentation();
+                role.setName(roleName);
+                role.setDescription("Operio default role: " + roleName);
+                realmResource.roles().create(role);
+            }
+
+            LOG.info(
+                    "Platform realm '{}' bootstrapped with {} roles, client-secret={}***",
+                    PLATFORM_REALM,
+                    DEFAULT_ROLES.size(),
+                    secret.substring(0, Math.min(4, secret.length())));
+            return secret;
         }
     }
 }

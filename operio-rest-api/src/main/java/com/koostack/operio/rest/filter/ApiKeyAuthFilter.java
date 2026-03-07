@@ -591,6 +591,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 normalized.equals("api/v1/platform/docs")
                 || normalized.equals("api/v1/platform/docs/")
                 ||
+                // IAM auth endpoints (login, refresh, logout) — unauthenticated by design
+                normalized.equals("api/v1/platform/iam/login")
+                || normalized.equals("api/v1/platform/iam/refresh")
+                || normalized.equals("api/v1/platform/iam/logout")
+                ||
                 // Site pages (public, unauthenticated)
                 normalized.isEmpty()
                 || normalized.equals("docs")

@@ -95,7 +95,7 @@ class OpenApiAnnotationTest {
             OpenAPIDefinition def =
                     OperioOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             Tag[] tags = def.tags();
-            assertEquals(6, tags.length, "Should define 6 tags");
+            assertEquals(7, tags.length, "Should define 7 tags");
 
             Set<String> tagNames = Arrays.stream(tags).map(Tag::name).collect(Collectors.toSet());
             assertTrue(tagNames.contains(OperioOpenApiConfig.TAG_CONSENT));

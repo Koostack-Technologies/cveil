@@ -22,7 +22,13 @@ import org.slf4j.LoggerFactory;
  * <h2>Thread Safety</h2>
  *
  * <p>This class is thread-safe. The Keycloak admin client is shared across threads.
+ *
+ * @deprecated The role-management functionality (assignRole, removeRole, getUserRoles) is now
+ *     duplicated in {@code TenantIamCommandService} and {@code TenantIamQueryService}. This class
+ *     is kept for backward compatibility with existing {@link AuthzProvider} consumers. In a future
+ *     release, consolidate callers to use the tenant IAM services directly and remove this class.
  */
+@Deprecated
 public class KeycloakAuthzProvider implements AuthzProvider<KeycloakAuthzConfig> {
 
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakAuthzProvider.class);

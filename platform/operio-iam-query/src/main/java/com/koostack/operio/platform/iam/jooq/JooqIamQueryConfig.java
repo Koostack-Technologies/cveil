@@ -1,16 +1,22 @@
 package com.koostack.operio.platform.iam.jooq;
 
-import org.jooq.DSLContext;
+import com.koostack.operio.plugin.platform.keycloak.KeycloakConfig;
+import javax.sql.DataSource;
 
 /**
  * Configuration for {@link JooqIamQueryService}.
  *
- * @param dsl the {@link DSLContext} targeting the platform database
+ * @param keycloakConfig the Keycloak connection configuration
+ * @param platformDataSource optional DataSource for legacy API key lookups
  */
-public record JooqIamQueryConfig(DSLContext dsl) {
+public record JooqIamQueryConfig(KeycloakConfig keycloakConfig, DataSource platformDataSource) {
     public JooqIamQueryConfig {
-        if (dsl == null) {
-            throw new IllegalArgumentException("dsl must not be null");
+        if (keycloakConfig == null) {
+            throw new IllegalArgumentException("keycloakConfig must not be null");
         }
+    }
+
+    public JooqIamQueryConfig(KeycloakConfig keycloakConfig) {
+        this(keycloakConfig, null);
     }
 }
