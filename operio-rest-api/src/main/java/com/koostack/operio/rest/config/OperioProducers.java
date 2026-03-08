@@ -1131,8 +1131,8 @@ public class OperioProducers {
                             this.tenantEventService));
             this.tenantIamCommandService = tenantIamCmdSvc;
 
-            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryService tenantIamQrySvc =
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryService();
+            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryDispatcher tenantIamQrySvc =
+                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryDispatcher();
             tenantIamQrySvc.configure(
                     new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryConfig(
                             kcIamConfig));

@@ -9,6 +9,7 @@ import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.IamDtos.*;
 import com.koostack.operio.rest.interceptor.TenantScoped;
+import com.koostack.operio.tenant.iam.kc.*;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -91,7 +92,8 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users tenant={}", tenantId);
 
-        List<IdpUser> users = tenantIam.queryService().listUsers(tenantId);
+        List<IdpUser> users = tenantIam.queryDispatcher()
+                .dispatch(new TenantListUsersQueryActuator.TenantListUsersQuery(tenantId));
         return Response.ok(users.stream().map(UserResponse::from).toList()).build();
     }
 
@@ -107,7 +109,9 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users/{} tenant={}", username, tenantId);
 
-        IdpUser user = tenantIam.queryService().findUserByUsername(tenantId, username);
+        IdpUser user = tenantIam.queryDispatcher()
+                .dispatch(new TenantFindUserByUsernameQueryActuator.TenantFindUserByUsernameQuery(
+                        tenantId, username));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + username))
@@ -136,7 +140,9 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users/by-email email={} tenant={}", email, tenantId);
 
-        IdpUser user = tenantIam.queryService().findUserByEmail(tenantId, email);
+        IdpUser user = tenantIam.queryDispatcher()
+                .dispatch(new TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery(
+                        tenantId, email));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + email))
@@ -182,7 +188,10 @@ public class TenantIamResource {
         String tenantId = requireTenantContext();
         requireIam();
 
-        Set<String> roles = tenantIam.queryService().getUserRolesByUsername(tenantId, username);
+        Set<String> roles = tenantIam.queryDispatcher()
+                .dispatch(
+                        new TenantGetUserRolesByUsernameQueryActuator
+                                .TenantGetUserRolesByUsernameQuery(tenantId, username));
         return Response.ok(roles).build();
     }
 
@@ -257,7 +266,11 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/service-accounts tenant={}", tenantId);
 
-        var accounts = tenantIam.queryService().listServiceAccounts(tenantId);
+        @SuppressWarnings("unchecked")
+        List<com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo>
+                accounts = tenantIam.queryDispatcher()
+                        .dispatch(new TenantListServiceAccountsQueryActuator
+                                .TenantListServiceAccountsQuery(tenantId));
         return Response.ok(accounts.stream().map(ServiceAccountResponse::fromTenant).toList())
                 .build();
     }
@@ -276,7 +289,10 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/service-accounts/{} tenant={}", clientId, tenantId);
 
-        var account = tenantIam.queryService().getServiceAccount(tenantId, clientId);
+        var account = (com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo)
+                tenantIam.queryDispatcher()
+                        .dispatch(new TenantGetServiceAccountQueryActuator
+                                .TenantGetServiceAccountQuery(tenantId, clientId));
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
