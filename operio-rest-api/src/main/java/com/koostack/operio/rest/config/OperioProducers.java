@@ -34,7 +34,7 @@ import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
 import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
-import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryService;
+import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
@@ -242,7 +242,7 @@ public class OperioProducers {
         // -- Command + query services (production: event-sourced + jOOQ) ------
         JooqConsentAdminCommandService commandService = new JooqConsentAdminCommandService();
         this.consentAdminCommandService = commandService;
-        JooqConsentAdminQueryService queryService = new JooqConsentAdminQueryService();
+        JooqConsentAdminQueryDispatcher queryService = new JooqConsentAdminQueryDispatcher();
 
         // -- Command + query services (production: event-sourced + jOOQ) ------
         // Graph replaces Redis admin cache — JOOQ admin query used directly
