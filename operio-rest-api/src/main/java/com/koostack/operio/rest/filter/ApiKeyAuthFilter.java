@@ -499,30 +499,6 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Checks whether the given token matches the configured bootstrap key.
-     *
-     * <p>Returns {@code false} if no bootstrap key is configured or if the key is blank (i.e. the
-     * env var is not set).
-     *
-     * @param token the bearer token to check
-     * @return {@code true} if the token is the bootstrap key
-     * @deprecated Replaced by {@link BootstrapKeyLifecycleService#isActiveBootstrapKey(String)}
-     *     which adds auto-disable and force-override semantics. Retained as a private helper for
-     *     any future fallback needs.
-     */
-    @Deprecated
-    @SuppressWarnings("unused")
-    private boolean isBootstrapKey(String token) {
-        return configInstance
-                .get()
-                .superAdmin()
-                .flatMap(OperioConfig.SuperAdminConfig::bootstrapKey)
-                .filter(key -> !key.isBlank())
-                .map(key -> key.equals(token))
-                .orElse(false);
-    }
-
-    /**
      * Resolves the remote (client) IP address from the request headers, falling back through
      * standard proxy headers.
      *

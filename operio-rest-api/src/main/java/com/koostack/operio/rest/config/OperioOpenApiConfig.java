@@ -132,11 +132,6 @@ public class OperioOpenApiConfig {
     /** Tag for governance framework endpoints (purposes, regulations, jurisdictions). */
     public static final String TAG_GOVERNANCE = "Governance";
 
-    /**
-     * @deprecated Use {@link #TAG_GOVERNANCE} instead. Kept for backward compatibility.
-     */
-    @Deprecated public static final String TAG_LEGAL = TAG_GOVERNANCE;
-
     /** Tag for platform administration endpoints. */
     public static final String TAG_PLATFORM = "Platform";
 

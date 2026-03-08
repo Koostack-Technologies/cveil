@@ -4,7 +4,6 @@ import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
@@ -46,12 +45,6 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
     static void setUp() {
         dsarService = new InMemorySubjectDsarService();
         service.setSubjectDsarService(dsarService, ADMIN_KEY);
-
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        ConsentEventTypes.SUBJECT_REGISTERED,
-                        "Subject Registered",
-                        SubjectRegisteredEvent.class));
     }
 
     // -----------------------------------------------------------------------
@@ -197,14 +190,6 @@ class DigitalShredderTest extends TenantEventServiceTestBase {
     @Test
     @Order(4)
     void nonShreddableEventRemainsPlaintext() {
-        // RegulationRegisteredEvent does NOT implement Shreddable
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        ConsentEventTypes.REGULATION_REGISTERED,
-                        "Regulation Registered",
-                        com.koostack.operio.core.tenant.consent.events.RegulationRegisteredEvent
-                                .class));
-
         String name = "non-shred-regulation-" + UUID.randomUUID();
         UUID aggregateId =
                 com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate.deriveId(

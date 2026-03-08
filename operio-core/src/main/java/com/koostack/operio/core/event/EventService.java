@@ -1,7 +1,6 @@
 package com.koostack.operio.core.event;
 
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.spi.Plugin;
@@ -18,12 +17,10 @@ import com.koostack.operio.core.spi.Plugin;
  *   <li>Null tenant ID → platform-scoped event store
  * </ul>
  *
- * <p>Replaces the now-deprecated {@link TenantEventService} and {@link PlatformEventService}
- * interfaces, which had identical method signatures.
+ * <p>Replaces the legacy {@code TenantEventService} and {@code PlatformEventService} interfaces,
+ * which had identical method signatures.
  *
  * @param <T> the configuration type for the backing implementation
- * @see TenantEventService
- * @see PlatformEventService
  */
 public interface EventService<T> extends Plugin<T> {
 
@@ -61,12 +58,4 @@ public interface EventService<T> extends Plugin<T> {
                 "hydrateAggregate is not supported by this EventService implementation");
     }
 
-    /**
-     * No-op. The {@code event_type} catalog table has been removed. Retained for backward
-     * compatibility with existing callers.
-     *
-     * @deprecated This method does nothing and will be removed in a future release.
-     */
-    @Deprecated(forRemoval = true)
-    default <U> void registerEventType(RegisterEventTypeInput<U> input) {}
 }

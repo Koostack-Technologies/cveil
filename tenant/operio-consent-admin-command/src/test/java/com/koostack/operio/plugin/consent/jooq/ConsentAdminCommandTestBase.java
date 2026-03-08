@@ -139,16 +139,6 @@ abstract class ConsentAdminCommandTestBase {
         commandService = new JooqConsentAdminCommandService();
         commandService.configure(new ConsentAdminCommandConfig(eventService));
 
-        // Re-register one type to trigger a synchronous cache reload after
-        // all 10 types are in the DB, ensuring the cache is fully populated.
-        eventService.registerEventType(
-                new com.koostack.operio.core.event.models.RegisterEventTypeInput<>(
-                        com.koostack.operio.core.tenant.consent.ConsentEventTypes
-                                .REGULATION_REGISTERED,
-                        "Consent Regulation Registered",
-                        com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate
-                                .class));
-
         // -- Redis consumer for verification --
         testJedis = new JedisPooled(redis.getHost(), redis.getMappedPort(6379));
         startRedisConsumer();

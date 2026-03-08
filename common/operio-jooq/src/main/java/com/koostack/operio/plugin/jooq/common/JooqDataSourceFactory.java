@@ -56,24 +56,4 @@ public final class JooqDataSourceFactory {
         return new HikariDataSource(hikariConfig);
     }
 
-    /**
-     * Creates a new {@link DataSource} using HikariCP with the given JDBC connection string and
-     * pool name.
-     *
-     * <p><strong>Backward-compatibility overload.</strong> No explicit username or password is set
-     * — the driver will use whatever credentials are embedded in the JDBC URL or its own defaults.
-     *
-     * @param connectionString the JDBC URL for the database connection
-     * @param poolName a descriptive name for the HikariCP connection pool
-     * @return a configured {@link DataSource} instance
-     * @deprecated Prefer {@link #createDataSource(JooqPluginConfig, String)} which also forwards
-     *     username and password from the config.
-     */
-    @Deprecated(since = "0.1.0", forRemoval = true)
-    public static DataSource createDataSource(String connectionString, String poolName) {
-        HikariConfig hikariConfig = new HikariConfig();
-        hikariConfig.setJdbcUrl(connectionString);
-        hikariConfig.setPoolName(poolName);
-        return new HikariDataSource(hikariConfig);
-    }
 }

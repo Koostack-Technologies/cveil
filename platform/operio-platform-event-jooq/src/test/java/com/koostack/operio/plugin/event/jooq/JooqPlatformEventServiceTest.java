@@ -5,7 +5,6 @@ import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.core.events.TenantCreatedEvent;
@@ -22,10 +21,6 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         String tenantId = "tenant_publish";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "tenant-lifecycle", tenantId);
-
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        CoreEventTypes.TENANT_CREATED, "Tenant Created", TenantCreatedEvent.class));
 
         TenantCreatedEvent payload = new TenantCreatedEvent(tenantId, "Acme Corp", "enterprise");
         service.publishEvent(
@@ -53,15 +48,6 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         String tenantId = "tenant_multi";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "tenant-lifecycle", tenantId);
-
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        CoreEventTypes.TENANT_CREATED, "Tenant Created", TenantCreatedEvent.class));
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        CoreEventTypes.TENANT_PLAN_CHANGED,
-                        "Tenant Plan Changed",
-                        TenantPlanChangedEvent.class));
 
         service.publishEvent(
                 PublishDomainEventInput.of(
@@ -95,12 +81,6 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         String tenantId = "tenant_snap";
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "snap-aggregate", tenantId);
-
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        CoreEventTypes.TENANT_PLAN_CHANGED,
-                        "Tenant Plan Changed",
-                        TenantPlanChangedEvent.class));
 
         for (int i = 1; i <= 21; i++) {
             service.publishEvent(

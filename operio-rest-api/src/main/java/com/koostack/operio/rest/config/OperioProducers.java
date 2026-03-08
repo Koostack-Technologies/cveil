@@ -334,35 +334,7 @@ public class OperioProducers {
     // -----------------------------------------------------------------------
 
     /**
-     * @Produces @ApplicationScoped @Unremovable @SuppressWarnings({"unchecked", "rawtypes"}) public
-     * CoreCommandService coreCommandService(TenantService tenantService) { TenantService unwrapped
-     * = ClientProxy.unwrap(tenantService); if (unwrapped instanceof DefaultTenantService dts) {
-     * CoreCommandService service = dts.coreCommandService(); if (service != null) {
-     * LOG.debug("Operio REST API: CoreCommandService available"); return service; } }
-     * LOG.debug("Operio REST API: CoreCommandService not available (embedded mode)"); return null;
-     * } @Produces @ApplicationScoped @Unremovable @SuppressWarnings({"unchecked", "rawtypes"})
-     * public CoreQueryService coreQueryService(TenantService tenantService) { TenantService
-     * unwrapped = ClientProxy.unwrap(tenantService); if (unwrapped instanceof DefaultTenantService
-     * dts) { CoreQueryService service = dts.coreQueryService(); if (service != null) {
-     * LOG.debug("Operio REST API: CoreQueryService available"); return service; } }
-     * LOG.debug("Operio REST API: CoreQueryService not available (embedded mode)"); return null;
-     * } @Produces @ApplicationScoped @Unremovable @SuppressWarnings("rawtypes") public
-     * com.koostack.operio.core.platform.iam.IamCommandService iamCommandService(TenantService
-     * tenantService) { tenantService.appName(); if (iamCommandService != null) { LOG.debug("Operio
-     * REST API: IamCommandService available"); return iamCommandService; } LOG.debug("Operio REST
-     * API: IamCommandService not available (embedded mode)"); return null;
-     * } @Produces @ApplicationScoped @Unremovable @SuppressWarnings("rawtypes") public
-     * com.koostack.operio.core.platform.iam.IamQueryService iamQueryService(TenantService
-     * tenantService) { tenantService.appName(); if (iamQueryService != null) { LOG.debug("Operio
-     * REST API: IamQueryService available"); return iamQueryService; } LOG.debug("Operio REST API:
-     * IamQueryService not available (embedded mode)"); return null;
-     * } @Produces @ApplicationScoped @Unremovable @SuppressWarnings("rawtypes") public
-     * com.koostack.operio.core.platform.plan.PlanQueryService planQueryService(TenantService
-     * tenantService) { tenantService.appName(); if (planQueryService != null) { LOG.debug("Operio
-     * REST API: PlanQueryService available"); return planQueryService; } LOG.debug("Operio REST
-     * API: PlanQueryService not available (embedded mode)"); return null; }
-     *
-     * <p>/** Produces the {@link TokenValidationService} singleton — used by {@code
+     * Produces the {@link TokenValidationService} singleton — used by {@code
      * ApiKeyAuthFilter} to authenticate bearer tokens on every request.
      *
      * <p>In production mode this returns the {@code ApiKeyTokenVerifier} wired during {@link

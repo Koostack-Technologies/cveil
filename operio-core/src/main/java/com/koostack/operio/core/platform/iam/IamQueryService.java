@@ -179,12 +179,6 @@ public interface IamQueryService<T> extends Plugin<T> {
         return List.of();
     }
 
-    /** @deprecated Use {@link #getServiceAccount} for new code. */
-    @Deprecated(forRemoval = true)
-    default ApiKeyInfo getApiKey(String tenantId, String keyId) {
-        return null;
-    }
-
     /** @deprecated No longer needed — JWT verification replaces hash lookup. */
     @Deprecated(forRemoval = true)
     default ApiKeyInfo findByKeyHash(String keyHash) {

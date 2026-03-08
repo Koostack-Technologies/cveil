@@ -31,8 +31,4 @@ public final class IamEventTypes {
     /** @deprecated Use {@link #SERVICE_ACCOUNT_REVOKED} for new code. */
     @Deprecated(forRemoval = true)
     public static final String API_KEY_REVOKED = "iam.api-key.revoked";
-
-    /** @deprecated No longer used in the Keycloak-native IAM flow. */
-    @Deprecated(forRemoval = true)
-    public static final String IDP_CONFIG_UPDATED = "iam.idp-config.updated";
 }

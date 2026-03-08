@@ -5,7 +5,6 @@ import static com.koostack.operio.tenant.event.jooq.generated.tables.Event.EVENT
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -32,11 +31,6 @@ class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
     @BeforeAll
     static void registerTestEventType() {
-        service.registerEventType(
-                new RegisterEventTypeInput<>(
-                        ConsentEventTypes.REGULATION_REGISTERED,
-                        "Regulation Registered",
-                        RegulationRegisteredEvent.class));
     }
 
     // -----------------------------------------------------------------------
