@@ -1,17 +1,31 @@
 package com.koostack.operio.tenant.iam.kc;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.tenant.events.TenantUserLoggedOutEvent;
+import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
+import java.util.Base64;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Actuator that handles the "logout" command for tenant IAM.
  *
  * <p>Revokes the refresh token via Keycloak's OIDC logout endpoint using
- * {@link KeycloakAuthSupport}. No query-service dependency.
+ * {@link KeycloakAuthSupport}, then publishes a {@link TenantUserLoggedOutEvent}.
  */
 public class TenantLogoutCommandActuator
         implements Actuator<TenantLogoutCommandActuator.LogoutCommand, Void> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TenantLogoutCommandActuator.class);
+    private static final String USER_AGGREGATE_TYPE = "tenant-iam-user";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final KeycloakAuthSupport authSupport;
 
@@ -29,7 +43,57 @@ public class TenantLogoutCommandActuator
 
     @Override
     public Void execute(EventService<?> publisher, LogoutCommand command) {
+        // Extract userId from the refresh token JWT before revoking it
+        String userId = extractSubject(command.refreshToken());
+
+        // Keycloak side-effect
         authSupport.logout(command.tenantId(), command.refreshToken());
+
+        // Publish domain event
+        if (userId != null) {
+            var payload = new TenantUserLoggedOutEvent(command.tenantId(), userId);
+
+            UUID aggregateId = UUID.fromString(userId);
+            AggregateKey key =
+                    new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
+
+            publisher.publishEvent(
+                    PublishDomainEventInput.of(
+                            command.tenantId(),
+                            TenantIamEventTypes.USER_LOGGED_OUT,
+                            key,
+                            payload));
+
+            LOG.info(
+                    "Tenant user logged out: tenantId={}, userId={}",
+                    command.tenantId(),
+                    userId);
+        } else {
+            LOG.warn(
+                    "Tenant user logged out but could not extract userId from refresh token: tenantId={}",
+                    command.tenantId());
+        }
+
         return null;
+    }
+
+    /**
+     * Extracts the {@code sub} claim from a JWT refresh token without verification.
+     * Returns {@code null} if the token cannot be decoded.
+     */
+    private static String extractSubject(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) {
+                return null;
+            }
+            byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
+            JsonNode payload = MAPPER.readTree(decoded);
+            JsonNode sub = payload.get("sub");
+            return sub != null ? sub.asText() : null;
+        } catch (Exception e) {
+            LOG.debug("Failed to extract subject from refresh token: {}", e.getMessage());
+            return null;
+        }
     }
 }

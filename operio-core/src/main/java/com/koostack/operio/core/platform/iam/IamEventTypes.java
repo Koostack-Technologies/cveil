@@ -15,6 +15,11 @@ public final class IamEventTypes {
     public static final String USER_SUSPENDED = "iam.user.suspended";
     public static final String USER_ACTIVATED = "iam.user.activated";
 
+    // -- Authentication lifecycle ---------------------------------------------
+    public static final String USER_AUTHENTICATED = "iam.user.authenticated";
+    public static final String TOKEN_REFRESHED = "iam.token.refreshed";
+    public static final String USER_LOGGED_OUT = "iam.user.logged-out";
+
     // -- Service account lifecycle --------------------------------------------
     public static final String SERVICE_ACCOUNT_CREATED = "iam.service-account.created";
     public static final String SERVICE_ACCOUNT_REVOKED = "iam.service-account.revoked";

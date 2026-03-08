@@ -15,6 +15,11 @@ public final class TenantIamEventTypes {
     public static final String USER_SUSPENDED = "tenant-iam.user.suspended";
     public static final String USER_ACTIVATED = "tenant-iam.user.activated";
 
+    // -- Authentication lifecycle ---------------------------------------------
+    public static final String USER_AUTHENTICATED = "tenant-iam.user.authenticated";
+    public static final String TOKEN_REFRESHED = "tenant-iam.token.refreshed";
+    public static final String USER_LOGGED_OUT = "tenant-iam.user.logged-out";
+
     // -- Service account lifecycle --------------------------------------------
     public static final String SERVICE_ACCOUNT_CREATED = "tenant-iam.service-account.created";
     public static final String SERVICE_ACCOUNT_REVOKED = "tenant-iam.service-account.revoked";
