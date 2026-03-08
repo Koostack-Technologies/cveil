@@ -4,6 +4,7 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserActivatedEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
 import java.util.List;

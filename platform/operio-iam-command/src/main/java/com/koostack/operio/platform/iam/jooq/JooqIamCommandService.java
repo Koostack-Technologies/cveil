@@ -93,18 +93,15 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
-        String userId = requireUserId(realmId, emailOrUsername);
         var command =
-                new SuspendUserCommandActuator.SuspendUserCommand(realmId, userId, emailOrUsername);
+                new SuspendUserCommandActuator.SuspendUserCommand(realmId, emailOrUsername);
         suspendUserActuator.execute(eventService, command);
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
-        String userId = requireUserId(realmId, emailOrUsername);
         var command =
-                new ActivateUserCommandActuator.ActivateUserCommand(
-                        realmId, userId, emailOrUsername);
+                new ActivateUserCommandActuator.ActivateUserCommand(realmId, emailOrUsername);
         activateUserActuator.execute(eventService, command);
     }
 
@@ -133,25 +130,21 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
-        String userId = requireUserId(realmId, emailOrUsername);
         var command =
-                new AssignRoleCommandActuator.AssignRoleCommand(
-                        realmId, userId, role, emailOrUsername);
+                new AssignRoleCommandActuator.AssignRoleCommand(realmId, emailOrUsername, role);
         assignRoleActuator.execute(eventService, command);
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
-        String userId = requireUserId(realmId, emailOrUsername);
         var command =
-                new RemoveRoleCommandActuator.RemoveRoleCommand(
-                        realmId, userId, role, emailOrUsername);
+                new RemoveRoleCommandActuator.RemoveRoleCommand(realmId, emailOrUsername, role);
         removeRoleActuator.execute(eventService, command);
     }
 
     // -- Legacy API key compat ------------------------------------------------
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     @Override
     public CreateApiTokenResult createApiToken(
             String tenantId, String name, String environment, String roles) {
@@ -195,7 +188,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         return new CreateApiTokenResult(keyPrefix, keyPrefix, rawKey);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     @Override
     public void revokeApiToken(String tenantId, String keyId) {
         if (platformDataSource == null) {
@@ -216,18 +209,6 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     // -- Internal helpers -----------------------------------------------------
 
-    private String requireUserId(String realmId, String emailOrUsername) {
-        if (queryService == null) {
-            throw new IllegalStateException(
-                    "queryService not configured — call setQueryService() after wiring");
-        }
-        String userId = queryService.resolveUserId(realmId, emailOrUsername);
-        if (userId == null) {
-            throw new IllegalArgumentException(
-                    "User not found: " + emailOrUsername + " in realm " + realmId);
-        }
-        return userId;
-    }
 
     private static String generateRawApiKey() {
         byte[] bytes = new byte[24];
