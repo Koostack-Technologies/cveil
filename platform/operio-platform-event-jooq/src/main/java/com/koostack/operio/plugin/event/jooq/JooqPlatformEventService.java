@@ -8,6 +8,7 @@ import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
@@ -209,6 +210,32 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
         } catch (Exception e) {
             throw new OperioServiceException(
                     "Failed to get aggregate version for "
+                            + key.aggregateType()
+                            + "/"
+                            + key.aggregateId(),
+                    e);
+        }
+    }
+
+    @Override
+    public <T extends AggregateRoot> T hydrateAggregate(AggregateKey key, Class<T> type) {
+        if (dslContext == null) {
+            throw new OperioServiceException("JooqPlatformEventService is not configured");
+        }
+        try {
+            return TenantContext.callWhere(
+                    key.tenantId(),
+                    () -> {
+                        var events =
+                                eventRepository.fetchChangesForAggregate(
+                                        key.aggregateType(), key.aggregateId().toString());
+                        return PlatformAggregateEventApplier.replay(events, type);
+                    });
+        } catch (OperioServiceException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new OperioServiceException(
+                    "Failed to hydrate aggregate "
                             + key.aggregateType()
                             + "/"
                             + key.aggregateId(),

@@ -155,40 +155,13 @@ public class PlatformResource {
                 request.tenantId(),
                 request.plan());
 
-        // Validate uniqueness
-        var existing = cqrs.coreQueryService().getTenant(request.tenantId());
-        if (existing != null) {
-            throw new OperioServiceException(
-                    "Tenant '" + request.tenantId() + "' already exists");
-        }
-
-        // Validate plan exists and is active, resolve limits
-        var planQueryService = cqrs.planQueryService();
-        int evalLimit = 0;
-        int subjectLimit = 0;
-        int burstLimit = 0;
-        if (planQueryService != null) {
-            var planInfo = planQueryService.getPlan(request.plan());
-            if (planInfo == null) {
-                throw new OperioServiceException(
-                        "Plan '" + request.plan() + "' does not exist");
-            }
-            if (!planInfo.isActive()) {
-                throw new OperioServiceException(
-                        "Plan '" + request.plan() + "' is not active");
-            }
-            evalLimit = Math.toIntExact(planInfo.evalLimit());
-            subjectLimit = Math.toIntExact(planInfo.subjectLimit());
-            burstLimit = planInfo.burstLimit();
-        }
-
         String billingEmail =
                 request.billingEmail() != null
                         ? request.billingEmail()
                         : request.tenantId() + "@billing.operio.local";
 
         // Multi-dispatch: sequential commands across bounded contexts
-        // 1. Create tenant
+        // 1. Create tenant (uniqueness enforced via aggregate hydration)
         coreDispatcher.dispatch(
                 new CreateTenantCommandActuator.CreateTenantCommand(
                         request.tenantId(), request.displayName(), request.plan()));
@@ -198,11 +171,10 @@ public class PlatformResource {
                 new CreateBillingProfileCommandActuator.CreateBillingProfileCommand(
                         request.tenantId(), billingEmail));
 
-        // 3. Create subscription (with resolved plan limits)
+        // 3. Create subscription (plan validation + duplicate check via aggregate hydration)
         billingDispatcher.dispatch(
                 new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
-                        request.tenantId(), request.plan(),
-                        evalLimit, subjectLimit, burstLimit));
+                        request.tenantId(), request.plan()));
 
         // 4. Emit provisioning started
         coreDispatcher.dispatch(

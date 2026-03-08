@@ -4,48 +4,74 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
 import com.koostack.operio.core.platform.billing.events.SubscriptionCreatedEvent;
+import com.koostack.operio.core.platform.plan.aggregates.PlanAggregate;
 import java.util.UUID;
 
 /**
  * Actuator that handles the "create subscription" command.
  *
- * <p>Publishes a {@link SubscriptionCreatedEvent} to the platform event store.
+ * <p>Hydrates the {@link PlanAggregate} from the event store to validate that the requested plan
+ * exists and is active, and hydrates the {@link BillingProfileAggregate} to verify no subscription
+ * already exists. On success, publishes a {@link SubscriptionCreatedEvent} to the platform event
+ * store.
  */
 public class CreateSubscriptionCommandActuator
         implements Actuator<CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
 
-    public record CreateSubscriptionCommand(
-            String tenantId,
-            String planTier,
-            int evalLimit,
-            int subjectLimit,
-            int burstLimit) {}
+    public record CreateSubscriptionCommand(String tenantId, String planTier) {}
 
     @Override
     public Void execute(EventService<?> publisher, CreateSubscriptionCommand command) {
-        UUID aggregateId = BillingProfileAggregate.deriveId(command.tenantId());
-        AggregateKey key =
+        // Hydrate plan aggregate to validate existence and active status
+        UUID planAggregateId = PlanAggregate.deriveId(command.planTier());
+        AggregateKey planKey =
                 new AggregateKey(
-                        aggregateId,
+                        planAggregateId,
+                        PlanAggregate.AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
+
+        PlanAggregate plan = publisher.hydrateAggregate(planKey, PlanAggregate.class);
+        if (plan == null) {
+            throw new OperioServiceException(
+                    "Plan '" + command.planTier() + "' does not exist");
+        }
+        if (!plan.isActive()) {
+            throw new OperioServiceException(
+                    "Plan '" + command.planTier() + "' is not active");
+        }
+
+        // Hydrate billing profile to check for existing subscription
+        UUID billingAggregateId = BillingProfileAggregate.deriveId(command.tenantId());
+        AggregateKey billingKey =
+                new AggregateKey(
+                        billingAggregateId,
                         BillingProfileAggregate.AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
+
+        BillingProfileAggregate existing =
+                publisher.hydrateAggregate(billingKey, BillingProfileAggregate.class);
+        if (existing != null && existing.subscription() != null) {
+            throw new OperioServiceException(
+                    "Tenant '" + command.tenantId() + "' already has an active subscription");
+        }
 
         var payload =
                 new SubscriptionCreatedEvent(
                         command.tenantId(),
                         command.planTier(),
-                        command.evalLimit(),
-                        command.subjectLimit(),
-                        command.burstLimit());
+                        Math.toIntExact(plan.evalLimit()),
+                        Math.toIntExact(plan.subjectLimit()),
+                        plan.burstLimit());
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         BillingEventTypes.SUBSCRIPTION_CREATED,
-                        key,
+                        billingKey,
                         payload));
         return null;
     }

@@ -134,7 +134,7 @@ public class JooqBillingDispatcher
             String tenantId, String planTier, int evalLimit, int subjectLimit, int burstLimit) {
         dispatch(
                 new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
-                        tenantId, planTier, evalLimit, subjectLimit, burstLimit));
+                        tenantId, planTier));
     }
 
     @Override
