@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "activate user" command for tenant IAM.
  *
- * <p>Re-enables the user in the tenant's Keycloak realm first, then publishes a
- * {@link TenantUserActivatedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Re-enables the user in the tenant's Keycloak realm first, then publishes a {@link
+ * TenantUserActivatedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantActivateUserCommandActuator
         implements Actuator<TenantActivateUserCommandActuator.ActivateUserCommand, Void> {
@@ -64,19 +64,18 @@ public class TenantActivateUserCommandActuator
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.USER_ACTIVATED,
-                        key,
-                        payload));
+                        command.tenantId(), TenantIamEventTypes.USER_ACTIVATED, key, payload));
 
-        LOG.info("Tenant user activated: tenantId={}, identifier={}",
-                command.tenantId(), command.emailOrUsername());
+        LOG.info(
+                "Tenant user activated: tenantId={}, identifier={}",
+                command.tenantId(),
+                command.emailOrUsername());
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);
@@ -91,4 +90,3 @@ public class TenantActivateUserCommandActuator
         return "t_" + tenantId;
     }
 }
-

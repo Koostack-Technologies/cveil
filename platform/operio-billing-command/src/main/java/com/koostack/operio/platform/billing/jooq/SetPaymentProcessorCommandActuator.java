@@ -16,8 +16,7 @@ import java.util.UUID;
  * <p>Publishes a {@link PaymentProcessorSetEvent} to the platform event store.
  */
 public class SetPaymentProcessorCommandActuator
-        implements Actuator<
-                SetPaymentProcessorCommandActuator.SetPaymentProcessorCommand, Void> {
+        implements Actuator<SetPaymentProcessorCommandActuator.SetPaymentProcessorCommand, Void> {
 
     public record SetPaymentProcessorCommand(
             String tenantId, String processor, String customerId) {}

@@ -28,13 +28,8 @@ public final class IamDtos {
 
     /** Request body for {@code POST /users}. */
     public record RegisterUserRequest(
-            @NotBlank(message = "username must not be blank")
-                    @Size(max = 255)
-                    String username,
-            @NotBlank(message = "email must not be blank")
-                    @Email(message = "email must be a valid email address")
-                    @Size(max = 320)
-                    String email,
+            @NotBlank(message = "username must not be blank") @Size(max = 255) String username,
+            @NotBlank(message = "email must not be blank") @Email(message = "email must be a valid email address") @Size(max = 320) String email,
             @Size(max = 255) String fullName,
             Set<String> roles,
             boolean temporaryPassword) {}
@@ -46,8 +41,8 @@ public final class IamDtos {
         }
 
         public static UserRegisteredResponse from(
-                com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator
-                        .RegisterUserResult r) {
+                com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
+                        r) {
             return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
         }
 
@@ -88,7 +83,8 @@ public final class IamDtos {
 
         public static ServiceAccountCreatedResponse from(
                 com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
-                        .CreateServiceAccountResult r) {
+                                .CreateServiceAccountResult
+                        r) {
             return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
         }
 

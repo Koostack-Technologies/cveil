@@ -195,14 +195,7 @@ public class DefaultPlatformService implements PlatformService {
     @Override
     public void changeTenantPlan(String tenantId, String newPlan) {
         requireCoreCommand();
-        String oldPlan = null;
-        if (coreQueryService != null) {
-            var tenant = coreQueryService.getTenant(tenantId);
-            if (tenant != null) {
-                oldPlan = tenant.plan();
-            }
-        }
-        coreCommandService.changeTenantPlan(tenantId, oldPlan, newPlan);
+        coreCommandService.changeTenantPlan(tenantId, newPlan);
     }
 
     private void requireCoreCommand() {

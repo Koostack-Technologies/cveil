@@ -152,8 +152,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
         LOG.info("Postgres started: url={}, user={}", jdbcUrl, DB_USERNAME);
 
         // Create the 'keycloak' schema so Keycloak can store its tables there
-        try (var conn =
-                        java.sql.DriverManager.getConnection(jdbcUrl, DB_USERNAME, DB_PASSWORD);
+        try (var conn = java.sql.DriverManager.getConnection(jdbcUrl, DB_USERNAME, DB_PASSWORD);
                 var stmt = conn.createStatement()) {
             stmt.execute("CREATE SCHEMA IF NOT EXISTS keycloak");
             LOG.info("Created 'keycloak' schema in Postgres");
@@ -184,9 +183,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
                         .withExposedPorts(KEYCLOAK_PORT)
                         .withCommand("start-dev")
                         .withEnv("KC_DB", "postgres")
-                        .withEnv(
-                                "KC_DB_URL",
-                                "jdbc:postgresql://postgres:5432/" + DB_NAME)
+                        .withEnv("KC_DB_URL", "jdbc:postgresql://postgres:5432/" + DB_NAME)
                         .withEnv("KC_DB_SCHEMA", "keycloak")
                         .withEnv("KC_DB_USERNAME", DB_USERNAME)
                         .withEnv("KC_DB_PASSWORD", DB_PASSWORD)

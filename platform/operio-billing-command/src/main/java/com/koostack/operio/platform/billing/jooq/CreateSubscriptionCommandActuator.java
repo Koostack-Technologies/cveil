@@ -37,12 +37,10 @@ public class CreateSubscriptionCommandActuator
 
         PlanAggregate plan = publisher.hydrateAggregate(planKey, PlanAggregate.class);
         if (plan == null) {
-            throw new OperioServiceException(
-                    "Plan '" + command.planTier() + "' does not exist");
+            throw new OperioServiceException("Plan '" + command.planTier() + "' does not exist");
         }
         if (!plan.isActive()) {
-            throw new OperioServiceException(
-                    "Plan '" + command.planTier() + "' is not active");
+            throw new OperioServiceException("Plan '" + command.planTier() + "' is not active");
         }
 
         // Hydrate billing profile to check for existing subscription

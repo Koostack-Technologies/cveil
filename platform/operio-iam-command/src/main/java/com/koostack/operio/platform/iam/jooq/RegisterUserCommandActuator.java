@@ -86,13 +86,20 @@ public class RegisterUserCommandActuator
         String keycloakUserId = createKeycloakUser(command, userId, roles);
 
         // ---- Phase 2: Publish domain event ----------------------------------
-        var payload = new UserRegisteredEvent(
-                command.realmId(), userId, command.username(), command.email(),
-                command.fullName(), roles, command.temporaryPassword());
+        var payload =
+                new UserRegisteredEvent(
+                        command.realmId(),
+                        userId,
+                        command.username(),
+                        command.email(),
+                        command.fullName(),
+                        roles,
+                        command.temporaryPassword());
 
         UUID aggregateId = deriveAggregateId(command.realmId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -101,8 +108,12 @@ public class RegisterUserCommandActuator
                         key,
                         payload));
 
-        LOG.info("User registered: realmId={}, username={}, email={}, kcId={}",
-                command.realmId(), command.username(), command.email(), keycloakUserId);
+        LOG.info(
+                "User registered: realmId={}, username={}, email={}, kcId={}",
+                command.realmId(),
+                command.username(),
+                command.email(),
+                keycloakUserId);
 
         return new RegisterUserResult(command.username(), command.email(), command.realmId());
     }
@@ -122,8 +133,10 @@ public class RegisterUserCommandActuator
         // Idempotent: check if user already exists
         List<UserRepresentation> existing = realm.users().searchByEmail(command.email(), true);
         if (!existing.isEmpty()) {
-            LOG.debug("User already exists in realm '{}': email={}",
-                    command.realmId(), command.email());
+            LOG.debug(
+                    "User already exists in realm '{}': email={}",
+                    command.realmId(),
+                    command.email());
             return existing.get(0).getId();
         }
 
@@ -151,7 +164,8 @@ public class RegisterUserCommandActuator
                 if (createdUserId == null) {
                     throw new IllegalStateException(
                             "Keycloak returned 201 but Location header missing or malformed"
-                                    + " — cannot map command userId " + commandUserId);
+                                    + " — cannot map command userId "
+                                    + commandUserId);
                 }
 
                 // Assign roles
@@ -162,7 +176,8 @@ public class RegisterUserCommandActuator
                 // Send "set password" email if temporary
                 if (command.temporaryPassword()) {
                     try {
-                        realm.users().get(createdUserId)
+                        realm.users()
+                                .get(createdUserId)
                                 .executeActionsEmail(List.of("UPDATE_PASSWORD"));
                     } catch (Exception e) {
                         LOG.warn("Failed to send password setup email: {}", e.getMessage());
@@ -171,8 +186,10 @@ public class RegisterUserCommandActuator
 
                 return createdUserId;
             } else if (response.getStatus() == 409) {
-                LOG.debug("User already exists (409) in realm '{}': email={}",
-                        command.realmId(), command.email());
+                LOG.debug(
+                        "User already exists (409) in realm '{}': email={}",
+                        command.realmId(),
+                        command.email());
                 return null;
             } else {
                 throw new RuntimeException(
@@ -211,4 +228,3 @@ public class RegisterUserCommandActuator
                 (USER_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
     }
 }
-

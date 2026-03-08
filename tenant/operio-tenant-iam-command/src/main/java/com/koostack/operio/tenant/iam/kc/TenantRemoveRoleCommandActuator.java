@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "remove role" command for tenant IAM.
  *
- * <p>Removes the role in the tenant's Keycloak realm first, then publishes a
- * {@link TenantRoleRemovedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Removes the role in the tenant's Keycloak realm first, then publishes a {@link
+ * TenantRoleRemovedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantRemoveRoleCommandActuator
         implements Actuator<TenantRemoveRoleCommandActuator.RemoveRoleCommand, Void> {
@@ -58,34 +58,37 @@ public class TenantRemoveRoleCommandActuator
                 RoleRepresentation roleRep = realm.roles().get(command.role()).toRepresentation();
                 realm.users().get(kcUserId).roles().realmLevel().remove(List.of(roleRep));
             } catch (jakarta.ws.rs.NotFoundException e) {
-                LOG.debug("Role or user not found for removal: realm={}, userId={}, role={}",
-                        realmId, command.userId(), command.role());
+                LOG.debug(
+                        "Role or user not found for removal: realm={}, userId={}, role={}",
+                        realmId,
+                        command.userId(),
+                        command.role());
                 // Still publish the event — the role was already absent
             }
         }
 
         // Publish domain event
-        var payload = new TenantRoleRemovedEvent(
-                command.tenantId(), command.userId(), command.role());
+        var payload =
+                new TenantRoleRemovedEvent(command.tenantId(), command.userId(), command.role());
 
         UUID aggregateId = deriveAggregateId(command.tenantId());
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.ROLE_REMOVED,
-                        key,
-                        payload));
+                        command.tenantId(), TenantIamEventTypes.ROLE_REMOVED, key, payload));
 
-        LOG.info("Tenant role removed: tenantId={}, identifier={}, role={}",
-                command.tenantId(), command.emailOrUsername(), command.role());
+        LOG.info(
+                "Tenant role removed: tenantId={}, identifier={}, role={}",
+                command.tenantId(),
+                command.emailOrUsername(),
+                command.role());
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);
@@ -100,4 +103,3 @@ public class TenantRemoveRoleCommandActuator
         return "t_" + tenantId;
     }
 }
-

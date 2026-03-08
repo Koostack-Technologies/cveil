@@ -159,7 +159,9 @@ public interface IamQueryService<T> extends Plugin<T> {
 
     // -- Legacy API key methods (kept for backward compatibility) --------------
 
-    /** @deprecated Use {@link ServiceAccountInfo} for new code. */
+    /**
+     * @deprecated Use {@link ServiceAccountInfo} for new code.
+     */
     @Deprecated(forRemoval = true)
     record ApiKeyInfo(
             String keyId,
@@ -173,19 +175,25 @@ public interface IamQueryService<T> extends Plugin<T> {
             java.time.Instant createdAt,
             java.time.Instant expiresAt) {}
 
-    /** @deprecated Use {@link #listServiceAccounts} for new code. */
+    /**
+     * @deprecated Use {@link #listServiceAccounts} for new code.
+     */
     @Deprecated(forRemoval = true)
     default List<ApiKeyInfo> listApiKeys(String tenantId) {
         return List.of();
     }
 
-    /** @deprecated No longer needed — JWT verification replaces hash lookup. */
+    /**
+     * @deprecated No longer needed — JWT verification replaces hash lookup.
+     */
     @Deprecated(forRemoval = true)
     default ApiKeyInfo findByKeyHash(String keyHash) {
         return null;
     }
 
-    /** @deprecated No longer needed — JWT verification replaces prefix lookup. */
+    /**
+     * @deprecated No longer needed — JWT verification replaces prefix lookup.
+     */
     @Deprecated(forRemoval = true)
     default ApiKeyInfo findByKeyPrefix(String keyPrefix) {
         return null;

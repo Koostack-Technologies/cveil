@@ -36,4 +36,3 @@ public class RemoveRegulationCommandActuator
         return null;
     }
 }
-

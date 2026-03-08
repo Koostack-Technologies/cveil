@@ -23,11 +23,11 @@ import org.slf4j.LoggerFactory;
  * Keycloak-native IAM command dispatcher.
  *
  * <p>Implements both the generic {@link CommandDispatcher} SPI (actuator-based routing) and the
- * legacy {@link IamCommandService} interface (thin delegation layer for backward compatibility
- * with existing REST resources and holders).
+ * legacy {@link IamCommandService} interface (thin delegation layer for backward compatibility with
+ * existing REST resources and holders).
  *
- * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the
- * appropriate {@link Actuator} by command record type.
+ * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the appropriate
+ * {@link Actuator} by command record type.
  */
 public class KeycloakIamDispatcher
         implements CommandDispatcher, IamCommandService<JooqIamCommandConfig> {
@@ -110,14 +110,39 @@ public class KeycloakIamDispatcher
         LOG.info("KeycloakIamDispatcher configured with {} actuators", actuators.size());
     }
 
+    /**
+     * Register auth actuators that depend on the query service. Must be called after {@link
+     * #setQueryService(IamQueryService)}.
+     */
+    public void registerAuthActuators() {
+        if (queryService == null) {
+            LOG.warn("Cannot register auth actuators — queryService is not set");
+            return;
+        }
+        actuators.put(
+                AuthenticateCommandActuator.AuthenticateCommand.class,
+                new AuthenticateCommandActuator(queryService));
+        actuators.put(
+                RefreshTokenCommandActuator.RefreshTokenCommand.class,
+                new RefreshTokenCommandActuator(queryService));
+        actuators.put(
+                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(queryService));
+        LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
+    }
+
     // -- IamCommandService delegation (backward compatibility) -----------------
 
     @Override
     public RegisterUserResult registerUser(
-            String realmId, String username, String email, String fullName, Set<String> roles,
+            String realmId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
             boolean temporaryPassword) {
-        var command = new RegisterUserCommandActuator.RegisterUserCommand(
-                realmId, username, email, fullName, roles, temporaryPassword);
+        var command =
+                new RegisterUserCommandActuator.RegisterUserCommand(
+                        realmId, username, email, fullName, roles, temporaryPassword);
         RegisterUserCommandActuator.RegisterUserResult result = dispatch(command);
         return new RegisterUserResult(result.username(), result.email(), result.realmId());
     }
@@ -125,22 +150,25 @@ public class KeycloakIamDispatcher
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(new SuspendUserCommandActuator.SuspendUserCommand(
-                realmId, userId, emailOrUsername));
+        dispatch(
+                new SuspendUserCommandActuator.SuspendUserCommand(
+                        realmId, userId, emailOrUsername));
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(new ActivateUserCommandActuator.ActivateUserCommand(
-                realmId, userId, emailOrUsername));
+        dispatch(
+                new ActivateUserCommandActuator.ActivateUserCommand(
+                        realmId, userId, emailOrUsername));
     }
 
     @Override
     public CreateServiceAccountResult createServiceAccount(
             String realmId, String name, Set<String> roles) {
-        var command = new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
-                realmId, name, roles);
+        var command =
+                new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
+                        realmId, name, roles);
         CreateServiceAccountCommandActuator.CreateServiceAccountResult result = dispatch(command);
         return new CreateServiceAccountResult(
                 result.clientId(), result.clientSecret(), result.realmId());
@@ -148,22 +176,25 @@ public class KeycloakIamDispatcher
 
     @Override
     public void revokeServiceAccount(String realmId, String clientId) {
-        dispatch(new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
-                realmId, clientId));
+        dispatch(
+                new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                        realmId, clientId));
     }
 
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(new AssignRoleCommandActuator.AssignRoleCommand(
-                realmId, userId, role, emailOrUsername));
+        dispatch(
+                new AssignRoleCommandActuator.AssignRoleCommand(
+                        realmId, userId, role, emailOrUsername));
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(new RemoveRoleCommandActuator.RemoveRoleCommand(
-                realmId, userId, role, emailOrUsername));
+        dispatch(
+                new RemoveRoleCommandActuator.RemoveRoleCommand(
+                        realmId, userId, role, emailOrUsername));
     }
 
     // -- Legacy API key compat ------------------------------------------------
@@ -182,17 +213,18 @@ public class KeycloakIamDispatcher
         String keyPrefix = rawKey.substring(0, Math.min(rawKey.length(), KEY_PREFIX_LENGTH));
 
         try (Connection conn = platformDataSource.getConnection()) {
-            try (PreparedStatement upsert = conn.prepareStatement(
-                    "INSERT INTO platform_iam.platform_user (platform_user_id, email, status) "
-                            + "VALUES ('system', 'system@operio.internal', 'active') "
-                            + "ON CONFLICT (platform_user_id) DO NOTHING")) {
+            try (PreparedStatement upsert =
+                    conn.prepareStatement(
+                            "INSERT INTO platform_iam.platform_user (platform_user_id, email,"
+                                + " status) VALUES ('system', 'system@operio.internal', 'active')"
+                                + " ON CONFLICT (platform_user_id) DO NOTHING")) {
                 upsert.executeUpdate();
             }
 
             String sql =
-                    "INSERT INTO platform_iam.api_key "
-                            + "(key_hash, key_prefix, name, tenant_id, platform_user_id, subject, roles, status) "
-                            + "VALUES (?, ?, ?, ?, 'system', ?, ?, 'active')";
+                    "INSERT INTO platform_iam.api_key (key_hash, key_prefix, name, tenant_id,"
+                        + " platform_user_id, subject, roles, status) VALUES (?, ?, ?, ?, 'system',"
+                        + " ?, ?, 'active')";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, keyHash);
                 ps.setString(2, keyPrefix);
@@ -265,4 +297,3 @@ public class KeycloakIamDispatcher
         }
     }
 }
-

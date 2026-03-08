@@ -34,8 +34,7 @@ public class RevokeAllConsentCommandActuator
                         command.ipAddress(),
                         command.userAgent());
         AggregateKey key =
-                new AggregateKey(
-                        aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
+                new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.CONSENT_ALL_REVOKED, key, payload));
@@ -43,4 +42,3 @@ public class RevokeAllConsentCommandActuator
         return null;
     }
 }
-

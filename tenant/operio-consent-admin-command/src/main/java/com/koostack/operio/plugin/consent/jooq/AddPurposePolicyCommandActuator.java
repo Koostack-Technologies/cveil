@@ -42,8 +42,7 @@ public class AddPurposePolicyCommandActuator
 
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
-        AggregateKey key =
-                new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
         PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
 
@@ -86,4 +85,3 @@ public class AddPurposePolicyCommandActuator
         return null;
     }
 }
-

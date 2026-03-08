@@ -94,10 +94,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.tenantSchema = tenantId != null ? "t_" + tenantId : null;
 
         this.keycloakUrl =
-                config.keycloak()
-                        .flatMap(kc -> kc.url())
-                        .filter(u -> !u.isBlank())
-                        .orElse(null);
+                config.keycloak().flatMap(kc -> kc.url()).filter(u -> !u.isBlank()).orElse(null);
     }
 
     @Override
@@ -160,14 +157,9 @@ public class IntegrationTestSupport implements AutoCloseable {
                 .untilAsserted(
                         () -> {
                             var users =
-                                    keycloak()
-                                            .realm(realmName)
-                                            .users()
-                                            .searchByEmail(email, true);
+                                    keycloak().realm(realmName).users().searchByEmail(email, true);
                             assertThat(users)
-                                    .as(
-                                            "User '%s' should exist in realm '%s'",
-                                            email, realmName)
+                                    .as("User '%s' should exist in realm '%s'", email, realmName)
                                     .isNotEmpty();
                         });
     }
@@ -181,10 +173,7 @@ public class IntegrationTestSupport implements AutoCloseable {
                 .untilAsserted(
                         () -> {
                             var users =
-                                    keycloak()
-                                            .realm(realmName)
-                                            .users()
-                                            .searchByEmail(email, true);
+                                    keycloak().realm(realmName).users().searchByEmail(email, true);
                             assertThat(users).isNotEmpty();
                             assertThat(users.get(0).isEnabled())
                                     .as("User '%s' should be disabled", email)
@@ -201,10 +190,7 @@ public class IntegrationTestSupport implements AutoCloseable {
                 .untilAsserted(
                         () -> {
                             var users =
-                                    keycloak()
-                                            .realm(realmName)
-                                            .users()
-                                            .searchByEmail(email, true);
+                                    keycloak().realm(realmName).users().searchByEmail(email, true);
                             assertThat(users).isNotEmpty();
                             assertThat(users.get(0).isEnabled())
                                     .as("User '%s' should be enabled", email)
@@ -224,13 +210,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /** Returns the realm-level roles assigned to a user. */
     public List<RoleRepresentation> getKeycloakUserRoles(String realmName, String userId) {
-        return keycloak()
-                .realm(realmName)
-                .users()
-                .get(userId)
-                .roles()
-                .realmLevel()
-                .listEffective();
+        return keycloak().realm(realmName).users().get(userId).roles().realmLevel().listEffective();
     }
 
     /** Returns the Keycloak URL, or null if not configured. */

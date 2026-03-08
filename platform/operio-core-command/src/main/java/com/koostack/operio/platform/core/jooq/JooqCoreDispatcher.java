@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
  * legacy {@link CoreCommandService} interface (thin delegation layer for backward compatibility
  * with existing REST resources and holders).
  *
- * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the
- * appropriate {@link Actuator} by command record type.
+ * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the appropriate
+ * {@link Actuator} by command record type.
  */
 public class JooqCoreDispatcher
         implements CommandDispatcher, CoreCommandService<JooqCoreCommandConfig> {
@@ -94,9 +94,7 @@ public class JooqCoreDispatcher
 
     @Override
     public void createTenant(String tenantId, String displayName, String plan) {
-        dispatch(
-                new CreateTenantCommandActuator.CreateTenantCommand(
-                        tenantId, displayName, plan));
+        dispatch(new CreateTenantCommandActuator.CreateTenantCommand(tenantId, displayName, plan));
     }
 
     @Override
@@ -107,10 +105,8 @@ public class JooqCoreDispatcher
     }
 
     @Override
-    public void changeTenantPlan(String tenantId, String oldPlan, String newPlan) {
-        dispatch(
-                new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
-                        tenantId, oldPlan, newPlan));
+    public void changeTenantPlan(String tenantId, String newPlan) {
+        dispatch(new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(tenantId, newPlan));
     }
 
     @Override

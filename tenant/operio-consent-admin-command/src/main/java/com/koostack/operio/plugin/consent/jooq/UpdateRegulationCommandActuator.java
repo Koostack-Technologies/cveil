@@ -7,8 +7,8 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
-import com.koostack.operio.core.tenant.consent.events.RegulationUpdatedEvent;
 import com.koostack.operio.core.tenant.consent.events.RegulationSnapshot;
+import com.koostack.operio.core.tenant.consent.events.RegulationUpdatedEvent;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "update regulation" command.
  *
- * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the
- * {@link RegulationSnapshot} (preserving existing jurisdiction assignments).
+ * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the {@link
+ * RegulationSnapshot} (preserving existing jurisdiction assignments).
  */
 public class UpdateRegulationCommandActuator
         implements Actuator<UpdateRegulationCommandActuator.UpdateRegulationCommand, Void> {
@@ -37,8 +37,7 @@ public class UpdateRegulationCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current =
-                publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
         List<String> jurisdictions =
                 current != null
                         ? current.jurisdictions().stream()
@@ -59,4 +58,3 @@ public class UpdateRegulationCommandActuator
         return null;
     }
 }
-

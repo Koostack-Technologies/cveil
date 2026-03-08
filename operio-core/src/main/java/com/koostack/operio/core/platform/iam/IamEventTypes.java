@@ -24,11 +24,15 @@ public final class IamEventTypes {
     public static final String ROLE_REMOVED = "iam.role.removed";
 
     // -- Legacy (kept for backward compatibility with existing event streams) --
-    /** @deprecated Use {@link #SERVICE_ACCOUNT_CREATED} for new code. */
+    /**
+     * @deprecated Use {@link #SERVICE_ACCOUNT_CREATED} for new code.
+     */
     @Deprecated(forRemoval = true)
     public static final String API_KEY_GENERATED = "iam.api-key.generated";
 
-    /** @deprecated Use {@link #SERVICE_ACCOUNT_REVOKED} for new code. */
+    /**
+     * @deprecated Use {@link #SERVICE_ACCOUNT_REVOKED} for new code.
+     */
     @Deprecated(forRemoval = true)
     public static final String API_KEY_REVOKED = "iam.api-key.revoked";
 }

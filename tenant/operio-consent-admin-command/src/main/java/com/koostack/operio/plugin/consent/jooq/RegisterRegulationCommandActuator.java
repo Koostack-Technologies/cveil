@@ -14,8 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RegisterRegulationCommandActuator
-        implements Actuator<
-                RegisterRegulationCommandActuator.RegisterRegulationCommand, Void> {
+        implements Actuator<RegisterRegulationCommandActuator.RegisterRegulationCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RegisterRegulationCommandActuator.class);
@@ -38,4 +37,3 @@ public class RegisterRegulationCommandActuator
         return null;
     }
 }
-

@@ -34,4 +34,3 @@ public class RegisterEntityCommandActuator
         return null;
     }
 }
-

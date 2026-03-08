@@ -13,7 +13,6 @@ import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.*;
 
 /**
@@ -168,12 +167,21 @@ class TenantIamResourceIT {
                     .untilAsserted(
                             () -> {
                                 var roles =
-                                        supportA.keycloak().realm(TENANT_A_REALM).roles().list().stream()
+                                        supportA
+                                                .keycloak()
+                                                .realm(TENANT_A_REALM)
+                                                .roles()
+                                                .list()
+                                                .stream()
                                                 .map(r -> r.getName())
                                                 .toList();
                                 assertThat(roles)
                                         .as("Tenant realm should have IAM roles")
-                                        .containsAll(List.of("tenant-admin", "tenant-write", "tenant-read"));
+                                        .containsAll(
+                                                List.of(
+                                                        "tenant-admin",
+                                                        "tenant-write",
+                                                        "tenant-read"));
                             });
         }
     }
@@ -239,9 +247,7 @@ class TenantIamResourceIT {
                             .realm("operio-platform")
                             .users()
                             .searchByEmail(tenantAUserEmail, true);
-            assertThat(users)
-                    .as("Tenant user should NOT exist in platform realm")
-                    .isEmpty();
+            assertThat(users).as("Tenant user should NOT exist in platform realm").isEmpty();
         }
 
         @Test
@@ -381,11 +387,7 @@ class TenantIamResourceIT {
                             () ->
                                     given().header("Authorization", tenantAAuth())
                                             .when()
-                                            .get(
-                                                    BASE_PATH
-                                                            + "/users/"
-                                                            + tenantAUsername
-                                                            + "/roles")
+                                            .get(BASE_PATH + "/users/" + tenantAUsername + "/roles")
                                             .then()
                                             .statusCode(200)
                                             .body("$", notNullValue()));
@@ -397,7 +399,8 @@ class TenantIamResourceIT {
         void assignRole() {
             given().header("Authorization", tenantAAuth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                     { "role": "tenant-write" }
                     """)
                     .when()
@@ -426,9 +429,7 @@ class TenantIamResourceIT {
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles =
-                                        supportA.getKeycloakUserRoles(
-                                                TENANT_A_REALM, kcUserId);
+                                var roles = supportA.getKeycloakUserRoles(TENANT_A_REALM, kcUserId);
                                 assertThat(roles)
                                         .extracting("name")
                                         .as("User should have tenant-write role")
@@ -466,9 +467,7 @@ class TenantIamResourceIT {
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles =
-                                        supportA.getKeycloakUserRoles(
-                                                TENANT_A_REALM, kcUserId);
+                                var roles = supportA.getKeycloakUserRoles(TENANT_A_REALM, kcUserId);
                                 var roleNames = roles.stream().map(r -> r.getName()).toList();
                                 assertThat(roleNames)
                                         .as("User should not have tenant-write role")
@@ -616,7 +615,12 @@ class TenantIamResourceIT {
             var kcUserId = users.get(0).getId();
 
             // Mark email as verified (tenant realm requires verifyEmail)
-            var userRep = supportA.keycloak().realm(TENANT_A_REALM).users().get(kcUserId).toRepresentation();
+            var userRep =
+                    supportA.keycloak()
+                            .realm(TENANT_A_REALM)
+                            .users()
+                            .get(kcUserId)
+                            .toRepresentation();
             userRep.setEmailVerified(true);
             supportA.keycloak().realm(TENANT_A_REALM).users().get(kcUserId).update(userRep);
 
@@ -668,8 +672,7 @@ class TenantIamResourceIT {
             String[] parts = tenantAAccessToken.split("\\.");
             assertThat(parts).hasSize(3);
 
-            String payload =
-                    new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
+            String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
             assertThat(payload).contains("tenant-login@acme-test.com");
             // Issuer should reference the tenant realm
             assertThat(payload).contains(TENANT_A_REALM);
@@ -902,9 +905,7 @@ class TenantIamResourceIT {
                             .realm(TENANT_B_REALM)
                             .users()
                             .searchByEmail(tenantAUserEmail, true);
-            assertThat(users)
-                    .as("Tenant A user should NOT exist in tenant B realm")
-                    .isEmpty();
+            assertThat(users).as("Tenant A user should NOT exist in tenant B realm").isEmpty();
         }
     }
 

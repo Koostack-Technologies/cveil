@@ -19,15 +19,14 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "assign field category" command.
  *
- * <p>Absorbs orchestration logic formerly split between {@code DefaultTenantService} (query
- * service call to build the snapshot) and {@code JooqConsentAdminCommandService} (event
- * publishing). Instead of calling the query service, the actuator hydrates the {@link
- * FieldAggregate} directly from the event log via {@link EventService#hydrateAggregate}, builds
- * the snapshot, and publishes the domain event.
+ * <p>Absorbs orchestration logic formerly split between {@code DefaultTenantService} (query service
+ * call to build the snapshot) and {@code JooqConsentAdminCommandService} (event publishing).
+ * Instead of calling the query service, the actuator hydrates the {@link FieldAggregate} directly
+ * from the event log via {@link EventService#hydrateAggregate}, builds the snapshot, and publishes
+ * the domain event.
  */
 public class AssignFieldCategoryCommandActuator
-        implements Actuator<
-                AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
+        implements Actuator<AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(AssignFieldCategoryCommandActuator.class);
@@ -41,10 +40,7 @@ public class AssignFieldCategoryCommandActuator
      * @param categoryDescription optional description of the category
      */
     public record AssignFieldCategoryCommand(
-            String fieldName,
-            String entityName,
-            String categoryName,
-            String categoryDescription) {}
+            String fieldName, String entityName, String categoryName, String categoryDescription) {}
 
     @Override
     public Void execute(EventService<?> publisher, AssignFieldCategoryCommand command) {
@@ -86,10 +82,7 @@ public class AssignFieldCategoryCommandActuator
                         snapshot);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        tenantId,
-                        ConsentEventTypes.FIELD_CATEGORY_ASSIGNED,
-                        key,
-                        payload));
+                        tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED, key, payload));
 
         LOG.info(
                 "Field category assigned: field={}, entity={}, category={}",
@@ -99,4 +92,3 @@ public class AssignFieldCategoryCommandActuator
         return null;
     }
 }
-

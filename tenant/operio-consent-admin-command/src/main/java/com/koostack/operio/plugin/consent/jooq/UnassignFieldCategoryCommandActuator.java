@@ -75,4 +75,3 @@ public class UnassignFieldCategoryCommandActuator
         return null;
     }
 }
-

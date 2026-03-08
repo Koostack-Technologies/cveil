@@ -26,8 +26,7 @@ public class RemovePurposeCommandActuator
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         var payload = new PurposeRemovedEvent(command.purposeName());
-        AggregateKey key =
-                new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_REMOVED, key, payload));
@@ -35,4 +34,3 @@ public class RemovePurposeCommandActuator
         return null;
     }
 }
-

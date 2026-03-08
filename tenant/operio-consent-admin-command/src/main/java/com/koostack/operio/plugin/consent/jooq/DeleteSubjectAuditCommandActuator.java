@@ -14,8 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DeleteSubjectAuditCommandActuator
-        implements Actuator<
-                DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand, Void> {
+        implements Actuator<DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DeleteSubjectAuditCommandActuator.class);
@@ -40,8 +39,7 @@ public class DeleteSubjectAuditCommandActuator
                         command.actor(),
                         command.ipAddress(),
                         command.userAgent());
-        AggregateKey key =
-                new AggregateKey(aggregateId, DsarAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, DsarAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.SUBJECT_AUDIT_DELETED, key, payload));
@@ -49,4 +47,3 @@ public class DeleteSubjectAuditCommandActuator
         return null;
     }
 }
-

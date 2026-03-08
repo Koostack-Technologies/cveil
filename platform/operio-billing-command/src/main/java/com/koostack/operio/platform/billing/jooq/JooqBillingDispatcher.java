@@ -17,8 +17,8 @@ import org.slf4j.LoggerFactory;
  * legacy {@link BillingCommandService} interface (thin delegation layer for backward compatibility
  * with existing REST resources and holders).
  *
- * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the
- * appropriate {@link Actuator} by command record type.
+ * <p>All non-deprecated command methods delegate to the dispatcher, which routes to the appropriate
+ * {@link Actuator} by command record type.
  */
 public class JooqBillingDispatcher
         implements CommandDispatcher, BillingCommandService<JooqBillingCommandConfig> {

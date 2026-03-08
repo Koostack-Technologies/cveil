@@ -3,7 +3,6 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.exception.OperioAuthException;

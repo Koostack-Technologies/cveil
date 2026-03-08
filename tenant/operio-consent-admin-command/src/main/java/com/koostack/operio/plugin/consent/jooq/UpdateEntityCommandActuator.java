@@ -34,4 +34,3 @@ public class UpdateEntityCommandActuator
         return null;
     }
 }
-

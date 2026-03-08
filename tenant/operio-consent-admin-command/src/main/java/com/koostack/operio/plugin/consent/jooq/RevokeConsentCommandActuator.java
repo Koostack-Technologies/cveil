@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class RevokeConsentCommandActuator
         implements Actuator<RevokeConsentCommandActuator.RevokeConsentCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(RevokeConsentCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RevokeConsentCommandActuator.class);
 
     public record RevokeConsentCommand(
             String subjectId,
@@ -49,12 +48,10 @@ public class RevokeConsentCommandActuator
                         command.ipAddress(),
                         command.userAgent());
         AggregateKey key =
-                new AggregateKey(
-                        aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
+                new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.CONSENT_REVOKED, key, payload));
         return null;
     }
 }
-

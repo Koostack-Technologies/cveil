@@ -16,8 +16,7 @@ import java.util.UUID;
  * <p>Publishes a {@link BillingProfileCreatedEvent} to the platform event store.
  */
 public class CreateBillingProfileCommandActuator
-        implements Actuator<
-                CreateBillingProfileCommandActuator.CreateBillingProfileCommand, Void> {
+        implements Actuator<CreateBillingProfileCommandActuator.CreateBillingProfileCommand, Void> {
 
     public record CreateBillingProfileCommand(String tenantId, String billingEmail) {}
 

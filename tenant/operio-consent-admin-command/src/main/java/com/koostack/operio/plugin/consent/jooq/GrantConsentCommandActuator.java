@@ -17,8 +17,7 @@ import org.slf4j.LoggerFactory;
 public class GrantConsentCommandActuator
         implements Actuator<GrantConsentCommandActuator.GrantConsentCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(GrantConsentCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GrantConsentCommandActuator.class);
 
     public record GrantConsentCommand(
             String subjectId,
@@ -52,12 +51,10 @@ public class GrantConsentCommandActuator
                         command.userAgent(),
                         command.expiresAt());
         AggregateKey key =
-                new AggregateKey(
-                        aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
+                new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.CONSENT_GRANTED, key, payload));
         return null;
     }
 }
-

@@ -35,4 +35,3 @@ public class RemoveFieldCommandActuator
         return null;
     }
 }
-

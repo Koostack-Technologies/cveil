@@ -55,7 +55,17 @@ public class JooqCoreCommandService implements CoreCommandService<JooqCoreComman
     }
 
     @Override
-    public void changeTenantPlan(String tenantId, String oldPlan, String newPlan) {
+    public void changeTenantPlan(String tenantId, String newPlan) {
+        // Hydrate the tenant aggregate from the event log to resolve the current plan
+        UUID aggregateId = TenantAggregate.deriveId(tenantId);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        TenantAggregate.AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
+        TenantAggregate current = eventService.hydrateAggregate(key, TenantAggregate.class);
+        String oldPlan = current != null ? current.plan() : null;
+
         var payload = new TenantPlanChangedEvent(tenantId, oldPlan, newPlan);
         publishEvent(CoreEventTypes.TENANT_PLAN_CHANGED, tenantId, payload);
     }

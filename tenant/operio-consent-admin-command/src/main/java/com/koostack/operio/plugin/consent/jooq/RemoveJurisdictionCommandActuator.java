@@ -36,4 +36,3 @@ public class RemoveJurisdictionCommandActuator
         return null;
     }
 }
-

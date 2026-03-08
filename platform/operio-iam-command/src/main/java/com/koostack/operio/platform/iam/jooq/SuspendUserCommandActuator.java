@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "suspend user" command for platform IAM.
  *
- * <p>Disables the user in Keycloak first, then publishes a {@link UserSuspendedEvent}.
- * If the Keycloak call fails the event is never recorded.
+ * <p>Disables the user in Keycloak first, then publishes a {@link UserSuspendedEvent}. If the
+ * Keycloak call fails the event is never recorded.
  */
 public class SuspendUserCommandActuator
         implements Actuator<SuspendUserCommandActuator.SuspendUserCommand, Void> {
@@ -56,8 +56,9 @@ public class SuspendUserCommandActuator
         // Publish domain event
         var payload = new UserSuspendedEvent(command.realmId(), command.userId());
         UUID aggregateId = deriveAggregateId(command.realmId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -66,14 +67,17 @@ public class SuspendUserCommandActuator
                         key,
                         payload));
 
-        LOG.info("User suspended: realmId={}, identifier={}, kcId={}",
-                command.realmId(), command.emailOrUsername(), kcUserId);
+        LOG.info(
+                "User suspended: realmId={}, identifier={}, kcId={}",
+                command.realmId(),
+                command.emailOrUsername(),
+                kcUserId);
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);

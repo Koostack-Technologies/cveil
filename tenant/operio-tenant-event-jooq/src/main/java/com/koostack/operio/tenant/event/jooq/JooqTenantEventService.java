@@ -263,10 +263,7 @@ public class JooqTenantEventService implements TenantEventService<TenantEventJoo
             throw e;
         } catch (Exception e) {
             throw new OperioServiceException(
-                    "Failed to hydrate aggregate "
-                            + key.aggregateType()
-                            + "/"
-                            + key.aggregateId(),
+                    "Failed to hydrate aggregate " + key.aggregateType() + "/" + key.aggregateId(),
                     e);
         }
     }

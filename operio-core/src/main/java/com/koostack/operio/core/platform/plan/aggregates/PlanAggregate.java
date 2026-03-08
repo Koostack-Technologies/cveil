@@ -120,4 +120,3 @@ public record PlanAggregate(
         }
     }
 }
-

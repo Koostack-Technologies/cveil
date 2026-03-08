@@ -1,7 +1,6 @@
 package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.cqrs.CommandDispatcher;
-import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
@@ -70,9 +69,13 @@ public class PlatformResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
-    @Inject @Named("coreDispatcher") CommandDispatcher coreDispatcher;
+    @Inject
+    @Named("coreDispatcher")
+    CommandDispatcher coreDispatcher;
 
-    @Inject @Named("billingDispatcher") CommandDispatcher billingDispatcher;
+    @Inject
+    @Named("billingDispatcher")
+    CommandDispatcher billingDispatcher;
 
     @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
@@ -331,8 +334,7 @@ public class PlatformResource {
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        coreDispatcher.dispatch(
-                new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
+        coreDispatcher.dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
 
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
@@ -576,39 +578,23 @@ public class PlatformResource {
             @Valid UpdatePlanRequest request) {
         requireSuperAdmin(securityContext);
         requireDispatchers();
-        requireCqrsServices();
 
         LOG.info("PUT /platform/tenants/{}/plan - newPlan={}", tenantId, request.plan());
 
-        // Resolve old plan from read model for the change event
-        String oldPlan = null;
-        var tenant = cqrs.coreQueryService().getTenant(tenantId);
-        if (tenant != null) {
-            oldPlan = tenant.plan();
-        }
-
         coreDispatcher.dispatch(
                 new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
-                        tenantId, oldPlan, request.plan()));
+                        tenantId, request.plan()));
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);
 
-        // Read the existing tenant for metadata; override the plan field
-        // because the plan-changed event is projected asynchronously.
-        TenantResponse response;
-        if (tenant != null) {
-            response =
-                    new TenantResponse(
-                            tenant.tenantId(),
-                            tenant.displayName(),
-                            request.plan(),
-                            tenant.status(),
-                            tenant.createdAt());
-        } else {
-            response = new TenantResponse(tenantId, null, request.plan(), null, null);
-        }
-
-        return Response.ok(response).build();
+        return Response.ok(
+                        MessageResponse.of(
+                                "Plan change to '"
+                                        + request.plan()
+                                        + "' dispatched for tenant '"
+                                        + tenantId
+                                        + "'"))
+                .build();
     }
 }

@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class UpdateCategoryCommandActuator
         implements Actuator<UpdateCategoryCommandActuator.UpdateCategoryCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(UpdateCategoryCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(UpdateCategoryCommandActuator.class);
 
     public record UpdateCategoryCommand(String categoryName, String description) {}
 
@@ -36,4 +35,3 @@ public class UpdateCategoryCommandActuator
         return null;
     }
 }
-

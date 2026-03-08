@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class ExpireConsentCommandActuator
         implements Actuator<ExpireConsentCommandActuator.ExpireConsentCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(ExpireConsentCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ExpireConsentCommandActuator.class);
 
     public record ExpireConsentCommand(
             String subjectId,
@@ -43,12 +42,10 @@ public class ExpireConsentCommandActuator
                         command.entityName(),
                         command.categoryName());
         AggregateKey key =
-                new AggregateKey(
-                        aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
+                new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.CONSENT_EXPIRED, key, payload));
         return null;
     }
 }
-

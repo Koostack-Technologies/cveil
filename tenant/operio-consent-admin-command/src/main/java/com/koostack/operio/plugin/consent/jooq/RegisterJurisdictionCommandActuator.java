@@ -14,8 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RegisterJurisdictionCommandActuator
-        implements Actuator<
-                RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand, Void> {
+        implements Actuator<RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RegisterJurisdictionCommandActuator.class);
@@ -28,8 +27,7 @@ public class RegisterJurisdictionCommandActuator
         String tenantId = TenantContext.require();
         UUID aggregateId = JurisdictionAggregate.deriveId(command.jurisdictionName());
         var payload =
-                new JurisdictionRegisteredEvent(
-                        command.jurisdictionName(), command.description());
+                new JurisdictionRegisteredEvent(command.jurisdictionName(), command.description());
         AggregateKey key =
                 new AggregateKey(aggregateId, JurisdictionAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
@@ -39,4 +37,3 @@ public class RegisterJurisdictionCommandActuator
         return null;
     }
 }
-

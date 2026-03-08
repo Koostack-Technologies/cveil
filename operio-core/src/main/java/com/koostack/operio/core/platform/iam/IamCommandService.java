@@ -44,7 +44,11 @@ public interface IamCommandService<T> extends Plugin<T> {
      * @return the registration result
      */
     RegisterUserResult registerUser(
-            String realmId, String username, String email, String fullName, Set<String> roles,
+            String realmId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
             boolean temporaryPassword);
 
     /**
@@ -72,8 +76,7 @@ public interface IamCommandService<T> extends Plugin<T> {
      * @param roles roles to assign to the service account
      * @return the result containing the one-time client secret
      */
-    CreateServiceAccountResult createServiceAccount(
-            String realmId, String name, Set<String> roles);
+    CreateServiceAccountResult createServiceAccount(String realmId, String name, Set<String> roles);
 
     /**
      * Revoke/disable a service account. Publishes a {@code ServiceAccountRevokedEvent}.

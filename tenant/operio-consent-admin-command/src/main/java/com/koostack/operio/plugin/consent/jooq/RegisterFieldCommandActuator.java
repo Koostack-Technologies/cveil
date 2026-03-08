@@ -19,10 +19,7 @@ public class RegisterFieldCommandActuator
     private static final Logger LOG = LoggerFactory.getLogger(RegisterFieldCommandActuator.class);
 
     public record RegisterFieldCommand(
-            String fieldName,
-            String entityName,
-            String description,
-            String entityDescription) {}
+            String fieldName, String entityName, String description, String entityDescription) {}
 
     @Override
     public Void execute(EventService<?> publisher, RegisterFieldCommand command) {
@@ -44,4 +41,3 @@ public class RegisterFieldCommandActuator
         return null;
     }
 }
-

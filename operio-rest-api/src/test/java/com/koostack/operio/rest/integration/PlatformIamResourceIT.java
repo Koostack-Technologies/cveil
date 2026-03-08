@@ -13,8 +13,6 @@ import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.*;
 
 /**
@@ -346,7 +344,8 @@ class PlatformIamResourceIT {
         void assignRole() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                     { "role": "tenant-admin" }
                     """)
                     .when()
@@ -374,9 +373,7 @@ class PlatformIamResourceIT {
                                                 .searchByEmail(userEmail, true);
                                 assertThat(users).isNotEmpty();
                                 var kcUserId = users.get(0).getId();
-                                var roles =
-                                        support.getKeycloakUserRoles(
-                                                PLATFORM_REALM, kcUserId);
+                                var roles = support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
                                 assertThat(roles)
                                         .extracting("name")
                                         .as("User should have tenant-admin role")
@@ -413,11 +410,8 @@ class PlatformIamResourceIT {
                                                 .searchByEmail(userEmail, true);
                                 assertThat(users).isNotEmpty();
                                 var kcUserId = users.get(0).getId();
-                                var roles =
-                                        support.getKeycloakUserRoles(
-                                                PLATFORM_REALM, kcUserId);
-                                var roleNames =
-                                        roles.stream().map(r -> r.getName()).toList();
+                                var roles = support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
+                                var roleNames = roles.stream().map(r -> r.getName()).toList();
                                 assertThat(roleNames)
                                         .as("User should not have tenant-admin role")
                                         .doesNotContain("tenant-admin");
@@ -601,8 +595,7 @@ class PlatformIamResourceIT {
             assertThat(parts).hasSize(3);
 
             // Decode payload (base64url)
-            String payload =
-                    new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
+            String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
             assertThat(payload).contains("login-user@operio-test.com");
         }
 

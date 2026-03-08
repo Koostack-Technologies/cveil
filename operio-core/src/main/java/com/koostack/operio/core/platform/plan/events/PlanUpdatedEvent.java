@@ -13,4 +13,3 @@ public record PlanUpdatedEvent(
         boolean isPublic,
         int sortOrder)
         implements DomainEvent {}
-

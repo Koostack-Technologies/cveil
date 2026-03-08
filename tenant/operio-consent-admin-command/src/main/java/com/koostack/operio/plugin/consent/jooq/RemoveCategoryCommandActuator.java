@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class RemoveCategoryCommandActuator
         implements Actuator<RemoveCategoryCommandActuator.RemoveCategoryCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(RemoveCategoryCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RemoveCategoryCommandActuator.class);
 
     public record RemoveCategoryCommand(String categoryName) {}
 
@@ -36,4 +35,3 @@ public class RemoveCategoryCommandActuator
         return null;
     }
 }
-

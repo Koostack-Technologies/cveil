@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "assign role" command for tenant IAM.
  *
- * <p>Assigns the role in the tenant's Keycloak realm first, then publishes a
- * {@link TenantRoleAssignedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Assigns the role in the tenant's Keycloak realm first, then publishes a {@link
+ * TenantRoleAssignedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantAssignRoleCommandActuator
         implements Actuator<TenantAssignRoleCommandActuator.AssignRoleCommand, Void> {
@@ -58,27 +58,27 @@ public class TenantAssignRoleCommandActuator
         }
 
         // Publish domain event
-        var payload = new TenantRoleAssignedEvent(
-                command.tenantId(), command.userId(), command.role());
+        var payload =
+                new TenantRoleAssignedEvent(command.tenantId(), command.userId(), command.role());
 
         UUID aggregateId = deriveAggregateId(command.tenantId());
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.ROLE_ASSIGNED,
-                        key,
-                        payload));
+                        command.tenantId(), TenantIamEventTypes.ROLE_ASSIGNED, key, payload));
 
-        LOG.info("Tenant role assigned: tenantId={}, identifier={}, role={}",
-                command.tenantId(), command.emailOrUsername(), command.role());
+        LOG.info(
+                "Tenant role assigned: tenantId={}, identifier={}, role={}",
+                command.tenantId(),
+                command.emailOrUsername(),
+                command.role());
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);
@@ -107,4 +107,3 @@ public class TenantAssignRoleCommandActuator
         return "t_" + tenantId;
     }
 }
-

@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class UpdateSubjectCommandActuator
         implements Actuator<UpdateSubjectCommandActuator.UpdateSubjectCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(UpdateSubjectCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(UpdateSubjectCommandActuator.class);
 
     public record UpdateSubjectCommand(String subjectName, String description) {}
 
@@ -27,8 +26,7 @@ public class UpdateSubjectCommandActuator
         String tenantId = TenantContext.require();
         UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
         var payload = new SubjectUpdatedEvent(command.subjectName(), command.description());
-        AggregateKey key =
-                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.SUBJECT_UPDATED, key, payload));
@@ -36,4 +34,3 @@ public class UpdateSubjectCommandActuator
         return null;
     }
 }
-

@@ -4,5 +4,4 @@ import com.koostack.operio.core.event.DomainEvent;
 import java.util.Set;
 
 public record ServiceAccountCreatedEvent(
-        String realmId, String clientId, String name, Set<String> roles)
-        implements DomainEvent {}
+        String realmId, String clientId, String name, Set<String> roles) implements DomainEvent {}

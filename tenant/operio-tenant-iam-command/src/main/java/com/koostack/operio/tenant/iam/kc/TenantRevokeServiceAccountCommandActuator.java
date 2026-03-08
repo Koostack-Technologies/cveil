@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "revoke service account" command for tenant IAM.
  *
- * <p>Disables the Keycloak client in the tenant's realm first, then publishes a
- * {@link TenantServiceAccountRevokedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Disables the Keycloak client in the tenant's realm first, then publishes a {@link
+ * TenantServiceAccountRevokedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantRevokeServiceAccountCommandActuator
         implements Actuator<
@@ -57,8 +57,10 @@ public class TenantRevokeServiceAccountCommandActuator
                 client.setEnabled(false);
                 realm.clients().get(internalId).update(client);
             } else {
-                LOG.debug("Service account not found for revocation: realm={}, clientId={}",
-                        realmId, command.clientId());
+                LOG.debug(
+                        "Service account not found for revocation: realm={}, clientId={}",
+                        realmId,
+                        command.clientId());
             }
         }
 
@@ -66,8 +68,8 @@ public class TenantRevokeServiceAccountCommandActuator
         var payload = new TenantServiceAccountRevokedEvent(command.tenantId(), command.clientId());
 
         UUID aggregateId = deriveAggregateId(command.tenantId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
+        AggregateKey key =
+                new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -76,19 +78,19 @@ public class TenantRevokeServiceAccountCommandActuator
                         key,
                         payload));
 
-        LOG.info("Tenant service account revoked: tenantId={}, clientId={}",
-                command.tenantId(), command.clientId());
+        LOG.info(
+                "Tenant service account revoked: tenantId={}, clientId={}",
+                command.tenantId(),
+                command.clientId());
         return null;
     }
 
     private static UUID deriveAggregateId(String tenantId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + tenantId)
-                        .getBytes(StandardCharsets.UTF_8));
+                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + tenantId).getBytes(StandardCharsets.UTF_8));
     }
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
     }
 }
-

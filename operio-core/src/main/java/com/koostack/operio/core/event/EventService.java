@@ -57,5 +57,4 @@ public interface EventService<T> extends Plugin<T> {
         throw new UnsupportedOperationException(
                 "hydrateAggregate is not supported by this EventService implementation");
     }
-
 }

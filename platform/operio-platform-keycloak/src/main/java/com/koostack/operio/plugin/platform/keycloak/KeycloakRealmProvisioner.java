@@ -31,8 +31,14 @@ public class KeycloakRealmProvisioner {
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakRealmProvisioner.class);
 
     private static final List<String> DEFAULT_ROLES =
-            List.of("consent:read", "consent:write", "admin:read", "admin:write",
-                    "tenant-admin", "tenant-write", "tenant-read");
+            List.of(
+                    "consent:read",
+                    "consent:write",
+                    "admin:read",
+                    "admin:write",
+                    "tenant-admin",
+                    "tenant-write",
+                    "tenant-read");
 
     private static final int ACCESS_TOKEN_LIFESPAN_SECONDS = 900; // 15 minutes
     private static final int REFRESH_TOKEN_LIFESPAN_SECONDS = 604800; // 7 days
@@ -150,17 +156,17 @@ public class KeycloakRealmProvisioner {
                 if (userId != null) {
                     // Assign tenant-admin role
                     try {
-                        RoleRepresentation adminRole = realm.roles().get("tenant-admin")
-                                .toRepresentation();
+                        RoleRepresentation adminRole =
+                                realm.roles().get("tenant-admin").toRepresentation();
                         realm.users().get(userId).roles().realmLevel().add(List.of(adminRole));
                     } catch (Exception e) {
-                        LOG.warn("Failed to assign tenant-admin role to root user: {}",
+                        LOG.warn(
+                                "Failed to assign tenant-admin role to root user: {}",
                                 e.getMessage());
                     }
                     // Send password setup email
                     try {
-                        realm.users().get(userId)
-                                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+                        realm.users().get(userId).executeActionsEmail(List.of("UPDATE_PASSWORD"));
                     } catch (Exception e) {
                         LOG.warn("Failed to send password setup email: {}", e.getMessage());
                     }
@@ -170,8 +176,10 @@ public class KeycloakRealmProvisioner {
                 LOG.info("Root user already exists (409) in realm '{}': email={}", realmId, email);
             } else {
                 throw new IllegalStateException(
-                        "Failed to create root user in realm '" + realmId
-                                + "': HTTP " + response.getStatus());
+                        "Failed to create root user in realm '"
+                                + realmId
+                                + "': HTTP "
+                                + response.getStatus());
             }
         } finally {
             response.close();
@@ -209,8 +217,7 @@ public class KeycloakRealmProvisioner {
         }
     }
 
-    private void ensurePlatformRootUser(
-            String platformRealmId, String email, String password) {
+    private void ensurePlatformRootUser(String platformRealmId, String email, String password) {
         RealmResource realm = adminClient.realm(platformRealmId);
 
         List<UserRepresentation> existing = realm.users().searchByUsername("root", true);
@@ -232,33 +239,31 @@ public class KeycloakRealmProvisioner {
                 if (userId != null && password != null) {
                     org.keycloak.representations.idm.CredentialRepresentation cred =
                             new org.keycloak.representations.idm.CredentialRepresentation();
-                    cred.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
+                    cred.setType(
+                            org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
                     cred.setValue(password);
                     cred.setTemporary(false);
                     realm.users().get(userId).resetPassword(cred);
 
                     // Assign super-admin role
                     try {
-                        RoleRepresentation superAdmin = realm.roles().get("super-admin")
-                                .toRepresentation();
-                        realm.users().get(userId).roles().realmLevel()
-                                .add(List.of(superAdmin));
+                        RoleRepresentation superAdmin =
+                                realm.roles().get("super-admin").toRepresentation();
+                        realm.users().get(userId).roles().realmLevel().add(List.of(superAdmin));
                     } catch (jakarta.ws.rs.NotFoundException nfe) {
                         // Create the role first
                         RoleRepresentation newRole = new RoleRepresentation();
                         newRole.setName("super-admin");
                         newRole.setDescription("Super administrator with full platform access");
                         realm.roles().create(newRole);
-                        RoleRepresentation superAdmin = realm.roles().get("super-admin")
-                                .toRepresentation();
-                        realm.users().get(userId).roles().realmLevel()
-                                .add(List.of(superAdmin));
+                        RoleRepresentation superAdmin =
+                                realm.roles().get("super-admin").toRepresentation();
+                        realm.users().get(userId).roles().realmLevel().add(List.of(superAdmin));
                     }
                 }
                 LOG.info("Platform root user created in realm '{}'", platformRealmId);
             } else if (response.getStatus() == 409) {
-                LOG.debug("Platform root user already exists (409) in realm '{}'",
-                        platformRealmId);
+                LOG.debug("Platform root user already exists (409) in realm '{}'", platformRealmId);
             }
         } finally {
             response.close();

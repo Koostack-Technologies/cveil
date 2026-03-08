@@ -30,8 +30,7 @@ public class UpdateTenantDisplayNameCommandActuator
                         TenantAggregate.AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
 
-        var payload =
-                new TenantDisplayNameUpdatedEvent(command.tenantId(), command.displayName());
+        var payload = new TenantDisplayNameUpdatedEvent(command.tenantId(), command.displayName());
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,

@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "suspend user" command for tenant IAM.
  *
- * <p>Disables the user in the tenant's Keycloak realm first, then publishes a
- * {@link TenantUserSuspendedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Disables the user in the tenant's Keycloak realm first, then publishes a {@link
+ * TenantUserSuspendedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantSuspendUserCommandActuator
         implements Actuator<TenantSuspendUserCommandActuator.SuspendUserCommand, Void> {
@@ -64,19 +64,18 @@ public class TenantSuspendUserCommandActuator
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.USER_SUSPENDED,
-                        key,
-                        payload));
+                        command.tenantId(), TenantIamEventTypes.USER_SUSPENDED, key, payload));
 
-        LOG.info("Tenant user suspended: tenantId={}, identifier={}",
-                command.tenantId(), command.emailOrUsername());
+        LOG.info(
+                "Tenant user suspended: tenantId={}, identifier={}",
+                command.tenantId(),
+                command.emailOrUsername());
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);
@@ -91,4 +90,3 @@ public class TenantSuspendUserCommandActuator
         return "t_" + tenantId;
     }
 }
-

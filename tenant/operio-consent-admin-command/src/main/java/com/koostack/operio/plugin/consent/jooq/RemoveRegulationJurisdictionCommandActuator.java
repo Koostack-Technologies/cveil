@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "remove regulation jurisdiction" command.
  *
- * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the
- * post-mutation {@link RegulationSnapshot} with the target jurisdiction removed.
+ * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the post-mutation
+ * {@link RegulationSnapshot} with the target jurisdiction removed.
  */
 public class RemoveRegulationJurisdictionCommandActuator
         implements Actuator<
@@ -34,8 +34,7 @@ public class RemoveRegulationJurisdictionCommandActuator
             String regulationName, String jurisdictionName) {}
 
     @Override
-    public Void execute(
-            EventService<?> publisher, RemoveRegulationJurisdictionCommand command) {
+    public Void execute(EventService<?> publisher, RemoveRegulationJurisdictionCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
 
@@ -44,8 +43,7 @@ public class RemoveRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current =
-                publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
@@ -65,10 +63,7 @@ public class RemoveRegulationJurisdictionCommandActuator
                         command.regulationName(), command.jurisdictionName(), snapshot);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        tenantId,
-                        ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
-                        key,
-                        payload));
+                        tenantId, ConsentEventTypes.REGULATION_JURISDICTION_REMOVED, key, payload));
 
         LOG.info(
                 "Regulation jurisdiction removed: regulation={}, jurisdiction={}",
@@ -77,4 +72,3 @@ public class RemoveRegulationJurisdictionCommandActuator
         return null;
     }
 }
-

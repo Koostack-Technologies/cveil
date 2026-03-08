@@ -30,8 +30,7 @@ public class UpdatePaymentMethodStatusCommandActuator
                         BillingProfileAggregate.AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
 
-        var payload =
-                new PaymentMethodStatusUpdatedEvent(command.tenantId(), command.status());
+        var payload = new PaymentMethodStatusUpdatedEvent(command.tenantId(), command.status());
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,

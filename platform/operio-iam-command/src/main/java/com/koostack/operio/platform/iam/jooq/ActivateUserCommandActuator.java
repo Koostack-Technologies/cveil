@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "activate user" command for platform IAM.
  *
- * <p>Re-enables the user in Keycloak first, then publishes a {@link UserActivatedEvent}.
- * If the Keycloak call fails the event is never recorded.
+ * <p>Re-enables the user in Keycloak first, then publishes a {@link UserActivatedEvent}. If the
+ * Keycloak call fails the event is never recorded.
  */
 public class ActivateUserCommandActuator
         implements Actuator<ActivateUserCommandActuator.ActivateUserCommand, Void> {
@@ -56,8 +56,9 @@ public class ActivateUserCommandActuator
         // Publish domain event
         var payload = new UserActivatedEvent(command.realmId(), command.userId());
         UUID aggregateId = deriveAggregateId(command.realmId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -66,14 +67,17 @@ public class ActivateUserCommandActuator
                         key,
                         payload));
 
-        LOG.info("User activated: realmId={}, identifier={}, kcId={}",
-                command.realmId(), command.emailOrUsername(), kcUserId);
+        LOG.info(
+                "User activated: realmId={}, identifier={}, kcId={}",
+                command.realmId(),
+                command.emailOrUsername(),
+                kcUserId);
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);

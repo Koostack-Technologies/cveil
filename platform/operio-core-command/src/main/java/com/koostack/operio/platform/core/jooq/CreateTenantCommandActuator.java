@@ -14,10 +14,9 @@ import java.util.UUID;
 /**
  * Actuator that handles the "create tenant" command.
  *
- * <p>Hydrates the {@link TenantAggregate} from the event store to enforce
- * uniqueness — if an aggregate already exists for the given tenant ID the
- * command is rejected. On success, publishes a {@link TenantCreatedEvent}
- * to the platform event store.
+ * <p>Hydrates the {@link TenantAggregate} from the event store to enforce uniqueness — if an
+ * aggregate already exists for the given tenant ID the command is rejected. On success, publishes a
+ * {@link TenantCreatedEvent} to the platform event store.
  */
 public class CreateTenantCommandActuator
         implements Actuator<CreateTenantCommandActuator.CreateTenantCommand, Void> {
@@ -36,13 +35,11 @@ public class CreateTenantCommandActuator
         // Hydrate existing aggregate — reject if already present
         TenantAggregate existing = publisher.hydrateAggregate(key, TenantAggregate.class);
         if (existing != null) {
-            throw new OperioServiceException(
-                    "Tenant '" + command.tenantId() + "' already exists");
+            throw new OperioServiceException("Tenant '" + command.tenantId() + "' already exists");
         }
 
         var payload =
-                new TenantCreatedEvent(
-                        command.tenantId(), command.displayName(), command.plan());
+                new TenantCreatedEvent(command.tenantId(), command.displayName(), command.plan());
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,

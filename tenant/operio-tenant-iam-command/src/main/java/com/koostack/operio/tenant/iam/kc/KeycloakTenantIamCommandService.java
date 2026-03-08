@@ -67,7 +67,11 @@ public class KeycloakTenantIamCommandService
 
     @Override
     public RegisterUserResult registerUser(
-            String tenantId, String username, String email, String fullName, Set<String> roles,
+            String tenantId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
             boolean temporaryPassword) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
@@ -81,12 +85,22 @@ public class KeycloakTenantIamCommandService
 
         String realmId = toRealmId(tenantId);
         String userId = UUID.randomUUID().toString();
-        var payload = new TenantUserRegisteredEvent(tenantId, userId, username, email, fullName,
-                roles != null ? roles : Set.of(), temporaryPassword);
+        var payload =
+                new TenantUserRegisteredEvent(
+                        tenantId,
+                        userId,
+                        username,
+                        email,
+                        fullName,
+                        roles != null ? roles : Set.of(),
+                        temporaryPassword);
         publishEvent(TenantIamEventTypes.USER_REGISTERED, tenantId, USER_AGGREGATE_TYPE, payload);
 
-        LOG.info("Tenant user registration event published: tenantId={}, username={}, email={}",
-                tenantId, username, email);
+        LOG.info(
+                "Tenant user registration event published: tenantId={}, username={}, email={}",
+                tenantId,
+                username,
+                email);
         return new RegisterUserResult(username, email, realmId);
     }
 
@@ -120,21 +134,30 @@ public class KeycloakTenantIamCommandService
 
         String realmId = toRealmId(tenantId);
         String clientId = "svc-" + name.toLowerCase().replaceAll("[^a-z0-9-]", "-");
-        var payload = new TenantServiceAccountCreatedEvent(tenantId, clientId, name,
-                roles != null ? roles : Set.of());
-        publishEvent(TenantIamEventTypes.SERVICE_ACCOUNT_CREATED, tenantId,
-                SERVICE_ACCOUNT_AGGREGATE_TYPE, payload);
+        var payload =
+                new TenantServiceAccountCreatedEvent(
+                        tenantId, clientId, name, roles != null ? roles : Set.of());
+        publishEvent(
+                TenantIamEventTypes.SERVICE_ACCOUNT_CREATED,
+                tenantId,
+                SERVICE_ACCOUNT_AGGREGATE_TYPE,
+                payload);
 
-        LOG.info("Tenant service account creation event published: tenantId={}, clientId={}",
-                tenantId, clientId);
+        LOG.info(
+                "Tenant service account creation event published: tenantId={}, clientId={}",
+                tenantId,
+                clientId);
         return new CreateServiceAccountResult(clientId, "pending-projection", realmId);
     }
 
     @Override
     public void revokeServiceAccount(String tenantId, String clientId) {
         var payload = new TenantServiceAccountRevokedEvent(tenantId, clientId);
-        publishEvent(TenantIamEventTypes.SERVICE_ACCOUNT_REVOKED, tenantId,
-                SERVICE_ACCOUNT_AGGREGATE_TYPE, payload);
+        publishEvent(
+                TenantIamEventTypes.SERVICE_ACCOUNT_REVOKED,
+                tenantId,
+                SERVICE_ACCOUNT_AGGREGATE_TYPE,
+                payload);
         LOG.info("Tenant service account revoked: tenantId={}, clientId={}", tenantId, clientId);
     }
 
@@ -145,7 +168,11 @@ public class KeycloakTenantIamCommandService
         String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantRoleAssignedEvent(tenantId, userId, role);
         publishEvent(TenantIamEventTypes.ROLE_ASSIGNED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant role assigned: tenantId={}, identifier={}, role={}", tenantId, emailOrUsername, role);
+        LOG.info(
+                "Tenant role assigned: tenantId={}, identifier={}, role={}",
+                tenantId,
+                emailOrUsername,
+                role);
     }
 
     @Override
@@ -153,7 +180,11 @@ public class KeycloakTenantIamCommandService
         String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantRoleRemovedEvent(tenantId, userId, role);
         publishEvent(TenantIamEventTypes.ROLE_REMOVED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant role removed: tenantId={}, identifier={}, role={}", tenantId, emailOrUsername, role);
+        LOG.info(
+                "Tenant role removed: tenantId={}, identifier={}, role={}",
+                tenantId,
+                emailOrUsername,
+                role);
     }
 
     // -- Internal helpers -----------------------------------------------------
@@ -175,8 +206,7 @@ public class KeycloakTenantIamCommandService
             String eventType, String tenantId, String aggregateType, DomainEvent payload) {
         UUID aggregateId = deriveAggregateId(tenantId, aggregateType);
         AggregateKey key = new AggregateKey(aggregateId, aggregateType, tenantId);
-        eventService.publishEvent(
-                PublishDomainEventInput.of(tenantId, eventType, key, payload));
+        eventService.publishEvent(PublishDomainEventInput.of(tenantId, eventType, key, payload));
     }
 
     private static UUID deriveAggregateId(String tenantId, String aggregateType) {

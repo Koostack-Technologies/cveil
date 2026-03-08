@@ -21,9 +21,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "register user" command for tenant IAM.
  *
- * <p>Creates the user in the tenant's Keycloak realm first (idempotent), assigns roles,
- * optionally sends the password-setup email, then publishes a {@link TenantUserRegisteredEvent}
- * to the tenant event store. If the Keycloak call fails the event is never recorded.
+ * <p>Creates the user in the tenant's Keycloak realm first (idempotent), assigns roles, optionally
+ * sends the password-setup email, then publishes a {@link TenantUserRegisteredEvent} to the tenant
+ * event store. If the Keycloak call fails the event is never recorded.
  */
 public class TenantRegisterUserCommandActuator
         implements Actuator<
@@ -51,8 +51,12 @@ public class TenantRegisterUserCommandActuator
      * @param temporaryPassword if true, user must change password on first login
      */
     public record RegisterUserCommand(
-            String tenantId, String username, String email, String fullName,
-            Set<String> roles, boolean temporaryPassword) {}
+            String tenantId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
+            boolean temporaryPassword) {}
 
     /**
      * Result of registering a tenant user.
@@ -85,22 +89,28 @@ public class TenantRegisterUserCommandActuator
         }
 
         // Publish domain event (only reached if KC succeeded)
-        var payload = new TenantUserRegisteredEvent(
-                command.tenantId(), userId, command.username(), command.email(),
-                command.fullName(), roles, command.temporaryPassword());
+        var payload =
+                new TenantUserRegisteredEvent(
+                        command.tenantId(),
+                        userId,
+                        command.username(),
+                        command.email(),
+                        command.fullName(),
+                        roles,
+                        command.temporaryPassword());
 
         UUID aggregateId = deriveAggregateId(command.tenantId());
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.USER_REGISTERED,
-                        key,
-                        payload));
+                        command.tenantId(), TenantIamEventTypes.USER_REGISTERED, key, payload));
 
-        LOG.info("Tenant user registered: tenantId={}, username={}, email={}",
-                command.tenantId(), command.username(), command.email());
+        LOG.info(
+                "Tenant user registered: tenantId={}, username={}, email={}",
+                command.tenantId(),
+                command.username(),
+                command.email());
 
         return new RegisterUserResult(command.username(), command.email(), realmId);
     }
@@ -142,7 +152,8 @@ public class TenantRegisterUserCommandActuator
                 if (createdUserId == null) {
                     throw new IllegalStateException(
                             "Keycloak returned 201 but Location header missing or malformed"
-                                    + " — cannot map command userId " + userId);
+                                    + " — cannot map command userId "
+                                    + userId);
                 }
 
                 for (String roleName : roles) {
@@ -151,15 +162,18 @@ public class TenantRegisterUserCommandActuator
 
                 if (command.temporaryPassword()) {
                     try {
-                        realm.users().get(createdUserId)
+                        realm.users()
+                                .get(createdUserId)
                                 .executeActionsEmail(List.of("UPDATE_PASSWORD"));
                     } catch (Exception e) {
                         LOG.warn("Failed to send password setup email: {}", e.getMessage());
                     }
                 }
             } else if (response.getStatus() == 409) {
-                LOG.debug("User already exists (409) in realm '{}': email={}",
-                        realmId, command.email());
+                LOG.debug(
+                        "User already exists (409) in realm '{}': email={}",
+                        realmId,
+                        command.email());
             } else {
                 throw new RuntimeException(
                         "Keycloak user creation failed: HTTP " + response.getStatus());
@@ -200,4 +214,3 @@ public class TenantRegisterUserCommandActuator
         return "t_" + tenantId;
     }
 }
-

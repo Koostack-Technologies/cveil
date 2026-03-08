@@ -44,21 +44,14 @@ public final class PlatformAggregateEventApplier {
     private static AggregateRoot applyEvent(
             AggregateRoot current, String aggregateType, String eventType, JsonNode payloadNode) {
         return switch (aggregateType) {
-            case TenantAggregate.AGGREGATE_TYPE ->
-                    TenantAggregate.apply(
-                            (TenantAggregate) current, eventType, payloadNode, objectMapper);
-            case BillingProfileAggregate.AGGREGATE_TYPE ->
-                    BillingProfileAggregate.apply(
-                            (BillingProfileAggregate) current,
-                            eventType,
-                            payloadNode,
-                            objectMapper);
-            case PlanAggregate.AGGREGATE_TYPE ->
-                    PlanAggregate.apply(
-                            (PlanAggregate) current, eventType, payloadNode, objectMapper);
-            default ->
-                    throw new IllegalArgumentException(
-                            "Unknown platform aggregate type: " + aggregateType);
+            case TenantAggregate.AGGREGATE_TYPE -> TenantAggregate.apply(
+                    (TenantAggregate) current, eventType, payloadNode, objectMapper);
+            case BillingProfileAggregate.AGGREGATE_TYPE -> BillingProfileAggregate.apply(
+                    (BillingProfileAggregate) current, eventType, payloadNode, objectMapper);
+            case PlanAggregate.AGGREGATE_TYPE -> PlanAggregate.apply(
+                    (PlanAggregate) current, eventType, payloadNode, objectMapper);
+            default -> throw new IllegalArgumentException(
+                    "Unknown platform aggregate type: " + aggregateType);
         };
     }
 
@@ -73,6 +66,3 @@ public final class PlatformAggregateEventApplier {
         }
     }
 }
-
-
-

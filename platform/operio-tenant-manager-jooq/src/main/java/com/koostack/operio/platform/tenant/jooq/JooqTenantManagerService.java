@@ -303,20 +303,24 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
                 if (tenantAdminEmail != null && !tenantAdminEmail.isBlank()) {
                     try {
                         keycloakProvisioner.createRootUser(realmId, tenantAdminEmail);
-                        log.info("Created root admin user in realm '{}': email={}",
-                                realmId, tenantAdminEmail);
+                        log.info(
+                                "Created root admin user in realm '{}': email={}",
+                                realmId,
+                                tenantAdminEmail);
                     } catch (Exception e) {
                         log.warn(
                                 "Failed to create root admin user in realm '{}' — "
                                         + "realm was provisioned. User can be created manually.",
-                                realmId, e);
+                                realmId,
+                                e);
                     }
                 }
             } catch (Exception e) {
                 log.warn(
                         "Failed to provision Keycloak realm for tenant '{}'. "
                                 + "Schema was created successfully — Keycloak can be retried.",
-                        tenantId, e);
+                        tenantId,
+                        e);
             }
         }
 
@@ -328,8 +332,12 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
                 keycloakRealmId);
 
         return new ProvisionResult(
-                schemaName, redisAclUser, redisAclPassword, redisAclPassHash,
-                keycloakRealmId, keycloakClientSecret);
+                schemaName,
+                redisAclUser,
+                redisAclPassword,
+                redisAclPassHash,
+                keycloakRealmId,
+                keycloakClientSecret);
     }
 
     // -----------------------------------------------------------------------

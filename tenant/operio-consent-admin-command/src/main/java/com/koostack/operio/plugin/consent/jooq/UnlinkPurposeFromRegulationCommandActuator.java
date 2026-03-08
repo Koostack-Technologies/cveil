@@ -30,8 +30,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
     private static final Logger LOG =
             LoggerFactory.getLogger(UnlinkPurposeFromRegulationCommandActuator.class);
 
-    public record UnlinkPurposeFromRegulationCommand(
-            String purposeName, String regulationName) {}
+    public record UnlinkPurposeFromRegulationCommand(String purposeName, String regulationName) {}
 
     @Override
     public Void execute(EventService<?> publisher, UnlinkPurposeFromRegulationCommand command) {
@@ -40,8 +39,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
 
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
-        AggregateKey key =
-                new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
         PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
 
@@ -50,8 +48,13 @@ public class UnlinkPurposeFromRegulationCommandActuator
         if (current != null) {
             current.regulationLinks().stream()
                     .filter(r -> !r.regulationName().equals(command.regulationName()))
-                    .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
-                            r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
+                    .map(
+                            r ->
+                                    new PurposeSnapshot.RegulationLinkSnapshot(
+                                            r.regulationName(),
+                                            r.lawfulBasis(),
+                                            r.onGranted(),
+                                            r.onDenied()))
                     .forEach(regs::add);
             policies = UpdatePurposeCommandActuator.toPolicySnapshots(current);
         }
@@ -77,4 +80,3 @@ public class UnlinkPurposeFromRegulationCommandActuator
         return null;
     }
 }
-

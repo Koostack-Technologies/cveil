@@ -2,8 +2,6 @@ package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.models.TenantContext;
-import com.koostack.operio.core.tenant.iam.TenantIamCommandService;
-import com.koostack.operio.core.tenant.iam.TenantIamQueryService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.TenantIamHolder;
@@ -57,17 +55,20 @@ public class TenantIamResource {
             operationId = "tenantRegisterUser",
             summary = "Register a tenant user",
             description = "Creates a new user in the tenant's Keycloak realm.")
-    public Response registerUser(
-            @Context SecurityContext sc, @Valid RegisterUserRequest request) {
+    public Response registerUser(@Context SecurityContext sc, @Valid RegisterUserRequest request) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("POST /iam/users tenant={} username={} email={}",
-                tenantId, request.username(), request.email());
+        LOG.debug(
+                "POST /iam/users tenant={} username={} email={}",
+                tenantId,
+                request.username(),
+                request.email());
 
         var result =
-                tenantIam.commandService()
+                tenantIam
+                        .commandService()
                         .registerUser(
                                 tenantId,
                                 request.username(),
@@ -228,7 +229,7 @@ public class TenantIamResource {
             summary = "Create a tenant service account",
             description =
                     "Creates a Keycloak confidential client with service account enabled in the"
-                            + " tenant realm. The client secret is returned once — store it securely.")
+                        + " tenant realm. The client secret is returned once — store it securely.")
     public Response createServiceAccount(
             @Context SecurityContext sc, @Valid CreateServiceAccountRequest request) {
         requireTenantAdmin(sc);
@@ -238,7 +239,8 @@ public class TenantIamResource {
         LOG.debug("POST /iam/service-accounts name={} tenant={}", request.name(), tenantId);
 
         var result =
-                tenantIam.commandService()
+                tenantIam
+                        .commandService()
                         .createServiceAccount(tenantId, request.name(), request.roles());
         return Response.status(Response.Status.CREATED)
                 .entity(ServiceAccountCreatedResponse.fromTenant(result))
@@ -247,9 +249,7 @@ public class TenantIamResource {
 
     @GET
     @Path("/service-accounts")
-    @Operation(
-            operationId = "tenantListServiceAccounts",
-            summary = "List tenant service accounts")
+    @Operation(operationId = "tenantListServiceAccounts", summary = "List tenant service accounts")
     public Response listServiceAccounts(@Context SecurityContext sc) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
@@ -279,8 +279,7 @@ public class TenantIamResource {
         var account = tenantIam.queryService().getServiceAccount(tenantId, clientId);
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found",
-                            "Service account not found: " + clientId))
+                    .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
                     .build();
         }
         return Response.ok(ServiceAccountResponse.fromTenant(account)).build();
@@ -322,8 +321,11 @@ public class TenantIamResource {
 
         try {
             var result =
-                    tenantIam.queryService()
-                            .authenticate(tenantId, request.email(), request.password());
+                    tenantIamDispatcher()
+                            .dispatch(
+                                    new com.koostack.operio.tenant.iam.kc
+                                            .TenantAuthenticateCommandActuator.AuthenticateCommand(
+                                            tenantId, request.email(), request.password()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -342,7 +344,12 @@ public class TenantIamResource {
         LOG.debug("POST /iam/refresh tenant={}", tenantId);
 
         try {
-            var result = tenantIam.queryService().refreshToken(tenantId, request.refreshToken());
+            var result =
+                    tenantIamDispatcher()
+                            .dispatch(
+                                    new com.koostack.operio.tenant.iam.kc
+                                            .TenantRefreshTokenCommandActuator.RefreshTokenCommand(
+                                            tenantId, request.refreshToken()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -359,7 +366,10 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("POST /iam/logout tenant={}", tenantId);
-        tenantIam.queryService().logout(tenantId, request.refreshToken());
+        tenantIamDispatcher()
+                .dispatch(
+                        new com.koostack.operio.tenant.iam.kc.TenantLogoutCommandActuator
+                                .LogoutCommand(tenantId, request.refreshToken()));
         return Response.ok(MessageResponse.of("Logged out")).build();
     }
 
@@ -385,5 +395,14 @@ public class TenantIamResource {
             throw new IllegalStateException(
                     "Tenant IAM services not available — is Keycloak configured?");
         }
+    }
+
+    private com.koostack.operio.core.cqrs.CommandDispatcher tenantIamDispatcher() {
+        var cmdSvc = tenantIam.commandService();
+        if (cmdSvc instanceof com.koostack.operio.core.cqrs.CommandDispatcher cd) {
+            return cd;
+        }
+        throw new IllegalStateException(
+                "Tenant IAM command service does not implement CommandDispatcher");
     }
 }

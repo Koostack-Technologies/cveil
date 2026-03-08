@@ -72,8 +72,7 @@ public class PlatformCqrsHolder {
         if (iamCommandService instanceof CommandDispatcher cd) {
             return cd;
         }
-        throw new IllegalStateException(
-                "IAM command service does not implement CommandDispatcher");
+        throw new IllegalStateException("IAM command service does not implement CommandDispatcher");
     }
 
     @SuppressWarnings("unchecked")

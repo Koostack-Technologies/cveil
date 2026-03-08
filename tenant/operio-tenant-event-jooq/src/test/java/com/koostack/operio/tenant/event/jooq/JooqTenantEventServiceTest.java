@@ -30,8 +30,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 class JooqTenantEventServiceTest extends TenantEventServiceTestBase {
 
     @BeforeAll
-    static void registerTestEventType() {
-    }
+    static void registerTestEventType() {}
 
     // -----------------------------------------------------------------------
     // publishEvent + getAggregate

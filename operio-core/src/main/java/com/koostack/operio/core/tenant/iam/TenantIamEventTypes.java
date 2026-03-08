@@ -3,8 +3,8 @@ package com.koostack.operio.core.tenant.iam;
 /**
  * String constants for tenant-scoped IAM domain event types published to the tenant event store.
  *
- * <p>Mirrors {@link com.koostack.operio.core.platform.iam.IamEventTypes} but prefixed with
- * {@code tenant-iam.} and published to the per-tenant event stream ({@code t_{tenantId}_event}).
+ * <p>Mirrors {@link com.koostack.operio.core.platform.iam.IamEventTypes} but prefixed with {@code
+ * tenant-iam.} and published to the per-tenant event stream ({@code t_{tenantId}_event}).
  */
 public final class TenantIamEventTypes {
 

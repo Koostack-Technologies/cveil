@@ -43,8 +43,7 @@ public class LinkPurposeToRegulationCommandActuator
 
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
-        AggregateKey key =
-                new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
         PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
 
@@ -54,16 +53,22 @@ public class LinkPurposeToRegulationCommandActuator
         if (current != null) {
             current.regulationLinks().stream()
                     .filter(r -> !r.regulationName().equals(command.regulationName()))
-                    .map(r -> new PurposeSnapshot.RegulationLinkSnapshot(
-                            r.regulationName(), r.lawfulBasis(), r.onGranted(), r.onDenied()))
+                    .map(
+                            r ->
+                                    new PurposeSnapshot.RegulationLinkSnapshot(
+                                            r.regulationName(),
+                                            r.lawfulBasis(),
+                                            r.onGranted(),
+                                            r.onDenied()))
                     .forEach(regs::add);
             policies = UpdatePurposeCommandActuator.toPolicySnapshots(current);
         }
-        regs.add(new PurposeSnapshot.RegulationLinkSnapshot(
-                command.regulationName(),
-                command.lawfulBasis(),
-                command.onGranted(),
-                command.onDenied()));
+        regs.add(
+                new PurposeSnapshot.RegulationLinkSnapshot(
+                        command.regulationName(),
+                        command.lawfulBasis(),
+                        command.onGranted(),
+                        command.onDenied()));
 
         var snapshot =
                 new PurposeSnapshot(
@@ -91,4 +96,3 @@ public class LinkPurposeToRegulationCommandActuator
         return null;
     }
 }
-

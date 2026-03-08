@@ -34,4 +34,3 @@ public class RemoveEntityCommandActuator
         return null;
     }
 }
-

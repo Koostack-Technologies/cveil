@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
-import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
@@ -33,8 +32,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Keycloak-backed platform IAM query service.
  *
- * <p>Reads users, service accounts, and roles from Keycloak Admin API. Also provides
- * authentication (ROPC grant) and JWT verification (JWKS).
+ * <p>Reads users, service accounts, and roles from Keycloak Admin API. Also provides authentication
+ * (ROPC grant) and JWT verification (JWKS).
  */
 public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> {
 
@@ -68,13 +67,14 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     public void configure(JooqIamQueryConfig cfg) {
         this.config = cfg.keycloakConfig();
         this.platformDataSource = cfg.platformDataSource();
-        this.adminClient = KeycloakBuilder.builder()
-                .serverUrl(config.serverUrl())
-                .realm(config.adminRealm())
-                .clientId(config.adminClientId())
-                .username(config.adminUsername())
-                .password(config.adminPassword())
-                .build();
+        this.adminClient =
+                KeycloakBuilder.builder()
+                        .serverUrl(config.serverUrl())
+                        .realm(config.adminRealm())
+                        .clientId(config.adminClientId())
+                        .username(config.adminUsername())
+                        .password(config.adminPassword())
+                        .build();
         this.jwksVerifier = new JwksTokenVerifier();
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
         LOG.info("KeycloakIamQueryService configured");
@@ -89,9 +89,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     @Override
     public List<IdpUser> listUsers(String realmId) {
-        return adminClient.realm(realmId).users().list().stream()
-                .map(this::toIdpUser)
-                .toList();
+        return adminClient.realm(realmId).users().list().stream().map(this::toIdpUser).toList();
     }
 
     @Override
@@ -99,8 +97,8 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         String kcUserId = resolveKcUserId(realmId, userId);
         if (kcUserId == null) return null;
         try {
-            UserRepresentation user = adminClient.realm(realmId).users().get(kcUserId)
-                    .toRepresentation();
+            UserRepresentation user =
+                    adminClient.realm(realmId).users().get(kcUserId).toRepresentation();
             return toIdpUser(user);
         } catch (jakarta.ws.rs.NotFoundException e) {
             return null;
@@ -109,15 +107,15 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     @Override
     public IdpUser findUserByEmail(String realmId, String email) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(email, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(email, true);
         return users.isEmpty() ? null : toIdpUser(users.get(0));
     }
 
     @Override
     public IdpUser findUserByUsername(String realmId, String username) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByUsername(username, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByUsername(username, true);
         return users.isEmpty() ? null : toIdpUser(users.get(0));
     }
 
@@ -130,16 +128,16 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     @Override
     public Set<String> getUserRolesByEmail(String realmId, String email) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(email, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(email, true);
         if (users.isEmpty()) return Set.of();
         return fetchRoles(realmId, users.get(0).getId());
     }
 
     @Override
     public Set<String> getUserRolesByUsername(String realmId, String username) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByUsername(username, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByUsername(username, true);
         if (users.isEmpty()) return Set.of();
         return fetchRoles(realmId, users.get(0).getId());
     }
@@ -147,12 +145,11 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     @Override
     public String resolveUserId(String realmId, String emailOrUsername) {
         // Try by email first
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(emailOrUsername, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(emailOrUsername, true);
         if (users.isEmpty()) {
             // Try by username
-            users = adminClient.realm(realmId).users()
-                    .searchByUsername(emailOrUsername, true);
+            users = adminClient.realm(realmId).users().searchByUsername(emailOrUsername, true);
         }
         if (users.isEmpty()) return null;
         return readOperioUserId(users.get(0));
@@ -160,8 +157,14 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     private Set<String> fetchRoles(String realmId, String kcUserId) {
         try {
-            return adminClient.realm(realmId).users().get(kcUserId)
-                    .roles().realmLevel().listEffective().stream()
+            return adminClient
+                    .realm(realmId)
+                    .users()
+                    .get(kcUserId)
+                    .roles()
+                    .realmLevel()
+                    .listEffective()
+                    .stream()
                     .map(RoleRepresentation::getName)
                     .collect(Collectors.toUnmodifiableSet());
         } catch (jakarta.ws.rs.NotFoundException e) {
@@ -195,25 +198,35 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     public AuthResult authenticate(String realmId, String email, String password) {
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String tokenUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=password"
-                    + "&client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&username=" + urlEncode(email)
-                    + "&password=" + urlEncode(password);
+            String formBody =
+                    "grant_type=password"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&username="
+                            + urlEncode(email)
+                            + "&password="
+                            + urlEncode(password);
 
-            LOG.info("ROPC authenticate: url={}, client_id={}, username={}", tokenUrl, config.operioClientId(), email);
+            LOG.info(
+                    "ROPC authenticate: url={}, client_id={}, username={}",
+                    tokenUrl,
+                    config.operioClientId(),
+                    email);
 
-            HttpResponse<String> response = httpClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(tokenUrl))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .timeout(HTTP_TIMEOUT)
-                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create(tokenUrl))
+                                    .header("Content-Type", "application/x-www-form-urlencoded")
+                                    .timeout(HTTP_TIMEOUT)
+                                    .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 LOG.warn("ROPC failed: status={}, body={}", response.statusCode(), response.body());
@@ -231,22 +244,27 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     public AuthResult refreshToken(String realmId, String refreshToken) {
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String tokenUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=refresh_token"
-                    + "&client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "grant_type=refresh_token"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
-            HttpResponse<String> response = httpClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(tokenUrl))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .timeout(HTTP_TIMEOUT)
-                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create(tokenUrl))
+                                    .header("Content-Type", "application/x-www-form-urlencoded")
+                                    .timeout(HTTP_TIMEOUT)
+                                    .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 throw new OperioAuthException("Invalid or expired refresh token");
@@ -261,8 +279,8 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     @Override
     public IdentityContext verifyToken(String realmId, String accessToken) {
-        String jwksUrl = config.serverUrl() + "/realms/" + realmId
-                + "/protocol/openid-connect/certs";
+        String jwksUrl =
+                config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/certs";
         return jwksVerifier.verify(jwksUrl, accessToken, realmId);
     }
 
@@ -270,12 +288,16 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     public void logout(String realmId, String refreshToken) {
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String logoutUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/logout";
+            String logoutUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/logout";
 
-            String formBody = "client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
             httpClient.send(
                     HttpRequest.newBuilder()
@@ -297,8 +319,8 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     public ApiKeyInfo findByKeyHash(String keyHash) {
         if (platformDataSource == null) return null;
         String sql =
-                "SELECT key_prefix, name, tenant_id, subject, roles, status, created_at, expires_at "
-                        + "FROM platform_iam.api_key WHERE key_hash = ?";
+                "SELECT key_prefix, name, tenant_id, subject, roles, status, created_at, expires_at"
+                        + " FROM platform_iam.api_key WHERE key_hash = ?";
         try (var conn = platformDataSource.getConnection();
                 var ps = conn.prepareStatement(sql)) {
             ps.setString(1, keyHash);
@@ -328,22 +350,24 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     // -- Internal helpers -----------------------------------------------------
 
-    /**
-     * Resolves a command-side userId (operio-user-id attribute) to the actual Keycloak user ID.
-     */
+    /** Resolves a command-side userId (operio-user-id attribute) to the actual Keycloak user ID. */
     private String resolveKcUserId(String realmId, String userId) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByAttributes("operio-user-id:" + userId);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByAttributes("operio-user-id:" + userId);
         if (!users.isEmpty()) return users.get(0).getId();
         return null;
     }
 
     private IdpUser toIdpUser(UserRepresentation user) {
-        String status = Boolean.TRUE.equals(user.isEnabled())
-                ? (Boolean.TRUE.equals(user.isEmailVerified()) ? "active" : "unverified")
-                : "suspended";
-        String fullName = ((user.getFirstName() != null ? user.getFirstName() : "")
-                + " " + (user.getLastName() != null ? user.getLastName() : "")).trim();
+        String status =
+                Boolean.TRUE.equals(user.isEnabled())
+                        ? (Boolean.TRUE.equals(user.isEmailVerified()) ? "active" : "unverified")
+                        : "suspended";
+        String fullName =
+                ((user.getFirstName() != null ? user.getFirstName() : "")
+                                + " "
+                                + (user.getLastName() != null ? user.getLastName() : ""))
+                        .trim();
         Long created = user.getCreatedTimestamp();
         return new IdpUser(
                 user.getUsername(),
@@ -364,8 +388,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         return null;
     }
 
-    private ServiceAccountInfo toServiceAccountInfo(
-            ClientRepresentation client, String realmId) {
+    private ServiceAccountInfo toServiceAccountInfo(ClientRepresentation client, String realmId) {
         return new ServiceAccountInfo(
                 client.getClientId(),
                 client.getName(),
@@ -404,8 +427,10 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     private AuthResult parseTokenResponse(String json, String realmId) {
         try {
             JsonNode root = MAPPER.readTree(json);
-            String accessToken = root.has("access_token") ? root.get("access_token").asText() : null;
-            String refreshTokenVal = root.has("refresh_token") ? root.get("refresh_token").asText() : null;
+            String accessToken =
+                    root.has("access_token") ? root.get("access_token").asText() : null;
+            String refreshTokenVal =
+                    root.has("refresh_token") ? root.get("refresh_token").asText() : null;
             long expiresIn = root.has("expires_in") ? root.get("expires_in").asLong() : 900;
 
             if (accessToken == null) {

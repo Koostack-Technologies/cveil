@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class RegisterPurposeCommandActuator
         implements Actuator<RegisterPurposeCommandActuator.RegisterPurposeCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(RegisterPurposeCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RegisterPurposeCommandActuator.class);
 
     public record RegisterPurposeCommand(String purposeName, String description) {}
 
@@ -27,8 +26,7 @@ public class RegisterPurposeCommandActuator
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         var payload = new PurposeRegisteredEvent(command.purposeName(), command.description());
-        AggregateKey key =
-                new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_REGISTERED, key, payload));
@@ -36,4 +34,3 @@ public class RegisterPurposeCommandActuator
         return null;
     }
 }
-

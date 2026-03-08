@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "add regulation jurisdiction" command.
  *
- * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the
- * post-mutation {@link RegulationSnapshot} with the new jurisdiction added.
+ * <p>Hydrates the current {@link RegulationAggregate} from the event log to build the post-mutation
+ * {@link RegulationSnapshot} with the new jurisdiction added.
  */
 public class AddRegulationJurisdictionCommandActuator
         implements Actuator<
@@ -42,14 +42,12 @@ public class AddRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current =
-                publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
         if (current != null) {
-            current.jurisdictions()
-                    .forEach(j -> jurisdictions.add(j.jurisdictionName()));
+            current.jurisdictions().forEach(j -> jurisdictions.add(j.jurisdictionName()));
             regDescription = current.description();
         }
         if (!jurisdictions.contains(command.jurisdictionName())) {
@@ -67,10 +65,7 @@ public class AddRegulationJurisdictionCommandActuator
                         snapshot);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
-                        tenantId,
-                        ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
-                        key,
-                        payload));
+                        tenantId, ConsentEventTypes.REGULATION_JURISDICTION_ADDED, key, payload));
 
         LOG.info(
                 "Regulation jurisdiction added: regulation={}, jurisdiction={}",
@@ -79,4 +74,3 @@ public class AddRegulationJurisdictionCommandActuator
         return null;
     }
 }
-

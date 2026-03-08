@@ -23,8 +23,8 @@ import org.slf4j.LoggerFactory;
  * Actuator that handles the "create service account" command for tenant IAM.
  *
  * <p>Creates the confidential client in the tenant's Keycloak realm first (idempotent), retrieves
- * the client secret, assigns roles, then publishes a {@link TenantServiceAccountCreatedEvent}.
- * If Keycloak fails the event is never recorded.
+ * the client secret, assigns roles, then publishes a {@link TenantServiceAccountCreatedEvent}. If
+ * Keycloak fails the event is never recorded.
  */
 public class TenantCreateServiceAccountCommandActuator
         implements Actuator<
@@ -48,8 +48,7 @@ public class TenantCreateServiceAccountCommandActuator
      * @param name human-readable name for the service account
      * @param roles roles to assign to the service account (nullable — defaults to empty)
      */
-    public record CreateServiceAccountCommand(
-            String tenantId, String name, Set<String> roles) {}
+    public record CreateServiceAccountCommand(String tenantId, String name, Set<String> roles) {}
 
     /**
      * Result of creating a tenant service account.
@@ -82,12 +81,13 @@ public class TenantCreateServiceAccountCommandActuator
         }
 
         // Publish domain event (only reached if KC succeeded)
-        var payload = new TenantServiceAccountCreatedEvent(
-                command.tenantId(), clientId, command.name(), roles);
+        var payload =
+                new TenantServiceAccountCreatedEvent(
+                        command.tenantId(), clientId, command.name(), roles);
 
         UUID aggregateId = deriveAggregateId(command.tenantId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
+        AggregateKey key =
+                new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -96,8 +96,10 @@ public class TenantCreateServiceAccountCommandActuator
                         key,
                         payload));
 
-        LOG.info("Tenant service account created: tenantId={}, clientId={}",
-                command.tenantId(), clientId);
+        LOG.info(
+                "Tenant service account created: tenantId={}, clientId={}",
+                command.tenantId(),
+                clientId);
 
         return new CreateServiceAccountResult(clientId, clientSecret, realmId);
     }
@@ -109,8 +111,8 @@ public class TenantCreateServiceAccountCommandActuator
         // Idempotent: check if client already exists
         List<ClientRepresentation> existing = realm.clients().findByClientId(clientId);
         if (!existing.isEmpty()) {
-            LOG.debug("Service account already exists in realm '{}': clientId={}",
-                    realmId, clientId);
+            LOG.debug(
+                    "Service account already exists in realm '{}': clientId={}", realmId, clientId);
             String internalId = existing.get(0).getId();
             CredentialRepresentation secret = realm.clients().get(internalId).getSecret();
             return secret != null ? secret.getValue() : "existing";
@@ -131,8 +133,7 @@ public class TenantCreateServiceAccountCommandActuator
         // Retrieve the created client to get its internal ID and secret
         List<ClientRepresentation> created = realm.clients().findByClientId(clientId);
         if (created.isEmpty()) {
-            throw new IllegalStateException(
-                    "Keycloak client created but not found: " + clientId);
+            throw new IllegalStateException("Keycloak client created but not found: " + clientId);
         }
         String internalId = created.get(0).getId();
         CredentialRepresentation secret = realm.clients().get(internalId).getSecret();
@@ -165,12 +166,10 @@ public class TenantCreateServiceAccountCommandActuator
 
     private static UUID deriveAggregateId(String tenantId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + tenantId)
-                        .getBytes(StandardCharsets.UTF_8));
+                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + tenantId).getBytes(StandardCharsets.UTF_8));
     }
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
     }
 }
-

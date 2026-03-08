@@ -324,8 +324,7 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void unassignFieldCategory(String fieldName, String entityName, String categoryName) {
-        commandService()
-                .unassignFieldCategoryCommand(fieldName, entityName, categoryName, null);
+        commandService().unassignFieldCategoryCommand(fieldName, entityName, categoryName, null);
     }
 
     // -----------------------------------------------------------------------

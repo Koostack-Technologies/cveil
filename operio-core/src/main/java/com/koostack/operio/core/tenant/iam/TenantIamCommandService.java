@@ -24,7 +24,11 @@ public interface TenantIamCommandService<T> extends Plugin<T> {
     record CreateServiceAccountResult(String clientId, String clientSecret, String realmId) {}
 
     RegisterUserResult registerUser(
-            String tenantId, String username, String email, String fullName, Set<String> roles,
+            String tenantId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
             boolean temporaryPassword);
 
     void suspendUser(String tenantId, String emailOrUsername);

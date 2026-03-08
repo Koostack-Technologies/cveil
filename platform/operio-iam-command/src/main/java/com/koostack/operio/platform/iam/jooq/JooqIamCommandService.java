@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Keycloak-native platform IAM command service.
  *
- * <p>Publishes domain events for user/service-account operations. The projection handler
- * translates these events into Keycloak Admin API calls.
+ * <p>Publishes domain events for user/service-account operations. The projection handler translates
+ * these events into Keycloak Admin API calls.
  */
 public class JooqIamCommandService implements IamCommandService<JooqIamCommandConfig> {
 
@@ -78,10 +78,15 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public RegisterUserResult registerUser(
-            String realmId, String username, String email, String fullName, Set<String> roles,
+            String realmId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
             boolean temporaryPassword) {
-        var command = new RegisterUserCommandActuator.RegisterUserCommand(
-                realmId, username, email, fullName, roles, temporaryPassword);
+        var command =
+                new RegisterUserCommandActuator.RegisterUserCommand(
+                        realmId, username, email, fullName, roles, temporaryPassword);
         var result = registerUserActuator.execute(eventService, command);
         return new RegisterUserResult(result.username(), result.email(), result.realmId());
     }
@@ -89,16 +94,17 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var command = new SuspendUserCommandActuator.SuspendUserCommand(
-                realmId, userId, emailOrUsername);
+        var command =
+                new SuspendUserCommandActuator.SuspendUserCommand(realmId, userId, emailOrUsername);
         suspendUserActuator.execute(eventService, command);
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var command = new ActivateUserCommandActuator.ActivateUserCommand(
-                realmId, userId, emailOrUsername);
+        var command =
+                new ActivateUserCommandActuator.ActivateUserCommand(
+                        realmId, userId, emailOrUsername);
         activateUserActuator.execute(eventService, command);
     }
 
@@ -107,8 +113,9 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public CreateServiceAccountResult createServiceAccount(
             String realmId, String name, Set<String> roles) {
-        var command = new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
-                realmId, name, roles);
+        var command =
+                new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
+                        realmId, name, roles);
         var result = createServiceAccountActuator.execute(eventService, command);
         return new CreateServiceAccountResult(
                 result.clientId(), result.clientSecret(), result.realmId());
@@ -116,8 +123,9 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public void revokeServiceAccount(String realmId, String clientId) {
-        var command = new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
-                realmId, clientId);
+        var command =
+                new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                        realmId, clientId);
         revokeServiceAccountActuator.execute(eventService, command);
     }
 
@@ -126,16 +134,18 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var command = new AssignRoleCommandActuator.AssignRoleCommand(
-                realmId, userId, role, emailOrUsername);
+        var command =
+                new AssignRoleCommandActuator.AssignRoleCommand(
+                        realmId, userId, role, emailOrUsername);
         assignRoleActuator.execute(eventService, command);
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var command = new RemoveRoleCommandActuator.RemoveRoleCommand(
-                realmId, userId, role, emailOrUsername);
+        var command =
+                new RemoveRoleCommandActuator.RemoveRoleCommand(
+                        realmId, userId, role, emailOrUsername);
         removeRoleActuator.execute(eventService, command);
     }
 
@@ -156,17 +166,18 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
         try (Connection conn = platformDataSource.getConnection()) {
             // Ensure system user exists (the FK on api_key.platform_user_id requires it)
-            try (PreparedStatement upsert = conn.prepareStatement(
-                    "INSERT INTO platform_iam.platform_user (platform_user_id, email, status) "
-                            + "VALUES ('system', 'system@operio.internal', 'active') "
-                            + "ON CONFLICT (platform_user_id) DO NOTHING")) {
+            try (PreparedStatement upsert =
+                    conn.prepareStatement(
+                            "INSERT INTO platform_iam.platform_user (platform_user_id, email,"
+                                + " status) VALUES ('system', 'system@operio.internal', 'active')"
+                                + " ON CONFLICT (platform_user_id) DO NOTHING")) {
                 upsert.executeUpdate();
             }
 
             String sql =
-                    "INSERT INTO platform_iam.api_key "
-                            + "(key_hash, key_prefix, name, tenant_id, platform_user_id, subject, roles, status) "
-                            + "VALUES (?, ?, ?, ?, 'system', ?, ?, 'active')";
+                    "INSERT INTO platform_iam.api_key (key_hash, key_prefix, name, tenant_id,"
+                        + " platform_user_id, subject, roles, status) VALUES (?, ?, ?, ?, 'system',"
+                        + " ?, ?, 'active')";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, keyHash);
                 ps.setString(2, keyPrefix);
@@ -238,6 +249,4 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
             throw new AssertionError("SHA-256 not available", e);
         }
     }
-
-
 }

@@ -14,4 +14,3 @@ public record PlanCreatedEvent(
         boolean isActive,
         int sortOrder)
         implements DomainEvent {}
-

@@ -19,12 +19,11 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "revoke service account" command for platform IAM.
  *
- * <p>Disables the Keycloak client first, then publishes a {@link ServiceAccountRevokedEvent}.
- * If the Keycloak call fails the event is never recorded.
+ * <p>Disables the Keycloak client first, then publishes a {@link ServiceAccountRevokedEvent}. If
+ * the Keycloak call fails the event is never recorded.
  */
 public class RevokeServiceAccountCommandActuator
-        implements Actuator<
-                RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand, Void> {
+        implements Actuator<RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RevokeServiceAccountCommandActuator.class);
@@ -55,17 +54,21 @@ public class RevokeServiceAccountCommandActuator
             client.setEnabled(false);
             realm.clients().get(internalId).update(client);
         } else {
-            LOG.debug("Service account not found for revocation: realm={}, clientId={}",
-                    command.realmId(), command.clientId());
+            LOG.debug(
+                    "Service account not found for revocation: realm={}, clientId={}",
+                    command.realmId(),
+                    command.clientId());
         }
 
         // Publish domain event
         var payload = new ServiceAccountRevokedEvent(command.realmId(), command.clientId());
 
         UUID aggregateId = deriveAggregateId(command.realmId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE,
-                PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        SERVICE_ACCOUNT_AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -74,14 +77,15 @@ public class RevokeServiceAccountCommandActuator
                         key,
                         payload));
 
-        LOG.info("Service account revoked: realmId={}, clientId={}",
-                command.realmId(), command.clientId());
+        LOG.info(
+                "Service account revoked: realmId={}, clientId={}",
+                command.realmId(),
+                command.clientId());
         return null;
     }
 
     private static UUID deriveAggregateId(String realmId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + realmId)
-                        .getBytes(StandardCharsets.UTF_8));
+                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
     }
 }

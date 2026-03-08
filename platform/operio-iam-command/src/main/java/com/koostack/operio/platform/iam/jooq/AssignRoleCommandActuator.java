@@ -20,8 +20,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "assign role" command for platform IAM.
  *
- * <p>Assigns the role in Keycloak first, then publishes a {@link RoleAssignedEvent}.
- * If the Keycloak call fails the event is never recorded.
+ * <p>Assigns the role in Keycloak first, then publishes a {@link RoleAssignedEvent}. If the
+ * Keycloak call fails the event is never recorded.
  */
 public class AssignRoleCommandActuator
         implements Actuator<AssignRoleCommandActuator.AssignRoleCommand, Void> {
@@ -54,12 +54,12 @@ public class AssignRoleCommandActuator
         assignRealmRole(realm, kcUserId, command.role());
 
         // Publish domain event
-        var payload = new RoleAssignedEvent(
-                command.realmId(), command.userId(), command.role());
+        var payload = new RoleAssignedEvent(command.realmId(), command.userId(), command.role());
 
         UUID aggregateId = deriveAggregateId(command.realmId());
-        AggregateKey key = new AggregateKey(
-                aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
         publisher.publishEvent(
                 PublishDomainEventInput.of(
@@ -68,14 +68,18 @@ public class AssignRoleCommandActuator
                         key,
                         payload));
 
-        LOG.info("Role assigned: realmId={}, identifier={}, role={}, kcId={}",
-                command.realmId(), command.emailOrUsername(), command.role(), kcUserId);
+        LOG.info(
+                "Role assigned: realmId={}, identifier={}, role={}, kcId={}",
+                command.realmId(),
+                command.emailOrUsername(),
+                command.role(),
+                kcUserId);
         return null;
     }
 
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users = realm.users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         throw new IllegalStateException(
                 "User not found by operio-user-id attribute: " + commandUserId);

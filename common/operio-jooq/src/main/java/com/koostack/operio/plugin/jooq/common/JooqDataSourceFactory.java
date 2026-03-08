@@ -55,5 +55,4 @@ public final class JooqDataSourceFactory {
 
         return new HikariDataSource(hikariConfig);
     }
-
 }

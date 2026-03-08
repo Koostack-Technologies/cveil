@@ -41,8 +41,7 @@ import org.slf4j.LoggerFactory;
 public class KeycloakTenantIamQueryService
         implements TenantIamQueryService<KeycloakTenantIamQueryConfig> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(KeycloakTenantIamQueryService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KeycloakTenantIamQueryService.class);
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -70,13 +69,14 @@ public class KeycloakTenantIamQueryService
     @Override
     public void configure(KeycloakTenantIamQueryConfig cfg) {
         this.config = cfg.keycloakConfig();
-        this.adminClient = KeycloakBuilder.builder()
-                .serverUrl(config.serverUrl())
-                .realm(config.adminRealm())
-                .clientId(config.adminClientId())
-                .username(config.adminUsername())
-                .password(config.adminPassword())
-                .build();
+        this.adminClient =
+                KeycloakBuilder.builder()
+                        .serverUrl(config.serverUrl())
+                        .realm(config.adminRealm())
+                        .clientId(config.adminClientId())
+                        .username(config.adminUsername())
+                        .password(config.adminPassword())
+                        .build();
         this.jwksVerifier = new JwksTokenVerifier();
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
         LOG.info("KeycloakTenantIamQueryService configured");
@@ -92,9 +92,7 @@ public class KeycloakTenantIamQueryService
     @Override
     public List<IdpUser> listUsers(String tenantId) {
         String realmId = toRealmId(tenantId);
-        return adminClient.realm(realmId).users().list().stream()
-                .map(this::toIdpUser)
-                .toList();
+        return adminClient.realm(realmId).users().list().stream().map(this::toIdpUser).toList();
     }
 
     @Override
@@ -103,8 +101,8 @@ public class KeycloakTenantIamQueryService
         String kcUserId = resolveKcUserId(realmId, userId);
         if (kcUserId == null) return null;
         try {
-            UserRepresentation user = adminClient.realm(realmId).users().get(kcUserId)
-                    .toRepresentation();
+            UserRepresentation user =
+                    adminClient.realm(realmId).users().get(kcUserId).toRepresentation();
             return toIdpUser(user);
         } catch (jakarta.ws.rs.NotFoundException e) {
             return null;
@@ -114,16 +112,16 @@ public class KeycloakTenantIamQueryService
     @Override
     public IdpUser findUserByEmail(String tenantId, String email) {
         String realmId = toRealmId(tenantId);
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(email, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(email, true);
         return users.isEmpty() ? null : toIdpUser(users.get(0));
     }
 
     @Override
     public IdpUser findUserByUsername(String tenantId, String username) {
         String realmId = toRealmId(tenantId);
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByUsername(username, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByUsername(username, true);
         return users.isEmpty() ? null : toIdpUser(users.get(0));
     }
 
@@ -138,8 +136,8 @@ public class KeycloakTenantIamQueryService
     @Override
     public Set<String> getUserRolesByEmail(String tenantId, String email) {
         String realmId = toRealmId(tenantId);
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(email, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(email, true);
         if (users.isEmpty()) return Set.of();
         return fetchRoles(realmId, users.get(0).getId());
     }
@@ -147,8 +145,8 @@ public class KeycloakTenantIamQueryService
     @Override
     public Set<String> getUserRolesByUsername(String tenantId, String username) {
         String realmId = toRealmId(tenantId);
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByUsername(username, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByUsername(username, true);
         if (users.isEmpty()) return Set.of();
         return fetchRoles(realmId, users.get(0).getId());
     }
@@ -157,12 +155,11 @@ public class KeycloakTenantIamQueryService
     public String resolveUserId(String tenantId, String emailOrUsername) {
         String realmId = toRealmId(tenantId);
         // Try by email first
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByEmail(emailOrUsername, true);
+        List<UserRepresentation> users =
+                adminClient.realm(realmId).users().searchByEmail(emailOrUsername, true);
         if (users.isEmpty()) {
             // Try by username
-            users = adminClient.realm(realmId).users()
-                    .searchByUsername(emailOrUsername, true);
+            users = adminClient.realm(realmId).users().searchByUsername(emailOrUsername, true);
         }
         if (users.isEmpty()) return null;
         return readOperioUserId(users.get(0));
@@ -170,8 +167,14 @@ public class KeycloakTenantIamQueryService
 
     private Set<String> fetchRoles(String realmId, String kcUserId) {
         try {
-            return adminClient.realm(realmId).users().get(kcUserId)
-                    .roles().realmLevel().listEffective().stream()
+            return adminClient
+                    .realm(realmId)
+                    .users()
+                    .get(kcUserId)
+                    .roles()
+                    .realmLevel()
+                    .listEffective()
+                    .stream()
                     .map(RoleRepresentation::getName)
                     .collect(Collectors.toUnmodifiableSet());
         } catch (jakarta.ws.rs.NotFoundException e) {
@@ -208,23 +211,29 @@ public class KeycloakTenantIamQueryService
         String realmId = toRealmId(tenantId);
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String tokenUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=password"
-                    + "&client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&username=" + urlEncode(email)
-                    + "&password=" + urlEncode(password);
+            String formBody =
+                    "grant_type=password"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&username="
+                            + urlEncode(email)
+                            + "&password="
+                            + urlEncode(password);
 
-            HttpResponse<String> response = httpClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(tokenUrl))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .timeout(HTTP_TIMEOUT)
-                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create(tokenUrl))
+                                    .header("Content-Type", "application/x-www-form-urlencoded")
+                                    .timeout(HTTP_TIMEOUT)
+                                    .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 throw new OperioAuthException("Invalid email or password");
@@ -242,22 +251,27 @@ public class KeycloakTenantIamQueryService
         String realmId = toRealmId(tenantId);
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String tokenUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/token";
+            String tokenUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/token";
 
-            String formBody = "grant_type=refresh_token"
-                    + "&client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "grant_type=refresh_token"
+                            + "&client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
-            HttpResponse<String> response = httpClient.send(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(tokenUrl))
-                            .header("Content-Type", "application/x-www-form-urlencoded")
-                            .timeout(HTTP_TIMEOUT)
-                            .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(
+                            HttpRequest.newBuilder()
+                                    .uri(URI.create(tokenUrl))
+                                    .header("Content-Type", "application/x-www-form-urlencoded")
+                                    .timeout(HTTP_TIMEOUT)
+                                    .POST(HttpRequest.BodyPublishers.ofString(formBody))
+                                    .build(),
+                            HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 throw new OperioAuthException("Invalid or expired refresh token");
@@ -273,8 +287,8 @@ public class KeycloakTenantIamQueryService
     @Override
     public IdentityContext verifyToken(String tenantId, String accessToken) {
         String realmId = toRealmId(tenantId);
-        String jwksUrl = config.serverUrl() + "/realms/" + realmId
-                + "/protocol/openid-connect/certs";
+        String jwksUrl =
+                config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/certs";
         return jwksVerifier.verify(jwksUrl, accessToken, realmId);
     }
 
@@ -283,12 +297,16 @@ public class KeycloakTenantIamQueryService
         String realmId = toRealmId(tenantId);
         try {
             String clientSecret = resolveClientSecret(realmId);
-            String logoutUrl = config.serverUrl() + "/realms/" + realmId
-                    + "/protocol/openid-connect/logout";
+            String logoutUrl =
+                    config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/logout";
 
-            String formBody = "client_id=" + urlEncode(config.operioClientId())
-                    + "&client_secret=" + urlEncode(clientSecret)
-                    + "&refresh_token=" + urlEncode(refreshToken);
+            String formBody =
+                    "client_id="
+                            + urlEncode(config.operioClientId())
+                            + "&client_secret="
+                            + urlEncode(clientSecret)
+                            + "&refresh_token="
+                            + urlEncode(refreshToken);
 
             httpClient.send(
                     HttpRequest.newBuilder()
@@ -310,11 +328,15 @@ public class KeycloakTenantIamQueryService
     }
 
     private IdpUser toIdpUser(UserRepresentation user) {
-        String status = Boolean.TRUE.equals(user.isEnabled())
-                ? (Boolean.TRUE.equals(user.isEmailVerified()) ? "active" : "unverified")
-                : "suspended";
-        String fullName = ((user.getFirstName() != null ? user.getFirstName() : "")
-                + " " + (user.getLastName() != null ? user.getLastName() : "")).trim();
+        String status =
+                Boolean.TRUE.equals(user.isEnabled())
+                        ? (Boolean.TRUE.equals(user.isEmailVerified()) ? "active" : "unverified")
+                        : "suspended";
+        String fullName =
+                ((user.getFirstName() != null ? user.getFirstName() : "")
+                                + " "
+                                + (user.getLastName() != null ? user.getLastName() : ""))
+                        .trim();
         Long created = user.getCreatedTimestamp();
         return new IdpUser(
                 user.getUsername(),
@@ -335,8 +357,7 @@ public class KeycloakTenantIamQueryService
         return null;
     }
 
-    private ServiceAccountInfo toServiceAccountInfo(
-            ClientRepresentation client, String realmId) {
+    private ServiceAccountInfo toServiceAccountInfo(ClientRepresentation client, String realmId) {
         return new ServiceAccountInfo(
                 client.getClientId(),
                 client.getName(),
@@ -347,8 +368,11 @@ public class KeycloakTenantIamQueryService
     }
 
     private String resolveKcUserId(String realmId, String commandUserId) {
-        List<UserRepresentation> users = adminClient.realm(realmId).users()
-                .searchByAttributes("operio-user-id:" + commandUserId);
+        List<UserRepresentation> users =
+                adminClient
+                        .realm(realmId)
+                        .users()
+                        .searchByAttributes("operio-user-id:" + commandUserId);
         if (!users.isEmpty()) return users.get(0).getId();
         return null;
     }
@@ -379,8 +403,10 @@ public class KeycloakTenantIamQueryService
     private AuthResult parseTokenResponse(String json, String realmId) {
         try {
             JsonNode root = MAPPER.readTree(json);
-            String accessToken = root.has("access_token") ? root.get("access_token").asText() : null;
-            String refreshTokenVal = root.has("refresh_token") ? root.get("refresh_token").asText() : null;
+            String accessToken =
+                    root.has("access_token") ? root.get("access_token").asText() : null;
+            String refreshTokenVal =
+                    root.has("refresh_token") ? root.get("refresh_token").asText() : null;
             long expiresIn = root.has("expires_in") ? root.get("expires_in").asLong() : 900;
 
             if (accessToken == null) {

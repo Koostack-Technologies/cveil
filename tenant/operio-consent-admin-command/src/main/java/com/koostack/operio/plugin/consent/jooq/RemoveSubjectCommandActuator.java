@@ -16,8 +16,7 @@ import org.slf4j.LoggerFactory;
 public class RemoveSubjectCommandActuator
         implements Actuator<RemoveSubjectCommandActuator.RemoveSubjectCommand, Void> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(RemoveSubjectCommandActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RemoveSubjectCommandActuator.class);
 
     public record RemoveSubjectCommand(String subjectName) {}
 
@@ -27,8 +26,7 @@ public class RemoveSubjectCommandActuator
         String tenantId = TenantContext.require();
         UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
         var payload = new SubjectRemovedEvent(command.subjectName());
-        AggregateKey key =
-                new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
+        AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
         publisher.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.SUBJECT_REMOVED, key, payload));
@@ -36,4 +34,3 @@ public class RemoveSubjectCommandActuator
         return null;
     }
 }
-
