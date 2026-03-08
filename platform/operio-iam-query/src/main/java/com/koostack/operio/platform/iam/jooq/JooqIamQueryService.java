@@ -1,11 +1,12 @@
 package com.koostack.operio.platform.iam.jooq;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.AuthResult;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.platform.iam.IamQueryService;
-import com.koostack.operio.core.platform.iam.UserIdMapping;
 import com.koostack.operio.plugin.platform.keycloak.JwksTokenVerifier;
 import com.koostack.operio.plugin.platform.keycloak.KeycloakConfig;
 import java.net.URI;
@@ -39,6 +40,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqIamQueryService.class);
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private KeycloakConfig config;
     private Keycloak adminClient;
@@ -99,7 +101,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         try {
             UserRepresentation user = adminClient.realm(realmId).users().get(kcUserId)
                     .toRepresentation();
-            return toIdpUser(user, userId);
+            return toIdpUser(user);
         } catch (jakarta.ws.rs.NotFoundException e) {
             return null;
         }
@@ -113,9 +115,50 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     }
 
     @Override
+    public IdpUser findUserByUsername(String realmId, String username) {
+        List<UserRepresentation> users = adminClient.realm(realmId).users()
+                .searchByUsername(username, true);
+        return users.isEmpty() ? null : toIdpUser(users.get(0));
+    }
+
+    @Override
     public Set<String> getUserRoles(String realmId, String userId) {
         String kcUserId = resolveKcUserId(realmId, userId);
         if (kcUserId == null) return Set.of();
+        return fetchRoles(realmId, kcUserId);
+    }
+
+    @Override
+    public Set<String> getUserRolesByEmail(String realmId, String email) {
+        List<UserRepresentation> users = adminClient.realm(realmId).users()
+                .searchByEmail(email, true);
+        if (users.isEmpty()) return Set.of();
+        return fetchRoles(realmId, users.get(0).getId());
+    }
+
+    @Override
+    public Set<String> getUserRolesByUsername(String realmId, String username) {
+        List<UserRepresentation> users = adminClient.realm(realmId).users()
+                .searchByUsername(username, true);
+        if (users.isEmpty()) return Set.of();
+        return fetchRoles(realmId, users.get(0).getId());
+    }
+
+    @Override
+    public String resolveUserId(String realmId, String emailOrUsername) {
+        // Try by email first
+        List<UserRepresentation> users = adminClient.realm(realmId).users()
+                .searchByEmail(emailOrUsername, true);
+        if (users.isEmpty()) {
+            // Try by username
+            users = adminClient.realm(realmId).users()
+                    .searchByUsername(emailOrUsername, true);
+        }
+        if (users.isEmpty()) return null;
+        return readOperioUserId(users.get(0));
+    }
+
+    private Set<String> fetchRoles(String realmId, String kcUserId) {
         try {
             return adminClient.realm(realmId).users().get(kcUserId)
                     .roles().realmLevel().listEffective().stream()
@@ -286,44 +329,39 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     // -- Internal helpers -----------------------------------------------------
 
     /**
-     * Resolves a command-side userId to the actual Keycloak user ID.
-     * Uses the in-memory mapping from IamProjectionHandler, with KC direct lookup as fallback.
+     * Resolves a command-side userId (operio-user-id attribute) to the actual Keycloak user ID.
      */
     private String resolveKcUserId(String realmId, String userId) {
-        String cached = UserIdMapping.toKcId(userId);
-        if (cached != null) return cached;
-        try {
-            adminClient.realm(realmId).users().get(userId).toRepresentation();
-            return userId;
-        } catch (jakarta.ws.rs.NotFoundException e) {
-            return null;
-        }
+        List<UserRepresentation> users = adminClient.realm(realmId).users()
+                .searchByAttributes("operio-user-id:" + userId);
+        if (!users.isEmpty()) return users.get(0).getId();
+        return null;
     }
 
     private IdpUser toIdpUser(UserRepresentation user) {
-        return toIdpUser(user, null);
-    }
-
-    private IdpUser toIdpUser(UserRepresentation user, String commandUserId) {
         String status = Boolean.TRUE.equals(user.isEnabled())
                 ? (Boolean.TRUE.equals(user.isEmailVerified()) ? "active" : "unverified")
                 : "suspended";
         String fullName = ((user.getFirstName() != null ? user.getFirstName() : "")
                 + " " + (user.getLastName() != null ? user.getLastName() : "")).trim();
         Long created = user.getCreatedTimestamp();
-        String userId = commandUserId;
-        if (userId == null) {
-            userId = UserIdMapping.toCommandId(user.getId());
-        }
-        if (userId == null) {
-            userId = user.getId();
-        }
         return new IdpUser(
-                userId,
+                user.getUsername(),
                 user.getEmail(),
                 fullName.isEmpty() ? null : fullName,
                 status,
                 created != null ? Instant.ofEpochMilli(created) : Instant.now());
+    }
+
+    private String readOperioUserId(UserRepresentation user) {
+        var attrs = user.getAttributes();
+        if (attrs != null && attrs.containsKey("operio-user-id")) {
+            var values = attrs.get("operio-user-id");
+            if (values != null && !values.isEmpty()) {
+                return values.get(0);
+            }
+        }
+        return null;
     }
 
     private ServiceAccountInfo toServiceAccountInfo(
@@ -364,50 +402,23 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
     }
 
     private AuthResult parseTokenResponse(String json, String realmId) {
-        String accessToken = extractJsonStringValue(json, "access_token");
-        String refreshTokenVal = extractJsonStringValue(json, "refresh_token");
-        String expiresInStr = extractJsonNumberValue(json, "expires_in");
+        try {
+            JsonNode root = MAPPER.readTree(json);
+            String accessToken = root.has("access_token") ? root.get("access_token").asText() : null;
+            String refreshTokenVal = root.has("refresh_token") ? root.get("refresh_token").asText() : null;
+            long expiresIn = root.has("expires_in") ? root.get("expires_in").asLong() : 900;
 
-        if (accessToken == null) {
-            throw new OperioAuthException("Keycloak returned no access_token");
-        }
-
-        long expiresIn = expiresInStr != null ? Long.parseLong(expiresInStr) : 900;
-        IdentityContext identity = verifyToken(realmId, accessToken);
-        return AuthResult.bearer(accessToken, refreshTokenVal, expiresIn, identity);
-    }
-
-    private static String extractJsonStringValue(String json, String key) {
-        String searchKey = "\"" + key + "\"";
-        int keyIndex = json.indexOf(searchKey);
-        if (keyIndex < 0) return null;
-        int colonIndex = json.indexOf(':', keyIndex + searchKey.length());
-        if (colonIndex < 0) return null;
-        int quoteStart = json.indexOf('"', colonIndex + 1);
-        if (quoteStart < 0) return null;
-        int pos = quoteStart + 1;
-        while (pos < json.length()) {
-            char c = json.charAt(pos);
-            if (c == '"' && json.charAt(pos - 1) != '\\') {
-                return json.substring(quoteStart + 1, pos);
+            if (accessToken == null) {
+                throw new OperioAuthException("Keycloak returned no access_token");
             }
-            pos++;
-        }
-        return null;
-    }
 
-    private static String extractJsonNumberValue(String json, String key) {
-        String searchKey = "\"" + key + "\"";
-        int keyIndex = json.indexOf(searchKey);
-        if (keyIndex < 0) return null;
-        int colonIndex = json.indexOf(':', keyIndex + searchKey.length());
-        if (colonIndex < 0) return null;
-        int start = colonIndex + 1;
-        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
-        int end = start;
-        while (end < json.length()
-                && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.')) end++;
-        return start < end ? json.substring(start, end) : null;
+            IdentityContext identity = verifyToken(realmId, accessToken);
+            return AuthResult.bearer(accessToken, refreshTokenVal, expiresIn, identity);
+        } catch (OperioAuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new OperioAuthException("Failed to parse token response: " + e.getMessage());
+        }
     }
 
     private static String urlEncode(String value) {

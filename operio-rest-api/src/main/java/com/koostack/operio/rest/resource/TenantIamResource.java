@@ -63,12 +63,14 @@ public class TenantIamResource {
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("POST /iam/users tenant={} email={}", tenantId, request.email());
+        LOG.debug("POST /iam/users tenant={} username={} email={}",
+                tenantId, request.username(), request.email());
 
         var result =
                 tenantIam.commandService()
                         .registerUser(
                                 tenantId,
+                                request.username(),
                                 request.email(),
                                 request.fullName(),
                                 request.roles(),
@@ -93,96 +95,125 @@ public class TenantIamResource {
     }
 
     @GET
-    @Path("/users/{userId}")
-    @Operation(operationId = "tenantGetUser", summary = "Get tenant user by ID")
+    @Path("/users/{username}")
+    @Operation(operationId = "tenantGetUser", summary = "Get tenant user by username")
     public Response getUser(
             @Context SecurityContext sc,
-            @Parameter(description = "User ID") @PathParam("userId") String userId) {
+            @Parameter(description = "Username") @PathParam("username") String username) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("GET /iam/users/{} tenant={}", userId, tenantId);
+        LOG.debug("GET /iam/users/{} tenant={}", username, tenantId);
 
-        IdpUser user = tenantIam.queryService().getUser(tenantId, userId);
+        IdpUser user = tenantIam.queryService().findUserByUsername(tenantId, username);
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found", "User not found: " + userId))
+                    .entity(ErrorResponse.of("not_found", "User not found: " + username))
+                    .build();
+        }
+        return Response.ok(UserResponse.from(user)).build();
+    }
+
+    @GET
+    @Path("/users/by-email")
+    @Operation(
+            operationId = "tenantFindUserByEmail",
+            summary = "Find a tenant user by email address")
+    public Response findUserByEmail(
+            @Context SecurityContext sc,
+            @Parameter(description = "Email address") @QueryParam("email") String email) {
+        requireTenantAdmin(sc);
+        String tenantId = requireTenantContext();
+        requireIam();
+
+        if (email == null || email.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("bad_request", "email query parameter is required"))
+                    .build();
+        }
+
+        LOG.debug("GET /iam/users/by-email email={} tenant={}", email, tenantId);
+
+        IdpUser user = tenantIam.queryService().findUserByEmail(tenantId, email);
+        if (user == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("not_found", "User not found: " + email))
                     .build();
         }
         return Response.ok(UserResponse.from(user)).build();
     }
 
     @PUT
-    @Path("/users/{userId}/suspend")
+    @Path("/users/{username}/suspend")
     @Operation(operationId = "tenantSuspendUser", summary = "Suspend a tenant user")
     public Response suspendUser(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("PUT /iam/users/{}/suspend tenant={}", userId, tenantId);
-        tenantIam.commandService().suspendUser(tenantId, userId);
+        LOG.debug("PUT /iam/users/{}/suspend tenant={}", username, tenantId);
+        tenantIam.commandService().suspendUser(tenantId, username);
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
     @PUT
-    @Path("/users/{userId}/activate")
+    @Path("/users/{username}/activate")
     @Operation(operationId = "tenantActivateUser", summary = "Activate a tenant user")
     public Response activateUser(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("PUT /iam/users/{}/activate tenant={}", userId, tenantId);
-        tenantIam.commandService().activateUser(tenantId, userId);
+        LOG.debug("PUT /iam/users/{}/activate tenant={}", username, tenantId);
+        tenantIam.commandService().activateUser(tenantId, username);
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
     @GET
-    @Path("/users/{userId}/roles")
+    @Path("/users/{username}/roles")
     @Operation(operationId = "tenantGetUserRoles", summary = "Get tenant user roles")
     public Response getUserRoles(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        Set<String> roles = tenantIam.queryService().getUserRoles(tenantId, userId);
+        Set<String> roles = tenantIam.queryService().getUserRolesByUsername(tenantId, username);
         return Response.ok(roles).build();
     }
 
     @PUT
-    @Path("/users/{userId}/roles")
+    @Path("/users/{username}/roles")
     @Operation(operationId = "tenantAssignRole", summary = "Assign role to a tenant user")
     public Response assignRole(
             @Context SecurityContext sc,
-            @PathParam("userId") String userId,
+            @PathParam("username") String username,
             @Valid RoleRequest request) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("PUT /iam/users/{}/roles role={} tenant={}", userId, request.role(), tenantId);
-        tenantIam.commandService().assignRole(tenantId, userId, request.role());
+        LOG.debug("PUT /iam/users/{}/roles role={} tenant={}", username, request.role(), tenantId);
+        tenantIam.commandService().assignRole(tenantId, username, request.role());
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
     @DELETE
-    @Path("/users/{userId}/roles/{role}")
+    @Path("/users/{username}/roles/{role}")
     @Operation(operationId = "tenantRemoveRole", summary = "Remove role from a tenant user")
     public Response removeRole(
             @Context SecurityContext sc,
-            @PathParam("userId") String userId,
+            @PathParam("username") String username,
             @PathParam("role") String role) {
         requireTenantAdmin(sc);
         String tenantId = requireTenantContext();
         requireIam();
 
-        LOG.debug("DELETE /iam/users/{}/roles/{} tenant={}", userId, role, tenantId);
-        tenantIam.commandService().removeRole(tenantId, userId, role);
+        LOG.debug("DELETE /iam/users/{}/roles/{} tenant={}", username, role, tenantId);
+        tenantIam.commandService().removeRole(tenantId, username, role);
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -229,6 +260,30 @@ public class TenantIamResource {
         var accounts = tenantIam.queryService().listServiceAccounts(tenantId);
         return Response.ok(accounts.stream().map(ServiceAccountResponse::fromTenant).toList())
                 .build();
+    }
+
+    @GET
+    @Path("/service-accounts/{clientId}")
+    @Operation(
+            operationId = "tenantGetServiceAccount",
+            summary = "Get a tenant service account by client ID")
+    public Response getServiceAccount(
+            @Context SecurityContext sc,
+            @Parameter(description = "Client ID") @PathParam("clientId") String clientId) {
+        requireTenantAdmin(sc);
+        String tenantId = requireTenantContext();
+        requireIam();
+
+        LOG.debug("GET /iam/service-accounts/{} tenant={}", clientId, tenantId);
+
+        var account = tenantIam.queryService().getServiceAccount(tenantId, clientId);
+        if (account == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("not_found",
+                            "Service account not found: " + clientId))
+                    .build();
+        }
+        return Response.ok(ServiceAccountResponse.fromTenant(account)).build();
     }
 
     @DELETE

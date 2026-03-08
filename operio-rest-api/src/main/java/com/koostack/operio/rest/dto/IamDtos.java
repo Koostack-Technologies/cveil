@@ -28,6 +28,9 @@ public final class IamDtos {
 
     /** Request body for {@code POST /users}. */
     public record RegisterUserRequest(
+            @NotBlank(message = "username must not be blank")
+                    @Size(max = 255)
+                    String username,
             @NotBlank(message = "email must not be blank")
                     @Email(message = "email must be a valid email address")
                     @Size(max = 320)
@@ -37,22 +40,23 @@ public final class IamDtos {
             boolean temporaryPassword) {}
 
     /** Response after user registration. */
-    public record UserRegisteredResponse(String userId, String email, String realmId) {
+    public record UserRegisteredResponse(String username, String email, String realmId) {
         public static UserRegisteredResponse from(IamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(r.userId(), r.email(), r.realmId());
+            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
         }
 
         public static UserRegisteredResponse fromTenant(
                 com.koostack.operio.core.tenant.iam.TenantIamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(r.userId(), r.email(), r.realmId());
+            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
         }
     }
 
     /** Response for user queries. */
     public record UserResponse(
-            String userId, String email, String fullName, String status, Instant createdAt) {
+            String username, String email, String fullName, String status, Instant createdAt) {
         public static UserResponse from(IdpUser u) {
-            return new UserResponse(u.userId(), u.email(), u.fullName(), u.status(), u.createdAt());
+            return new UserResponse(
+                    u.username(), u.email(), u.fullName(), u.status(), u.createdAt());
         }
     }
 

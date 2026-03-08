@@ -32,7 +32,15 @@ public interface TenantIamQueryService<T> extends Plugin<T> {
 
     IdpUser findUserByEmail(String tenantId, String email);
 
+    IdpUser findUserByUsername(String tenantId, String username);
+
     Set<String> getUserRoles(String tenantId, String userId);
+
+    Set<String> getUserRolesByEmail(String tenantId, String email);
+
+    Set<String> getUserRolesByUsername(String tenantId, String username);
+
+    String resolveUserId(String tenantId, String emailOrUsername);
 
     // -- Service account queries ----------------------------------------------
 

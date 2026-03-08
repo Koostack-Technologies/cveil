@@ -17,11 +17,11 @@ public interface IamCommandService<T> extends Plugin<T> {
     /**
      * Result of registering a user.
      *
-     * @param userId the Keycloak user ID
+     * @param username the user's login name
      * @param email the user's email
      * @param realmId the realm the user was registered in
      */
-    record RegisterUserResult(String userId, String email, String realmId) {}
+    record RegisterUserResult(String username, String email, String realmId) {}
 
     /**
      * Result of creating a service account (Keycloak confidential client).
@@ -36,6 +36,7 @@ public interface IamCommandService<T> extends Plugin<T> {
      * Register a new user in the given realm. Publishes a {@code UserRegisteredEvent}.
      *
      * @param realmId the Keycloak realm (tenantId or platform realm)
+     * @param username the user's unique login name
      * @param email the user's email address
      * @param fullName the user's display name
      * @param roles initial roles to assign
@@ -43,24 +44,24 @@ public interface IamCommandService<T> extends Plugin<T> {
      * @return the registration result
      */
     RegisterUserResult registerUser(
-            String realmId, String email, String fullName, Set<String> roles,
+            String realmId, String username, String email, String fullName, Set<String> roles,
             boolean temporaryPassword);
 
     /**
      * Suspend a user account. Publishes a {@code UserSuspendedEvent}.
      *
      * @param realmId the Keycloak realm
-     * @param userId the user's Keycloak ID
+     * @param emailOrUsername the user's email or username
      */
-    void suspendUser(String realmId, String userId);
+    void suspendUser(String realmId, String emailOrUsername);
 
     /**
      * Re-activate a suspended user account. Publishes a {@code UserActivatedEvent}.
      *
      * @param realmId the Keycloak realm
-     * @param userId the user's Keycloak ID
+     * @param emailOrUsername the user's email or username
      */
-    void activateUser(String realmId, String userId);
+    void activateUser(String realmId, String emailOrUsername);
 
     /**
      * Create a service account (confidential client with client credentials grant). Publishes a
@@ -86,19 +87,19 @@ public interface IamCommandService<T> extends Plugin<T> {
      * Assign a role to a user. Publishes a {@code RoleAssignedEvent}.
      *
      * @param realmId the Keycloak realm
-     * @param userId the user's Keycloak ID
+     * @param emailOrUsername the user's email or username
      * @param role the role name to assign
      */
-    void assignRole(String realmId, String userId, String role);
+    void assignRole(String realmId, String emailOrUsername, String role);
 
     /**
      * Remove a role from a user. Publishes a {@code RoleRemovedEvent}.
      *
      * @param realmId the Keycloak realm
-     * @param userId the user's Keycloak ID
+     * @param emailOrUsername the user's email or username
      * @param role the role name to remove
      */
-    void removeRole(String realmId, String userId, String role);
+    void removeRole(String realmId, String emailOrUsername, String role);
 
     // -- Legacy API key methods (kept for backward compatibility) --------------
 

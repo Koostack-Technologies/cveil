@@ -334,7 +334,7 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
                         e.getMessage());
             }
 
-            return new IdpUser(userId, email, fullName, "unverified", Instant.now());
+            return new IdpUser(email, email, fullName, "unverified", Instant.now());
         } finally {
             response.close();
         }

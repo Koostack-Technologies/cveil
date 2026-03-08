@@ -373,7 +373,7 @@ class KeycloakIdpProviderTest {
             IdpUser result =
                     provider.registerUser(TENANT_ID, "user@test.com", "password", "John Doe");
 
-            assertEquals("new-user-123", result.userId());
+            assertEquals("user@test.com", result.username());
             assertEquals("user@test.com", result.email());
             assertEquals("John Doe", result.fullName());
             assertEquals("unverified", result.status());

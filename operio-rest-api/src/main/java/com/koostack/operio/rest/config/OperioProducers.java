@@ -1080,6 +1080,12 @@ public class OperioProducers {
         }
         this.iamQueryService = iamQuerySvc;
 
+        // Wire query service into command service for email/username → UUID resolution
+        if (iamCmdSvc instanceof com.koostack.operio.platform.iam.jooq.JooqIamCommandService jooqCmdSvc) {
+            jooqCmdSvc.setQueryService(iamQuerySvc);
+            LOG.info("Operio REST API: IamCommandService wired with IamQueryService");
+        }
+
         // Wire API key token verifier to IamQueryService for hash-based lookup
         if (this.tokenVerifier != null) {
             this.tokenVerifier.setIamQueryService(iamQuerySvc);
@@ -1099,6 +1105,10 @@ public class OperioProducers {
             tenantIamQrySvc.configure(
                     new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryConfig(kcIamConfig));
             this.tenantIamQueryService = tenantIamQrySvc;
+
+            // Wire query service into tenant command service for email/username → UUID resolution
+            tenantIamCmdSvc.setQueryService(tenantIamQrySvc);
+
             LOG.info("Operio REST API: tenant IAM command + query services wired (Keycloak)");
         } else {
             LOG.warn(

@@ -61,12 +61,13 @@ public class PlatformIamResource {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("POST /platform/iam/users email={}", request.email());
+        LOG.debug("POST /platform/iam/users username={}, email={}", request.username(), request.email());
 
         var result =
                 cqrs.iamCommandService()
                         .registerUser(
                                 PLATFORM_REALM,
+                                request.username(),
                                 request.email(),
                                 request.fullName(),
                                 request.roles(),
@@ -90,90 +91,118 @@ public class PlatformIamResource {
     }
 
     @GET
-    @Path("/users/{userId}")
-    @Operation(operationId = "platformGetUser", summary = "Get platform user by ID")
+    @Path("/users/{username}")
+    @Operation(operationId = "platformGetUser", summary = "Get platform user by username")
     public Response getUser(
             @Context SecurityContext sc,
-            @Parameter(description = "User ID") @PathParam("userId") String userId) {
+            @Parameter(description = "Username") @PathParam("username") String username) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("GET /platform/iam/users/{}", userId);
+        LOG.debug("GET /platform/iam/users/{}", username);
 
-        IdpUser user = cqrs.iamQueryService().getUser(PLATFORM_REALM, userId);
+        IdpUser user = cqrs.iamQueryService().findUserByUsername(PLATFORM_REALM, username);
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found", "User not found: " + userId))
+                    .entity(ErrorResponse.of("not_found", "User not found: " + username))
+                    .build();
+        }
+        return Response.ok(UserResponse.from(user)).build();
+    }
+
+    @GET
+    @Path("/users/by-email")
+    @Operation(
+            operationId = "platformFindUserByEmail",
+            summary = "Find a platform user by email address")
+    public Response findUserByEmail(
+            @Context SecurityContext sc,
+            @Parameter(description = "Email address") @QueryParam("email") String email) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        if (email == null || email.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("bad_request", "email query parameter is required"))
+                    .build();
+        }
+
+        LOG.debug("GET /platform/iam/users/by-email email={}", email);
+
+        IdpUser user = cqrs.iamQueryService().findUserByEmail(PLATFORM_REALM, email);
+        if (user == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("not_found", "User not found: " + email))
                     .build();
         }
         return Response.ok(UserResponse.from(user)).build();
     }
 
     @PUT
-    @Path("/users/{userId}/suspend")
+    @Path("/users/{username}/suspend")
     @Operation(operationId = "platformSuspendUser", summary = "Suspend a platform user")
     public Response suspendUser(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("PUT /platform/iam/users/{}/suspend", userId);
-        cqrs.iamCommandService().suspendUser(PLATFORM_REALM, userId);
+        LOG.debug("PUT /platform/iam/users/{}/suspend", username);
+        cqrs.iamCommandService().suspendUser(PLATFORM_REALM, username);
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
     @PUT
-    @Path("/users/{userId}/activate")
+    @Path("/users/{username}/activate")
     @Operation(operationId = "platformActivateUser", summary = "Activate a platform user")
     public Response activateUser(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("PUT /platform/iam/users/{}/activate", userId);
-        cqrs.iamCommandService().activateUser(PLATFORM_REALM, userId);
+        LOG.debug("PUT /platform/iam/users/{}/activate", username);
+        cqrs.iamCommandService().activateUser(PLATFORM_REALM, username);
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
     @GET
-    @Path("/users/{userId}/roles")
+    @Path("/users/{username}/roles")
     @Operation(operationId = "platformGetUserRoles", summary = "Get platform user roles")
     public Response getUserRoles(
-            @Context SecurityContext sc, @PathParam("userId") String userId) {
+            @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        Set<String> roles = cqrs.iamQueryService().getUserRoles(PLATFORM_REALM, userId);
+        Set<String> roles = cqrs.iamQueryService().getUserRolesByUsername(PLATFORM_REALM, username);
         return Response.ok(roles).build();
     }
 
     @PUT
-    @Path("/users/{userId}/roles")
+    @Path("/users/{username}/roles")
     @Operation(operationId = "platformAssignRole", summary = "Assign role to a platform user")
     public Response assignRole(
             @Context SecurityContext sc,
-            @PathParam("userId") String userId,
+            @PathParam("username") String username,
             @Valid RoleRequest request) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("PUT /platform/iam/users/{}/roles role={}", userId, request.role());
-        cqrs.iamCommandService().assignRole(PLATFORM_REALM, userId, request.role());
+        LOG.debug("PUT /platform/iam/users/{}/roles role={}", username, request.role());
+        cqrs.iamCommandService().assignRole(PLATFORM_REALM, username, request.role());
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
     @DELETE
-    @Path("/users/{userId}/roles/{role}")
+    @Path("/users/{username}/roles/{role}")
     @Operation(operationId = "platformRemoveRole", summary = "Remove role from a platform user")
     public Response removeRole(
             @Context SecurityContext sc,
-            @PathParam("userId") String userId,
+            @PathParam("username") String username,
             @PathParam("role") String role) {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        LOG.debug("DELETE /platform/iam/users/{}/roles/{}", userId, role);
-        cqrs.iamCommandService().removeRole(PLATFORM_REALM, userId, role);
+        LOG.debug("DELETE /platform/iam/users/{}/roles/{}", username, role);
+        cqrs.iamCommandService().removeRole(PLATFORM_REALM, username, role);
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -217,6 +246,29 @@ public class PlatformIamResource {
 
         var accounts = cqrs.iamQueryService().listServiceAccounts(PLATFORM_REALM);
         return Response.ok(accounts.stream().map(ServiceAccountResponse::from).toList()).build();
+    }
+
+    @GET
+    @Path("/service-accounts/{clientId}")
+    @Operation(
+            operationId = "platformGetServiceAccount",
+            summary = "Get a platform service account by client ID")
+    public Response getServiceAccount(
+            @Context SecurityContext sc,
+            @Parameter(description = "Client ID") @PathParam("clientId") String clientId) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("GET /platform/iam/service-accounts/{}", clientId);
+
+        var account = cqrs.iamQueryService().getServiceAccount(PLATFORM_REALM, clientId);
+        if (account == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("not_found",
+                            "Service account not found: " + clientId))
+                    .build();
+        }
+        return Response.ok(ServiceAccountResponse.from(account)).build();
     }
 
     @DELETE

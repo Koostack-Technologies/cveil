@@ -7,6 +7,7 @@ import java.util.Set;
 public record TenantUserRegisteredEvent(
         String tenantId,
         String userId,
+        String username,
         String email,
         String fullName,
         Set<String> roles,

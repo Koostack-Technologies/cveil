@@ -7,6 +7,7 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.*;
 import com.koostack.operio.core.tenant.iam.TenantIamCommandService;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
+import com.koostack.operio.core.tenant.iam.TenantIamQueryService;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,12 @@ public class KeycloakTenantIamCommandService
     private static final String SERVICE_ACCOUNT_AGGREGATE_TYPE = "tenant-iam-service-account";
 
     private EventService<?> eventService;
+    private TenantIamQueryService<?> queryService;
+
+    /** Set the query service for email/username → UUID resolution. */
+    public void setQueryService(TenantIamQueryService<?> queryService) {
+        this.queryService = queryService;
+    }
 
     @Override
     public String getName() {
@@ -60,10 +67,13 @@ public class KeycloakTenantIamCommandService
 
     @Override
     public RegisterUserResult registerUser(
-            String tenantId, String email, String fullName, Set<String> roles,
+            String tenantId, String username, String email, String fullName, Set<String> roles,
             boolean temporaryPassword) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
+        }
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("username is required");
         }
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email is required");
@@ -71,27 +81,29 @@ public class KeycloakTenantIamCommandService
 
         String realmId = toRealmId(tenantId);
         String userId = UUID.randomUUID().toString();
-        var payload = new TenantUserRegisteredEvent(tenantId, userId, email, fullName,
+        var payload = new TenantUserRegisteredEvent(tenantId, userId, username, email, fullName,
                 roles != null ? roles : Set.of(), temporaryPassword);
         publishEvent(TenantIamEventTypes.USER_REGISTERED, tenantId, USER_AGGREGATE_TYPE, payload);
 
-        LOG.info("Tenant user registration event published: tenantId={}, userId={}, email={}",
-                tenantId, userId, email);
-        return new RegisterUserResult(userId, email, realmId);
+        LOG.info("Tenant user registration event published: tenantId={}, username={}, email={}",
+                tenantId, username, email);
+        return new RegisterUserResult(username, email, realmId);
     }
 
     @Override
-    public void suspendUser(String tenantId, String userId) {
+    public void suspendUser(String tenantId, String emailOrUsername) {
+        String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantUserSuspendedEvent(tenantId, userId);
         publishEvent(TenantIamEventTypes.USER_SUSPENDED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant user suspended: tenantId={}, userId={}", tenantId, userId);
+        LOG.info("Tenant user suspended: tenantId={}, identifier={}", tenantId, emailOrUsername);
     }
 
     @Override
-    public void activateUser(String tenantId, String userId) {
+    public void activateUser(String tenantId, String emailOrUsername) {
+        String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantUserActivatedEvent(tenantId, userId);
         publishEvent(TenantIamEventTypes.USER_ACTIVATED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant user activated: tenantId={}, userId={}", tenantId, userId);
+        LOG.info("Tenant user activated: tenantId={}, identifier={}", tenantId, emailOrUsername);
     }
 
     // -- Service account operations -------------------------------------------
@@ -129,20 +141,35 @@ public class KeycloakTenantIamCommandService
     // -- Role operations ------------------------------------------------------
 
     @Override
-    public void assignRole(String tenantId, String userId, String role) {
+    public void assignRole(String tenantId, String emailOrUsername, String role) {
+        String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantRoleAssignedEvent(tenantId, userId, role);
         publishEvent(TenantIamEventTypes.ROLE_ASSIGNED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant role assigned: tenantId={}, userId={}, role={}", tenantId, userId, role);
+        LOG.info("Tenant role assigned: tenantId={}, identifier={}, role={}", tenantId, emailOrUsername, role);
     }
 
     @Override
-    public void removeRole(String tenantId, String userId, String role) {
+    public void removeRole(String tenantId, String emailOrUsername, String role) {
+        String userId = requireUserId(tenantId, emailOrUsername);
         var payload = new TenantRoleRemovedEvent(tenantId, userId, role);
         publishEvent(TenantIamEventTypes.ROLE_REMOVED, tenantId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Tenant role removed: tenantId={}, userId={}, role={}", tenantId, userId, role);
+        LOG.info("Tenant role removed: tenantId={}, identifier={}, role={}", tenantId, emailOrUsername, role);
     }
 
     // -- Internal helpers -----------------------------------------------------
+
+    private String requireUserId(String tenantId, String emailOrUsername) {
+        if (queryService == null) {
+            throw new IllegalStateException(
+                    "queryService not configured — call setQueryService() after wiring");
+        }
+        String userId = queryService.resolveUserId(tenantId, emailOrUsername);
+        if (userId == null) {
+            throw new IllegalArgumentException(
+                    "User not found: " + emailOrUsername + " in tenant " + tenantId);
+        }
+        return userId;
+    }
 
     private void publishEvent(
             String eventType, String tenantId, String aggregateType, DomainEvent payload) {

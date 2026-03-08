@@ -55,13 +55,50 @@ public interface IamQueryService<T> extends Plugin<T> {
     IdpUser findUserByEmail(String realmId, String email);
 
     /**
-     * Get all roles assigned to a user.
+     * Find a user by username.
      *
      * @param realmId the Keycloak realm
-     * @param userId the user's Keycloak ID
+     * @param username the username to search for
+     * @return the user, or {@code null} if not found
+     */
+    IdpUser findUserByUsername(String realmId, String username);
+
+    /**
+     * Get all roles assigned to a user (by internal ID).
+     *
+     * @param realmId the Keycloak realm
+     * @param userId the user's internal ID (opaque)
      * @return the user's roles, possibly empty — never {@code null}
      */
     Set<String> getUserRoles(String realmId, String userId);
+
+    /**
+     * Get all roles assigned to a user identified by email.
+     *
+     * @param realmId the Keycloak realm
+     * @param email the user's email
+     * @return the user's roles, possibly empty — never {@code null}
+     */
+    Set<String> getUserRolesByEmail(String realmId, String email);
+
+    /**
+     * Get all roles assigned to a user identified by username.
+     *
+     * @param realmId the Keycloak realm
+     * @param username the user's username
+     * @return the user's roles, possibly empty — never {@code null}
+     */
+    Set<String> getUserRolesByUsername(String realmId, String username);
+
+    /**
+     * Resolve a user's internal ID from an email or username. Used internally by command services
+     * to map external identifiers to event-store aggregate keys.
+     *
+     * @param realmId the Keycloak realm
+     * @param emailOrUsername the user's email or username
+     * @return the internal user ID, or {@code null} if not found
+     */
+    String resolveUserId(String realmId, String emailOrUsername);
 
     // -- Service account queries ----------------------------------------------
 

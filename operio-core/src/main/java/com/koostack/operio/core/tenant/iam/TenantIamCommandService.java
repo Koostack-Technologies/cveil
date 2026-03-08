@@ -18,25 +18,25 @@ import java.util.Set;
 public interface TenantIamCommandService<T> extends Plugin<T> {
 
     /** Result of registering a tenant user. */
-    record RegisterUserResult(String userId, String email, String realmId) {}
+    record RegisterUserResult(String username, String email, String realmId) {}
 
     /** Result of creating a tenant service account. */
     record CreateServiceAccountResult(String clientId, String clientSecret, String realmId) {}
 
     RegisterUserResult registerUser(
-            String tenantId, String email, String fullName, Set<String> roles,
+            String tenantId, String username, String email, String fullName, Set<String> roles,
             boolean temporaryPassword);
 
-    void suspendUser(String tenantId, String userId);
+    void suspendUser(String tenantId, String emailOrUsername);
 
-    void activateUser(String tenantId, String userId);
+    void activateUser(String tenantId, String emailOrUsername);
 
     CreateServiceAccountResult createServiceAccount(
             String tenantId, String name, Set<String> roles);
 
     void revokeServiceAccount(String tenantId, String clientId);
 
-    void assignRole(String tenantId, String userId, String role);
+    void assignRole(String tenantId, String emailOrUsername, String role);
 
-    void removeRole(String tenantId, String userId, String role);
+    void removeRole(String tenantId, String emailOrUsername, String role);
 }

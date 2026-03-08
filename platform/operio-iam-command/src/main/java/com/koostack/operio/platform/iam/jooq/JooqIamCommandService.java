@@ -8,6 +8,7 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.*;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
+import com.koostack.operio.core.platform.iam.IamQueryService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -38,6 +39,12 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     private EventService<?> eventService;
     private DataSource platformDataSource;
+    private IamQueryService<?> queryService;
+
+    /** Set the query service for email/username → UUID resolution. */
+    public void setQueryService(IamQueryService<?> queryService) {
+        this.queryService = queryService;
+    }
 
     @Override
     public String getName() {
@@ -65,37 +72,42 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public RegisterUserResult registerUser(
-            String realmId, String email, String fullName, Set<String> roles,
+            String realmId, String username, String email, String fullName, Set<String> roles,
             boolean temporaryPassword) {
         if (realmId == null || realmId.isBlank()) {
             throw new IllegalArgumentException("realmId is required");
+        }
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("username is required");
         }
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email is required");
         }
 
         String userId = UUID.randomUUID().toString();
-        var payload = new UserRegisteredEvent(realmId, userId, email, fullName,
+        var payload = new UserRegisteredEvent(realmId, userId, username, email, fullName,
                 roles != null ? roles : Set.of(), temporaryPassword);
         publishEvent(IamEventTypes.USER_REGISTERED, realmId, USER_AGGREGATE_TYPE, payload);
 
-        LOG.info("User registration event published: realmId={}, userId={}, email={}",
-                realmId, userId, email);
-        return new RegisterUserResult(userId, email, realmId);
+        LOG.info("User registration event published: realmId={}, username={}, email={}",
+                realmId, username, email);
+        return new RegisterUserResult(username, email, realmId);
     }
 
     @Override
-    public void suspendUser(String realmId, String userId) {
+    public void suspendUser(String realmId, String emailOrUsername) {
+        String userId = requireUserId(realmId, emailOrUsername);
         var payload = new UserSuspendedEvent(realmId, userId);
         publishEvent(IamEventTypes.USER_SUSPENDED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("User suspended: realmId={}, userId={}", realmId, userId);
+        LOG.info("User suspended: realmId={}, identifier={}", realmId, emailOrUsername);
     }
 
     @Override
-    public void activateUser(String realmId, String userId) {
+    public void activateUser(String realmId, String emailOrUsername) {
+        String userId = requireUserId(realmId, emailOrUsername);
         var payload = new UserActivatedEvent(realmId, userId);
         publishEvent(IamEventTypes.USER_ACTIVATED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("User activated: realmId={}, userId={}", realmId, userId);
+        LOG.info("User activated: realmId={}, identifier={}", realmId, emailOrUsername);
     }
 
     // -- Service account operations -------------------------------------------
@@ -134,17 +146,19 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     // -- Role operations ------------------------------------------------------
 
     @Override
-    public void assignRole(String realmId, String userId, String role) {
+    public void assignRole(String realmId, String emailOrUsername, String role) {
+        String userId = requireUserId(realmId, emailOrUsername);
         var payload = new RoleAssignedEvent(realmId, userId, role);
         publishEvent(IamEventTypes.ROLE_ASSIGNED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Role assigned: realmId={}, userId={}, role={}", realmId, userId, role);
+        LOG.info("Role assigned: realmId={}, identifier={}, role={}", realmId, emailOrUsername, role);
     }
 
     @Override
-    public void removeRole(String realmId, String userId, String role) {
+    public void removeRole(String realmId, String emailOrUsername, String role) {
+        String userId = requireUserId(realmId, emailOrUsername);
         var payload = new RoleRemovedEvent(realmId, userId, role);
         publishEvent(IamEventTypes.ROLE_REMOVED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Role removed: realmId={}, userId={}, role={}", realmId, userId, role);
+        LOG.info("Role removed: realmId={}, identifier={}, role={}", realmId, emailOrUsername, role);
     }
 
     // -- Legacy API key compat ------------------------------------------------
@@ -212,6 +226,19 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     }
 
     // -- Internal helpers -----------------------------------------------------
+
+    private String requireUserId(String realmId, String emailOrUsername) {
+        if (queryService == null) {
+            throw new IllegalStateException(
+                    "queryService not configured — call setQueryService() after wiring");
+        }
+        String userId = queryService.resolveUserId(realmId, emailOrUsername);
+        if (userId == null) {
+            throw new IllegalArgumentException(
+                    "User not found: " + emailOrUsername + " in realm " + realmId);
+        }
+        return userId;
+    }
 
     private static String generateRawApiKey() {
         byte[] bytes = new byte[24];

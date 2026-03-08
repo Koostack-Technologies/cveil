@@ -2,9 +2,7 @@ package com.koostack.operio.platform.iam.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
-import com.koostack.operio.core.platform.iam.UserIdMapping;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -23,8 +21,8 @@ import org.slf4j.LoggerFactory;
  * the event stream produces the same result.
  *
  * <p>KC 26+ ignores {@code UserRepresentation.setId()} during user creation, so the KC-assigned
- * ID differs from the command UUID. This handler maintains a {@code commandUUID → kcUUID} mapping
- * which is also exposed via {@link #getKcUserId(String)} for the query service.
+ * ID differs from the command UUID. This handler stores the command UUID as a Keycloak user
+ * attribute ({@code operio-user-id}) and resolves it via attribute search.
  */
 public class IamProjectionHandler {
 
@@ -102,6 +100,8 @@ public class IamProjectionHandler {
         String realmId = node.get("realmId").asText();
         String userId = node.get("userId").asText();
         String email = node.get("email").asText();
+        String username = node.has("username") && !node.get("username").isNull()
+                ? node.get("username").asText() : email;
         String fullName = node.has("fullName") && !node.get("fullName").isNull()
                 ? node.get("fullName").asText() : null;
         boolean temporaryPassword = node.has("temporaryPassword")
@@ -118,9 +118,10 @@ public class IamProjectionHandler {
 
         UserRepresentation user = new UserRepresentation();
         user.setEmail(email);
-        user.setUsername(email);
+        user.setUsername(username);
         user.setEnabled(true);
         user.setEmailVerified(!temporaryPassword);
+        user.setAttributes(Map.of("operio-user-id", List.of(userId)));
 
         if (fullName != null && !fullName.isBlank()) {
             String[] parts = fullName.trim().split("\\s+", 2);
@@ -136,28 +137,28 @@ public class IamProjectionHandler {
         try {
             if (response.getStatus() == 201) {
                 String createdUserId = extractUserId(response);
+                if (createdUserId == null) {
+                    throw new IllegalStateException(
+                            "Keycloak returned 201 but Location header missing or malformed"
+                                    + " — cannot map command userId " + userId);
+                }
                 LOG.info("User created in Keycloak: realm={}, email={}, kcId={}, commandId={}",
                         realmId, email, createdUserId, userId);
 
-                // Cache the command → KC ID mapping
-                if (createdUserId != null) {
-                    UserIdMapping.register(userId, createdUserId);
-
-                    // Assign roles if specified
-                    if (node.has("roles") && node.get("roles").isArray()) {
-                        for (var roleNode : node.get("roles")) {
-                            assignRealmRole(realm, createdUserId, roleNode.asText());
-                        }
+                // Assign roles if specified
+                if (node.has("roles") && node.get("roles").isArray()) {
+                    for (var roleNode : node.get("roles")) {
+                        assignRealmRole(realm, createdUserId, roleNode.asText());
                     }
+                }
 
-                    // Send "set password" email if temporary
-                    if (temporaryPassword) {
-                        try {
-                            realm.users().get(createdUserId)
-                                    .executeActionsEmail(List.of("UPDATE_PASSWORD"));
-                        } catch (Exception e) {
-                            LOG.warn("Failed to send password setup email: {}", e.getMessage());
-                        }
+                // Send "set password" email if temporary
+                if (temporaryPassword) {
+                    try {
+                        realm.users().get(createdUserId)
+                                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+                    } catch (Exception e) {
+                        LOG.warn("Failed to send password setup email: {}", e.getMessage());
                     }
                 }
             } else if (response.getStatus() == 409) {
@@ -308,18 +309,14 @@ public class IamProjectionHandler {
      * Resolves a command-side userId to the actual Keycloak user ID.
      * KC 26+ ignores UserRepresentation.setId() during creation, so the KC-assigned ID
      * differs from the command UUID. We store the command UUID as a user attribute
-     * ({@code operio-user-id}) and fall back to attribute search when direct lookup fails.
+     * ({@code operio-user-id}) and search by that attribute.
      */
     private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        String cached = UserIdMapping.toKcId(commandUserId);
-        if (cached != null) return cached;
-        try {
-            realm.users().get(commandUserId).toRepresentation();
-            return commandUserId;
-        } catch (jakarta.ws.rs.NotFoundException e) {
-            throw new jakarta.ws.rs.NotFoundException(
-                    "User not found by ID or cache: " + commandUserId);
-        }
+        List<UserRepresentation> users = realm.users()
+                .searchByAttributes("operio-user-id:" + commandUserId);
+        if (!users.isEmpty()) return users.get(0).getId();
+        throw new IllegalStateException(
+                "User not found by operio-user-id attribute: " + commandUserId);
     }
 
     private void assignRealmRole(RealmResource realm, String userId, String roleName) {
