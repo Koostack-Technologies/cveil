@@ -1,6 +1,8 @@
 package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.models.IdpUser;
+import com.koostack.operio.core.platform.iam.IamQueryService;
+import com.koostack.operio.platform.iam.jooq.*;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
@@ -88,7 +90,9 @@ public class PlatformIamResource {
 
         LOG.debug("GET /platform/iam/users");
 
-        List<IdpUser> users = cqrs.iamQueryService().listUsers(PLATFORM_REALM);
+        List<IdpUser> users =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(new ListUsersQueryActuator.ListUsersQuery(PLATFORM_REALM));
         return Response.ok(users.stream().map(UserResponse::from).toList()).build();
     }
 
@@ -103,7 +107,11 @@ public class PlatformIamResource {
 
         LOG.debug("GET /platform/iam/users/{}", username);
 
-        IdpUser user = cqrs.iamQueryService().findUserByUsername(PLATFORM_REALM, username);
+        IdpUser user =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(
+                                new FindUserByUsernameQueryActuator.FindUserByUsernameQuery(
+                                        PLATFORM_REALM, username));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + username))
@@ -131,7 +139,11 @@ public class PlatformIamResource {
 
         LOG.debug("GET /platform/iam/users/by-email email={}", email);
 
-        IdpUser user = cqrs.iamQueryService().findUserByEmail(PLATFORM_REALM, email);
+        IdpUser user =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(
+                                new FindUserByEmailQueryActuator.FindUserByEmailQuery(
+                                        PLATFORM_REALM, email));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + email))
@@ -180,7 +192,11 @@ public class PlatformIamResource {
         requireSuperAdmin(sc);
         requireCqrs();
 
-        Set<String> roles = cqrs.iamQueryService().getUserRolesByUsername(PLATFORM_REALM, username);
+        Set<String> roles =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(
+                                new GetUserRolesByUsernameQueryActuator
+                                        .GetUserRolesByUsernameQuery(PLATFORM_REALM, username));
         return Response.ok(roles).build();
     }
 
@@ -263,7 +279,13 @@ public class PlatformIamResource {
 
         LOG.debug("GET /platform/iam/service-accounts");
 
-        var accounts = cqrs.iamQueryService().listServiceAccounts(PLATFORM_REALM);
+        var accounts =
+                cqrs.iamQueryDispatcher()
+                        .<ListServiceAccountsQueryActuator.ListServiceAccountsQuery,
+                                java.util.List<IamQueryService.ServiceAccountInfo>>
+                                dispatch(
+                                        new ListServiceAccountsQueryActuator
+                                                .ListServiceAccountsQuery(PLATFORM_REALM));
         return Response.ok(accounts.stream().map(ServiceAccountResponse::from).toList()).build();
     }
 
@@ -280,7 +302,13 @@ public class PlatformIamResource {
 
         LOG.debug("GET /platform/iam/service-accounts/{}", clientId);
 
-        var account = cqrs.iamQueryService().getServiceAccount(PLATFORM_REALM, clientId);
+        var account =
+                cqrs.iamQueryDispatcher()
+                        .<GetServiceAccountQueryActuator.GetServiceAccountQuery,
+                                IamQueryService.ServiceAccountInfo>
+                                dispatch(
+                                        new GetServiceAccountQueryActuator.GetServiceAccountQuery(
+                                                PLATFORM_REALM, clientId));
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))

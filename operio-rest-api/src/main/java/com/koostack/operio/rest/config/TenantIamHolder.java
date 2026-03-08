@@ -1,5 +1,6 @@
 package com.koostack.operio.rest.config;
 
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.tenant.iam.TenantIamCommandService;
 import com.koostack.operio.core.tenant.iam.TenantIamQueryService;
 
@@ -34,5 +35,18 @@ public class TenantIamHolder {
     @SuppressWarnings("unchecked")
     public TenantIamQueryService<?> queryService() {
         return queryService;
+    }
+
+    /**
+     * Returns the tenant IAM query dispatcher for direct query-record dispatch.
+     *
+     * @throws IllegalStateException if the underlying service is not a QueryDispatcher
+     */
+    public QueryDispatcher queryDispatcher() {
+        if (queryService instanceof QueryDispatcher qd) {
+            return qd;
+        }
+        throw new IllegalStateException(
+                "Tenant IAM query service does not implement QueryDispatcher");
     }
 }

@@ -1080,8 +1080,8 @@ public class OperioProducers {
         this.coreQueryService = coreQuerySvc;
         this.planQueryService = planQuerySvc;
 
-        com.koostack.operio.platform.iam.jooq.JooqIamQueryService iamQuerySvc =
-                new com.koostack.operio.platform.iam.jooq.JooqIamQueryService();
+        com.koostack.operio.platform.iam.jooq.KeycloakIamQueryDispatcher iamQuerySvc =
+                new com.koostack.operio.platform.iam.jooq.KeycloakIamQueryDispatcher();
 
         // Build KeycloakConfig for IAM query service
         com.koostack.operio.plugin.platform.keycloak.KeycloakConfig kcIamConfig = null;

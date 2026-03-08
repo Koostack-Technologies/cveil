@@ -65,8 +65,7 @@ public class TenantCreateServiceAccountCommandActuator
             String clientId, String clientSecret, String realmId) {}
 
     @Override
-    public CreateServiceAccountResult execute(
-            EventService<?> publisher, CreateServiceAccountCommand command) {
+    public CreateServiceAccountResult execute(CreateServiceAccountCommand command) {
         if (command.tenantId() == null || command.tenantId().isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }

@@ -1,6 +1,7 @@
 package com.koostack.operio.rest.config;
 
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
@@ -78,6 +79,18 @@ public class PlatformCqrsHolder {
     @SuppressWarnings("unchecked")
     public <T> IamQueryService<T> iamQueryService() {
         return (IamQueryService<T>) iamQueryService;
+    }
+
+    /**
+     * Returns the IAM query dispatcher for direct query-record dispatch.
+     *
+     * @throws IllegalStateException if the underlying service is not a QueryDispatcher
+     */
+    public QueryDispatcher iamQueryDispatcher() {
+        if (iamQueryService instanceof QueryDispatcher qd) {
+            return qd;
+        }
+        throw new IllegalStateException("IAM query service does not implement QueryDispatcher");
     }
 
     @SuppressWarnings("unchecked")
