@@ -1112,7 +1112,6 @@ public class OperioProducers {
         if (iamCmdSvc
                 instanceof com.koostack.operio.platform.iam.jooq.KeycloakIamDispatcher dispatcher) {
             dispatcher.setQueryService(iamQuerySvc);
-            dispatcher.registerAuthActuators();
             LOG.info("Operio REST API: KeycloakIamDispatcher wired with IamQueryService");
         }
 
@@ -1141,7 +1140,6 @@ public class OperioProducers {
 
             // Wire query service into tenant command service for email/username → UUID resolution
             tenantIamCmdSvc.setQueryService(tenantIamQrySvc);
-            tenantIamCmdSvc.registerAuthActuators();
 
             LOG.info("Operio REST API: tenant IAM command + query services wired (Keycloak)");
         } else {
@@ -1186,7 +1184,8 @@ public class OperioProducers {
                                 .build();
         iamCmdSvc.configure(
                 new com.koostack.operio.platform.iam.jooq.JooqIamCommandConfig(
-                        platformEventService, platformDataSource, iamCmdKeycloak));
+                        platformEventService, platformDataSource, iamCmdKeycloak, kcIamConfig));
+        iamCmdSvc.registerAuthActuators();
 
         // Reconfigure tenant IAM dispatcher now that the Keycloak admin client is available
         if (this.tenantIamCommandService
@@ -1196,7 +1195,8 @@ public class OperioProducers {
                 && this.tenantEventService != null) {
             tenantDispatcher.configure(
                     new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandConfig(
-                            this.tenantEventService, iamCmdKeycloak));
+                            this.tenantEventService, iamCmdKeycloak, kcIamConfig));
+            tenantDispatcher.registerAuthActuators();
             LOG.info(
                     "Operio REST API: KeycloakTenantIamDispatcher reconfigured with Keycloak admin"
                             + " client");

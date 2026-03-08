@@ -85,7 +85,7 @@ public class TenantCreateServiceAccountCommandActuator
                 new TenantServiceAccountCreatedEvent(
                         command.tenantId(), clientId, command.name(), roles);
 
-        UUID aggregateId = deriveAggregateId(command.tenantId());
+        UUID aggregateId = deriveAggregateId(realmId, clientId);
         AggregateKey key =
                 new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
@@ -164,9 +164,9 @@ public class TenantCreateServiceAccountCommandActuator
         }
     }
 
-    private static UUID deriveAggregateId(String tenantId) {
+    private static UUID deriveAggregateId(String realmId, String clientId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + tenantId).getBytes(StandardCharsets.UTF_8));
+                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 
     private static String toRealmId(String tenantId) {

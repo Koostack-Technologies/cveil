@@ -145,18 +145,14 @@ public class KeycloakTenantIamDispatcher
 
     @Override
     public void suspendUser(String tenantId, String emailOrUsername) {
-        String userId = requireUserId(tenantId, emailOrUsername);
-        dispatch(
-                new TenantSuspendUserCommandActuator.SuspendUserCommand(
-                        tenantId, userId, emailOrUsername));
+        dispatch(new TenantSuspendUserCommandActuator.SuspendUserCommand(
+                tenantId, emailOrUsername));
     }
 
     @Override
     public void activateUser(String tenantId, String emailOrUsername) {
-        String userId = requireUserId(tenantId, emailOrUsername);
-        dispatch(
-                new TenantActivateUserCommandActuator.ActivateUserCommand(
-                        tenantId, userId, emailOrUsername));
+        dispatch(new TenantActivateUserCommandActuator.ActivateUserCommand(
+                tenantId, emailOrUsername));
     }
 
     @Override
@@ -180,18 +176,14 @@ public class KeycloakTenantIamDispatcher
 
     @Override
     public void assignRole(String tenantId, String emailOrUsername, String role) {
-        String userId = requireUserId(tenantId, emailOrUsername);
-        dispatch(
-                new TenantAssignRoleCommandActuator.AssignRoleCommand(
-                        tenantId, userId, role, emailOrUsername));
+        dispatch(new TenantAssignRoleCommandActuator.AssignRoleCommand(
+                tenantId, emailOrUsername, role));
     }
 
     @Override
     public void removeRole(String tenantId, String emailOrUsername, String role) {
-        String userId = requireUserId(tenantId, emailOrUsername);
-        dispatch(
-                new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
-                        tenantId, userId, role, emailOrUsername));
+        dispatch(new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
+                tenantId, emailOrUsername, role));
     }
 
     // -- Internal helpers -----------------------------------------------------

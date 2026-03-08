@@ -82,7 +82,7 @@ public class CreateServiceAccountCommandActuator
         var payload =
                 new ServiceAccountCreatedEvent(command.realmId(), clientId, command.name(), roles);
 
-        UUID aggregateId = deriveAggregateId(command.realmId());
+        UUID aggregateId = deriveAggregateId(command.realmId(), clientId);
         AggregateKey key =
                 new AggregateKey(
                         aggregateId,
@@ -161,8 +161,8 @@ public class CreateServiceAccountCommandActuator
         }
     }
 
-    private static UUID deriveAggregateId(String realmId) {
+    private static UUID deriveAggregateId(String realmId, String clientId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
+                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 }

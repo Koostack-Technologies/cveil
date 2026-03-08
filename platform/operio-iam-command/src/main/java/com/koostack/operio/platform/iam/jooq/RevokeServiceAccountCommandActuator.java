@@ -63,7 +63,7 @@ public class RevokeServiceAccountCommandActuator
         // Publish domain event
         var payload = new ServiceAccountRevokedEvent(command.realmId(), command.clientId());
 
-        UUID aggregateId = deriveAggregateId(command.realmId());
+        UUID aggregateId = deriveAggregateId(command.realmId(), command.clientId());
         AggregateKey key =
                 new AggregateKey(
                         aggregateId,
@@ -84,8 +84,8 @@ public class RevokeServiceAccountCommandActuator
         return null;
     }
 
-    private static UUID deriveAggregateId(String realmId) {
+    private static UUID deriveAggregateId(String realmId, String clientId) {
         return UUID.nameUUIDFromBytes(
-                (SERVICE_ACCOUNT_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
+                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 }

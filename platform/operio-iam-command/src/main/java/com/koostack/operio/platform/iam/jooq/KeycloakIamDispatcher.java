@@ -149,18 +149,12 @@ public class KeycloakIamDispatcher
 
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
-        String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(
-                new SuspendUserCommandActuator.SuspendUserCommand(
-                        realmId, userId, emailOrUsername));
+        dispatch(new SuspendUserCommandActuator.SuspendUserCommand(realmId, emailOrUsername));
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
-        String userId = requireUserId(realmId, emailOrUsername);
-        dispatch(
-                new ActivateUserCommandActuator.ActivateUserCommand(
-                        realmId, userId, emailOrUsername));
+        dispatch(new ActivateUserCommandActuator.ActivateUserCommand(realmId, emailOrUsername));
     }
 
     @Override
@@ -183,18 +177,16 @@ public class KeycloakIamDispatcher
 
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
-        String userId = requireUserId(realmId, emailOrUsername);
         dispatch(
                 new AssignRoleCommandActuator.AssignRoleCommand(
-                        realmId, userId, role, emailOrUsername));
+                        realmId, emailOrUsername, role));
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
-        String userId = requireUserId(realmId, emailOrUsername);
         dispatch(
                 new RemoveRoleCommandActuator.RemoveRoleCommand(
-                        realmId, userId, role, emailOrUsername));
+                        realmId, emailOrUsername, role));
     }
 
     // -- Legacy API key compat ------------------------------------------------

@@ -6,9 +6,7 @@ import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserRegisteredEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
@@ -80,15 +78,16 @@ public class TenantRegisterUserCommandActuator
         }
 
         String realmId = toRealmId(command.tenantId());
-        String userId = UUID.randomUUID().toString();
         Set<String> roles = command.roles() != null ? command.roles() : Set.of();
 
         // Phase 2: Keycloak side-effect BEFORE publishing event
+        String keycloakUserId = null;
         if (adminClient != null) {
-            createKeycloakUser(command, realmId, userId, roles);
+            keycloakUserId = createKeycloakUser(command, realmId, roles);
         }
 
         // Publish domain event (only reached if KC succeeded)
+        String userId = keycloakUserId != null ? keycloakUserId : UUID.randomUUID().toString();
         var payload =
                 new TenantUserRegisteredEvent(
                         command.tenantId(),
@@ -99,7 +98,7 @@ public class TenantRegisterUserCommandActuator
                         roles,
                         command.temporaryPassword());
 
-        UUID aggregateId = deriveAggregateId(command.tenantId());
+        UUID aggregateId = UUID.fromString(userId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
@@ -117,15 +116,15 @@ public class TenantRegisterUserCommandActuator
 
     // -- Keycloak operations --------------------------------------------------
 
-    private void createKeycloakUser(
-            RegisterUserCommand command, String realmId, String userId, Set<String> roles) {
+    private String createKeycloakUser(
+            RegisterUserCommand command, String realmId, Set<String> roles) {
         RealmResource realm = adminClient.realm(realmId);
 
         // Idempotent: check if user already exists
         List<UserRepresentation> existing = realm.users().searchByEmail(command.email(), true);
         if (!existing.isEmpty()) {
             LOG.debug("User already exists in realm '{}': email={}", realmId, command.email());
-            return;
+            return existing.get(0).getId();
         }
 
         UserRepresentation user = new UserRepresentation();
@@ -133,7 +132,6 @@ public class TenantRegisterUserCommandActuator
         user.setUsername(command.username());
         user.setEnabled(true);
         user.setEmailVerified(!command.temporaryPassword());
-        user.setAttributes(Map.of("operio-user-id", List.of(userId)));
 
         if (command.fullName() != null && !command.fullName().isBlank()) {
             String[] parts = command.fullName().trim().split("\\s+", 2);
@@ -151,9 +149,7 @@ public class TenantRegisterUserCommandActuator
                 String createdUserId = extractUserId(response);
                 if (createdUserId == null) {
                     throw new IllegalStateException(
-                            "Keycloak returned 201 but Location header missing or malformed"
-                                    + " — cannot map command userId "
-                                    + userId);
+                            "Keycloak returned 201 but Location header missing or malformed");
                 }
 
                 for (String roleName : roles) {
@@ -169,11 +165,17 @@ public class TenantRegisterUserCommandActuator
                         LOG.warn("Failed to send password setup email: {}", e.getMessage());
                     }
                 }
+
+                return createdUserId;
             } else if (response.getStatus() == 409) {
                 LOG.debug(
                         "User already exists (409) in realm '{}': email={}",
                         realmId,
                         command.email());
+                // Re-fetch to get the KC user ID
+                List<UserRepresentation> retried =
+                        realm.users().searchByEmail(command.email(), true);
+                return retried.isEmpty() ? null : retried.get(0).getId();
             } else {
                 throw new RuntimeException(
                         "Keycloak user creation failed: HTTP " + response.getStatus());
@@ -205,10 +207,6 @@ public class TenantRegisterUserCommandActuator
         return null;
     }
 
-    private static UUID deriveAggregateId(String tenantId) {
-        return UUID.nameUUIDFromBytes(
-                (USER_AGGREGATE_TYPE + ":" + tenantId).getBytes(StandardCharsets.UTF_8));
-    }
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;

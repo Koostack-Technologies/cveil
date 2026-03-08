@@ -321,11 +321,15 @@ public class TenantIamResource {
 
         try {
             var result =
-                    tenantIamDispatcher()
-                            .dispatch(
-                                    new com.koostack.operio.tenant.iam.kc
-                                            .TenantAuthenticateCommandActuator.AuthenticateCommand(
-                                            tenantId, request.email(), request.password()));
+                    (com.koostack.operio.core.models.AuthResult)
+                            tenantIamDispatcher()
+                                    .dispatch(
+                                            new com.koostack.operio.tenant.iam.kc
+                                                    .TenantAuthenticateCommandActuator
+                                                    .AuthenticateCommand(
+                                                    tenantId,
+                                                    request.email(),
+                                                    request.password()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -345,11 +349,13 @@ public class TenantIamResource {
 
         try {
             var result =
-                    tenantIamDispatcher()
-                            .dispatch(
-                                    new com.koostack.operio.tenant.iam.kc
-                                            .TenantRefreshTokenCommandActuator.RefreshTokenCommand(
-                                            tenantId, request.refreshToken()));
+                    (com.koostack.operio.core.models.AuthResult)
+                            tenantIamDispatcher()
+                                    .dispatch(
+                                            new com.koostack.operio.tenant.iam.kc
+                                                    .TenantRefreshTokenCommandActuator
+                                                    .RefreshTokenCommand(
+                                                    tenantId, request.refreshToken()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)

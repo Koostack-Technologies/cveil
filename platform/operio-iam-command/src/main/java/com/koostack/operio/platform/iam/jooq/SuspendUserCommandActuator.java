@@ -7,7 +7,6 @@ import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserSuspendedEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
@@ -19,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "suspend user" command for platform IAM.
  *
- * <p>Disables the user in Keycloak first, then publishes a {@link UserSuspendedEvent}. If the
- * Keycloak call fails the event is never recorded.
+ * <p>Resolves the Keycloak user from {@code emailOrUsername}, disables them, then publishes a
+ * {@link UserSuspendedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class SuspendUserCommandActuator
         implements Actuator<SuspendUserCommandActuator.SuspendUserCommand, Void> {
@@ -38,24 +37,24 @@ public class SuspendUserCommandActuator
      * Command input for suspending a platform user.
      *
      * @param realmId the Keycloak realm
-     * @param userId the resolved user ID
-     * @param emailOrUsername the original identifier (used for logging)
+     * @param emailOrUsername the user's email or username
      */
-    public record SuspendUserCommand(String realmId, String userId, String emailOrUsername) {}
+    public record SuspendUserCommand(String realmId, String emailOrUsername) {}
 
     @Override
     public Void execute(EventService<?> publisher, SuspendUserCommand command) {
-        // Phase 2: Keycloak side-effect before event
         RealmResource realm = adminClient.realm(command.realmId());
-        String kcUserId = resolveKcUserId(realm, command.userId());
-        var userResource = realm.users().get(kcUserId);
-        var user = userResource.toRepresentation();
-        user.setEnabled(false);
-        userResource.update(user);
 
-        // Publish domain event
-        var payload = new UserSuspendedEvent(command.realmId(), command.userId());
-        UUID aggregateId = deriveAggregateId(command.realmId());
+        // Resolve username/email → Keycloak user
+        UserRepresentation kcUser = resolveKeycloakUser(realm, command.emailOrUsername());
+
+        // Keycloak side-effect
+        kcUser.setEnabled(false);
+        realm.users().get(kcUser.getId()).update(kcUser);
+
+        // Publish domain event — Keycloak user ID is the aggregate identity
+        var payload = new UserSuspendedEvent(command.realmId(), kcUser.getId());
+        UUID aggregateId = UUID.fromString(kcUser.getId());
         AggregateKey key =
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
@@ -71,20 +70,18 @@ public class SuspendUserCommandActuator
                 "User suspended: realmId={}, identifier={}, kcId={}",
                 command.realmId(),
                 command.emailOrUsername(),
-                kcUserId);
+                kcUser.getId());
         return null;
     }
 
-    private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users =
-                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
-        if (!users.isEmpty()) return users.get(0).getId();
-        throw new IllegalStateException(
-                "User not found by operio-user-id attribute: " + commandUserId);
-    }
-
-    private static UUID deriveAggregateId(String realmId) {
-        return UUID.nameUUIDFromBytes(
-                (USER_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
+    private UserRepresentation resolveKeycloakUser(RealmResource realm, String emailOrUsername) {
+        List<UserRepresentation> users = realm.users().searchByEmail(emailOrUsername, true);
+        if (users.isEmpty()) {
+            users = realm.users().searchByUsername(emailOrUsername, true);
+        }
+        if (users.isEmpty()) {
+            throw new IllegalArgumentException("User not found: " + emailOrUsername);
+        }
+        return users.get(0);
     }
 }

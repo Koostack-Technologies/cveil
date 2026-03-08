@@ -6,7 +6,6 @@ import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantRoleRemovedEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
@@ -19,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "remove role" command for tenant IAM.
  *
- * <p>Removes the role in the tenant's Keycloak realm first, then publishes a {@link
- * TenantRoleRemovedEvent}. If the Keycloak call fails the event is never recorded.
+ * <p>Resolves the Keycloak user from {@code emailOrUsername}, removes the role in the tenant's
+ * Keycloak realm, then publishes a {@link TenantRoleRemovedEvent}.
  */
 public class TenantRemoveRoleCommandActuator
         implements Actuator<TenantRemoveRoleCommandActuator.RemoveRoleCommand, Void> {
@@ -39,39 +38,36 @@ public class TenantRemoveRoleCommandActuator
      * Command input for removing a role from a tenant user.
      *
      * @param tenantId the tenant identifier
-     * @param userId the resolved user ID
+     * @param emailOrUsername the user's email or username
      * @param role the role name to remove
-     * @param emailOrUsername the original identifier (used for logging)
      */
-    public record RemoveRoleCommand(
-            String tenantId, String userId, String role, String emailOrUsername) {}
+    public record RemoveRoleCommand(String tenantId, String emailOrUsername, String role) {}
 
     @Override
     public Void execute(EventService<?> publisher, RemoveRoleCommand command) {
         String realmId = toRealmId(command.tenantId());
+        String kcUserId = command.emailOrUsername(); // fallback if no admin client
 
-        // Phase 2: Keycloak side-effect BEFORE publishing event
         if (adminClient != null) {
             RealmResource realm = adminClient.realm(realmId);
-            String kcUserId = resolveKcUserId(realm, command.userId());
+            UserRepresentation kcUser = resolveKeycloakUser(realm, command.emailOrUsername());
+            kcUserId = kcUser.getId();
+
             try {
                 RoleRepresentation roleRep = realm.roles().get(command.role()).toRepresentation();
                 realm.users().get(kcUserId).roles().realmLevel().remove(List.of(roleRep));
             } catch (jakarta.ws.rs.NotFoundException e) {
                 LOG.debug(
-                        "Role or user not found for removal: realm={}, userId={}, role={}",
+                        "Role or user not found for removal: realm={}, identifier={}, role={}",
                         realmId,
-                        command.userId(),
+                        command.emailOrUsername(),
                         command.role());
-                // Still publish the event — the role was already absent
             }
         }
 
-        // Publish domain event
-        var payload =
-                new TenantRoleRemovedEvent(command.tenantId(), command.userId(), command.role());
-
-        UUID aggregateId = deriveAggregateId(command.tenantId());
+        // Publish domain event — Keycloak user ID is the aggregate identity
+        var payload = new TenantRoleRemovedEvent(command.tenantId(), kcUserId, command.role());
+        UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
         publisher.publishEvent(
@@ -86,17 +82,25 @@ public class TenantRemoveRoleCommandActuator
         return null;
     }
 
-    private String resolveKcUserId(RealmResource realm, String commandUserId) {
-        List<UserRepresentation> users =
-                realm.users().searchByAttributes("operio-user-id:" + commandUserId);
-        if (!users.isEmpty()) return users.get(0).getId();
-        throw new IllegalStateException(
-                "User not found by operio-user-id attribute: " + commandUserId);
+    private UserRepresentation resolveKeycloakUser(RealmResource realm, String emailOrUsername) {
+        List<UserRepresentation> users = realm.users().searchByEmail(emailOrUsername, true);
+        if (users.isEmpty()) {
+            users = realm.users().searchByUsername(emailOrUsername, true);
+        }
+        if (users.isEmpty()) {
+            throw new IllegalArgumentException("User not found: " + emailOrUsername);
+        }
+        return users.get(0);
     }
 
-    private static UUID deriveAggregateId(String tenantId) {
-        return UUID.nameUUIDFromBytes(
-                (USER_AGGREGATE_TYPE + ":" + tenantId).getBytes(StandardCharsets.UTF_8));
+
+
+    private static UUID toAggregateId(String id) {
+        try {
+            return UUID.fromString(id);
+        } catch (IllegalArgumentException e) {
+            return UUID.nameUUIDFromBytes(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
     }
 
     private static String toRealmId(String tenantId) {

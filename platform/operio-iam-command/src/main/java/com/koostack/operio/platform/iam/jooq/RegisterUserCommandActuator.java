@@ -7,9 +7,7 @@ import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserRegisteredEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
@@ -79,24 +77,24 @@ public class RegisterUserCommandActuator
             throw new IllegalArgumentException("email is required");
         }
 
-        String userId = UUID.randomUUID().toString();
         Set<String> roles = command.roles() != null ? command.roles() : Set.of();
 
         // ---- Phase 1: Keycloak side-effect (before event) -------------------
-        String keycloakUserId = createKeycloakUser(command, userId, roles);
+        String keycloakUserId = createKeycloakUser(command, roles);
 
         // ---- Phase 2: Publish domain event ----------------------------------
+        // The Keycloak-assigned user ID is the canonical aggregate identity
         var payload =
                 new UserRegisteredEvent(
                         command.realmId(),
-                        userId,
+                        keycloakUserId,
                         command.username(),
                         command.email(),
                         command.fullName(),
                         roles,
                         command.temporaryPassword());
 
-        UUID aggregateId = deriveAggregateId(command.realmId());
+        UUID aggregateId = UUID.fromString(keycloakUserId);
         AggregateKey key =
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
@@ -127,7 +125,7 @@ public class RegisterUserCommandActuator
      * @return the Keycloak-assigned user ID, or {@code null} if the user already existed
      */
     private String createKeycloakUser(
-            RegisterUserCommand command, String commandUserId, Set<String> roles) {
+            RegisterUserCommand command, Set<String> roles) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Idempotent: check if user already exists
@@ -145,7 +143,6 @@ public class RegisterUserCommandActuator
         user.setUsername(command.username());
         user.setEnabled(true);
         user.setEmailVerified(!command.temporaryPassword());
-        user.setAttributes(Map.of("operio-user-id", List.of(commandUserId)));
 
         if (command.fullName() != null && !command.fullName().isBlank()) {
             String[] parts = command.fullName().trim().split("\\s+", 2);
@@ -163,9 +160,7 @@ public class RegisterUserCommandActuator
                 String createdUserId = extractUserId(response);
                 if (createdUserId == null) {
                     throw new IllegalStateException(
-                            "Keycloak returned 201 but Location header missing or malformed"
-                                    + " — cannot map command userId "
-                                    + commandUserId);
+                            "Keycloak returned 201 but Location header missing or malformed");
                 }
 
                 // Assign roles
@@ -221,10 +216,5 @@ public class RegisterUserCommandActuator
             return location.substring(location.lastIndexOf('/') + 1);
         }
         return null;
-    }
-
-    private static UUID deriveAggregateId(String realmId) {
-        return UUID.nameUUIDFromBytes(
-                (USER_AGGREGATE_TYPE + ":" + realmId).getBytes(StandardCharsets.UTF_8));
     }
 }
