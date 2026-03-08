@@ -1,5 +1,6 @@
 package com.koostack.operio.platform.iam.jooq;
 
+import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.event.EventService;
@@ -42,6 +43,8 @@ public class KeycloakIamDispatcher
     private EventService<?> eventService;
     private DataSource platformDataSource;
     private IamQueryService<?> queryService;
+    private org.keycloak.admin.client.Keycloak keycloakAdmin;
+    private com.koostack.operio.plugin.platform.keycloak.KeycloakConfig keycloakConfig;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -82,6 +85,8 @@ public class KeycloakIamDispatcher
     public void configure(JooqIamCommandConfig config) {
         this.eventService = config.eventService();
         this.platformDataSource = config.platformDataSource();
+        this.keycloakAdmin = config.keycloakAdmin();
+        this.keycloakConfig = config.keycloakConfig();
 
         // Register all actuators
         var kc = config.keycloakAdmin();
@@ -115,18 +120,19 @@ public class KeycloakIamDispatcher
      * #setQueryService(IamQueryService)}.
      */
     public void registerAuthActuators() {
-        if (queryService == null) {
-            LOG.warn("Cannot register auth actuators — queryService is not set");
+        if (keycloakConfig == null || keycloakAdmin == null) {
+            LOG.warn("Cannot register auth actuators — keycloakConfig/keycloakAdmin not set");
             return;
         }
+        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin);
         actuators.put(
                 AuthenticateCommandActuator.AuthenticateCommand.class,
-                new AuthenticateCommandActuator(queryService));
+                new AuthenticateCommandActuator(authSupport));
         actuators.put(
                 RefreshTokenCommandActuator.RefreshTokenCommand.class,
-                new RefreshTokenCommandActuator(queryService));
+                new RefreshTokenCommandActuator(authSupport));
         actuators.put(
-                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(queryService));
+                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(authSupport));
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
     }
 

@@ -1,5 +1,6 @@
 package com.koostack.operio.tenant.iam.kc;
 
+import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
 
@@ -7,14 +8,14 @@ import com.koostack.operio.core.event.EventService;
  * Actuator that handles the "logout" command for tenant IAM.
  *
  * <p>Revokes the refresh token via Keycloak's OIDC logout endpoint using
- * {@link TenantKeycloakAuthSupport}. No query-service dependency.
+ * {@link KeycloakAuthSupport}. No query-service dependency.
  */
 public class TenantLogoutCommandActuator
         implements Actuator<TenantLogoutCommandActuator.LogoutCommand, Void> {
 
-    private final TenantKeycloakAuthSupport authSupport;
+    private final KeycloakAuthSupport authSupport;
 
-    public TenantLogoutCommandActuator(TenantKeycloakAuthSupport authSupport) {
+    public TenantLogoutCommandActuator(KeycloakAuthSupport authSupport) {
         this.authSupport = authSupport;
     }
 

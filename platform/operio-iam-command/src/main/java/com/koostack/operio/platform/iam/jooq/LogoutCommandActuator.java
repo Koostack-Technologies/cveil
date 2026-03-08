@@ -1,5 +1,6 @@
 package com.koostack.operio.platform.iam.jooq;
 
+import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
 

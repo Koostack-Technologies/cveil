@@ -84,4 +84,3 @@ public class ActivateUserCommandActuator
         return users.get(0);
     }
 }
-}

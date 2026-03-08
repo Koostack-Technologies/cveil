@@ -1,5 +1,6 @@
 package com.koostack.operio.tenant.iam.kc;
 
+import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.models.AuthResult;
@@ -8,14 +9,14 @@ import com.koostack.operio.core.models.AuthResult;
  * Actuator that handles the "refresh token" command for tenant IAM.
  *
  * <p>Performs the OIDC refresh-token grant directly against the tenant's Keycloak realm
- * via {@link TenantKeycloakAuthSupport}. No query-service dependency.
+ * via {@link KeycloakAuthSupport}. No query-service dependency.
  */
 public class TenantRefreshTokenCommandActuator
         implements Actuator<TenantRefreshTokenCommandActuator.RefreshTokenCommand, AuthResult> {
 
-    private final TenantKeycloakAuthSupport authSupport;
+    private final KeycloakAuthSupport authSupport;
 
-    public TenantRefreshTokenCommandActuator(TenantKeycloakAuthSupport authSupport) {
+    public TenantRefreshTokenCommandActuator(KeycloakAuthSupport authSupport) {
         this.authSupport = authSupport;
     }
 

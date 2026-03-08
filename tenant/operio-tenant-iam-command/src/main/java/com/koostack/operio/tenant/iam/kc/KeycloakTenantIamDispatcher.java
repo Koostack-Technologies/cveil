@@ -1,5 +1,7 @@
 package com.koostack.operio.tenant.iam.kc;
 
+import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
+import com.koostack.operio.common.keycloak.RealmResolver;
 import com.koostack.operio.core.cqrs.Actuator;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.event.EventService;
@@ -31,6 +33,8 @@ public class KeycloakTenantIamDispatcher
 
     private EventService<?> eventService;
     private TenantIamQueryService<?> queryService;
+    private org.keycloak.admin.client.Keycloak keycloakAdmin;
+    private com.koostack.operio.plugin.platform.keycloak.KeycloakConfig keycloakConfig;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -70,6 +74,8 @@ public class KeycloakTenantIamDispatcher
     @Override
     public void configure(KeycloakTenantIamCommandConfig config) {
         this.eventService = config.eventService();
+        this.keycloakAdmin = config.keycloakAdmin();
+        this.keycloakConfig = config.keycloakConfig();
         var kc = config.keycloakAdmin();
 
         // Register all actuators
@@ -103,19 +109,20 @@ public class KeycloakTenantIamDispatcher
      * #setQueryService(TenantIamQueryService)}.
      */
     public void registerAuthActuators() {
-        if (queryService == null) {
-            LOG.warn("Cannot register tenant auth actuators — queryService is not set");
+        if (keycloakConfig == null || keycloakAdmin == null) {
+            LOG.warn("Cannot register tenant auth actuators — keycloakConfig/keycloakAdmin not set");
             return;
         }
+        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, RealmResolver.tenantPrefix());
         actuators.put(
                 TenantAuthenticateCommandActuator.AuthenticateCommand.class,
-                new TenantAuthenticateCommandActuator(queryService));
+                new TenantAuthenticateCommandActuator(authSupport));
         actuators.put(
                 TenantRefreshTokenCommandActuator.RefreshTokenCommand.class,
-                new TenantRefreshTokenCommandActuator(queryService));
+                new TenantRefreshTokenCommandActuator(authSupport));
         actuators.put(
                 TenantLogoutCommandActuator.LogoutCommand.class,
-                new TenantLogoutCommandActuator(queryService));
+                new TenantLogoutCommandActuator(authSupport));
         LOG.info(
                 "KeycloakTenantIamDispatcher registered auth actuators (total={})",
                 actuators.size());
