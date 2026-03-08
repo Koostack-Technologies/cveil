@@ -56,7 +56,7 @@ public class KeycloakIamDispatcher
             throw new IllegalArgumentException(
                     "No actuator registered for command type: " + input.getClass().getName());
         }
-        return actuator.execute(eventService, input);
+        return actuator.execute(input);
     }
 
     // -- Plugin SPI -----------------------------------------------------------
@@ -92,25 +92,25 @@ public class KeycloakIamDispatcher
         var kc = config.keycloakAdmin();
         actuators.put(
                 RegisterUserCommandActuator.RegisterUserCommand.class,
-                new RegisterUserCommandActuator(kc));
+                new RegisterUserCommandActuator(eventService, kc));
         actuators.put(
                 SuspendUserCommandActuator.SuspendUserCommand.class,
-                new SuspendUserCommandActuator(kc));
+                new SuspendUserCommandActuator(eventService, kc));
         actuators.put(
                 ActivateUserCommandActuator.ActivateUserCommand.class,
-                new ActivateUserCommandActuator(kc));
+                new ActivateUserCommandActuator(eventService, kc));
         actuators.put(
                 CreateServiceAccountCommandActuator.CreateServiceAccountCommand.class,
-                new CreateServiceAccountCommandActuator(kc));
+                new CreateServiceAccountCommandActuator(eventService, kc));
         actuators.put(
                 RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand.class,
-                new RevokeServiceAccountCommandActuator(kc));
+                new RevokeServiceAccountCommandActuator(eventService, kc));
         actuators.put(
                 AssignRoleCommandActuator.AssignRoleCommand.class,
-                new AssignRoleCommandActuator(kc));
+                new AssignRoleCommandActuator(eventService, kc));
         actuators.put(
                 RemoveRoleCommandActuator.RemoveRoleCommand.class,
-                new RemoveRoleCommandActuator(kc));
+                new RemoveRoleCommandActuator(eventService, kc));
 
         LOG.info("KeycloakIamDispatcher configured with {} actuators", actuators.size());
     }
@@ -127,12 +127,12 @@ public class KeycloakIamDispatcher
         var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin);
         actuators.put(
                 AuthenticateCommandActuator.AuthenticateCommand.class,
-                new AuthenticateCommandActuator(authSupport));
+                new AuthenticateCommandActuator(eventService, authSupport));
         actuators.put(
                 RefreshTokenCommandActuator.RefreshTokenCommand.class,
-                new RefreshTokenCommandActuator(authSupport));
+                new RefreshTokenCommandActuator(eventService, authSupport));
         actuators.put(
-                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(authSupport));
+                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(eventService, authSupport));
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
     }
 

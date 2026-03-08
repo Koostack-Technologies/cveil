@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserSuspendedEvent;
@@ -21,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * Keycloak realm, then publishes a {@link TenantUserSuspendedEvent}.
  */
 public class TenantSuspendUserCommandActuator
-        implements Actuator<TenantSuspendUserCommandActuator.SuspendUserCommand, Void> {
+        implements CommandActuator<TenantSuspendUserCommandActuator.SuspendUserCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(TenantSuspendUserCommandActuator.class);
@@ -29,7 +30,10 @@ public class TenantSuspendUserCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantSuspendUserCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantSuspendUserCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -42,7 +46,7 @@ public class TenantSuspendUserCommandActuator
     public record SuspendUserCommand(String tenantId, String emailOrUsername) {}
 
     @Override
-    public Void execute(EventService<?> publisher, SuspendUserCommand command) {
+    public Void execute(SuspendUserCommand command) {
         String realmId = toRealmId(command.tenantId());
         String kcUserId = command.emailOrUsername(); // fallback if no admin client
 
@@ -60,7 +64,7 @@ public class TenantSuspendUserCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(), TenantIamEventTypes.USER_SUSPENDED, key, payload));
 
@@ -94,5 +98,15 @@ public class TenantSuspendUserCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

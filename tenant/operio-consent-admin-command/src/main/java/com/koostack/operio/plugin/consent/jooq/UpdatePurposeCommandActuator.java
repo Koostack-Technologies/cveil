@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -22,20 +23,27 @@ import org.slf4j.LoggerFactory;
  * PurposeSnapshot} (preserving existing regulation links and policies).
  */
 public class UpdatePurposeCommandActuator
-        implements Actuator<UpdatePurposeCommandActuator.UpdatePurposeCommand, Void> {
+        implements CommandActuator<UpdatePurposeCommandActuator.UpdatePurposeCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UpdatePurposeCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(UpdatePurposeCommandActuator.class);
 
     public record UpdatePurposeCommand(String purposeName, String description) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UpdatePurposeCommand command) {
+    public Void execute(UpdatePurposeCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
         List<PurposeSnapshot.RegulationLinkSnapshot> regs =
                 current != null ? toRegLinkSnapshots(current) : List.of();
         List<PurposeSnapshot.PolicySnapshot> policies =
@@ -45,7 +53,7 @@ public class UpdatePurposeCommandActuator
 
         var payload =
                 new PurposeUpdatedEvent(command.purposeName(), command.description(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_UPDATED, key, payload));
         LOG.info("Purpose updated: {}", command.purposeName());
@@ -74,5 +82,15 @@ public class UpdatePurposeCommandActuator
                                         p.entityName(),
                                         p.categoryName()))
                 .toList();
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

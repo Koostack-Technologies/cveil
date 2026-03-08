@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserLoggedOutEvent;
@@ -22,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * {@link KeycloakAuthSupport}, then publishes a {@link UserLoggedOutEvent}.
  */
 public class LogoutCommandActuator
-        implements Actuator<LogoutCommandActuator.LogoutCommand, Void> {
+        implements CommandActuator<LogoutCommandActuator.LogoutCommand, Void> {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogoutCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "iam-user";
@@ -30,7 +31,10 @@ public class LogoutCommandActuator
 
     private final KeycloakAuthSupport authSupport;
 
-    public LogoutCommandActuator(KeycloakAuthSupport authSupport) {
+    private final EventService<?> eventService;
+
+    public LogoutCommandActuator(EventService<?> eventService, KeycloakAuthSupport authSupport) {
+        this.eventService = eventService;
         this.authSupport = authSupport;
     }
 
@@ -43,7 +47,7 @@ public class LogoutCommandActuator
     public record LogoutCommand(String realmId, String refreshToken) {}
 
     @Override
-    public Void execute(EventService<?> publisher, LogoutCommand command) {
+    public Void execute(LogoutCommand command) {
         // Extract userId from the refresh token JWT before revoking it
         String userId = extractSubject(command.refreshToken());
 
@@ -61,7 +65,7 @@ public class LogoutCommandActuator
                             USER_AGGREGATE_TYPE,
                             PlatformConstants.PLATFORM_TENANT_ID);
 
-            publisher.publishEvent(
+            eventPublisher().publishEvent(
                     PublishDomainEventInput.of(
                             PlatformConstants.PLATFORM_TENANT_ID,
                             IamEventTypes.USER_LOGGED_OUT,
@@ -99,5 +103,15 @@ public class LogoutCommandActuator
             LOG.debug("Failed to extract subject from refresh token: {}", e.getMessage());
             return null;
         }
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

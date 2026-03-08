@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantRoleAssignedEvent;
@@ -22,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * Keycloak realm, then publishes a {@link TenantRoleAssignedEvent}.
  */
 public class TenantAssignRoleCommandActuator
-        implements Actuator<TenantAssignRoleCommandActuator.AssignRoleCommand, Void> {
+        implements CommandActuator<TenantAssignRoleCommandActuator.AssignRoleCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(TenantAssignRoleCommandActuator.class);
@@ -30,7 +31,10 @@ public class TenantAssignRoleCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantAssignRoleCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantAssignRoleCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -44,7 +48,7 @@ public class TenantAssignRoleCommandActuator
     public record AssignRoleCommand(String tenantId, String emailOrUsername, String role) {}
 
     @Override
-    public Void execute(EventService<?> publisher, AssignRoleCommand command) {
+    public Void execute(AssignRoleCommand command) {
         String realmId = toRealmId(command.tenantId());
         String kcUserId = command.emailOrUsername(); // fallback if no admin client
 
@@ -61,7 +65,7 @@ public class TenantAssignRoleCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(), TenantIamEventTypes.ROLE_ASSIGNED, key, payload));
 
@@ -109,5 +113,15 @@ public class TenantAssignRoleCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

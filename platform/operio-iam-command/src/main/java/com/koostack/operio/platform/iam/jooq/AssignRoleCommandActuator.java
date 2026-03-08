@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.RoleAssignedEvent;
@@ -23,14 +24,17 @@ import org.slf4j.LoggerFactory;
  * {@link RoleAssignedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class AssignRoleCommandActuator
-        implements Actuator<AssignRoleCommandActuator.AssignRoleCommand, Void> {
+        implements CommandActuator<AssignRoleCommandActuator.AssignRoleCommand, Void> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AssignRoleCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "iam-user";
 
     private final Keycloak adminClient;
 
-    public AssignRoleCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public AssignRoleCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -44,7 +48,7 @@ public class AssignRoleCommandActuator
     public record AssignRoleCommand(String realmId, String emailOrUsername, String role) {}
 
     @Override
-    public Void execute(EventService<?> publisher, AssignRoleCommand command) {
+    public Void execute(AssignRoleCommand command) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Resolve username/email → Keycloak user
@@ -60,7 +64,7 @@ public class AssignRoleCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         IamEventTypes.ROLE_ASSIGNED,
@@ -99,5 +103,15 @@ public class AssignRoleCommandActuator
             RoleRepresentation role = realm.roles().get(roleName).toRepresentation();
             realm.users().get(kcUserId).roles().realmLevel().add(List.of(role));
         }
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

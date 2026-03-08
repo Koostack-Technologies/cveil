@@ -2,8 +2,9 @@ package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AuthResult;
@@ -20,14 +21,17 @@ import org.slf4j.LoggerFactory;
  * via {@link KeycloakAuthSupport}, then publishes a {@link UserAuthenticatedEvent}.
  */
 public class AuthenticateCommandActuator
-        implements Actuator<AuthenticateCommandActuator.AuthenticateCommand, AuthResult> {
+        implements CommandActuator<AuthenticateCommandActuator.AuthenticateCommand, AuthResult> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthenticateCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "iam-user";
 
     private final KeycloakAuthSupport authSupport;
 
-    public AuthenticateCommandActuator(KeycloakAuthSupport authSupport) {
+    private final EventService<?> eventService;
+
+    public AuthenticateCommandActuator(EventService<?> eventService, KeycloakAuthSupport authSupport) {
+        this.eventService = eventService;
         this.authSupport = authSupport;
     }
 
@@ -41,7 +45,7 @@ public class AuthenticateCommandActuator
     public record AuthenticateCommand(String realmId, String email, String password) {}
 
     @Override
-    public AuthResult execute(EventService<?> publisher, AuthenticateCommand command) {
+    public AuthResult execute(AuthenticateCommand command) {
         AuthResult result = authSupport.authenticate(
                 command.realmId(), command.email(), command.password());
 
@@ -55,7 +59,7 @@ public class AuthenticateCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         IamEventTypes.USER_AUTHENTICATED,
@@ -69,5 +73,15 @@ public class AuthenticateCommandActuator
                 userId);
 
         return result;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

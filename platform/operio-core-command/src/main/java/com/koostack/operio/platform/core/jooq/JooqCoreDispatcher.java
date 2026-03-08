@@ -38,7 +38,7 @@ public class JooqCoreDispatcher
             throw new IllegalArgumentException(
                     "No actuator registered for command type: " + input.getClass().getName());
         }
-        return actuator.execute(eventService, input);
+        return actuator.execute(input);
     }
 
     // -- Plugin SPI -----------------------------------------------------------
@@ -64,28 +64,28 @@ public class JooqCoreDispatcher
 
         actuators.put(
                 CreateTenantCommandActuator.CreateTenantCommand.class,
-                new CreateTenantCommandActuator());
+                new CreateTenantCommandActuator(eventService));
         actuators.put(
                 UpdateTenantDisplayNameCommandActuator.UpdateTenantDisplayNameCommand.class,
-                new UpdateTenantDisplayNameCommandActuator());
+                new UpdateTenantDisplayNameCommandActuator(eventService));
         actuators.put(
                 ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand.class,
-                new ChangeTenantPlanCommandActuator());
+                new ChangeTenantPlanCommandActuator(eventService));
         actuators.put(
                 SuspendTenantCommandActuator.SuspendTenantCommand.class,
-                new SuspendTenantCommandActuator());
+                new SuspendTenantCommandActuator(eventService));
         actuators.put(
                 ActivateTenantCommandActuator.ActivateTenantCommand.class,
-                new ActivateTenantCommandActuator());
+                new ActivateTenantCommandActuator(eventService));
         actuators.put(
                 DeleteTenantCommandActuator.DeleteTenantCommand.class,
-                new DeleteTenantCommandActuator());
+                new DeleteTenantCommandActuator(eventService));
         actuators.put(
                 ProvisionTenantCommandActuator.ProvisionTenantCommand.class,
-                new ProvisionTenantCommandActuator());
+                new ProvisionTenantCommandActuator(eventService));
         actuators.put(
                 EmitProvisioningStartedCommandActuator.EmitProvisioningStartedCommand.class,
-                new EmitProvisioningStartedCommandActuator());
+                new EmitProvisioningStartedCommandActuator(eventService));
 
         LOG.info("JooqCoreDispatcher configured with {} actuators", actuators.size());
     }

@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantServiceAccountRevokedEvent;
@@ -22,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * TenantServiceAccountRevokedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class TenantRevokeServiceAccountCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 TenantRevokeServiceAccountCommandActuator.RevokeServiceAccountCommand, Void> {
 
     private static final Logger LOG =
@@ -31,7 +32,10 @@ public class TenantRevokeServiceAccountCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantRevokeServiceAccountCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantRevokeServiceAccountCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -44,7 +48,7 @@ public class TenantRevokeServiceAccountCommandActuator
     public record RevokeServiceAccountCommand(String tenantId, String clientId) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RevokeServiceAccountCommand command) {
+    public Void execute(RevokeServiceAccountCommand command) {
         String realmId = toRealmId(command.tenantId());
 
         // Phase 2: Keycloak side-effect BEFORE publishing event
@@ -71,7 +75,7 @@ public class TenantRevokeServiceAccountCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(),
                         TenantIamEventTypes.SERVICE_ACCOUNT_REVOKED,
@@ -92,5 +96,15 @@ public class TenantRevokeServiceAccountCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

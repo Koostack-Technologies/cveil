@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.core.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
@@ -19,12 +20,19 @@ import java.util.UUID;
  * {@link TenantCreatedEvent} to the platform event store.
  */
 public class CreateTenantCommandActuator
-        implements Actuator<CreateTenantCommandActuator.CreateTenantCommand, Void> {
+        implements CommandActuator<CreateTenantCommandActuator.CreateTenantCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public CreateTenantCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record CreateTenantCommand(String tenantId, String displayName, String plan) {}
 
     @Override
-    public Void execute(EventService<?> publisher, CreateTenantCommand command) {
+    public Void execute(CreateTenantCommand command) {
         UUID aggregateId = TenantAggregate.deriveId(command.tenantId());
         AggregateKey key =
                 new AggregateKey(
@@ -33,19 +41,29 @@ public class CreateTenantCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         // Hydrate existing aggregate — reject if already present
-        TenantAggregate existing = publisher.hydrateAggregate(key, TenantAggregate.class);
+        TenantAggregate existing = eventPublisher().hydrateAggregate(key, TenantAggregate.class);
         if (existing != null) {
             throw new OperioServiceException("Tenant '" + command.tenantId() + "' already exists");
         }
 
         var payload =
                 new TenantCreatedEvent(command.tenantId(), command.displayName(), command.plan());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         CoreEventTypes.TENANT_CREATED,
                         key,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

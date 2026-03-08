@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,9 +24,16 @@ import org.slf4j.LoggerFactory;
  * {@link RegulationSnapshot} with the target jurisdiction removed.
  */
 public class RemoveRegulationJurisdictionCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 RemoveRegulationJurisdictionCommandActuator.RemoveRegulationJurisdictionCommand,
                 Void> {
+
+    private final EventService<?> eventService;
+
+    public RemoveRegulationJurisdictionCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RemoveRegulationJurisdictionCommandActuator.class);
@@ -34,7 +42,7 @@ public class RemoveRegulationJurisdictionCommandActuator
             String regulationName, String jurisdictionName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RemoveRegulationJurisdictionCommand command) {
+    public Void execute(RemoveRegulationJurisdictionCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
 
@@ -43,7 +51,7 @@ public class RemoveRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
@@ -61,7 +69,7 @@ public class RemoveRegulationJurisdictionCommandActuator
         var payload =
                 new RegulationJurisdictionRemovedEvent(
                         command.regulationName(), command.jurisdictionName(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.REGULATION_JURISDICTION_REMOVED, key, payload));
 
@@ -69,6 +77,16 @@ public class RemoveRegulationJurisdictionCommandActuator
                 "Regulation jurisdiction removed: regulation={}, jurisdiction={}",
                 command.regulationName(),
                 command.jurisdictionName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

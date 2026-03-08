@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.billing.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
@@ -16,8 +17,15 @@ import java.util.UUID;
  * <p>Publishes a {@link SubscriptionPlanChangedEvent} to the platform event store.
  */
 public class ChangeSubscriptionPlanCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 ChangeSubscriptionPlanCommandActuator.ChangeSubscriptionPlanCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public ChangeSubscriptionPlanCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record ChangeSubscriptionPlanCommand(
             String tenantId,
@@ -28,7 +36,7 @@ public class ChangeSubscriptionPlanCommandActuator
             int burstLimit) {}
 
     @Override
-    public Void execute(EventService<?> publisher, ChangeSubscriptionPlanCommand command) {
+    public Void execute(ChangeSubscriptionPlanCommand command) {
         UUID aggregateId = BillingProfileAggregate.deriveId(command.tenantId());
         AggregateKey key =
                 new AggregateKey(
@@ -44,12 +52,22 @@ public class ChangeSubscriptionPlanCommandActuator
                         command.evalLimit(),
                         command.subjectLimit(),
                         command.burstLimit());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED,
                         key,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

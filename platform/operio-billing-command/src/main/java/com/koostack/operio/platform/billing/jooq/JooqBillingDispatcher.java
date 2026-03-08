@@ -39,7 +39,7 @@ public class JooqBillingDispatcher
             throw new IllegalArgumentException(
                     "No actuator registered for command type: " + input.getClass().getName());
         }
-        return actuator.execute(eventService, input);
+        return actuator.execute(input);
     }
 
     // -- Plugin SPI -----------------------------------------------------------
@@ -65,31 +65,31 @@ public class JooqBillingDispatcher
 
         actuators.put(
                 CreateBillingProfileCommandActuator.CreateBillingProfileCommand.class,
-                new CreateBillingProfileCommandActuator());
+                new CreateBillingProfileCommandActuator(eventService));
         actuators.put(
                 UpdateBillingEmailCommandActuator.UpdateBillingEmailCommand.class,
-                new UpdateBillingEmailCommandActuator());
+                new UpdateBillingEmailCommandActuator(eventService));
         actuators.put(
                 UpdateTaxIdCommandActuator.UpdateTaxIdCommand.class,
-                new UpdateTaxIdCommandActuator());
+                new UpdateTaxIdCommandActuator(eventService));
         actuators.put(
                 SetPaymentProcessorCommandActuator.SetPaymentProcessorCommand.class,
-                new SetPaymentProcessorCommandActuator());
+                new SetPaymentProcessorCommandActuator(eventService));
         actuators.put(
                 UpdatePaymentMethodStatusCommandActuator.UpdatePaymentMethodStatusCommand.class,
-                new UpdatePaymentMethodStatusCommandActuator());
+                new UpdatePaymentMethodStatusCommandActuator(eventService));
         actuators.put(
                 CreateSubscriptionCommandActuator.CreateSubscriptionCommand.class,
-                new CreateSubscriptionCommandActuator());
+                new CreateSubscriptionCommandActuator(eventService));
         actuators.put(
                 ChangeSubscriptionPlanCommandActuator.ChangeSubscriptionPlanCommand.class,
-                new ChangeSubscriptionPlanCommandActuator());
+                new ChangeSubscriptionPlanCommandActuator(eventService));
         actuators.put(
                 CancelSubscriptionCommandActuator.CancelSubscriptionCommand.class,
-                new CancelSubscriptionCommandActuator());
+                new CancelSubscriptionCommandActuator(eventService));
         actuators.put(
                 RenewSubscriptionCommandActuator.RenewSubscriptionCommand.class,
-                new RenewSubscriptionCommandActuator());
+                new RenewSubscriptionCommandActuator(eventService));
 
         LOG.info("JooqBillingDispatcher configured with {} actuators", actuators.size());
     }

@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantRoleRemovedEvent;
@@ -22,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * Keycloak realm, then publishes a {@link TenantRoleRemovedEvent}.
  */
 public class TenantRemoveRoleCommandActuator
-        implements Actuator<TenantRemoveRoleCommandActuator.RemoveRoleCommand, Void> {
+        implements CommandActuator<TenantRemoveRoleCommandActuator.RemoveRoleCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(TenantRemoveRoleCommandActuator.class);
@@ -30,7 +31,10 @@ public class TenantRemoveRoleCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantRemoveRoleCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantRemoveRoleCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -44,7 +48,7 @@ public class TenantRemoveRoleCommandActuator
     public record RemoveRoleCommand(String tenantId, String emailOrUsername, String role) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RemoveRoleCommand command) {
+    public Void execute(RemoveRoleCommand command) {
         String realmId = toRealmId(command.tenantId());
         String kcUserId = command.emailOrUsername(); // fallback if no admin client
 
@@ -70,7 +74,7 @@ public class TenantRemoveRoleCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(), TenantIamEventTypes.ROLE_REMOVED, key, payload));
 
@@ -105,5 +109,15 @@ public class TenantRemoveRoleCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

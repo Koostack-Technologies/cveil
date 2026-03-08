@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,7 +24,14 @@ import org.slf4j.LoggerFactory;
  * {@link PurposeSnapshot} with the target policy entry removed.
  */
 public class RemovePurposePolicyCommandActuator
-        implements Actuator<RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand, Void> {
+        implements CommandActuator<RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public RemovePurposePolicyCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RemovePurposePolicyCommandActuator.class);
@@ -36,7 +44,7 @@ public class RemovePurposePolicyCommandActuator
             String categoryName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RemovePurposePolicyCommand command) {
+    public Void execute(RemovePurposePolicyCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         Objects.requireNonNull(command.policyType(), "policyType must not be null");
 
@@ -44,7 +52,7 @@ public class RemovePurposePolicyCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
 
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
         List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
@@ -83,7 +91,7 @@ public class RemovePurposePolicyCommandActuator
                         command.entityName(),
                         command.categoryName(),
                         snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_POLICY_REMOVED, key, payload));
 
@@ -91,6 +99,16 @@ public class RemovePurposePolicyCommandActuator
                 "Purpose policy removed: purpose={}, policyType={}",
                 command.purposeName(),
                 command.policyType());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

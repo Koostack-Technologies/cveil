@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserRegisteredEvent;
@@ -24,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * event store. If the Keycloak call fails the event is never recorded.
  */
 public class TenantRegisterUserCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 TenantRegisterUserCommandActuator.RegisterUserCommand,
                 TenantRegisterUserCommandActuator.RegisterUserResult> {
 
@@ -34,7 +35,10 @@ public class TenantRegisterUserCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantRegisterUserCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantRegisterUserCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -66,7 +70,7 @@ public class TenantRegisterUserCommandActuator
     public record RegisterUserResult(String username, String email, String realmId) {}
 
     @Override
-    public RegisterUserResult execute(EventService<?> publisher, RegisterUserCommand command) {
+    public RegisterUserResult execute(RegisterUserCommand command) {
         if (command.tenantId() == null || command.tenantId().isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
@@ -101,7 +105,7 @@ public class TenantRegisterUserCommandActuator
         UUID aggregateId = UUID.fromString(userId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(), TenantIamEventTypes.USER_REGISTERED, key, payload));
 
@@ -210,5 +214,15 @@ public class TenantRegisterUserCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

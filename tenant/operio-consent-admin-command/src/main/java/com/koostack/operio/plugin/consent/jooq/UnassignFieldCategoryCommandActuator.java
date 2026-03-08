@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,8 +24,15 @@ import org.slf4j.LoggerFactory;
  * {@link FieldSnapshot} (with the target category removed), then publishes the event.
  */
 public class UnassignFieldCategoryCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 UnassignFieldCategoryCommandActuator.UnassignFieldCategoryCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UnassignFieldCategoryCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(UnassignFieldCategoryCommandActuator.class);
@@ -33,7 +41,7 @@ public class UnassignFieldCategoryCommandActuator
             String fieldName, String entityName, String categoryName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UnassignFieldCategoryCommand command) {
+    public Void execute(UnassignFieldCategoryCommand command) {
         Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
         Objects.requireNonNull(command.categoryName(), "categoryName must not be null");
 
@@ -43,7 +51,7 @@ public class UnassignFieldCategoryCommandActuator
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
 
         // Hydrate from event log
-        FieldAggregate current = publisher.hydrateAggregate(key, FieldAggregate.class);
+        FieldAggregate current = eventPublisher().hydrateAggregate(key, FieldAggregate.class);
 
         // Build category list with the target removed
         List<String> newCategories = new ArrayList<>();
@@ -63,7 +71,7 @@ public class UnassignFieldCategoryCommandActuator
         var payload =
                 new FieldCategoryUnassignedEvent(
                         normalized, command.fieldName(), command.categoryName(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED, key, payload));
 
@@ -72,6 +80,16 @@ public class UnassignFieldCategoryCommandActuator
                 command.fieldName(),
                 normalized,
                 command.categoryName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

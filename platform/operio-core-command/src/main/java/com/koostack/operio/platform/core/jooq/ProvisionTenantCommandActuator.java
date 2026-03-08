@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.core.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
@@ -18,13 +19,20 @@ import java.util.UUID;
  * have succeeded.
  */
 public class ProvisionTenantCommandActuator
-        implements Actuator<ProvisionTenantCommandActuator.ProvisionTenantCommand, Void> {
+        implements CommandActuator<ProvisionTenantCommandActuator.ProvisionTenantCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public ProvisionTenantCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record ProvisionTenantCommand(
             String tenantId, String schemaPrefix, String redisAclUser) {}
 
     @Override
-    public Void execute(EventService<?> publisher, ProvisionTenantCommand command) {
+    public Void execute(ProvisionTenantCommand command) {
         UUID aggregateId = TenantAggregate.deriveId(command.tenantId());
         AggregateKey key =
                 new AggregateKey(
@@ -35,12 +43,22 @@ public class ProvisionTenantCommandActuator
         var payload =
                 new TenantProvisionedEvent(
                         command.tenantId(), command.schemaPrefix(), command.redisAclUser());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         CoreEventTypes.TENANT_PROVISIONED,
                         key,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

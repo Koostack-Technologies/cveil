@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,8 +24,15 @@ import org.slf4j.LoggerFactory;
  * {@link RegulationSnapshot} with the new jurisdiction added.
  */
 public class AddRegulationJurisdictionCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 AddRegulationJurisdictionCommandActuator.AddRegulationJurisdictionCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public AddRegulationJurisdictionCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(AddRegulationJurisdictionCommandActuator.class);
@@ -33,7 +41,7 @@ public class AddRegulationJurisdictionCommandActuator
             String regulationName, String jurisdictionName, String description) {}
 
     @Override
-    public Void execute(EventService<?> publisher, AddRegulationJurisdictionCommand command) {
+    public Void execute(AddRegulationJurisdictionCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
 
@@ -42,7 +50,7 @@ public class AddRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
@@ -63,7 +71,7 @@ public class AddRegulationJurisdictionCommandActuator
                         command.jurisdictionName(),
                         command.description(),
                         snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.REGULATION_JURISDICTION_ADDED, key, payload));
 
@@ -71,6 +79,16 @@ public class AddRegulationJurisdictionCommandActuator
                 "Regulation jurisdiction added: regulation={}, jurisdiction={}",
                 command.regulationName(),
                 command.jurisdictionName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

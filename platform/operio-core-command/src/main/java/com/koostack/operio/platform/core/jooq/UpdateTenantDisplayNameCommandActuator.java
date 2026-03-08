@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.core.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
@@ -16,13 +17,20 @@ import java.util.UUID;
  * <p>Publishes a {@link TenantDisplayNameUpdatedEvent} to the platform event store.
  */
 public class UpdateTenantDisplayNameCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 UpdateTenantDisplayNameCommandActuator.UpdateTenantDisplayNameCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UpdateTenantDisplayNameCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record UpdateTenantDisplayNameCommand(String tenantId, String displayName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UpdateTenantDisplayNameCommand command) {
+    public Void execute(UpdateTenantDisplayNameCommand command) {
         UUID aggregateId = TenantAggregate.deriveId(command.tenantId());
         AggregateKey key =
                 new AggregateKey(
@@ -31,12 +39,22 @@ public class UpdateTenantDisplayNameCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         var payload = new TenantDisplayNameUpdatedEvent(command.tenantId(), command.displayName());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         CoreEventTypes.TENANT_DISPLAY_NAME_UPDATED,
                         key,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

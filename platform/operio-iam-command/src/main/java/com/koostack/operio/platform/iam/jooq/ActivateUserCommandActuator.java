@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserActivatedEvent;
@@ -22,14 +23,17 @@ import org.slf4j.LoggerFactory;
  * {@link UserActivatedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class ActivateUserCommandActuator
-        implements Actuator<ActivateUserCommandActuator.ActivateUserCommand, Void> {
+        implements CommandActuator<ActivateUserCommandActuator.ActivateUserCommand, Void> {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActivateUserCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "iam-user";
 
     private final Keycloak adminClient;
 
-    public ActivateUserCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public ActivateUserCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -42,7 +46,7 @@ public class ActivateUserCommandActuator
     public record ActivateUserCommand(String realmId, String emailOrUsername) {}
 
     @Override
-    public Void execute(EventService<?> publisher, ActivateUserCommand command) {
+    public Void execute(ActivateUserCommand command) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Resolve username/email → Keycloak user
@@ -59,7 +63,7 @@ public class ActivateUserCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         IamEventTypes.USER_ACTIVATED,
@@ -83,5 +87,15 @@ public class ActivateUserCommandActuator
             throw new IllegalArgumentException("User not found: " + emailOrUsername);
         }
         return users.get(0);
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

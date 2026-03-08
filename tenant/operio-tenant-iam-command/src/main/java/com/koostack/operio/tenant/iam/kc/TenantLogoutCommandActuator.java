@@ -3,8 +3,9 @@ package com.koostack.operio.tenant.iam.kc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserLoggedOutEvent;
@@ -21,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * {@link KeycloakAuthSupport}, then publishes a {@link TenantUserLoggedOutEvent}.
  */
 public class TenantLogoutCommandActuator
-        implements Actuator<TenantLogoutCommandActuator.LogoutCommand, Void> {
+        implements CommandActuator<TenantLogoutCommandActuator.LogoutCommand, Void> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TenantLogoutCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "tenant-iam-user";
@@ -29,7 +30,10 @@ public class TenantLogoutCommandActuator
 
     private final KeycloakAuthSupport authSupport;
 
-    public TenantLogoutCommandActuator(KeycloakAuthSupport authSupport) {
+    private final EventService<?> eventService;
+
+    public TenantLogoutCommandActuator(EventService<?> eventService, KeycloakAuthSupport authSupport) {
+        this.eventService = eventService;
         this.authSupport = authSupport;
     }
 
@@ -42,7 +46,7 @@ public class TenantLogoutCommandActuator
     public record LogoutCommand(String tenantId, String refreshToken) {}
 
     @Override
-    public Void execute(EventService<?> publisher, LogoutCommand command) {
+    public Void execute(LogoutCommand command) {
         // Extract userId from the refresh token JWT before revoking it
         String userId = extractSubject(command.refreshToken());
 
@@ -57,7 +61,7 @@ public class TenantLogoutCommandActuator
             AggregateKey key =
                     new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-            publisher.publishEvent(
+            eventPublisher().publishEvent(
                     PublishDomainEventInput.of(
                             command.tenantId(),
                             TenantIamEventTypes.USER_LOGGED_OUT,
@@ -95,5 +99,15 @@ public class TenantLogoutCommandActuator
             LOG.debug("Failed to extract subject from refresh token: {}", e.getMessage());
             return null;
         }
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

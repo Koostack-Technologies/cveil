@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,9 +24,16 @@ import org.slf4j.LoggerFactory;
  * {@link PurposeSnapshot} with the target regulation link removed.
  */
 public class UnlinkPurposeFromRegulationCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 UnlinkPurposeFromRegulationCommandActuator.UnlinkPurposeFromRegulationCommand,
                 Void> {
+
+    private final EventService<?> eventService;
+
+    public UnlinkPurposeFromRegulationCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(UnlinkPurposeFromRegulationCommandActuator.class);
@@ -33,7 +41,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
     public record UnlinkPurposeFromRegulationCommand(String purposeName, String regulationName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UnlinkPurposeFromRegulationCommand command) {
+    public Void execute(UnlinkPurposeFromRegulationCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
 
@@ -41,7 +49,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
 
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();
         List<PurposeSnapshot.PolicySnapshot> policies = List.of();
@@ -69,7 +77,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
         var payload =
                 new PurposeRegulationUnlinkedEvent(
                         command.purposeName(), command.regulationName(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_REGULATION_UNLINKED, key, payload));
 
@@ -77,6 +85,16 @@ public class UnlinkPurposeFromRegulationCommandActuator
                 "Purpose regulation unlinked: purpose={}, regulation={}",
                 command.purposeName(),
                 command.regulationName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

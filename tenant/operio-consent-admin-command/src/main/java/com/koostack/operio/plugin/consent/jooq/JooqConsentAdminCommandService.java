@@ -31,74 +31,42 @@ public class JooqConsentAdminCommandService
     private final Map<Class<?>, Actuator<?, ?>> actuators = new ConcurrentHashMap<>();
     private EventService<?> eventService;
 
-    // -- Actuator instances (created once, registered in configure) ------------
+    // -- Actuator instances (created in configure with eventService) ------------
 
-    private final RegisterEntityCommandActuator registerEntityActuator =
-            new RegisterEntityCommandActuator();
-    private final UpdateEntityCommandActuator updateEntityActuator =
-            new UpdateEntityCommandActuator();
-    private final RemoveEntityCommandActuator removeEntityActuator =
-            new RemoveEntityCommandActuator();
-    private final RegisterCategoryCommandActuator registerCategoryActuator =
-            new RegisterCategoryCommandActuator();
-    private final UpdateCategoryCommandActuator updateCategoryActuator =
-            new UpdateCategoryCommandActuator();
-    private final RemoveCategoryCommandActuator removeCategoryActuator =
-            new RemoveCategoryCommandActuator();
-    private final RegisterFieldCommandActuator registerFieldActuator =
-            new RegisterFieldCommandActuator();
-    private final UpdateFieldCommandActuator updateFieldActuator = new UpdateFieldCommandActuator();
-    private final RemoveFieldCommandActuator removeFieldActuator = new RemoveFieldCommandActuator();
-    private final AssignFieldCategoryCommandActuator assignFieldCategoryActuator =
-            new AssignFieldCategoryCommandActuator();
-    private final UnassignFieldCategoryCommandActuator unassignFieldCategoryActuator =
-            new UnassignFieldCategoryCommandActuator();
-    private final RegisterPurposeCommandActuator registerPurposeActuator =
-            new RegisterPurposeCommandActuator();
-    private final UpdatePurposeCommandActuator updatePurposeActuator =
-            new UpdatePurposeCommandActuator();
-    private final RemovePurposeCommandActuator removePurposeActuator =
-            new RemovePurposeCommandActuator();
-    private final LinkPurposeToRegulationCommandActuator linkPurposeToRegulationActuator =
-            new LinkPurposeToRegulationCommandActuator();
-    private final UnlinkPurposeFromRegulationCommandActuator unlinkPurposeFromRegulationActuator =
-            new UnlinkPurposeFromRegulationCommandActuator();
-    private final AddPurposePolicyCommandActuator addPurposePolicyActuator =
-            new AddPurposePolicyCommandActuator();
-    private final RemovePurposePolicyCommandActuator removePurposePolicyActuator =
-            new RemovePurposePolicyCommandActuator();
-    private final RegisterRegulationCommandActuator registerRegulationActuator =
-            new RegisterRegulationCommandActuator();
-    private final UpdateRegulationCommandActuator updateRegulationActuator =
-            new UpdateRegulationCommandActuator();
-    private final RemoveRegulationCommandActuator removeRegulationActuator =
-            new RemoveRegulationCommandActuator();
-    private final AddRegulationJurisdictionCommandActuator addRegulationJurisdictionActuator =
-            new AddRegulationJurisdictionCommandActuator();
-    private final RemoveRegulationJurisdictionCommandActuator removeRegulationJurisdictionActuator =
-            new RemoveRegulationJurisdictionCommandActuator();
-    private final RegisterJurisdictionCommandActuator registerJurisdictionActuator =
-            new RegisterJurisdictionCommandActuator();
-    private final UpdateJurisdictionCommandActuator updateJurisdictionActuator =
-            new UpdateJurisdictionCommandActuator();
-    private final RemoveJurisdictionCommandActuator removeJurisdictionActuator =
-            new RemoveJurisdictionCommandActuator();
-    private final RegisterSubjectCommandActuator registerSubjectActuator =
-            new RegisterSubjectCommandActuator();
-    private final UpdateSubjectCommandActuator updateSubjectActuator =
-            new UpdateSubjectCommandActuator();
-    private final RemoveSubjectCommandActuator removeSubjectActuator =
-            new RemoveSubjectCommandActuator();
-    private final GrantConsentCommandActuator grantConsentActuator =
-            new GrantConsentCommandActuator();
-    private final RevokeConsentCommandActuator revokeConsentActuator =
-            new RevokeConsentCommandActuator();
-    private final ExpireConsentCommandActuator expireConsentActuator =
-            new ExpireConsentCommandActuator();
-    private final RevokeAllConsentCommandActuator revokeAllConsentActuator =
-            new RevokeAllConsentCommandActuator();
-    private final DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator =
-            new DeleteSubjectAuditCommandActuator();
+    private RegisterEntityCommandActuator registerEntityActuator;
+    private UpdateEntityCommandActuator updateEntityActuator;
+    private RemoveEntityCommandActuator removeEntityActuator;
+    private RegisterCategoryCommandActuator registerCategoryActuator;
+    private UpdateCategoryCommandActuator updateCategoryActuator;
+    private RemoveCategoryCommandActuator removeCategoryActuator;
+    private RegisterFieldCommandActuator registerFieldActuator;
+    private UpdateFieldCommandActuator updateFieldActuator;
+    private RemoveFieldCommandActuator removeFieldActuator;
+    private AssignFieldCategoryCommandActuator assignFieldCategoryActuator;
+    private UnassignFieldCategoryCommandActuator unassignFieldCategoryActuator;
+    private RegisterPurposeCommandActuator registerPurposeActuator;
+    private UpdatePurposeCommandActuator updatePurposeActuator;
+    private RemovePurposeCommandActuator removePurposeActuator;
+    private LinkPurposeToRegulationCommandActuator linkPurposeToRegulationActuator;
+    private UnlinkPurposeFromRegulationCommandActuator unlinkPurposeFromRegulationActuator;
+    private AddPurposePolicyCommandActuator addPurposePolicyActuator;
+    private RemovePurposePolicyCommandActuator removePurposePolicyActuator;
+    private RegisterRegulationCommandActuator registerRegulationActuator;
+    private UpdateRegulationCommandActuator updateRegulationActuator;
+    private RemoveRegulationCommandActuator removeRegulationActuator;
+    private AddRegulationJurisdictionCommandActuator addRegulationJurisdictionActuator;
+    private RemoveRegulationJurisdictionCommandActuator removeRegulationJurisdictionActuator;
+    private RegisterJurisdictionCommandActuator registerJurisdictionActuator;
+    private UpdateJurisdictionCommandActuator updateJurisdictionActuator;
+    private RemoveJurisdictionCommandActuator removeJurisdictionActuator;
+    private RegisterSubjectCommandActuator registerSubjectActuator;
+    private UpdateSubjectCommandActuator updateSubjectActuator;
+    private RemoveSubjectCommandActuator removeSubjectActuator;
+    private GrantConsentCommandActuator grantConsentActuator;
+    private RevokeConsentCommandActuator revokeConsentActuator;
+    private ExpireConsentCommandActuator expireConsentActuator;
+    private RevokeAllConsentCommandActuator revokeAllConsentActuator;
+    private DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -110,7 +78,7 @@ public class JooqConsentAdminCommandService
             throw new IllegalArgumentException(
                     "No actuator registered for command type: " + input.getClass().getName());
         }
-        return actuator.execute(eventService, input);
+        return actuator.execute(input);
     }
 
     // -----------------------------------------------------------------------
@@ -135,6 +103,42 @@ public class JooqConsentAdminCommandService
     @Override
     public void configure(ConsentAdminCommandConfig config) {
         this.eventService = config.eventService();
+
+        // Create actuator instances with eventService
+        registerEntityActuator = new RegisterEntityCommandActuator(eventService);
+        updateEntityActuator = new UpdateEntityCommandActuator(eventService);
+        removeEntityActuator = new RemoveEntityCommandActuator(eventService);
+        registerCategoryActuator = new RegisterCategoryCommandActuator(eventService);
+        updateCategoryActuator = new UpdateCategoryCommandActuator(eventService);
+        removeCategoryActuator = new RemoveCategoryCommandActuator(eventService);
+        registerFieldActuator = new RegisterFieldCommandActuator(eventService);
+        updateFieldActuator = new UpdateFieldCommandActuator(eventService);
+        removeFieldActuator = new RemoveFieldCommandActuator(eventService);
+        assignFieldCategoryActuator = new AssignFieldCategoryCommandActuator(eventService);
+        unassignFieldCategoryActuator = new UnassignFieldCategoryCommandActuator(eventService);
+        registerPurposeActuator = new RegisterPurposeCommandActuator(eventService);
+        updatePurposeActuator = new UpdatePurposeCommandActuator(eventService);
+        removePurposeActuator = new RemovePurposeCommandActuator(eventService);
+        linkPurposeToRegulationActuator = new LinkPurposeToRegulationCommandActuator(eventService);
+        unlinkPurposeFromRegulationActuator = new UnlinkPurposeFromRegulationCommandActuator(eventService);
+        addPurposePolicyActuator = new AddPurposePolicyCommandActuator(eventService);
+        removePurposePolicyActuator = new RemovePurposePolicyCommandActuator(eventService);
+        registerRegulationActuator = new RegisterRegulationCommandActuator(eventService);
+        updateRegulationActuator = new UpdateRegulationCommandActuator(eventService);
+        removeRegulationActuator = new RemoveRegulationCommandActuator(eventService);
+        addRegulationJurisdictionActuator = new AddRegulationJurisdictionCommandActuator(eventService);
+        removeRegulationJurisdictionActuator = new RemoveRegulationJurisdictionCommandActuator(eventService);
+        registerJurisdictionActuator = new RegisterJurisdictionCommandActuator(eventService);
+        updateJurisdictionActuator = new UpdateJurisdictionCommandActuator(eventService);
+        removeJurisdictionActuator = new RemoveJurisdictionCommandActuator(eventService);
+        registerSubjectActuator = new RegisterSubjectCommandActuator(eventService);
+        updateSubjectActuator = new UpdateSubjectCommandActuator(eventService);
+        removeSubjectActuator = new RemoveSubjectCommandActuator(eventService);
+        grantConsentActuator = new GrantConsentCommandActuator(eventService);
+        revokeConsentActuator = new RevokeConsentCommandActuator(eventService);
+        expireConsentActuator = new ExpireConsentCommandActuator(eventService);
+        revokeAllConsentActuator = new RevokeAllConsentCommandActuator(eventService);
+        deleteSubjectAuditActuator = new DeleteSubjectAuditCommandActuator(eventService);
 
         // Entity
         actuators.put(
@@ -246,21 +250,18 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerEntityCommand(String entityName, String description) {
         registerEntityActuator.execute(
-                eventService,
                 new RegisterEntityCommandActuator.RegisterEntityCommand(entityName, description));
     }
 
     @Override
     public void updateEntityCommand(String entityName, String description) {
         updateEntityActuator.execute(
-                eventService,
                 new UpdateEntityCommandActuator.UpdateEntityCommand(entityName, description));
     }
 
     @Override
     public void removeEntityCommand(String entityName) {
-        removeEntityActuator.execute(
-                eventService, new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
+        removeEntityActuator.execute(new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
     }
 
     // -----------------------------------------------------------------------
@@ -270,7 +271,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerCategoryCommand(String categoryName, String description) {
         registerCategoryActuator.execute(
-                eventService,
                 new RegisterCategoryCommandActuator.RegisterCategoryCommand(
                         categoryName, description));
     }
@@ -278,14 +278,12 @@ public class JooqConsentAdminCommandService
     @Override
     public void updateCategoryCommand(String categoryName, String description) {
         updateCategoryActuator.execute(
-                eventService,
                 new UpdateCategoryCommandActuator.UpdateCategoryCommand(categoryName, description));
     }
 
     @Override
     public void removeCategoryCommand(String categoryName) {
         removeCategoryActuator.execute(
-                eventService,
                 new RemoveCategoryCommandActuator.RemoveCategoryCommand(categoryName));
     }
 
@@ -297,7 +295,6 @@ public class JooqConsentAdminCommandService
     public void registerFieldCommand(
             String fieldName, String entityName, String description, String entityDescription) {
         registerFieldActuator.execute(
-                eventService,
                 new RegisterFieldCommandActuator.RegisterFieldCommand(
                         fieldName, entityName, description, entityDescription));
     }
@@ -306,7 +303,6 @@ public class JooqConsentAdminCommandService
     public void updateFieldCommand(
             String fieldName, String entityName, String description, FieldSnapshot snapshot) {
         updateFieldActuator.execute(
-                eventService,
                 new UpdateFieldCommandActuator.UpdateFieldCommand(
                         fieldName, entityName, description));
     }
@@ -314,7 +310,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void removeFieldCommand(String fieldName, String entityName) {
         removeFieldActuator.execute(
-                eventService,
                 new RemoveFieldCommandActuator.RemoveFieldCommand(fieldName, entityName));
     }
 
@@ -326,7 +321,6 @@ public class JooqConsentAdminCommandService
             String categoryDescription,
             FieldSnapshot snapshot) {
         assignFieldCategoryActuator.execute(
-                eventService,
                 new AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand(
                         fieldName, entityName, categoryName, categoryDescription));
     }
@@ -335,7 +329,6 @@ public class JooqConsentAdminCommandService
     public void unassignFieldCategoryCommand(
             String fieldName, String entityName, String categoryName, FieldSnapshot snapshot) {
         unassignFieldCategoryActuator.execute(
-                eventService,
                 new UnassignFieldCategoryCommandActuator.UnassignFieldCategoryCommand(
                         fieldName, entityName, categoryName));
     }
@@ -347,7 +340,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerPurposeCommand(String purposeName, String description) {
         registerPurposeActuator.execute(
-                eventService,
                 new RegisterPurposeCommandActuator.RegisterPurposeCommand(
                         purposeName, description));
     }
@@ -356,14 +348,12 @@ public class JooqConsentAdminCommandService
     public void updatePurposeCommand(
             String purposeName, String description, PurposeSnapshot snapshot) {
         updatePurposeActuator.execute(
-                eventService,
                 new UpdatePurposeCommandActuator.UpdatePurposeCommand(purposeName, description));
     }
 
     @Override
     public void removePurposeCommand(String purposeName) {
-        removePurposeActuator.execute(
-                eventService, new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
+        removePurposeActuator.execute(new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
     }
 
     @Override
@@ -375,7 +365,6 @@ public class JooqConsentAdminCommandService
             String onDenied,
             PurposeSnapshot snapshot) {
         linkPurposeToRegulationActuator.execute(
-                eventService,
                 new LinkPurposeToRegulationCommandActuator.LinkPurposeToRegulationCommand(
                         purposeName, regulationName, lawfulBasis, onGranted, onDenied));
     }
@@ -384,7 +373,6 @@ public class JooqConsentAdminCommandService
     public void unlinkPurposeFromRegulationCommand(
             String purposeName, String regulationName, PurposeSnapshot snapshot) {
         unlinkPurposeFromRegulationActuator.execute(
-                eventService,
                 new UnlinkPurposeFromRegulationCommandActuator.UnlinkPurposeFromRegulationCommand(
                         purposeName, regulationName));
     }
@@ -398,7 +386,6 @@ public class JooqConsentAdminCommandService
             String categoryName,
             PurposeSnapshot snapshot) {
         addPurposePolicyActuator.execute(
-                eventService,
                 new AddPurposePolicyCommandActuator.AddPurposePolicyCommand(
                         purposeName, policyType, fieldName, entityName, categoryName));
     }
@@ -412,7 +399,6 @@ public class JooqConsentAdminCommandService
             String categoryName,
             PurposeSnapshot snapshot) {
         removePurposePolicyActuator.execute(
-                eventService,
                 new RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand(
                         purposeName, policyType, fieldName, entityName, categoryName));
     }
@@ -424,7 +410,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerRegulationCommand(String regulationName, String description) {
         registerRegulationActuator.execute(
-                eventService,
                 new RegisterRegulationCommandActuator.RegisterRegulationCommand(
                         regulationName, description));
     }
@@ -433,7 +418,6 @@ public class JooqConsentAdminCommandService
     public void updateRegulationCommand(
             String regulationName, String description, RegulationSnapshot snapshot) {
         updateRegulationActuator.execute(
-                eventService,
                 new UpdateRegulationCommandActuator.UpdateRegulationCommand(
                         regulationName, description));
     }
@@ -441,7 +425,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void removeRegulationCommand(String regulationName) {
         removeRegulationActuator.execute(
-                eventService,
                 new RemoveRegulationCommandActuator.RemoveRegulationCommand(regulationName));
     }
 
@@ -452,7 +435,6 @@ public class JooqConsentAdminCommandService
             String description,
             RegulationSnapshot snapshot) {
         addRegulationJurisdictionActuator.execute(
-                eventService,
                 new AddRegulationJurisdictionCommandActuator.AddRegulationJurisdictionCommand(
                         regulationName, jurisdictionName, description));
     }
@@ -461,7 +443,6 @@ public class JooqConsentAdminCommandService
     public void removeRegulationJurisdictionCommand(
             String regulationName, String jurisdictionName, RegulationSnapshot snapshot) {
         removeRegulationJurisdictionActuator.execute(
-                eventService,
                 new RemoveRegulationJurisdictionCommandActuator.RemoveRegulationJurisdictionCommand(
                         regulationName, jurisdictionName));
     }
@@ -473,7 +454,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerJurisdictionCommand(String jurisdictionName, String description) {
         registerJurisdictionActuator.execute(
-                eventService,
                 new RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand(
                         jurisdictionName, description));
     }
@@ -481,7 +461,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void updateJurisdictionCommand(String jurisdictionName, String description) {
         updateJurisdictionActuator.execute(
-                eventService,
                 new UpdateJurisdictionCommandActuator.UpdateJurisdictionCommand(
                         jurisdictionName, description));
     }
@@ -489,7 +468,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void removeJurisdictionCommand(String jurisdictionName) {
         removeJurisdictionActuator.execute(
-                eventService,
                 new RemoveJurisdictionCommandActuator.RemoveJurisdictionCommand(jurisdictionName));
     }
 
@@ -500,7 +478,6 @@ public class JooqConsentAdminCommandService
     @Override
     public void registerSubjectCommand(String subjectName, String description) {
         registerSubjectActuator.execute(
-                eventService,
                 new RegisterSubjectCommandActuator.RegisterSubjectCommand(
                         subjectName, description));
     }
@@ -508,14 +485,12 @@ public class JooqConsentAdminCommandService
     @Override
     public void updateSubjectCommand(String subjectName, String description) {
         updateSubjectActuator.execute(
-                eventService,
                 new UpdateSubjectCommandActuator.UpdateSubjectCommand(subjectName, description));
     }
 
     @Override
     public void removeSubjectCommand(String subjectName) {
-        removeSubjectActuator.execute(
-                eventService, new RemoveSubjectCommandActuator.RemoveSubjectCommand(subjectName));
+        removeSubjectActuator.execute(new RemoveSubjectCommandActuator.RemoveSubjectCommand(subjectName));
     }
 
     // -----------------------------------------------------------------------
@@ -536,7 +511,6 @@ public class JooqConsentAdminCommandService
             String userAgent,
             Instant expiresAt) {
         grantConsentActuator.execute(
-                eventService,
                 new GrantConsentCommandActuator.GrantConsentCommand(
                         subjectId,
                         policyId,
@@ -564,7 +538,6 @@ public class JooqConsentAdminCommandService
             String ipAddress,
             String userAgent) {
         revokeConsentActuator.execute(
-                eventService,
                 new RevokeConsentCommandActuator.RevokeConsentCommand(
                         subjectId,
                         policyId,
@@ -588,7 +561,6 @@ public class JooqConsentAdminCommandService
             String entityName,
             String categoryName) {
         expireConsentActuator.execute(
-                eventService,
                 new ExpireConsentCommandActuator.ExpireConsentCommand(
                         subjectId,
                         policyId,
@@ -603,7 +575,6 @@ public class JooqConsentAdminCommandService
     public void revokeAllConsentCommand(
             String subjectId, String actor, String ipAddress, String userAgent) {
         revokeAllConsentActuator.execute(
-                eventService,
                 new RevokeAllConsentCommandActuator.RevokeAllConsentCommand(
                         subjectId, actor, ipAddress, userAgent));
     }
@@ -620,7 +591,6 @@ public class JooqConsentAdminCommandService
             String ipAddress,
             String userAgent) {
         deleteSubjectAuditActuator.execute(
-                eventService,
                 new DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand(
                         subjectId, deletionRequestId, actor, ipAddress, userAgent));
     }

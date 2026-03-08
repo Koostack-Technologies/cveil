@@ -46,7 +46,7 @@ public class KeycloakTenantIamDispatcher
             throw new IllegalArgumentException(
                     "No actuator registered for command type: " + input.getClass().getName());
         }
-        return actuator.execute(eventService, input);
+        return actuator.execute(input);
     }
 
     // -- Plugin SPI -----------------------------------------------------------
@@ -81,25 +81,25 @@ public class KeycloakTenantIamDispatcher
         // Register all actuators
         actuators.put(
                 TenantRegisterUserCommandActuator.RegisterUserCommand.class,
-                new TenantRegisterUserCommandActuator(kc));
+                new TenantRegisterUserCommandActuator(eventService, kc));
         actuators.put(
                 TenantSuspendUserCommandActuator.SuspendUserCommand.class,
-                new TenantSuspendUserCommandActuator(kc));
+                new TenantSuspendUserCommandActuator(eventService, kc));
         actuators.put(
                 TenantActivateUserCommandActuator.ActivateUserCommand.class,
-                new TenantActivateUserCommandActuator(kc));
+                new TenantActivateUserCommandActuator(eventService, kc));
         actuators.put(
                 TenantCreateServiceAccountCommandActuator.CreateServiceAccountCommand.class,
-                new TenantCreateServiceAccountCommandActuator(kc));
+                new TenantCreateServiceAccountCommandActuator(eventService, kc));
         actuators.put(
                 TenantRevokeServiceAccountCommandActuator.RevokeServiceAccountCommand.class,
-                new TenantRevokeServiceAccountCommandActuator(kc));
+                new TenantRevokeServiceAccountCommandActuator(eventService, kc));
         actuators.put(
                 TenantAssignRoleCommandActuator.AssignRoleCommand.class,
-                new TenantAssignRoleCommandActuator(kc));
+                new TenantAssignRoleCommandActuator(eventService, kc));
         actuators.put(
                 TenantRemoveRoleCommandActuator.RemoveRoleCommand.class,
-                new TenantRemoveRoleCommandActuator(kc));
+                new TenantRemoveRoleCommandActuator(eventService, kc));
 
         LOG.info("KeycloakTenantIamDispatcher configured with {} actuators", actuators.size());
     }
@@ -116,13 +116,13 @@ public class KeycloakTenantIamDispatcher
         var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, RealmResolver.tenantPrefix());
         actuators.put(
                 TenantAuthenticateCommandActuator.AuthenticateCommand.class,
-                new TenantAuthenticateCommandActuator(authSupport));
+                new TenantAuthenticateCommandActuator(eventService, authSupport));
         actuators.put(
                 TenantRefreshTokenCommandActuator.RefreshTokenCommand.class,
-                new TenantRefreshTokenCommandActuator(authSupport));
+                new TenantRefreshTokenCommandActuator(eventService, authSupport));
         actuators.put(
                 TenantLogoutCommandActuator.LogoutCommand.class,
-                new TenantLogoutCommandActuator(authSupport));
+                new TenantLogoutCommandActuator(eventService, authSupport));
         LOG.info(
                 "KeycloakTenantIamDispatcher registered auth actuators (total={})",
                 actuators.size());

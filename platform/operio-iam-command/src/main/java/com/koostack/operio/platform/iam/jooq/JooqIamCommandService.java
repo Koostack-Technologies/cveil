@@ -29,18 +29,12 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private RegisterUserCommandActuator registerUserActuator;
-    private final SuspendUserCommandActuator suspendUserActuator =
-            new SuspendUserCommandActuator(null);
-    private final ActivateUserCommandActuator activateUserActuator =
-            new ActivateUserCommandActuator(null);
-    private final CreateServiceAccountCommandActuator createServiceAccountActuator =
-            new CreateServiceAccountCommandActuator(null);
-    private final RevokeServiceAccountCommandActuator revokeServiceAccountActuator =
-            new RevokeServiceAccountCommandActuator(null);
-    private final AssignRoleCommandActuator assignRoleActuator =
-            new AssignRoleCommandActuator(null);
-    private final RemoveRoleCommandActuator removeRoleActuator =
-            new RemoveRoleCommandActuator(null);
+    private SuspendUserCommandActuator suspendUserActuator;
+    private ActivateUserCommandActuator activateUserActuator;
+    private CreateServiceAccountCommandActuator createServiceAccountActuator;
+    private RevokeServiceAccountCommandActuator revokeServiceAccountActuator;
+    private AssignRoleCommandActuator assignRoleActuator;
+    private RemoveRoleCommandActuator removeRoleActuator;
 
     private EventService<?> eventService;
     private DataSource platformDataSource;
@@ -70,7 +64,14 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     public void configure(JooqIamCommandConfig config) {
         this.eventService = config.eventService();
         this.platformDataSource = config.platformDataSource();
-        this.registerUserActuator = new RegisterUserCommandActuator(config.keycloakAdmin());
+        var kc = config.keycloakAdmin();
+        this.registerUserActuator = new RegisterUserCommandActuator(eventService, kc);
+        this.suspendUserActuator = new SuspendUserCommandActuator(eventService, kc);
+        this.activateUserActuator = new ActivateUserCommandActuator(eventService, kc);
+        this.createServiceAccountActuator = new CreateServiceAccountCommandActuator(eventService, kc);
+        this.revokeServiceAccountActuator = new RevokeServiceAccountCommandActuator(eventService, kc);
+        this.assignRoleActuator = new AssignRoleCommandActuator(eventService, kc);
+        this.removeRoleActuator = new RemoveRoleCommandActuator(eventService, kc);
         LOG.info("KeycloakIamCommandService configured");
     }
 
@@ -87,7 +88,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         var command =
                 new RegisterUserCommandActuator.RegisterUserCommand(
                         realmId, username, email, fullName, roles, temporaryPassword);
-        var result = registerUserActuator.execute(eventService, command);
+        var result = registerUserActuator.execute(command);
         return new RegisterUserResult(result.username(), result.email(), result.realmId());
     }
 
@@ -95,14 +96,14 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     public void suspendUser(String realmId, String emailOrUsername) {
         var command =
                 new SuspendUserCommandActuator.SuspendUserCommand(realmId, emailOrUsername);
-        suspendUserActuator.execute(eventService, command);
+        suspendUserActuator.execute(command);
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
         var command =
                 new ActivateUserCommandActuator.ActivateUserCommand(realmId, emailOrUsername);
-        activateUserActuator.execute(eventService, command);
+        activateUserActuator.execute(command);
     }
 
     // -- Service account operations -------------------------------------------
@@ -113,7 +114,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         var command =
                 new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
                         realmId, name, roles);
-        var result = createServiceAccountActuator.execute(eventService, command);
+        var result = createServiceAccountActuator.execute(command);
         return new CreateServiceAccountResult(
                 result.clientId(), result.clientSecret(), result.realmId());
     }
@@ -123,7 +124,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         var command =
                 new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
                         realmId, clientId);
-        revokeServiceAccountActuator.execute(eventService, command);
+        revokeServiceAccountActuator.execute(command);
     }
 
     // -- Role operations ------------------------------------------------------
@@ -132,14 +133,14 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     public void assignRole(String realmId, String emailOrUsername, String role) {
         var command =
                 new AssignRoleCommandActuator.AssignRoleCommand(realmId, emailOrUsername, role);
-        assignRoleActuator.execute(eventService, command);
+        assignRoleActuator.execute(command);
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
         var command =
                 new RemoveRoleCommandActuator.RemoveRoleCommand(realmId, emailOrUsername, role);
-        removeRoleActuator.execute(eventService, command);
+        removeRoleActuator.execute(command);
     }
 
     // -- Legacy API key compat ------------------------------------------------

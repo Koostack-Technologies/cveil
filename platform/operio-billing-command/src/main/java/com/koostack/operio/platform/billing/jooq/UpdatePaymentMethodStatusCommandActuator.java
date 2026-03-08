@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.billing.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
@@ -16,13 +17,20 @@ import java.util.UUID;
  * <p>Publishes a {@link PaymentMethodStatusUpdatedEvent} to the platform event store.
  */
 public class UpdatePaymentMethodStatusCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 UpdatePaymentMethodStatusCommandActuator.UpdatePaymentMethodStatusCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UpdatePaymentMethodStatusCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record UpdatePaymentMethodStatusCommand(String tenantId, String status) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UpdatePaymentMethodStatusCommand command) {
+    public Void execute(UpdatePaymentMethodStatusCommand command) {
         UUID aggregateId = BillingProfileAggregate.deriveId(command.tenantId());
         AggregateKey key =
                 new AggregateKey(
@@ -31,12 +39,22 @@ public class UpdatePaymentMethodStatusCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         var payload = new PaymentMethodStatusUpdatedEvent(command.tenantId(), command.status());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         BillingEventTypes.PAYMENT_METHOD_STATUS_UPDATED,
                         key,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

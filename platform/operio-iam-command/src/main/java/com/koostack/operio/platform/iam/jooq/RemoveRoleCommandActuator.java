@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.RoleRemovedEvent;
@@ -23,14 +24,17 @@ import org.slf4j.LoggerFactory;
  * {@link RoleRemovedEvent}. If the Keycloak call fails the event is never recorded.
  */
 public class RemoveRoleCommandActuator
-        implements Actuator<RemoveRoleCommandActuator.RemoveRoleCommand, Void> {
+        implements CommandActuator<RemoveRoleCommandActuator.RemoveRoleCommand, Void> {
 
     private static final Logger LOG = LoggerFactory.getLogger(RemoveRoleCommandActuator.class);
     private static final String USER_AGGREGATE_TYPE = "iam-user";
 
     private final Keycloak adminClient;
 
-    public RemoveRoleCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public RemoveRoleCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -44,7 +48,7 @@ public class RemoveRoleCommandActuator
     public record RemoveRoleCommand(String realmId, String emailOrUsername, String role) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RemoveRoleCommand command) {
+    public Void execute(RemoveRoleCommand command) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Resolve username/email → Keycloak user
@@ -70,7 +74,7 @@ public class RemoveRoleCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         IamEventTypes.ROLE_REMOVED,
@@ -95,5 +99,15 @@ public class RemoveRoleCommandActuator
             throw new IllegalArgumentException("User not found: " + emailOrUsername);
         }
         return users.get(0);
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

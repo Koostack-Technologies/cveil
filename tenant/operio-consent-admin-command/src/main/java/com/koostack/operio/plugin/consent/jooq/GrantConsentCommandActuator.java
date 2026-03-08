@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -15,7 +16,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class GrantConsentCommandActuator
-        implements Actuator<GrantConsentCommandActuator.GrantConsentCommand, Void> {
+        implements CommandActuator<GrantConsentCommandActuator.GrantConsentCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public GrantConsentCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(GrantConsentCommandActuator.class);
 
@@ -33,7 +41,7 @@ public class GrantConsentCommandActuator
             Instant expiresAt) {}
 
     @Override
-    public Void execute(EventService<?> publisher, GrantConsentCommand command) {
+    public Void execute(GrantConsentCommand command) {
         Objects.requireNonNull(command.subjectId(), "subjectId must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = SubjectConsentAggregate.deriveId(command.subjectId());
@@ -52,9 +60,19 @@ public class GrantConsentCommandActuator
                         command.expiresAt());
         AggregateKey key =
                 new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.CONSENT_GRANTED, key, payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

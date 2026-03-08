@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -22,14 +23,21 @@ import org.slf4j.LoggerFactory;
  * FieldSnapshot} (preserving existing categories), then publishes the update event.
  */
 public class UpdateFieldCommandActuator
-        implements Actuator<UpdateFieldCommandActuator.UpdateFieldCommand, Void> {
+        implements CommandActuator<UpdateFieldCommandActuator.UpdateFieldCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UpdateFieldCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(UpdateFieldCommandActuator.class);
 
     public record UpdateFieldCommand(String fieldName, String entityName, String description) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UpdateFieldCommand command) {
+    public Void execute(UpdateFieldCommand command) {
         Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
         String tenantId = TenantContext.require();
         String normalized = FieldAggregate.normalizeEntityName(command.entityName());
@@ -37,7 +45,7 @@ public class UpdateFieldCommandActuator
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
 
         // Hydrate to preserve existing categories in snapshot
-        FieldAggregate current = publisher.hydrateAggregate(key, FieldAggregate.class);
+        FieldAggregate current = eventPublisher().hydrateAggregate(key, FieldAggregate.class);
         List<String> categoryNames =
                 current != null
                         ? current.categories().stream()
@@ -51,10 +59,20 @@ public class UpdateFieldCommandActuator
         var payload =
                 new FieldUpdatedEvent(
                         normalized, command.fieldName(), command.description(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.FIELD_UPDATED, key, payload));
         LOG.info("Field updated: field={}, entity={}", command.fieldName(), normalized);
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

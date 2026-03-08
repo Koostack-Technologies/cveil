@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -14,23 +15,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RemoveSubjectCommandActuator
-        implements Actuator<RemoveSubjectCommandActuator.RemoveSubjectCommand, Void> {
+        implements CommandActuator<RemoveSubjectCommandActuator.RemoveSubjectCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public RemoveSubjectCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(RemoveSubjectCommandActuator.class);
 
     public record RemoveSubjectCommand(String subjectName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, RemoveSubjectCommand command) {
+    public Void execute(RemoveSubjectCommand command) {
         Objects.requireNonNull(command.subjectName(), "subjectName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
         var payload = new SubjectRemovedEvent(command.subjectName());
         AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.SUBJECT_REMOVED, key, payload));
         LOG.info("Subject removed: {}", command.subjectName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

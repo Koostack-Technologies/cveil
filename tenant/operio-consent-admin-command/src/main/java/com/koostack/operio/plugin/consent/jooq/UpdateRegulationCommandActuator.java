@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -22,7 +23,14 @@ import org.slf4j.LoggerFactory;
  * RegulationSnapshot} (preserving existing jurisdiction assignments).
  */
 public class UpdateRegulationCommandActuator
-        implements Actuator<UpdateRegulationCommandActuator.UpdateRegulationCommand, Void> {
+        implements CommandActuator<UpdateRegulationCommandActuator.UpdateRegulationCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public UpdateRegulationCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(UpdateRegulationCommandActuator.class);
@@ -30,14 +38,14 @@ public class UpdateRegulationCommandActuator
     public record UpdateRegulationCommand(String regulationName, String description) {}
 
     @Override
-    public Void execute(EventService<?> publisher, UpdateRegulationCommand command) {
+    public Void execute(UpdateRegulationCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         String tenantId = TenantContext.require();
         UUID aggregateId = RegulationAggregate.deriveId(command.regulationName());
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = publisher.hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
         List<String> jurisdictions =
                 current != null
                         ? current.jurisdictions().stream()
@@ -51,10 +59,20 @@ public class UpdateRegulationCommandActuator
         var payload =
                 new RegulationUpdatedEvent(
                         command.regulationName(), command.description(), snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.REGULATION_UPDATED, key, payload));
         LOG.info("Regulation updated: {}", command.regulationName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

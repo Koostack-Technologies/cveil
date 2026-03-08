@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -26,7 +27,14 @@ import org.slf4j.LoggerFactory;
  * the domain event.
  */
 public class AssignFieldCategoryCommandActuator
-        implements Actuator<AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
+        implements CommandActuator<AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public AssignFieldCategoryCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(AssignFieldCategoryCommandActuator.class);
@@ -43,7 +51,7 @@ public class AssignFieldCategoryCommandActuator
             String fieldName, String entityName, String categoryName, String categoryDescription) {}
 
     @Override
-    public Void execute(EventService<?> publisher, AssignFieldCategoryCommand command) {
+    public Void execute(AssignFieldCategoryCommand command) {
         Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
         Objects.requireNonNull(command.categoryName(), "categoryName must not be null");
 
@@ -53,7 +61,7 @@ public class AssignFieldCategoryCommandActuator
 
         // Hydrate current field state from event log (replaces query service call)
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
-        FieldAggregate current = publisher.hydrateAggregate(key, FieldAggregate.class);
+        FieldAggregate current = eventPublisher().hydrateAggregate(key, FieldAggregate.class);
 
         // Build updated category list
         List<String> newCategories = new ArrayList<>();
@@ -80,7 +88,7 @@ public class AssignFieldCategoryCommandActuator
                         command.categoryName(),
                         command.categoryDescription(),
                         snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED, key, payload));
 
@@ -89,6 +97,16 @@ public class AssignFieldCategoryCommandActuator
                 command.fieldName(),
                 normalized,
                 command.categoryName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

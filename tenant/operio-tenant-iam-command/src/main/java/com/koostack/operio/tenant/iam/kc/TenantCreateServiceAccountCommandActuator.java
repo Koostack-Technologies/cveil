@@ -1,7 +1,8 @@
 package com.koostack.operio.tenant.iam.kc;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantServiceAccountCreatedEvent;
@@ -27,7 +28,7 @@ import org.slf4j.LoggerFactory;
  * Keycloak fails the event is never recorded.
  */
 public class TenantCreateServiceAccountCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 TenantCreateServiceAccountCommandActuator.CreateServiceAccountCommand,
                 TenantCreateServiceAccountCommandActuator.CreateServiceAccountResult> {
 
@@ -37,7 +38,10 @@ public class TenantCreateServiceAccountCommandActuator
 
     private final Keycloak adminClient;
 
-    public TenantCreateServiceAccountCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public TenantCreateServiceAccountCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -89,7 +93,7 @@ public class TenantCreateServiceAccountCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         command.tenantId(),
                         TenantIamEventTypes.SERVICE_ACCOUNT_CREATED,
@@ -171,5 +175,15 @@ public class TenantCreateServiceAccountCommandActuator
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
+        return null;
     }
 }

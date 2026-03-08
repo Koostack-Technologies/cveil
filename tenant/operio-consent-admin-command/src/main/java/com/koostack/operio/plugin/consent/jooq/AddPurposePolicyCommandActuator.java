@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,7 +24,14 @@ import org.slf4j.LoggerFactory;
  * {@link PurposeSnapshot} with the new policy entry added.
  */
 public class AddPurposePolicyCommandActuator
-        implements Actuator<AddPurposePolicyCommandActuator.AddPurposePolicyCommand, Void> {
+        implements CommandActuator<AddPurposePolicyCommandActuator.AddPurposePolicyCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public AddPurposePolicyCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(AddPurposePolicyCommandActuator.class);
@@ -36,7 +44,7 @@ public class AddPurposePolicyCommandActuator
             String categoryName) {}
 
     @Override
-    public Void execute(EventService<?> publisher, AddPurposePolicyCommand command) {
+    public Void execute(AddPurposePolicyCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         Objects.requireNonNull(command.policyType(), "policyType must not be null");
 
@@ -44,7 +52,7 @@ public class AddPurposePolicyCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
 
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
         List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
@@ -74,7 +82,7 @@ public class AddPurposePolicyCommandActuator
                         command.entityName(),
                         command.categoryName(),
                         snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_POLICY_ADDED, key, payload));
 
@@ -82,6 +90,16 @@ public class AddPurposePolicyCommandActuator
                 "Purpose policy added: purpose={}, policyType={}",
                 command.purposeName(),
                 command.policyType());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

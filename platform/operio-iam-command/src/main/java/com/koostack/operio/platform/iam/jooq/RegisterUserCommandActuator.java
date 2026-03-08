@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.iam.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserRegisteredEvent;
@@ -25,7 +26,7 @@ import org.slf4j.LoggerFactory;
  * If the Keycloak call fails the event is never recorded, keeping the two systems consistent.
  */
 public class RegisterUserCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 RegisterUserCommandActuator.RegisterUserCommand,
                 RegisterUserCommandActuator.RegisterUserResult> {
 
@@ -34,7 +35,10 @@ public class RegisterUserCommandActuator
 
     private final Keycloak adminClient;
 
-    public RegisterUserCommandActuator(Keycloak adminClient) {
+    private final EventService<?> eventService;
+
+    public RegisterUserCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+        this.eventService = eventService;
         this.adminClient = adminClient;
     }
 
@@ -66,7 +70,7 @@ public class RegisterUserCommandActuator
     public record RegisterUserResult(String username, String email, String realmId) {}
 
     @Override
-    public RegisterUserResult execute(EventService<?> publisher, RegisterUserCommand command) {
+    public RegisterUserResult execute(RegisterUserCommand command) {
         if (command.realmId() == null || command.realmId().isBlank()) {
             throw new IllegalArgumentException("realmId is required");
         }
@@ -99,7 +103,7 @@ public class RegisterUserCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         IamEventTypes.USER_REGISTERED,
@@ -215,6 +219,16 @@ public class RegisterUserCommandActuator
         if (location != null && location.contains("/")) {
             return location.substring(location.lastIndexOf('/') + 1);
         }
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

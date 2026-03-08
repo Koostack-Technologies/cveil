@@ -1,8 +1,9 @@
 package com.koostack.operio.platform.billing.jooq;
 
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
@@ -21,12 +22,19 @@ import java.util.UUID;
  * store.
  */
 public class CreateSubscriptionCommandActuator
-        implements Actuator<CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
+        implements CommandActuator<CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public CreateSubscriptionCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     public record CreateSubscriptionCommand(String tenantId, String planTier) {}
 
     @Override
-    public Void execute(EventService<?> publisher, CreateSubscriptionCommand command) {
+    public Void execute(CreateSubscriptionCommand command) {
         // Hydrate plan aggregate to validate existence and active status
         UUID planAggregateId = PlanAggregate.deriveId(command.planTier());
         AggregateKey planKey =
@@ -35,7 +43,7 @@ public class CreateSubscriptionCommandActuator
                         PlanAggregate.AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
 
-        PlanAggregate plan = publisher.hydrateAggregate(planKey, PlanAggregate.class);
+        PlanAggregate plan = eventPublisher().hydrateAggregate(planKey, PlanAggregate.class);
         if (plan == null) {
             throw new OperioServiceException("Plan '" + command.planTier() + "' does not exist");
         }
@@ -52,7 +60,7 @@ public class CreateSubscriptionCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         BillingProfileAggregate existing =
-                publisher.hydrateAggregate(billingKey, BillingProfileAggregate.class);
+                eventPublisher().hydrateAggregate(billingKey, BillingProfileAggregate.class);
         if (existing != null && existing.subscription() != null) {
             throw new OperioServiceException(
                     "Tenant '" + command.tenantId() + "' already has an active subscription");
@@ -65,12 +73,22 @@ public class CreateSubscriptionCommandActuator
                         Math.toIntExact(plan.evalLimit()),
                         Math.toIntExact(plan.subjectLimit()),
                         plan.burstLimit());
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         PlatformConstants.PLATFORM_TENANT_ID,
                         BillingEventTypes.SUBSCRIPTION_CREATED,
                         billingKey,
                         payload));
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }

@@ -1,7 +1,8 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
@@ -23,8 +24,15 @@ import org.slf4j.LoggerFactory;
  * {@link PurposeSnapshot} with the new regulation link added (or replaced if already present).
  */
 public class LinkPurposeToRegulationCommandActuator
-        implements Actuator<
+        implements CommandActuator<
                 LinkPurposeToRegulationCommandActuator.LinkPurposeToRegulationCommand, Void> {
+
+    private final EventService<?> eventService;
+
+    public LinkPurposeToRegulationCommandActuator(EventService<?> eventService) {
+        this.eventService = eventService;
+    }
+
 
     private static final Logger LOG =
             LoggerFactory.getLogger(LinkPurposeToRegulationCommandActuator.class);
@@ -37,7 +45,7 @@ public class LinkPurposeToRegulationCommandActuator
             String onDenied) {}
 
     @Override
-    public Void execute(EventService<?> publisher, LinkPurposeToRegulationCommand command) {
+    public Void execute(LinkPurposeToRegulationCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
 
@@ -45,7 +53,7 @@ public class LinkPurposeToRegulationCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = publisher.hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
 
         // Build regulation links — replace existing entry for this regulation
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();
@@ -85,7 +93,7 @@ public class LinkPurposeToRegulationCommandActuator
                         command.onGranted(),
                         command.onDenied(),
                         snapshot);
-        publisher.publishEvent(
+        eventPublisher().publishEvent(
                 PublishDomainEventInput.of(
                         tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED, key, payload));
 
@@ -93,6 +101,16 @@ public class LinkPurposeToRegulationCommandActuator
                 "Purpose regulation linked: purpose={}, regulation={}",
                 command.purposeName(),
                 command.regulationName());
+        return null;
+    }
+
+    @Override
+    public EventService<?> eventPublisher() {
+        return eventService;
+    }
+
+    @Override
+    public MetricPublisherService<?> metricsPublisher() {
         return null;
     }
 }
