@@ -23,12 +23,12 @@ import com.koostack.operio.platform.billing.jooq.BillingProjectionHandler;
 import com.koostack.operio.platform.billing.jooq.JooqBillingCommandConfig;
 import com.koostack.operio.platform.billing.jooq.JooqBillingDispatcher;
 import com.koostack.operio.platform.billing.jooq.JooqBillingQueryConfig;
-import com.koostack.operio.platform.billing.jooq.JooqBillingQueryService;
+import com.koostack.operio.platform.billing.jooq.BillingQueryDispatcher;
 import com.koostack.operio.platform.core.jooq.CoreProjectionHandler;
 import com.koostack.operio.platform.core.jooq.JooqCoreCommandConfig;
 import com.koostack.operio.platform.core.jooq.JooqCoreDispatcher;
 import com.koostack.operio.platform.core.jooq.JooqCoreQueryConfig;
-import com.koostack.operio.platform.core.jooq.JooqCoreQueryService;
+import com.koostack.operio.platform.core.jooq.CoreQueryDispatcher;
 import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerConfig;
 import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
 import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
@@ -1066,10 +1066,10 @@ public class OperioProducers {
 
         // IAM command service configured later after keycloakAdminClient is available
 
-        JooqCoreQueryService coreQuerySvc = new JooqCoreQueryService();
+        CoreQueryDispatcher coreQuerySvc = new CoreQueryDispatcher();
         coreQuerySvc.configure(new JooqCoreQueryConfig(platformDsl, fieldDecryptor));
 
-        JooqBillingQueryService billingQuerySvc = new JooqBillingQueryService();
+        BillingQueryDispatcher billingQuerySvc = new BillingQueryDispatcher();
         billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
 
         com.koostack.operio.platform.plan.jooq.JooqPlanQueryService planQuerySvc =

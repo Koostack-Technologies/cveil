@@ -9,6 +9,8 @@ import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.EmitProvisioningStartedCommandActuator;
+import com.koostack.operio.platform.core.jooq.GetTenantQueryActuator;
+import com.koostack.operio.platform.core.jooq.ListTenantsQueryActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
@@ -228,7 +230,8 @@ public class PlatformResource {
 
         @SuppressWarnings("unchecked")
         List<com.koostack.operio.core.platform.core.models.TenantInfo> tenants =
-                cqrs.coreQueryService().listTenants();
+                cqrs.coreQueryDispatcher()
+                        .dispatch(new ListTenantsQueryActuator.ListTenantsQuery());
 
         List<TenantResponse> dtos = tenants.stream().map(TenantResponse::fromCoreModel).toList();
 
@@ -279,7 +282,9 @@ public class PlatformResource {
 
         LOG.debug("GET /platform/tenants/{}", tenantId);
 
-        var tenant = cqrs.coreQueryService().getTenant(tenantId);
+        com.koostack.operio.core.platform.core.models.TenantInfo tenant =
+                cqrs.coreQueryDispatcher()
+                        .dispatch(new GetTenantQueryActuator.GetTenantQuery(tenantId));
         if (tenant == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "Tenant not found: " + tenantId))
