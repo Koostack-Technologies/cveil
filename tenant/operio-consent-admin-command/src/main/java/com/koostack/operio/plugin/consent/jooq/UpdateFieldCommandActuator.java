@@ -1,0 +1,61 @@
+package com.koostack.operio.plugin.consent.jooq;
+
+import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
+import com.koostack.operio.core.tenant.consent.aggregates.FieldAggregate;
+import com.koostack.operio.core.tenant.consent.events.FieldUpdatedEvent;
+import com.koostack.operio.core.tenant.consent.events.FieldSnapshot;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Actuator that handles the "update field" command.
+ *
+ * <p>Hydrates the current {@link FieldAggregate} from the event log to build the
+ * {@link FieldSnapshot} (preserving existing categories), then publishes the update event.
+ */
+public class UpdateFieldCommandActuator
+        implements Actuator<UpdateFieldCommandActuator.UpdateFieldCommand, Void> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(UpdateFieldCommandActuator.class);
+
+    public record UpdateFieldCommand(
+            String fieldName, String entityName, String description) {}
+
+    @Override
+    public Void execute(EventService<?> publisher, UpdateFieldCommand command) {
+        Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
+        String tenantId = TenantContext.require();
+        String normalized = FieldAggregate.normalizeEntityName(command.entityName());
+        UUID aggregateId = FieldAggregate.deriveId(normalized, command.fieldName());
+        AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
+
+        // Hydrate to preserve existing categories in snapshot
+        FieldAggregate current = publisher.hydrateAggregate(key, FieldAggregate.class);
+        List<String> categoryNames =
+                current != null
+                        ? current.categories().stream()
+                                .map(FieldAggregate.CategoryEntry::categoryName)
+                                .toList()
+                        : List.of();
+        var snapshot =
+                new FieldSnapshot(
+                        command.fieldName(), normalized, command.description(), categoryNames);
+
+        var payload =
+                new FieldUpdatedEvent(normalized, command.fieldName(), command.description(), snapshot);
+        publisher.publishEvent(
+                PublishDomainEventInput.of(
+                        tenantId, ConsentEventTypes.FIELD_UPDATED, key, payload));
+        LOG.info("Field updated: field={}, entity={}", command.fieldName(), normalized);
+        return null;
+    }
+}
+

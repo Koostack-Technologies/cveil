@@ -45,6 +45,12 @@ public final class IamDtos {
             return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
         }
 
+        public static UserRegisteredResponse from(
+                com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator
+                        .RegisterUserResult r) {
+            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
+        }
+
         public static UserRegisteredResponse fromTenant(
                 com.koostack.operio.core.tenant.iam.TenantIamCommandService.RegisterUserResult r) {
             return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
@@ -77,6 +83,12 @@ public final class IamDtos {
             String clientId, String clientSecret, String realmId) {
         public static ServiceAccountCreatedResponse from(
                 IamCommandService.CreateServiceAccountResult r) {
+            return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
+        }
+
+        public static ServiceAccountCreatedResponse from(
+                com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
+                        .CreateServiceAccountResult r) {
             return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
         }
 

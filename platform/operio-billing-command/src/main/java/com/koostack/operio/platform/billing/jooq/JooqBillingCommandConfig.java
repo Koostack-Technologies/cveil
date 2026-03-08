@@ -3,7 +3,7 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.event.EventService;
 
 /**
- * Configuration for {@link JooqBillingCommandService}.
+ * Configuration for {@link JooqBillingDispatcher} (and legacy {@link JooqBillingCommandService}).
  *
  * @param eventService the platform event service for publishing domain events
  */

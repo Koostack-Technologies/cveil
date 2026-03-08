@@ -1,9 +1,11 @@
 package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.TenantService;
+import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.models.CategoryView;
 import com.koostack.operio.core.models.EntityView;
 import com.koostack.operio.core.models.FieldView;
+import com.koostack.operio.plugin.consent.jooq.AssignFieldCategoryCommandActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
@@ -16,6 +18,7 @@ import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -46,6 +49,10 @@ public class CatalogueResource {
     private static final Logger LOG = LoggerFactory.getLogger(CatalogueResource.class);
 
     @Inject TenantService tenantService;
+
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
 
     // -------------------------------------------------------------------
     // Fields
@@ -137,8 +144,13 @@ public class CatalogueResource {
     public Response assignFieldCategory(
             @Context SecurityContext sc, @Valid AssignFieldCategoryRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.assignFieldCategory(
-                req.fieldName(), req.entityName(), req.categoryName(), req.categoryDescription());
+        var command =
+                new AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand(
+                        req.fieldName(),
+                        req.entityName(),
+                        req.categoryName(),
+                        req.categoryDescription());
+        consentDispatcher.dispatch(command);
         return Response.ok(
                         MessageResponse.of(
                                 "Category '"

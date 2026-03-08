@@ -3,6 +3,7 @@ package com.koostack.operio.core.event;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.event.models.RegisterEventTypeInput;
 import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.spi.Plugin;
 
 /**
@@ -42,6 +43,23 @@ public interface EventService<T> extends Plugin<T> {
      * @return the current version number, or 0 if no events exist for this aggregate
      */
     Long getAggregateVersion(AggregateKey key);
+
+    /**
+     * Hydrate the current state of an aggregate by replaying all stored domain events, returning
+     * the result as a typed object.
+     *
+     * <p>Default implementation throws {@link UnsupportedOperationException}. Implementations that
+     * support aggregate hydration (e.g. tenant event services) override this method.
+     *
+     * @param key the aggregate key identifying the aggregate
+     * @param type the aggregate class to hydrate into
+     * @param <T> the aggregate type
+     * @return the fully hydrated aggregate, or {@code null} if no events exist
+     */
+    default <T extends AggregateRoot> T hydrateAggregate(AggregateKey key, Class<T> type) {
+        throw new UnsupportedOperationException(
+                "hydrateAggregate is not supported by this EventService implementation");
+    }
 
     /**
      * No-op. The {@code event_type} catalog table has been removed. Retained for backward

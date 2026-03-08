@@ -73,13 +73,13 @@ dependencies {
     implementation(project(":platform:operio-core-projection-jooq")) // CoreProjectionHandler
     implementation(project(":platform:operio-billing-projection-jooq")) // BillingProjectionHandler
     implementation(project(":platform:operio-tenant-manager-jooq")) // TenantManagerProjectionHandler
-    implementation(project(":platform:operio-iam-command")) // JooqIamCommandService
+    implementation(project(":platform:operio-iam-command")) // KeycloakIamDispatcher
     implementation(project(":platform:operio-iam-query")) // JooqIamQueryService
     implementation(project(":platform:operio-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:operio-plan-query-jooq"))
 
     // -- Tenant IAM modules ---------------------------------------------------
-    implementation(project(":tenant:operio-tenant-iam-command")) // KeycloakTenantIamCommandService
+    implementation(project(":tenant:operio-tenant-iam-command")) // KeycloakTenantIamDispatcher
     implementation(project(":tenant:operio-tenant-iam-query-kc")) // KeycloakTenantIamQueryService
     implementation(project(":tenant:operio-tenant-iam-projection-kc")) // TenantIamProjectionHandler
 

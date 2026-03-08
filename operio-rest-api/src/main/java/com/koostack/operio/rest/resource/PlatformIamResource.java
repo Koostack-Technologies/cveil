@@ -1,8 +1,6 @@
 package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.models.IdpUser;
-import com.koostack.operio.core.platform.iam.IamCommandService;
-import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
@@ -63,15 +61,16 @@ public class PlatformIamResource {
 
         LOG.debug("POST /platform/iam/users username={}, email={}", request.username(), request.email());
 
-        var result =
-                cqrs.iamCommandService()
-                        .registerUser(
-                                PLATFORM_REALM,
-                                request.username(),
-                                request.email(),
-                                request.fullName(),
-                                request.roles(),
-                                request.temporaryPassword());
+        var command = new com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator
+                .RegisterUserCommand(
+                        PLATFORM_REALM,
+                        request.username(),
+                        request.email(),
+                        request.fullName(),
+                        request.roles(),
+                        request.temporaryPassword());
+        com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult result =
+                cqrs.iamDispatcher().dispatch(command);
         return Response.status(Response.Status.CREATED)
                 .entity(UserRegisteredResponse.from(result))
                 .build();
@@ -147,7 +146,10 @@ public class PlatformIamResource {
         requireCqrs();
 
         LOG.debug("PUT /platform/iam/users/{}/suspend", username);
-        cqrs.iamCommandService().suspendUser(PLATFORM_REALM, username);
+        String userId = cqrs.iamQueryService().resolveUserId(PLATFORM_REALM, username);
+        cqrs.iamDispatcher().dispatch(
+                new com.koostack.operio.platform.iam.jooq.SuspendUserCommandActuator
+                        .SuspendUserCommand(PLATFORM_REALM, userId, username));
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
@@ -160,7 +162,10 @@ public class PlatformIamResource {
         requireCqrs();
 
         LOG.debug("PUT /platform/iam/users/{}/activate", username);
-        cqrs.iamCommandService().activateUser(PLATFORM_REALM, username);
+        String userId = cqrs.iamQueryService().resolveUserId(PLATFORM_REALM, username);
+        cqrs.iamDispatcher().dispatch(
+                new com.koostack.operio.platform.iam.jooq.ActivateUserCommandActuator
+                        .ActivateUserCommand(PLATFORM_REALM, userId, username));
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
@@ -187,7 +192,10 @@ public class PlatformIamResource {
         requireCqrs();
 
         LOG.debug("PUT /platform/iam/users/{}/roles role={}", username, request.role());
-        cqrs.iamCommandService().assignRole(PLATFORM_REALM, username, request.role());
+        String userId = cqrs.iamQueryService().resolveUserId(PLATFORM_REALM, username);
+        cqrs.iamDispatcher().dispatch(
+                new com.koostack.operio.platform.iam.jooq.AssignRoleCommandActuator
+                        .AssignRoleCommand(PLATFORM_REALM, userId, request.role(), username));
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
@@ -202,7 +210,10 @@ public class PlatformIamResource {
         requireCqrs();
 
         LOG.debug("DELETE /platform/iam/users/{}/roles/{}", username, role);
-        cqrs.iamCommandService().removeRole(PLATFORM_REALM, username, role);
+        String userId = cqrs.iamQueryService().resolveUserId(PLATFORM_REALM, username);
+        cqrs.iamDispatcher().dispatch(
+                new com.koostack.operio.platform.iam.jooq.RemoveRoleCommandActuator
+                        .RemoveRoleCommand(PLATFORM_REALM, userId, role, username));
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -225,9 +236,10 @@ public class PlatformIamResource {
 
         LOG.debug("POST /platform/iam/service-accounts name={}", request.name());
 
-        var result =
-                cqrs.iamCommandService()
-                        .createServiceAccount(PLATFORM_REALM, request.name(), request.roles());
+        var command = new com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
+                .CreateServiceAccountCommand(PLATFORM_REALM, request.name(), request.roles());
+        com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
+                .CreateServiceAccountResult result = cqrs.iamDispatcher().dispatch(command);
         return Response.status(Response.Status.CREATED)
                 .entity(ServiceAccountCreatedResponse.from(result))
                 .build();
@@ -282,7 +294,9 @@ public class PlatformIamResource {
         requireCqrs();
 
         LOG.debug("DELETE /platform/iam/service-accounts/{}", clientId);
-        cqrs.iamCommandService().revokeServiceAccount(PLATFORM_REALM, clientId);
+        cqrs.iamDispatcher().dispatch(
+                new com.koostack.operio.platform.iam.jooq.RevokeServiceAccountCommandActuator
+                        .RevokeServiceAccountCommand(PLATFORM_REALM, clientId));
         return Response.ok(MessageResponse.of("Service account revoked")).build();
     }
 

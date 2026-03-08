@@ -1,13 +1,7 @@
 package com.koostack.operio.platform.iam.jooq;
 
-import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.event.DomainEvent;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.event.models.PublishDomainEventInput;
-import com.koostack.operio.core.models.AggregateKey;
-import com.koostack.operio.core.platform.events.*;
 import com.koostack.operio.core.platform.iam.IamCommandService;
-import com.koostack.operio.core.platform.iam.IamEventTypes;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,7 +11,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.Base64;
 import java.util.Set;
-import java.util.UUID;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +24,23 @@ import org.slf4j.LoggerFactory;
 public class JooqIamCommandService implements IamCommandService<JooqIamCommandConfig> {
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqIamCommandService.class);
-    private static final String USER_AGGREGATE_TYPE = "iam-user";
-    private static final String SERVICE_ACCOUNT_AGGREGATE_TYPE = "iam-service-account";
     private static final String API_KEY_PREFIX_LITERAL = "opr_live_";
     private static final int KEY_PREFIX_LENGTH = 16;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private RegisterUserCommandActuator registerUserActuator;
+    private final SuspendUserCommandActuator suspendUserActuator =
+            new SuspendUserCommandActuator(null);
+    private final ActivateUserCommandActuator activateUserActuator =
+            new ActivateUserCommandActuator(null);
+    private final CreateServiceAccountCommandActuator createServiceAccountActuator =
+            new CreateServiceAccountCommandActuator(null);
+    private final RevokeServiceAccountCommandActuator revokeServiceAccountActuator =
+            new RevokeServiceAccountCommandActuator(null);
+    private final AssignRoleCommandActuator assignRoleActuator =
+            new AssignRoleCommandActuator(null);
+    private final RemoveRoleCommandActuator removeRoleActuator =
+            new RemoveRoleCommandActuator(null);
 
     private EventService<?> eventService;
     private DataSource platformDataSource;
@@ -65,6 +70,7 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     public void configure(JooqIamCommandConfig config) {
         this.eventService = config.eventService();
         this.platformDataSource = config.platformDataSource();
+        this.registerUserActuator = new RegisterUserCommandActuator(config.keycloakAdmin());
         LOG.info("KeycloakIamCommandService configured");
     }
 
@@ -74,40 +80,26 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     public RegisterUserResult registerUser(
             String realmId, String username, String email, String fullName, Set<String> roles,
             boolean temporaryPassword) {
-        if (realmId == null || realmId.isBlank()) {
-            throw new IllegalArgumentException("realmId is required");
-        }
-        if (username == null || username.isBlank()) {
-            throw new IllegalArgumentException("username is required");
-        }
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("email is required");
-        }
-
-        String userId = UUID.randomUUID().toString();
-        var payload = new UserRegisteredEvent(realmId, userId, username, email, fullName,
-                roles != null ? roles : Set.of(), temporaryPassword);
-        publishEvent(IamEventTypes.USER_REGISTERED, realmId, USER_AGGREGATE_TYPE, payload);
-
-        LOG.info("User registration event published: realmId={}, username={}, email={}",
-                realmId, username, email);
-        return new RegisterUserResult(username, email, realmId);
+        var command = new RegisterUserCommandActuator.RegisterUserCommand(
+                realmId, username, email, fullName, roles, temporaryPassword);
+        var result = registerUserActuator.execute(eventService, command);
+        return new RegisterUserResult(result.username(), result.email(), result.realmId());
     }
 
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var payload = new UserSuspendedEvent(realmId, userId);
-        publishEvent(IamEventTypes.USER_SUSPENDED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("User suspended: realmId={}, identifier={}", realmId, emailOrUsername);
+        var command = new SuspendUserCommandActuator.SuspendUserCommand(
+                realmId, userId, emailOrUsername);
+        suspendUserActuator.execute(eventService, command);
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var payload = new UserActivatedEvent(realmId, userId);
-        publishEvent(IamEventTypes.USER_ACTIVATED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("User activated: realmId={}, identifier={}", realmId, emailOrUsername);
+        var command = new ActivateUserCommandActuator.ActivateUserCommand(
+                realmId, userId, emailOrUsername);
+        activateUserActuator.execute(eventService, command);
     }
 
     // -- Service account operations -------------------------------------------
@@ -115,32 +107,18 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public CreateServiceAccountResult createServiceAccount(
             String realmId, String name, Set<String> roles) {
-        if (realmId == null || realmId.isBlank()) {
-            throw new IllegalArgumentException("realmId is required");
-        }
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name is required");
-        }
-
-        String clientId = "svc-" + name.toLowerCase().replaceAll("[^a-z0-9-]", "-");
-        var payload = new ServiceAccountCreatedEvent(realmId, clientId, name,
-                roles != null ? roles : Set.of());
-        publishEvent(IamEventTypes.SERVICE_ACCOUNT_CREATED, realmId,
-                SERVICE_ACCOUNT_AGGREGATE_TYPE, payload);
-
-        // The actual client secret is generated by the projection handler when it creates the
-        // Keycloak client. We return a placeholder here — the projection result is async.
-        LOG.info("Service account creation event published: realmId={}, clientId={}",
-                realmId, clientId);
-        return new CreateServiceAccountResult(clientId, "pending-projection", realmId);
+        var command = new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
+                realmId, name, roles);
+        var result = createServiceAccountActuator.execute(eventService, command);
+        return new CreateServiceAccountResult(
+                result.clientId(), result.clientSecret(), result.realmId());
     }
 
     @Override
     public void revokeServiceAccount(String realmId, String clientId) {
-        var payload = new ServiceAccountRevokedEvent(realmId, clientId);
-        publishEvent(IamEventTypes.SERVICE_ACCOUNT_REVOKED, realmId,
-                SERVICE_ACCOUNT_AGGREGATE_TYPE, payload);
-        LOG.info("Service account revoked: realmId={}, clientId={}", realmId, clientId);
+        var command = new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                realmId, clientId);
+        revokeServiceAccountActuator.execute(eventService, command);
     }
 
     // -- Role operations ------------------------------------------------------
@@ -148,17 +126,17 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var payload = new RoleAssignedEvent(realmId, userId, role);
-        publishEvent(IamEventTypes.ROLE_ASSIGNED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Role assigned: realmId={}, identifier={}, role={}", realmId, emailOrUsername, role);
+        var command = new AssignRoleCommandActuator.AssignRoleCommand(
+                realmId, userId, role, emailOrUsername);
+        assignRoleActuator.execute(eventService, command);
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
         String userId = requireUserId(realmId, emailOrUsername);
-        var payload = new RoleRemovedEvent(realmId, userId, role);
-        publishEvent(IamEventTypes.ROLE_REMOVED, realmId, USER_AGGREGATE_TYPE, payload);
-        LOG.info("Role removed: realmId={}, identifier={}, role={}", realmId, emailOrUsername, role);
+        var command = new RemoveRoleCommandActuator.RemoveRoleCommand(
+                realmId, userId, role, emailOrUsername);
+        removeRoleActuator.execute(eventService, command);
     }
 
     // -- Legacy API key compat ------------------------------------------------
@@ -261,18 +239,5 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         }
     }
 
-    private void publishEvent(
-            String eventType, String realmId, String aggregateType, DomainEvent payload) {
-        UUID aggregateId = deriveAggregateId(realmId, aggregateType);
-        AggregateKey key = new AggregateKey(
-                aggregateId, aggregateType, PlatformConstants.PLATFORM_TENANT_ID);
-        eventService.publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID, eventType, key, payload));
-    }
 
-    private static UUID deriveAggregateId(String realmId, String aggregateType) {
-        return UUID.nameUUIDFromBytes(
-                (aggregateType + ":" + realmId).getBytes(StandardCharsets.UTF_8));
-    }
 }

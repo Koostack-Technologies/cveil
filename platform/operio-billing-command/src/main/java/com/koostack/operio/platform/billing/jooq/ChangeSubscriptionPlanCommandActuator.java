@@ -1,0 +1,55 @@
+package com.koostack.operio.platform.billing.jooq;
+
+import com.koostack.operio.core.PlatformConstants;
+import com.koostack.operio.core.cqrs.Actuator;
+import com.koostack.operio.core.event.EventService;
+import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.models.AggregateKey;
+import com.koostack.operio.core.platform.billing.BillingEventTypes;
+import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
+import com.koostack.operio.core.platform.billing.events.SubscriptionPlanChangedEvent;
+import java.util.UUID;
+
+/**
+ * Actuator that handles the "change subscription plan" command.
+ *
+ * <p>Publishes a {@link SubscriptionPlanChangedEvent} to the platform event store.
+ */
+public class ChangeSubscriptionPlanCommandActuator
+        implements Actuator<
+                ChangeSubscriptionPlanCommandActuator.ChangeSubscriptionPlanCommand, Void> {
+
+    public record ChangeSubscriptionPlanCommand(
+            String tenantId,
+            String oldPlanTier,
+            String newPlanTier,
+            int evalLimit,
+            int subjectLimit,
+            int burstLimit) {}
+
+    @Override
+    public Void execute(EventService<?> publisher, ChangeSubscriptionPlanCommand command) {
+        UUID aggregateId = BillingProfileAggregate.deriveId(command.tenantId());
+        AggregateKey key =
+                new AggregateKey(
+                        aggregateId,
+                        BillingProfileAggregate.AGGREGATE_TYPE,
+                        PlatformConstants.PLATFORM_TENANT_ID);
+
+        var payload =
+                new SubscriptionPlanChangedEvent(
+                        command.tenantId(),
+                        command.oldPlanTier(),
+                        command.newPlanTier(),
+                        command.evalLimit(),
+                        command.subjectLimit(),
+                        command.burstLimit());
+        publisher.publishEvent(
+                PublishDomainEventInput.of(
+                        PlatformConstants.PLATFORM_TENANT_ID,
+                        BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED,
+                        key,
+                        payload));
+        return null;
+    }
+}

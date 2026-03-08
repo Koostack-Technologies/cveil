@@ -1,7 +1,15 @@
 package com.koostack.operio.rest.resource;
 
+import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
+import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
+import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuator;
+import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
+import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
+import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
+import com.koostack.operio.platform.core.jooq.EmitProvisioningStartedCommandActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
@@ -17,6 +25,7 @@ import com.koostack.operio.rest.interceptor.TenantScoped;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.ratelimit.RateLimitService;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -61,7 +70,9 @@ public class PlatformResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
-    @Inject com.koostack.operio.core.PlatformService platformService;
+    @Inject @Named("coreDispatcher") CommandDispatcher coreDispatcher;
+
+    @Inject @Named("billingDispatcher") CommandDispatcher billingDispatcher;
 
     @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
@@ -83,10 +94,10 @@ public class PlatformResource {
         }
     }
 
-    private void requireCoreCommandService() {
-        if (cqrs.coreCommandService() == null) {
+    private void requireDispatchers() {
+        if (coreDispatcher == null || billingDispatcher == null) {
             throw new IllegalStateException(
-                    "Core command service is not available in embedded mode. "
+                    "Platform dispatchers are not available in embedded mode. "
                             + "Set operio.mode=production to enable tenant management.");
         }
     }
@@ -137,25 +148,66 @@ public class PlatformResource {
     public Response createTenant(
             @Context SecurityContext securityContext, @Valid CreateTenantRequest request) {
         requireSuperAdmin(securityContext);
-
-        if (platformService == null) {
-            throw new IllegalStateException(
-                    "PlatformService is not available in embedded mode. "
-                            + "Set operio.mode=production to enable tenant management.");
-        }
+        requireDispatchers();
 
         LOG.info(
                 "POST /platform/tenants - creating tenant={}, plan={}",
                 request.tenantId(),
                 request.plan());
 
+        // Validate uniqueness
+        var existing = cqrs.coreQueryService().getTenant(request.tenantId());
+        if (existing != null) {
+            throw new OperioServiceException(
+                    "Tenant '" + request.tenantId() + "' already exists");
+        }
+
+        // Validate plan exists and is active, resolve limits
+        var planQueryService = cqrs.planQueryService();
+        int evalLimit = 0;
+        int subjectLimit = 0;
+        int burstLimit = 0;
+        if (planQueryService != null) {
+            var planInfo = planQueryService.getPlan(request.plan());
+            if (planInfo == null) {
+                throw new OperioServiceException(
+                        "Plan '" + request.plan() + "' does not exist");
+            }
+            if (!planInfo.isActive()) {
+                throw new OperioServiceException(
+                        "Plan '" + request.plan() + "' is not active");
+            }
+            evalLimit = Math.toIntExact(planInfo.evalLimit());
+            subjectLimit = Math.toIntExact(planInfo.subjectLimit());
+            burstLimit = planInfo.burstLimit();
+        }
+
         String billingEmail =
                 request.billingEmail() != null
                         ? request.billingEmail()
                         : request.tenantId() + "@billing.operio.local";
 
-        platformService.createTenant(
-                request.tenantId(), request.displayName(), request.plan(), billingEmail);
+        // Multi-dispatch: sequential commands across bounded contexts
+        // 1. Create tenant
+        coreDispatcher.dispatch(
+                new CreateTenantCommandActuator.CreateTenantCommand(
+                        request.tenantId(), request.displayName(), request.plan()));
+
+        // 2. Create billing profile
+        billingDispatcher.dispatch(
+                new CreateBillingProfileCommandActuator.CreateBillingProfileCommand(
+                        request.tenantId(), billingEmail));
+
+        // 3. Create subscription (with resolved plan limits)
+        billingDispatcher.dispatch(
+                new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
+                        request.tenantId(), request.plan(),
+                        evalLimit, subjectLimit, burstLimit));
+
+        // 4. Emit provisioning started
+        coreDispatcher.dispatch(
+                new EmitProvisioningStartedCommandActuator.EmitProvisioningStartedCommand(
+                        request.tenantId(), request.displayName(), request.plan()));
 
         // Return the accepted data directly — the projection materializes
         // asynchronously so a DB read-back would return null or stale data.
@@ -303,11 +355,12 @@ public class PlatformResource {
                     @PathParam("id")
                     String tenantId) {
         requireSuperAdmin(securityContext);
-        requireCoreCommandService();
+        requireDispatchers();
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        cqrs.coreCommandService().deleteTenant(tenantId);
+        coreDispatcher.dispatch(
+                new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
 
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
@@ -550,19 +603,27 @@ public class PlatformResource {
                     String tenantId,
             @Valid UpdatePlanRequest request) {
         requireSuperAdmin(securityContext);
-        requireCoreCommandService();
+        requireDispatchers();
         requireCqrsServices();
 
         LOG.info("PUT /platform/tenants/{}/plan - newPlan={}", tenantId, request.plan());
 
-        platformService.changeTenantPlan(tenantId, request.plan());
+        // Resolve old plan from read model for the change event
+        String oldPlan = null;
+        var tenant = cqrs.coreQueryService().getTenant(tenantId);
+        if (tenant != null) {
+            oldPlan = tenant.plan();
+        }
+
+        coreDispatcher.dispatch(
+                new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
+                        tenantId, oldPlan, request.plan()));
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);
 
         // Read the existing tenant for metadata; override the plan field
         // because the plan-changed event is projected asynchronously.
-        var tenant = cqrs.coreQueryService().getTenant(tenantId);
         TenantResponse response;
         if (tenant != null) {
             response =

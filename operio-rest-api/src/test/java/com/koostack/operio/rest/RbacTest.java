@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
+import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
@@ -1330,8 +1331,9 @@ class RbacTest {
         private CoreQueryService<?> coreQueryService;
         private IamCommandService<?> iamCommandService;
         private IamQueryService<?> iamQueryService;
-        private PlatformService platformService;
         private BootstrapKeyLifecycleService bootstrapLifecycle;
+        private CommandDispatcher coreDispatcherMock;
+        private CommandDispatcher billingDispatcherMock;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
@@ -1341,8 +1343,9 @@ class RbacTest {
             coreQueryService = mock(CoreQueryService.class);
             iamCommandService = mock(IamCommandService.class);
             iamQueryService = mock(IamQueryService.class);
-            platformService = mock(PlatformService.class);
             bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
+            coreDispatcherMock = mock(CommandDispatcher.class);
+            billingDispatcherMock = mock(CommandDispatcher.class);
 
             // Create PlatformCqrsHolder mock
             PlatformCqrsHolder cqrsHolder = mock(PlatformCqrsHolder.class);
@@ -1356,7 +1359,8 @@ class RbacTest {
             for (var entry :
                     java.util.Map.of(
                                     "cqrs", cqrsHolder,
-                                    "platformService", platformService,
+                                    "coreDispatcher", coreDispatcherMock,
+                                    "billingDispatcher", billingDispatcherMock,
                                     "bootstrapLifecycle", bootstrapLifecycle)
                             .entrySet()) {
                 var field = PlatformResource.class.getDeclaredField(entry.getKey());
