@@ -10,13 +10,10 @@ import com.koostack.operio.core.tenant.consent.ConsentGraphQueryService;
 import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 import java.util.logging.Logger;
-import javax.crypto.KeyGenerator;
 
 /**
  * Default {@link TenantService} implementation that composes command and query services into
@@ -37,7 +34,6 @@ public class DefaultTenantService extends Operio implements TenantService {
     private final ConsentAdminQueryService<?> queryService;
     private com.koostack.operio.core.metrics.MetricPublisherService<?> platformMetricPublisher;
     private com.koostack.operio.core.metrics.MetricPublisherService<?> tenantMetricPublisher;
-    private UnaryOperator<String> keyEncryptor = UnaryOperator.identity();
     private SubjectDsarService<?> subjectDsarService;
 
     public DefaultTenantService(
@@ -59,10 +55,6 @@ public class DefaultTenantService extends Operio implements TenantService {
         this.tenantMetricPublisher = publisher;
     }
 
-    public void setKeyEncryptor(UnaryOperator<String> keyEncryptor) {
-        this.keyEncryptor = keyEncryptor != null ? keyEncryptor : UnaryOperator.identity();
-    }
-
     public void setSubjectDsarService(SubjectDsarService<?> subjectDsarService) {
         this.subjectDsarService = subjectDsarService;
     }
@@ -73,14 +65,7 @@ public class DefaultTenantService extends Operio implements TenantService {
 
     @Override
     public void registerSubject(String subjectName, String description) {
-        requireDsarService();
-        // Generate per-subject DSAR key and persist to subject_dsar synchronously
-        // BEFORE publishing the event — the EventService needs this key to encrypt
-        // the shreddable payload.
-        String rawKey = generateDsarKey();
-        String encryptedKey = keyEncryptor.apply(rawKey);
-        java.util.UUID dsarId = SubjectDsarService.deriveDsarId(subjectName);
-        subjectDsarService.saveKey(dsarId, encryptedKey);
+        // DSAR key generation is handled by RegisterSubjectCommandActuator
         commandService().registerSubjectCommand(subjectName, description);
     }
 
@@ -116,17 +101,6 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public Optional<SubjectView> getSubject(String subjectName) {
         return queryService().getSubject(subjectName);
-    }
-
-    private String generateDsarKey() {
-        try {
-            KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-            keyGen.init(256);
-            byte[] keyBytes = keyGen.generateKey().getEncoded();
-            return Base64.getEncoder().encodeToString(keyBytes);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to generate AES-256 DSAR key", e);
-        }
     }
 
     private void requireDsarService() {
@@ -676,31 +650,13 @@ public class DefaultTenantService extends Operio implements TenantService {
     @Override
     public long countCachedKeysForSubject(String subject) {
         var decisionService = consentService();
-        try {
-            var method =
-                    decisionService.getClass().getMethod("countCachedKeysForSubject", String.class);
-            return (long) method.invoke(decisionService, subject);
-        } catch (NoSuchMethodException e) {
-            return 0;
-        } catch (Exception e) {
-            return 0;
-        }
+        return decisionService != null ? decisionService.countCachedKeysForSubject(subject) : 0;
     }
 
     @Override
     public long deleteCachedKeysForSubject(String subject) {
         var decisionService = consentService();
-        try {
-            var method =
-                    decisionService
-                            .getClass()
-                            .getMethod("deleteAllCachedKeysForSubject", String.class);
-            return (long) method.invoke(decisionService, subject);
-        } catch (NoSuchMethodException e) {
-            return 0;
-        } catch (Exception e) {
-            return 0;
-        }
+        return decisionService != null ? decisionService.deleteCachedKeysForSubject(subject) : 0;
     }
 
     // -----------------------------------------------------------------------

@@ -54,6 +54,14 @@ public class JooqConsentAdminQueryDispatcher
         return actuator.execute(input);
     }
 
+    /**
+     * Registers an additional actuator after initial configuration. Useful for actuators that
+     * require dependencies not available during {@link #configure}, such as Redis-backed services.
+     */
+    public <I, O> void registerActuator(Class<I> inputType, Actuator<I, O> actuator) {
+        actuators.put(inputType, actuator);
+    }
+
     // -- Plugin SPI -----------------------------------------------------------
 
     @Override

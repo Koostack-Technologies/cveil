@@ -1,9 +1,29 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.TenantService;
+import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.JurisdictionView;
 import com.koostack.operio.core.models.PurposeView;
 import com.koostack.operio.core.models.RegulationView;
+import com.koostack.operio.plugin.consent.jooq.AddPurposePolicyCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.AddRegulationJurisdictionCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.GetJurisdictionQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetPurposeQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetRegulationQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.LinkPurposeToRegulationCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.ListJurisdictionsQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.ListPurposesQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.ListRegulationsQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterJurisdictionCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterPurposeCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterRegulationCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveJurisdictionCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemovePurposeCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemovePurposePolicyCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveRegulationCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveRegulationJurisdictionCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UnlinkPurposeFromRegulationCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UpdateJurisdictionCommandActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.AddJurisdictionRequest;
@@ -18,6 +38,7 @@ import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -25,6 +46,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
+import java.util.Optional;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -50,7 +72,13 @@ public class GovernanceResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(GovernanceResource.class);
 
-    @Inject TenantService tenantService;
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
+
+    @Inject
+    @Named("consentQueryDispatcher")
+    QueryDispatcher consentQueryDispatcher;
 
     // -------------------------------------------------------------------
     // Purposes
@@ -74,7 +102,8 @@ public class GovernanceResource {
     })
     public Response listPurposes(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<PurposeView> purposes = tenantService.listPurposes();
+        List<PurposeView> purposes =
+                consentQueryDispatcher.dispatch(new ListPurposesQueryActuator.ListPurposesQuery());
         return Response.ok(purposes).build();
     }
 
@@ -94,7 +123,9 @@ public class GovernanceResource {
     public Response getPurpose(
             @Context SecurityContext sc, @PathParam("purposeName") String purposeName) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        PurposeView purpose = tenantService.getPurpose(purposeName);
+        PurposeView purpose =
+                consentQueryDispatcher.dispatch(
+                        new GetPurposeQueryActuator.GetPurposeQuery(purposeName));
         if (purpose == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("NOT_FOUND", "Purpose not found: " + purposeName))
@@ -119,7 +150,9 @@ public class GovernanceResource {
     public Response registerPurpose(
             @Context SecurityContext sc, @Valid RegisterPurposeRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerPurpose(req.purposeName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterPurposeCommandActuator.RegisterPurposeCommand(
+                        req.purposeName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Purpose registered: " + req.purposeName()))
                 .build();
@@ -141,7 +174,8 @@ public class GovernanceResource {
     public Response removePurpose(
             @Context SecurityContext sc, @PathParam("purposeName") String purposeName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removePurpose(purposeName);
+        consentDispatcher.dispatch(
+                new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
         return Response.ok(MessageResponse.of("Purpose removed")).build();
     }
 
@@ -161,12 +195,13 @@ public class GovernanceResource {
     public Response addPurposePolicy(
             @Context SecurityContext sc, @Valid AddPurposePolicyRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.addPurposePolicy(
-                req.purposeName(),
-                req.policyType(),
-                req.fieldName(),
-                req.entityName(),
-                req.categoryName());
+        consentDispatcher.dispatch(
+                new AddPurposePolicyCommandActuator.AddPurposePolicyCommand(
+                        req.purposeName(),
+                        req.policyType(),
+                        req.fieldName(),
+                        req.entityName(),
+                        req.categoryName()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Policy added to purpose: " + req.purposeName()))
                 .build();
@@ -188,12 +223,13 @@ public class GovernanceResource {
     public Response removePurposePolicy(
             @Context SecurityContext sc, @Valid RemovePurposePolicyRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removePurposePolicy(
-                req.purposeName(),
-                req.policyType(),
-                req.fieldName(),
-                req.entityName(),
-                req.categoryName());
+        consentDispatcher.dispatch(
+                new RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand(
+                        req.purposeName(),
+                        req.policyType(),
+                        req.fieldName(),
+                        req.entityName(),
+                        req.categoryName()));
         return Response.ok(MessageResponse.of("Policy removed")).build();
     }
 
@@ -213,12 +249,13 @@ public class GovernanceResource {
     public Response linkPurposeToRegulation(
             @Context SecurityContext sc, @Valid LinkPurposeRegulationRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.linkPurposeToRegulation(
-                req.purposeName(),
-                req.regulationName(),
-                req.lawfulBasis(),
-                req.onGranted(),
-                req.onDenied());
+        consentDispatcher.dispatch(
+                new LinkPurposeToRegulationCommandActuator.LinkPurposeToRegulationCommand(
+                        req.purposeName(),
+                        req.regulationName(),
+                        req.lawfulBasis(),
+                        req.onGranted(),
+                        req.onDenied()));
         return Response.ok(
                         MessageResponse.of(
                                 "Purpose '"
@@ -249,7 +286,9 @@ public class GovernanceResource {
             @PathParam("purposeName") String purposeName,
             @PathParam("regulationName") String regulationName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.unlinkPurposeFromRegulation(purposeName, regulationName);
+        consentDispatcher.dispatch(
+                new UnlinkPurposeFromRegulationCommandActuator.UnlinkPurposeFromRegulationCommand(
+                        purposeName, regulationName));
         return Response.ok(MessageResponse.of("Purpose unlinked from regulation")).build();
     }
 
@@ -273,7 +312,9 @@ public class GovernanceResource {
     })
     public Response listRegulations(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<RegulationView> regulations = tenantService.listRegulations();
+        List<RegulationView> regulations =
+                consentQueryDispatcher.dispatch(
+                        new ListRegulationsQueryActuator.ListRegulationsQuery());
         return Response.ok(regulations).build();
     }
 
@@ -293,7 +334,9 @@ public class GovernanceResource {
     public Response getRegulation(
             @Context SecurityContext sc, @PathParam("regulationName") String regulationName) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        RegulationView reg = tenantService.getRegulation(regulationName);
+        RegulationView reg =
+                consentQueryDispatcher.dispatch(
+                        new GetRegulationQueryActuator.GetRegulationQuery(regulationName));
         if (reg == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(
@@ -320,7 +363,9 @@ public class GovernanceResource {
     public Response registerRegulation(
             @Context SecurityContext sc, @Valid RegisterRegulationRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerRegulation(req.regulationName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterRegulationCommandActuator.RegisterRegulationCommand(
+                        req.regulationName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Regulation registered: " + req.regulationName()))
                 .build();
@@ -342,7 +387,8 @@ public class GovernanceResource {
     public Response removeRegulation(
             @Context SecurityContext sc, @PathParam("regulationName") String regulationName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeRegulation(regulationName);
+        consentDispatcher.dispatch(
+                new RemoveRegulationCommandActuator.RemoveRegulationCommand(regulationName));
         return Response.ok(MessageResponse.of("Regulation removed")).build();
     }
 
@@ -362,8 +408,9 @@ public class GovernanceResource {
     public Response addJurisdiction(
             @Context SecurityContext sc, @Valid AddJurisdictionRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.addRegulationJurisdiction(
-                req.regulationName(), req.jurisdictionName(), req.description());
+        consentDispatcher.dispatch(
+                new AddRegulationJurisdictionCommandActuator.AddRegulationJurisdictionCommand(
+                        req.regulationName(), req.jurisdictionName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(
                         MessageResponse.of(
@@ -391,7 +438,10 @@ public class GovernanceResource {
             @PathParam("regulationName") String regulationName,
             @PathParam("jurisdictionName") String jurisdictionName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeRegulationJurisdiction(regulationName, jurisdictionName);
+        consentDispatcher.dispatch(
+                new RemoveRegulationJurisdictionCommandActuator
+                                .RemoveRegulationJurisdictionCommand(
+                        regulationName, jurisdictionName));
         return Response.ok(MessageResponse.of("Jurisdiction removed from regulation")).build();
     }
 
@@ -415,7 +465,9 @@ public class GovernanceResource {
     })
     public Response listJurisdictions(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<JurisdictionView> jurisdictions = tenantService.listJurisdictions();
+        List<JurisdictionView> jurisdictions =
+                consentQueryDispatcher.dispatch(
+                        new ListJurisdictionsQueryActuator.ListJurisdictionsQuery());
         return Response.ok(jurisdictions).build();
     }
 
@@ -435,8 +487,10 @@ public class GovernanceResource {
     public Response getJurisdiction(
             @Context SecurityContext sc, @PathParam("jurisdictionName") String jurisdictionName) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return tenantService
-                .getJurisdiction(jurisdictionName)
+        return ((Optional<JurisdictionView>)
+                        consentQueryDispatcher.dispatch(
+                                new GetJurisdictionQueryActuator.GetJurisdictionQuery(
+                                        jurisdictionName)))
                 .map(j -> Response.ok(j).build())
                 .orElse(
                         Response.status(Response.Status.NOT_FOUND)
@@ -463,7 +517,9 @@ public class GovernanceResource {
     public Response registerJurisdiction(
             @Context SecurityContext sc, @Valid RegisterJurisdictionRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerJurisdiction(req.jurisdictionName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand(
+                        req.jurisdictionName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Jurisdiction registered: " + req.jurisdictionName()))
                 .build();
@@ -487,7 +543,9 @@ public class GovernanceResource {
             @PathParam("jurisdictionName") String jurisdictionName,
             @Valid UpdateJurisdictionRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.updateJurisdiction(jurisdictionName, req.description());
+        consentDispatcher.dispatch(
+                new UpdateJurisdictionCommandActuator.UpdateJurisdictionCommand(
+                        jurisdictionName, req.description()));
         return Response.ok(MessageResponse.of("Jurisdiction updated: " + jurisdictionName)).build();
     }
 
@@ -509,7 +567,28 @@ public class GovernanceResource {
     public Response removeJurisdiction(
             @Context SecurityContext sc, @PathParam("jurisdictionName") String jurisdictionName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeJurisdiction(jurisdictionName);
+        // Invariant: reject removal if regulations still reference this jurisdiction
+        // TODO(consent-bizlogic-migrate): move this check into RemoveJurisdictionCommandActuator
+        List<RegulationView> allRegulations =
+                consentQueryDispatcher.dispatch(
+                        new ListRegulationsQueryActuator.ListRegulationsQuery());
+        boolean hasAssignments =
+                allRegulations.stream()
+                        .anyMatch(
+                                r ->
+                                        r.activeJurisdictions().stream()
+                                                .anyMatch(
+                                                        j ->
+                                                                jurisdictionName.equals(
+                                                                        j.jurisdictionName())));
+        if (hasAssignments) {
+            throw new IllegalStateException(
+                    "Cannot remove jurisdiction '"
+                            + jurisdictionName
+                            + "' — it is still assigned to regulations. Remove it first.");
+        }
+        consentDispatcher.dispatch(
+                new RemoveJurisdictionCommandActuator.RemoveJurisdictionCommand(jurisdictionName));
         return Response.ok(MessageResponse.of("Jurisdiction removed")).build();
     }
 }

@@ -67,6 +67,7 @@ public class JooqConsentAdminCommandService
     private ExpireConsentCommandActuator expireConsentActuator;
     private RevokeAllConsentCommandActuator revokeAllConsentActuator;
     private DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator;
+    private ShredSubjectCommandActuator shredSubjectActuator;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -131,7 +132,9 @@ public class JooqConsentAdminCommandService
         registerJurisdictionActuator = new RegisterJurisdictionCommandActuator(eventService);
         updateJurisdictionActuator = new UpdateJurisdictionCommandActuator(eventService);
         removeJurisdictionActuator = new RemoveJurisdictionCommandActuator(eventService);
-        registerSubjectActuator = new RegisterSubjectCommandActuator(eventService);
+        registerSubjectActuator =
+                new RegisterSubjectCommandActuator(
+                        eventService, config.dsarService(), config.keyEncryptor());
         updateSubjectActuator = new UpdateSubjectCommandActuator(eventService);
         removeSubjectActuator = new RemoveSubjectCommandActuator(eventService);
         grantConsentActuator = new GrantConsentCommandActuator(eventService);
@@ -139,6 +142,12 @@ public class JooqConsentAdminCommandService
         expireConsentActuator = new ExpireConsentCommandActuator(eventService);
         revokeAllConsentActuator = new RevokeAllConsentCommandActuator(eventService);
         deleteSubjectAuditActuator = new DeleteSubjectAuditCommandActuator(eventService);
+
+        // DSAR actuators require SubjectDsarService (null-safe: only registered when available)
+        if (config.dsarService() != null) {
+            shredSubjectActuator =
+                    new ShredSubjectCommandActuator(eventService, config.dsarService());
+        }
 
         // Entity
         actuators.put(
@@ -232,6 +241,11 @@ public class JooqConsentAdminCommandService
         actuators.put(
                 DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand.class,
                 deleteSubjectAuditActuator);
+        if (shredSubjectActuator != null) {
+            actuators.put(
+                    ShredSubjectCommandActuator.ShredSubjectCommand.class,
+                    shredSubjectActuator);
+        }
 
         LOG.info(
                 "JooqConsentAdminCommandService configured (event-sourced, {} actuators)",

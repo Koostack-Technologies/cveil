@@ -469,6 +469,58 @@ public class ConsentGraphRedisRepository {
     }
 
     // -----------------------------------------------------------------------
+    // Subject cache key operations (SCAN-based)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Counts the number of edge-property keys for a given subject using SCAN.
+     * Pattern: {@code {prefix}:ep:subject:{subjectName}:policy:*}
+     */
+    long countCachedKeysForSubject(String subjectName) {
+        JedisPooled jedis = jedisProvider.get();
+        String pattern = prefix() + ":ep:subject:" + subjectName + ":policy:*";
+        long count = 0;
+        String cursor = "0";
+        redis.clients.jedis.params.ScanParams scanParams =
+                new redis.clients.jedis.params.ScanParams().match(pattern).count(200);
+        do {
+            redis.clients.jedis.resps.ScanResult<String> result = jedis.scan(cursor, scanParams);
+            count += result.getResult().size();
+            cursor = result.getCursor();
+        } while (!"0".equals(cursor));
+        return count;
+    }
+
+    /**
+     * Deletes all edge-property keys for a given subject using SCAN + pipelined DEL.
+     * Returns the number of keys deleted.
+     * Pattern: {@code {prefix}:ep:subject:{subjectName}:policy:*}
+     */
+    long deleteCachedKeysForSubject(String subjectName) {
+        JedisPooled jedis = jedisProvider.get();
+        String pattern = prefix() + ":ep:subject:" + subjectName + ":policy:*";
+        long deleted = 0;
+        String cursor = "0";
+        redis.clients.jedis.params.ScanParams scanParams =
+                new redis.clients.jedis.params.ScanParams().match(pattern).count(200);
+        do {
+            redis.clients.jedis.resps.ScanResult<String> result = jedis.scan(cursor, scanParams);
+            List<String> keys = result.getResult();
+            cursor = result.getCursor();
+            if (!keys.isEmpty()) {
+                try (Pipeline p = jedis.pipelined()) {
+                    for (String key : keys) {
+                        p.del(key);
+                    }
+                    p.sync();
+                }
+                deleted += keys.size();
+            }
+        } while (!"0".equals(cursor));
+        return deleted;
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
@@ -33,6 +34,9 @@ import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerConfig;
 import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
 import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
+import com.koostack.operio.plugin.consent.jooq.CountSubjectCacheKeysQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.EvaluateConsentQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
@@ -154,6 +158,9 @@ public class OperioProducers {
     /** Consent command service — stored for CDI exposure as CommandDispatcher. */
     private JooqConsentAdminCommandService consentAdminCommandService;
 
+    /** Consent query dispatcher — stored for CDI exposure as QueryDispatcher. */
+    private JooqConsentAdminQueryDispatcher consentAdminQueryDispatcher;
+
     @Inject OperioConfig config;
 
     @Inject Instance<IdpProvider<?>> idpProviderInstance;
@@ -243,6 +250,7 @@ public class OperioProducers {
         JooqConsentAdminCommandService commandService = new JooqConsentAdminCommandService();
         this.consentAdminCommandService = commandService;
         JooqConsentAdminQueryDispatcher queryService = new JooqConsentAdminQueryDispatcher();
+        this.consentAdminQueryDispatcher = queryService;
 
         // -- Command + query services (production: event-sourced + jOOQ) ------
         // Graph replaces Redis admin cache — JOOQ admin query used directly
@@ -252,6 +260,8 @@ public class OperioProducers {
         // Retained outside the if-block so SubjectDsarService can be wired after
         // buildTenantService()
         JooqConsentAdminServiceConfig retainedJooqConfig = null;
+        com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService retainedDsarService = null;
+
 
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)
                 && consentBundle instanceof CoreConsentBundle coreBundle) {
@@ -281,9 +291,34 @@ public class OperioProducers {
                     com.koostack.operio.plugin.jooq.common.JooqContextFactory
                             .createTenantAwareContext(eventConfig, "operio-tenant-outbox");
 
-            commandService.configure(new ConsentAdminCommandConfig(eventService));
+            // -- SubjectDsarService + key encryptor (used by command actuators) --
+            com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService dsarService = null;
+            java.util.function.UnaryOperator<String> keyEncryptor = null;
+
+            dsarService = new com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService();
+            dsarService.configure(jooqConfig);
+
+            if (config.platformDb().isPresent()) {
+                String encKey =
+                        config.platformDb()
+                                .get()
+                                .encryptionKey()
+                                .filter(k -> !k.isBlank())
+                                .orElse(null);
+                if (encKey != null) {
+                    final String capturedKey = encKey;
+                    keyEncryptor =
+                            raw ->
+                                    com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor
+                                            .encrypt(raw, capturedKey);
+                }
+            }
+
+            commandService.configure(
+                    new ConsentAdminCommandConfig(eventService, dsarService, keyEncryptor));
             queryService.configure(jooqConfig);
             retainedJooqConfig = jooqConfig;
+            retainedDsarService = dsarService;
 
             LOG.info(
                     "Operio REST API: command service (event-sourced) and query service (jOOQ)"
@@ -298,31 +333,27 @@ public class OperioProducers {
         DefaultTenantService tenantService =
                 builder.buildTenantService(commandService, effectiveQueryService);
 
-        // -- DSAR key encryptor (envelope encryption for per-subject keys) ----
-        if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
-            config.platformDb()
-                    .ifPresent(
-                            platformDb -> {
-                                String encKey =
-                                        platformDb
-                                                .encryptionKey()
-                                                .filter(k -> !k.isBlank())
-                                                .orElse(null);
-                                if (encKey != null) {
-                                    tenantService.setKeyEncryptor(
-                                            raw ->
-                                                    com.koostack.operio.plugin.platform.jooq.crypto
-                                                            .FieldEncryptor.encrypt(raw, encKey));
-                                }
-                            });
+        // Wire retained DSAR deps onto DefaultTenantService for backward compat
+        // (legacy endpoints that still use tenantService directly).
+        if (retainedDsarService != null) {
+            tenantService.setSubjectDsarService(retainedDsarService);
+            LOG.info("Operio REST API: SubjectDsarService wired (jooq)");
         }
 
-        // -- SubjectDsarService (DSAR key persistence — production only) ------
-        if (retainedJooqConfig != null) {
-            var dsarService = new com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService();
-            dsarService.configure(retainedJooqConfig);
-            tenantService.setSubjectDsarService(dsarService);
-            LOG.info("Operio REST API: SubjectDsarService wired (jooq)");
+        // Register Redis-backed query actuators on the consent query dispatcher.
+        // These depend on ConsentDecisionService which is only available after build.
+        var consentDecisionService = tenantService.consentService();
+        if (consentDecisionService != null && queryService instanceof JooqConsentAdminQueryDispatcher qd) {
+            qd.registerActuator(
+                    EvaluateConsentQueryActuator.EvaluateConsentQuery.class,
+                    new EvaluateConsentQueryActuator(consentDecisionService));
+            qd.registerActuator(
+                    CountSubjectCacheKeysQueryActuator.CountSubjectCacheKeysQuery.class,
+                    new CountSubjectCacheKeysQueryActuator(consentDecisionService));
+            qd.registerActuator(
+                    DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery.class,
+                    new DeleteSubjectCacheKeysQueryActuator(consentDecisionService));
+            LOG.info("Operio REST API: Redis-backed query actuators registered (evaluate, cache count, cache delete)");
         }
 
         LOG.info("Operio REST API: initialized successfully (appName={})", tenantService.appName());
@@ -404,6 +435,22 @@ public class OperioProducers {
             return consentAdminCommandService;
         }
         LOG.debug("Operio REST API: consent CommandDispatcher not available (embedded mode)");
+        return null;
+    }
+
+    /**
+     * Produces the consent admin {@link QueryDispatcher} for direct query-record dispatch from REST
+     * resources. Returns {@code null} in embedded mode where the consent query service is not
+     * configured as a dispatcher.
+     */
+    @Produces
+    @ApplicationScoped
+    @Named("consentQueryDispatcher")
+    public QueryDispatcher consentQueryDispatcher() {
+        if (consentAdminQueryDispatcher != null) {
+            return consentAdminQueryDispatcher;
+        }
+        LOG.debug("Operio REST API: consent QueryDispatcher not available (embedded mode)");
         return null;
     }
 

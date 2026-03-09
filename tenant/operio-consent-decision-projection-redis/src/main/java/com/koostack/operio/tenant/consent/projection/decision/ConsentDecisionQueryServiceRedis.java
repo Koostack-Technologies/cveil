@@ -361,4 +361,20 @@ public class ConsentDecisionQueryServiceRedis
                             + "Call configure() first.");
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Cache key operations (SCAN-based, delegated to repository)
+    // -----------------------------------------------------------------------
+
+    @Override
+    public long countCachedKeysForSubject(String subject) {
+        ensureConfigured();
+        return graphRepo.countCachedKeysForSubject(subject);
+    }
+
+    @Override
+    public long deleteCachedKeysForSubject(String subject) {
+        ensureConfigured();
+        return graphRepo.deleteCachedKeysForSubject(subject);
+    }
 }

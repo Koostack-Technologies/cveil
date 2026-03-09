@@ -165,21 +165,43 @@ public class PlatformResource {
                         ? request.billingEmail()
                         : request.tenantId() + "@billing.operio.local";
 
-        // Multi-dispatch: sequential commands across bounded contexts
+        // Multi-dispatch saga: sequential commands across bounded contexts.
+        // Each step is independently atomic (event-sourced), but the sequence
+        // as a whole is NOT transactional. If a later step fails, earlier
+        // events remain published. This is acceptable because:
+        //   - downstream projections are idempotent
+        //   - retry of the full request is safe (aggregate hydration detects duplicates)
+        //   - partial state is logged for manual remediation
+
         // 1. Create tenant (uniqueness enforced via aggregate hydration)
         coreDispatcher.dispatch(
                 new CreateTenantCommandActuator.CreateTenantCommand(
                         request.tenantId(), request.displayName(), request.plan()));
 
-        // 2. Create billing profile
-        billingDispatcher.dispatch(
-                new CreateBillingProfileCommandActuator.CreateBillingProfileCommand(
-                        request.tenantId(), billingEmail));
+        try {
+            // 2. Create billing profile
+            billingDispatcher.dispatch(
+                    new CreateBillingProfileCommandActuator.CreateBillingProfileCommand(
+                            request.tenantId(), billingEmail));
 
-        // 3. Create subscription (plan validation + duplicate check via aggregate hydration)
-        billingDispatcher.dispatch(
-                new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
-                        request.tenantId(), request.plan()));
+            // 3. Create subscription (plan validation + duplicate check via aggregate hydration)
+            billingDispatcher.dispatch(
+                    new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
+                            request.tenantId(), request.plan()));
+        } catch (Exception e) {
+            LOG.error(
+                    "Tenant {} created but billing setup failed — manual remediation required: {}",
+                    request.tenantId(),
+                    e.getMessage(),
+                    e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.internal(
+                                    "Tenant created but billing setup failed. "
+                                            + "Contact support with tenant ID: "
+                                            + request.tenantId()))
+                    .build();
+        }
 
         // 4. Emit provisioning started
         coreDispatcher.dispatch(

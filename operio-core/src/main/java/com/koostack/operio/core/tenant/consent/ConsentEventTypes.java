@@ -57,4 +57,5 @@ public final class ConsentEventTypes {
 
     // -- DsarAggregate --------------------------------------------------------
     public static final String SUBJECT_AUDIT_DELETED = "consent.dsar.audit-deleted";
+    public static final String SUBJECT_SHREDDED = "consent.dsar.shredded";
 }

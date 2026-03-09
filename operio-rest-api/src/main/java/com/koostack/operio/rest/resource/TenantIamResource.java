@@ -68,17 +68,21 @@ public class TenantIamResource {
                 request.email());
 
         var result =
-                tenantIam
-                        .commandService()
-                        .registerUser(
-                                tenantId,
-                                request.username(),
-                                request.email(),
-                                request.fullName(),
-                                request.roles(),
-                                request.temporaryPassword());
+                (TenantRegisterUserCommandActuator.RegisterUserResult)
+                        tenantIam
+                                .commandDispatcher()
+                                .dispatch(
+                                        new TenantRegisterUserCommandActuator.RegisterUserCommand(
+                                                tenantId,
+                                                request.username(),
+                                                request.email(),
+                                                request.fullName(),
+                                                request.roles(),
+                                                request.temporaryPassword()));
         return Response.status(Response.Status.CREATED)
-                .entity(UserRegisteredResponse.fromTenant(result))
+                .entity(
+                        new UserRegisteredResponse(
+                                result.username(), result.email(), result.realmId()))
                 .build();
     }
 
@@ -161,7 +165,9 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/suspend tenant={}", username, tenantId);
-        tenantIam.commandService().suspendUser(tenantId, username);
+        tenantIam.commandDispatcher()
+                .dispatch(new TenantSuspendUserCommandActuator.SuspendUserCommand(
+                        tenantId, username));
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
@@ -175,7 +181,9 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/activate tenant={}", username, tenantId);
-        tenantIam.commandService().activateUser(tenantId, username);
+        tenantIam.commandDispatcher()
+                .dispatch(new TenantActivateUserCommandActuator.ActivateUserCommand(
+                        tenantId, username));
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
@@ -207,7 +215,9 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/roles role={} tenant={}", username, request.role(), tenantId);
-        tenantIam.commandService().assignRole(tenantId, username, request.role());
+        tenantIam.commandDispatcher()
+                .dispatch(new TenantAssignRoleCommandActuator.AssignRoleCommand(
+                        tenantId, username, request.role()));
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
@@ -223,7 +233,9 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("DELETE /iam/users/{}/roles/{} tenant={}", username, role, tenantId);
-        tenantIam.commandService().removeRole(tenantId, username, role);
+        tenantIam.commandDispatcher()
+                .dispatch(new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
+                        tenantId, username, role));
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -248,11 +260,17 @@ public class TenantIamResource {
         LOG.debug("POST /iam/service-accounts name={} tenant={}", request.name(), tenantId);
 
         var result =
-                tenantIam
-                        .commandService()
-                        .createServiceAccount(tenantId, request.name(), request.roles());
+                (TenantCreateServiceAccountCommandActuator.CreateServiceAccountResult)
+                        tenantIam
+                                .commandDispatcher()
+                                .dispatch(
+                                        new TenantCreateServiceAccountCommandActuator
+                                                .CreateServiceAccountCommand(
+                                                tenantId, request.name(), request.roles()));
         return Response.status(Response.Status.CREATED)
-                .entity(ServiceAccountCreatedResponse.fromTenant(result))
+                .entity(
+                        new ServiceAccountCreatedResponse(
+                                result.clientId(), result.clientSecret(), result.realmId()))
                 .build();
     }
 
@@ -313,7 +331,9 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("DELETE /iam/service-accounts/{} tenant={}", clientId, tenantId);
-        tenantIam.commandService().revokeServiceAccount(tenantId, clientId);
+        tenantIam.commandDispatcher()
+                .dispatch(new TenantRevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                        tenantId, clientId));
         return Response.ok(MessageResponse.of("Service account revoked")).build();
     }
 
@@ -338,10 +358,10 @@ public class TenantIamResource {
         try {
             var result =
                     (com.koostack.operio.core.models.AuthResult)
-                            tenantIamDispatcher()
+                            tenantIam
+                                    .commandDispatcher()
                                     .dispatch(
-                                            new com.koostack.operio.tenant.iam.kc
-                                                    .TenantAuthenticateCommandActuator
+                                            new TenantAuthenticateCommandActuator
                                                     .AuthenticateCommand(
                                                     tenantId,
                                                     request.email(),
@@ -366,10 +386,10 @@ public class TenantIamResource {
         try {
             var result =
                     (com.koostack.operio.core.models.AuthResult)
-                            tenantIamDispatcher()
+                            tenantIam
+                                    .commandDispatcher()
                                     .dispatch(
-                                            new com.koostack.operio.tenant.iam.kc
-                                                    .TenantRefreshTokenCommandActuator
+                                            new TenantRefreshTokenCommandActuator
                                                     .RefreshTokenCommand(
                                                     tenantId, request.refreshToken()));
             return Response.ok(AuthResponse.from(result)).build();
@@ -388,10 +408,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("POST /iam/logout tenant={}", tenantId);
-        tenantIamDispatcher()
+        tenantIam
+                .commandDispatcher()
                 .dispatch(
-                        new com.koostack.operio.tenant.iam.kc.TenantLogoutCommandActuator
-                                .LogoutCommand(tenantId, request.refreshToken()));
+                        new TenantLogoutCommandActuator.LogoutCommand(
+                                tenantId, request.refreshToken()));
         return Response.ok(MessageResponse.of("Logged out")).build();
     }
 
@@ -417,14 +438,5 @@ public class TenantIamResource {
             throw new IllegalStateException(
                     "Tenant IAM services not available — is Keycloak configured?");
         }
-    }
-
-    private com.koostack.operio.core.cqrs.CommandDispatcher tenantIamDispatcher() {
-        var cmdSvc = tenantIam.commandService();
-        if (cmdSvc instanceof com.koostack.operio.core.cqrs.CommandDispatcher cd) {
-            return cd;
-        }
-        throw new IllegalStateException(
-                "Tenant IAM command service does not implement CommandDispatcher");
     }
 }

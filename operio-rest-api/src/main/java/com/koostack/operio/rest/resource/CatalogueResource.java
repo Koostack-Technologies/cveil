@@ -1,11 +1,25 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.CategoryView;
 import com.koostack.operio.core.models.EntityView;
 import com.koostack.operio.core.models.FieldView;
 import com.koostack.operio.plugin.consent.jooq.AssignFieldCategoryCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.GetCategoryQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetEntityQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.ListCategoriesQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.ListEntitiesQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.ListFieldsQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterCategoryCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterEntityCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterFieldCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveCategoryCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveEntityCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveFieldCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UnassignFieldCategoryCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UpdateCategoryCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UpdateEntityCommandActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
@@ -26,6 +40,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
+import java.util.Optional;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -48,11 +63,13 @@ public class CatalogueResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(CatalogueResource.class);
 
-    @Inject TenantService tenantService;
-
     @Inject
     @Named("consentDispatcher")
     CommandDispatcher consentDispatcher;
+
+    @Inject
+    @Named("consentQueryDispatcher")
+    QueryDispatcher consentQueryDispatcher;
 
     // -------------------------------------------------------------------
     // Fields
@@ -80,7 +97,8 @@ public class CatalogueResource {
     })
     public Response listFields(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<FieldView> fields = tenantService.listFields();
+        List<FieldView> fields =
+                consentQueryDispatcher.dispatch(new ListFieldsQueryActuator.ListFieldsQuery());
         return Response.ok(fields).build();
     }
 
@@ -99,8 +117,9 @@ public class CatalogueResource {
     })
     public Response registerField(@Context SecurityContext sc, @Valid RegisterFieldRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerField(
-                req.fieldName(), req.entityName(), req.description(), req.entityDescription());
+        consentDispatcher.dispatch(
+                new RegisterFieldCommandActuator.RegisterFieldCommand(
+                        req.fieldName(), req.entityName(), req.description(), req.entityDescription()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Field registered: " + req.fieldName()))
                 .build();
@@ -124,7 +143,8 @@ public class CatalogueResource {
             @PathParam("entityName") String entityName,
             @PathParam("fieldName") String fieldName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeField(fieldName, entityName);
+        consentDispatcher.dispatch(
+                new RemoveFieldCommandActuator.RemoveFieldCommand(fieldName, entityName));
         return Response.ok(MessageResponse.of("Field removed")).build();
     }
 
@@ -180,7 +200,9 @@ public class CatalogueResource {
             @PathParam("fieldName") String fieldName,
             @PathParam("categoryName") String categoryName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.unassignFieldCategory(fieldName, entityName, categoryName);
+        consentDispatcher.dispatch(
+                new UnassignFieldCategoryCommandActuator.UnassignFieldCategoryCommand(
+                        fieldName, entityName, categoryName));
         return Response.ok(MessageResponse.of("Category unassigned")).build();
     }
 
@@ -204,7 +226,8 @@ public class CatalogueResource {
     })
     public Response listEntities(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<EntityView> entities = tenantService.listEntities();
+        List<EntityView> entities =
+                consentQueryDispatcher.dispatch(new ListEntitiesQueryActuator.ListEntitiesQuery());
         return Response.ok(entities).build();
     }
 
@@ -224,8 +247,9 @@ public class CatalogueResource {
     public Response getEntity(
             @Context SecurityContext sc, @PathParam("entityName") String entityName) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return tenantService
-                .getEntity(entityName)
+        return ((Optional<EntityView>)
+                        consentQueryDispatcher.dispatch(
+                                new GetEntityQueryActuator.GetEntityQuery(entityName)))
                 .map(e -> Response.ok(e).build())
                 .orElse(
                         Response.status(Response.Status.NOT_FOUND)
@@ -250,7 +274,9 @@ public class CatalogueResource {
     })
     public Response registerEntity(@Context SecurityContext sc, @Valid RegisterEntityRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerEntity(req.entityName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterEntityCommandActuator.RegisterEntityCommand(
+                        req.entityName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Entity registered: " + req.entityName()))
                 .build();
@@ -274,7 +300,8 @@ public class CatalogueResource {
             @PathParam("entityName") String entityName,
             @Valid UpdateEntityRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.updateEntity(entityName, req.description());
+        consentDispatcher.dispatch(
+                new UpdateEntityCommandActuator.UpdateEntityCommand(entityName, req.description()));
         return Response.ok(MessageResponse.of("Entity updated: " + entityName)).build();
     }
 
@@ -296,7 +323,24 @@ public class CatalogueResource {
     public Response removeEntity(
             @Context SecurityContext sc, @PathParam("entityName") String entityName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeEntity(entityName);
+        // Invariant: reject removal if fields still reference this entity
+        // TODO(consent-bizlogic-migrate): move this check into RemoveEntityCommandActuator
+        List<FieldView> fields =
+                consentQueryDispatcher.dispatch(new ListFieldsQueryActuator.ListFieldsQuery());
+        boolean hasFields =
+                fields.stream()
+                        .anyMatch(
+                                f ->
+                                        f.entity() != null
+                                                && entityName.equals(f.entity().entityName()));
+        if (hasFields) {
+            throw new IllegalStateException(
+                    "Cannot remove entity '"
+                            + entityName
+                            + "' — it still has fields assigned. Remove them first.");
+        }
+        consentDispatcher.dispatch(
+                new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
         return Response.ok(MessageResponse.of("Entity removed")).build();
     }
 
@@ -320,7 +364,9 @@ public class CatalogueResource {
     })
     public Response listCategories(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<CategoryView> categories = tenantService.listCategories();
+        List<CategoryView> categories =
+                consentQueryDispatcher.dispatch(
+                        new ListCategoriesQueryActuator.ListCategoriesQuery());
         return Response.ok(categories).build();
     }
 
@@ -340,8 +386,9 @@ public class CatalogueResource {
     public Response getCategory(
             @Context SecurityContext sc, @PathParam("categoryName") String categoryName) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return tenantService
-                .getCategory(categoryName)
+        return ((Optional<CategoryView>)
+                        consentQueryDispatcher.dispatch(
+                                new GetCategoryQueryActuator.GetCategoryQuery(categoryName)))
                 .map(c -> Response.ok(c).build())
                 .orElse(
                         Response.status(Response.Status.NOT_FOUND)
@@ -367,7 +414,9 @@ public class CatalogueResource {
     public Response registerCategory(
             @Context SecurityContext sc, @Valid RegisterCategoryRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerCategory(req.categoryName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterCategoryCommandActuator.RegisterCategoryCommand(
+                        req.categoryName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Category registered: " + req.categoryName()))
                 .build();
@@ -391,7 +440,9 @@ public class CatalogueResource {
             @PathParam("categoryName") String categoryName,
             @Valid UpdateCategoryRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.updateCategory(categoryName, req.description());
+        consentDispatcher.dispatch(
+                new UpdateCategoryCommandActuator.UpdateCategoryCommand(
+                        categoryName, req.description()));
         return Response.ok(MessageResponse.of("Category updated: " + categoryName)).build();
     }
 
@@ -413,7 +464,27 @@ public class CatalogueResource {
     public Response removeCategory(
             @Context SecurityContext sc, @PathParam("categoryName") String categoryName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeCategory(categoryName);
+        // Invariant: reject removal if fields still reference this category
+        // TODO(consent-bizlogic-migrate): move this check into RemoveCategoryCommandActuator
+        List<FieldView> allFields =
+                consentQueryDispatcher.dispatch(new ListFieldsQueryActuator.ListFieldsQuery());
+        boolean hasAssignments =
+                allFields.stream()
+                        .anyMatch(
+                                f ->
+                                        f.categories().stream()
+                                                .anyMatch(
+                                                        c ->
+                                                                categoryName.equals(
+                                                                        c.categoryName())));
+        if (hasAssignments) {
+            throw new IllegalStateException(
+                    "Cannot remove category '"
+                            + categoryName
+                            + "' — it is still assigned to fields. Unassign it first.");
+        }
+        consentDispatcher.dispatch(
+                new RemoveCategoryCommandActuator.RemoveCategoryCommand(categoryName));
         return Response.ok(MessageResponse.of("Category removed")).build();
     }
 }

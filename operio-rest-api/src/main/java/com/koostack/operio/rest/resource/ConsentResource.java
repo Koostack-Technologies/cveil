@@ -1,14 +1,32 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.TenantService;
+import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
-import com.koostack.operio.core.models.ErasureReceipt;
+import com.koostack.operio.core.models.PurposeView;
+import com.koostack.operio.core.models.RequestContext;
 import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.models.SubjectView;
 import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.plugin.consent.jooq.CountSubjectCacheKeysQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.DeleteSubjectAuditCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.EvaluateConsentQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.FindPolicyQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetSubjectConsentQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetSubjectQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GrantConsentCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.ListSubjectsQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.DeleteSubjectAuditCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RegisterSubjectCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RemoveSubjectCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RevokeAllConsentCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.RevokeConsentCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.ShredSubjectCommandActuator;
+import com.koostack.operio.plugin.consent.jooq.UpdateSubjectCommandActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
@@ -28,6 +46,7 @@ import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -43,7 +62,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -88,7 +109,13 @@ public class ConsentResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConsentResource.class);
 
-    @Inject TenantService tenantService;
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
+
+    @Inject
+    @Named("consentQueryDispatcher")
+    QueryDispatcher consentQueryDispatcher;
 
     @Inject OperioConfig operioConfig;
 
@@ -143,8 +170,21 @@ public class ConsentResource {
                 request.subject(),
                 request.scope());
 
-        tenantService.grantConsent(
-                request.subject(), request.scope().toModel(), request.expiresAt());
+        ConsentScope scope = request.scope().toModel();
+        var policy = resolvePolicy(scope);
+        consentDispatcher.dispatch(
+                new GrantConsentCommandActuator.GrantConsentCommand(
+                        request.subject(),
+                        policy.policyId(),
+                        scope.purposeName(),
+                        policy.policyType(),
+                        policy.field() != null ? policy.field().fieldName() : null,
+                        policy.field() != null ? policy.field().entityName() : null,
+                        policy.category() != null ? policy.category().categoryName() : null,
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent(),
+                        request.expiresAt()));
 
         return Response.ok(MessageResponse.of("Consent granted")).build();
     }
@@ -195,7 +235,20 @@ public class ConsentResource {
                 request.subject(),
                 request.scope());
 
-        tenantService.revokeConsent(request.subject(), request.scope().toModel());
+        ConsentScope scope = request.scope().toModel();
+        var policy = resolvePolicy(scope);
+        consentDispatcher.dispatch(
+                new RevokeConsentCommandActuator.RevokeConsentCommand(
+                        request.subject(),
+                        policy.policyId(),
+                        scope.purposeName(),
+                        policy.policyType(),
+                        policy.field() != null ? policy.field().fieldName() : null,
+                        policy.field() != null ? policy.field().entityName() : null,
+                        policy.category() != null ? policy.category().categoryName() : null,
+                        RequestContext.actor(),
+                        RequestContext.ipAddress(),
+                        RequestContext.userAgent()));
 
         return Response.ok(MessageResponse.of("Consent revoked")).build();
     }
@@ -251,7 +304,44 @@ public class ConsentResource {
         List<BatchConsentEntry> entries =
                 request.grants().stream().map(dto -> dto.toModel()).toList();
 
-        BatchConsentResult result = tenantService.grantAllConsent(request.subject(), entries);
+        int succeeded = 0;
+        List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
+        for (int i = 0; i < entries.size(); i++) {
+            BatchConsentEntry entry = entries.get(i);
+            if (entry == null || entry.scope() == null) {
+                errors.add(
+                        new BatchConsentResult.BatchItemError(
+                                i,
+                                null,
+                                entry == null
+                                        ? "Null entry in batch"
+                                        : "Null scope in batch entry"));
+                continue;
+            }
+            try {
+                var policy = resolvePolicy(entry.scope());
+                consentDispatcher.dispatch(
+                        new GrantConsentCommandActuator.GrantConsentCommand(
+                                request.subject(),
+                                policy.policyId(),
+                                entry.scope().purposeName(),
+                                policy.policyType(),
+                                policy.field() != null ? policy.field().fieldName() : null,
+                                policy.field() != null ? policy.field().entityName() : null,
+                                policy.category() != null ? policy.category().categoryName() : null,
+                                RequestContext.actor(),
+                                RequestContext.ipAddress(),
+                                RequestContext.userAgent(),
+                                entry.expiresAt()));
+                succeeded++;
+            } catch (Exception e) {
+                errors.add(
+                        new BatchConsentResult.BatchItemError(
+                                i, entry.scope(), e.getMessage()));
+            }
+        }
+        BatchConsentResult result =
+                new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
 
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
@@ -307,7 +397,43 @@ public class ConsentResource {
         List<BatchConsentEntry> entries =
                 request.revokes().stream().map(dto -> dto.toModel()).toList();
 
-        BatchConsentResult result = tenantService.revokeAllConsent(request.subject(), entries);
+        int succeeded = 0;
+        List<BatchConsentResult.BatchItemError> errors = new ArrayList<>();
+        for (int i = 0; i < entries.size(); i++) {
+            BatchConsentEntry entry = entries.get(i);
+            if (entry == null || entry.scope() == null) {
+                errors.add(
+                        new BatchConsentResult.BatchItemError(
+                                i,
+                                null,
+                                entry == null
+                                        ? "Null entry in batch"
+                                        : "Null scope in batch entry"));
+                continue;
+            }
+            try {
+                var policy = resolvePolicy(entry.scope());
+                consentDispatcher.dispatch(
+                        new RevokeConsentCommandActuator.RevokeConsentCommand(
+                                request.subject(),
+                                policy.policyId(),
+                                entry.scope().purposeName(),
+                                policy.policyType(),
+                                policy.field() != null ? policy.field().fieldName() : null,
+                                policy.field() != null ? policy.field().entityName() : null,
+                                policy.category() != null ? policy.category().categoryName() : null,
+                                RequestContext.actor(),
+                                RequestContext.ipAddress(),
+                                RequestContext.userAgent()));
+                succeeded++;
+            } catch (Exception e) {
+                errors.add(
+                        new BatchConsentResult.BatchItemError(
+                                i, entry.scope(), e.getMessage()));
+            }
+        }
+        BatchConsentResult result =
+                new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
 
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
@@ -368,7 +494,8 @@ public class ConsentResource {
         Set<ConsentScope> coreScopes =
                 request.scopes().stream().map(ConsentScopeDto::toModel).collect(Collectors.toSet());
 
-        ConsentResponse response = tenantService.evaluateConsent(subjectId, coreScopes);
+        ConsentResponse response = consentQueryDispatcher.dispatch(
+                new EvaluateConsentQueryActuator.EvaluateConsentQuery(subjectId, coreScopes));
 
         return Response.ok(EvaluateResponse.fromModel(response)).build();
     }
@@ -419,7 +546,8 @@ public class ConsentResource {
 
         LOG.debug("GET /subjects/{}/summary", subjectId);
 
-        SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
+        SubjectConsentView consent = consentQueryDispatcher.dispatch(
+                new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
 
         return Response.ok(consent).build();
     }
@@ -470,7 +598,8 @@ public class ConsentResource {
 
         // In the new schema, the event stream is the historical record.
         // The consent ledger shows current state per subject.
-        SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
+        SubjectConsentView consent = consentQueryDispatcher.dispatch(
+                new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
         return Response.ok(consent).build();
     }
 
@@ -545,10 +674,11 @@ public class ConsentResource {
         LOG.debug("GET /subjects/{}/export", subjectId);
 
         try {
-            SubjectConsentView consent = tenantService.getSubjectConsent(subjectId);
+            SubjectConsentView consent = consentQueryDispatcher.dispatch(
+                    new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
 
-            // Count cached Redis keys for the subject (if applicable)
-            long cachedKeyCount = tenantService.countCachedKeysForSubject(subjectId);
+            long cachedKeyCount = consentQueryDispatcher.dispatch(
+                    new CountSubjectCacheKeysQueryActuator.CountSubjectCacheKeysQuery(subjectId));
 
             SubjectDataExport export =
                     new SubjectDataExport(subjectId, consent, cachedKeyCount, Instant.now());
@@ -656,16 +786,73 @@ public class ConsentResource {
         String requestId = UUID.randomUUID().toString();
 
         try {
-            ErasureReceipt receipt = tenantService.eraseSubject(subjectId, requestId);
+            // Multi-dispatch saga: sequential commands across aggregates.
+            // Follows the same pattern as PlatformResource.createTenant().
+            // Each step is independently atomic (event-sourced). If a later
+            // step fails, earlier events remain published — partial state is
+            // logged for manual remediation.
+            String status = "PENDING_SHRED";
+
+            // Step 1: Revoke all consent for the subject
+            long ledgerEntriesRevoked = 0;
+            try {
+                SubjectConsentView consent = consentQueryDispatcher.dispatch(
+                        new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
+                if (consent != null && consent.entries() != null) {
+                    ledgerEntriesRevoked = consent.entries().size();
+                }
+                consentDispatcher.dispatch(
+                        new RevokeAllConsentCommandActuator.RevokeAllConsentCommand(
+                                subjectId,
+                                RequestContext.actor(),
+                                RequestContext.ipAddress(),
+                                RequestContext.userAgent()));
+            } catch (Exception e) {
+                LOG.error("eraseSubject: failed to revoke consent for {}", subjectId, e);
+                status = "PARTIAL_FAILURE";
+            }
+
+            // Step 2: Delete cached consent-decision keys
+            long cachedKeysDeleted = 0;
+            try {
+                cachedKeysDeleted = consentQueryDispatcher.dispatch(
+                        new DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery(subjectId));
+            } catch (Exception e) {
+                LOG.error("eraseSubject: failed to delete cached keys for {}", subjectId, e);
+                status = "PARTIAL_FAILURE";
+            }
+
+            // Step 3: Remove subject entity
+            try {
+                consentDispatcher.dispatch(
+                        new RemoveSubjectCommandActuator.RemoveSubjectCommand(subjectId));
+            } catch (Exception e) {
+                LOG.error("eraseSubject: failed to remove subject {}", subjectId, e);
+                status = "PARTIAL_FAILURE";
+            }
+
+            // Step 4: Log DSAR audit event
+            try {
+                consentDispatcher.dispatch(
+                        new DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand(
+                                subjectId,
+                                requestId,
+                                RequestContext.actor(),
+                                RequestContext.ipAddress(),
+                                RequestContext.userAgent()));
+            } catch (Exception e) {
+                LOG.error("eraseSubject: failed to log DSAR audit for {}", subjectId, e);
+                status = "PARTIAL_FAILURE";
+            }
 
             DsarDeletionReceipt dto =
                     new DsarDeletionReceipt(
-                            receipt.subjectId(),
-                            receipt.requestId(),
-                            receipt.ledgerEntriesRevoked(),
-                            receipt.cachedKeysDeleted(),
-                            receipt.status(),
-                            receipt.completedAt());
+                            subjectId,
+                            requestId,
+                            ledgerEntriesRevoked,
+                            cachedKeysDeleted,
+                            status,
+                            Instant.now());
 
             return Response.ok(dto).build();
         } catch (Exception e) {
@@ -699,7 +886,8 @@ public class ConsentResource {
     })
     public Response listSubjects(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<SubjectView> subjects = tenantService.listSubjects();
+        List<SubjectView> subjects = consentQueryDispatcher.dispatch(
+                new ListSubjectsQueryActuator.ListSubjectsQuery());
         return Response.ok(subjects).build();
     }
 
@@ -730,8 +918,8 @@ public class ConsentResource {
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return tenantService
-                .getSubject(name)
+        return ((Optional<SubjectView>) consentQueryDispatcher.dispatch(
+                new GetSubjectQueryActuator.GetSubjectQuery(name)))
                 .map(s -> Response.ok(s).build())
                 .orElse(
                         Response.status(Response.Status.NOT_FOUND)
@@ -763,7 +951,9 @@ public class ConsentResource {
     public Response registerSubject(
             @Context SecurityContext sc, @Valid RegisterSubjectRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.registerSubject(req.subjectName(), req.description());
+        consentDispatcher.dispatch(
+                new RegisterSubjectCommandActuator.RegisterSubjectCommand(
+                        req.subjectName(), req.description()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Subject registered: " + req.subjectName()))
                 .build();
@@ -790,7 +980,8 @@ public class ConsentResource {
                     String name,
             @Valid UpdateSubjectRequest req) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.updateSubject(name, req.description());
+        consentDispatcher.dispatch(
+                new UpdateSubjectCommandActuator.UpdateSubjectCommand(name, req.description()));
         return Response.ok(MessageResponse.of("Subject updated: " + name)).build();
     }
 
@@ -823,7 +1014,7 @@ public class ConsentResource {
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
-        tenantService.removeSubject(name);
+        consentDispatcher.dispatch(new RemoveSubjectCommandActuator.RemoveSubjectCommand(name));
         return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
     }
 
@@ -859,7 +1050,10 @@ public class ConsentResource {
                     String name) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
 
-        if (!tenantService.allEventsPublishedForSubject(name)) {
+        ShredSubjectCommandActuator.ShredSubjectResult result =
+                consentDispatcher.dispatch(
+                        new ShredSubjectCommandActuator.ShredSubjectCommand(name));
+        if (!result.shredded()) {
             return Response.status(Response.Status.CONFLICT)
                     .entity(
                             ErrorResponse.of(
@@ -871,7 +1065,34 @@ public class ConsentResource {
                     .build();
         }
 
-        tenantService.shredSubject(name);
         return Response.ok(MessageResponse.of("DSAR key shredded for subject: " + name)).build();
+    }
+
+    // -------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------
+
+    private PurposeView.PolicyView resolvePolicy(ConsentScope scope) {
+        String policyType = isWildcardOrBlank(scope.fieldName()) ? "CATEGORY" : "FIELD";
+        PurposeView.PolicyView policy =
+                consentQueryDispatcher.dispatch(
+                        new FindPolicyQueryActuator.FindPolicyQuery(
+                                scope.purposeName(),
+                                policyType,
+                                isWildcardOrBlank(scope.fieldName()) ? null : scope.fieldName(),
+                                isWildcardOrBlank(scope.entityName()) ? null : scope.entityName(),
+                                isWildcardOrBlank(scope.category()) ? null : scope.category()));
+        if (policy == null) {
+            throw new IllegalArgumentException(
+                    "No matching policy found for scope: "
+                            + scope
+                            + " — policies must be created before consent can be granted or"
+                            + " revoked");
+        }
+        return policy;
+    }
+
+    private static boolean isWildcardOrBlank(String value) {
+        return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
     }
 }
