@@ -400,7 +400,8 @@ public class OperioProducers {
     @Unremovable
     @SuppressWarnings("rawtypes")
     public TokenValidationService tokenValidationService(Operio operio) {
-        // Operio parameter ensures CDI initialization ordering
+        // Force CDI proxy resolution so operioInit() completes first.
+        operio.appName();
         if (tokenVerifier != null) {
             LOG.debug("Operio REST API: TokenValidationService available");
             return tokenVerifier;
@@ -418,7 +419,9 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public PlatformCqrsHolder platformCqrsHolder(Operio operio) {
-        // Operio parameter ensures CDI initialization ordering
+        // Force CDI proxy resolution so operioInit() completes before we
+        // snapshot the infrastructure fields into the immutable holder.
+        operio.appName();
         LOG.debug(
                 "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}, tvs={}",
                 iamCommandService != null,
@@ -508,6 +511,8 @@ public class OperioProducers {
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
     public TenantIamHolder tenantIamHolder(Operio operio) {
+        // Force CDI proxy resolution so operioInit() completes first.
+        operio.appName();
         LOG.debug(
                 "TenantIamHolder — cmd={}, query={}",
                 tenantIamCommandService != null,
@@ -687,6 +692,10 @@ public class OperioProducers {
     @ApplicationScoped
     @io.quarkus.runtime.Startup
     public TenantStreamConsumer tenantStreamConsumer(Operio operio) {
+        // Force CDI proxy resolution so operioInit() completes before we
+        // inspect the infrastructure fields it populates (adminRedisPool, etc.).
+        operio.appName();
+
         if (adminRedisPool == null || tenantAwareJedisProvider == null) {
             LOG.info("Operio REST API: tenant stream consumer not wired (embedded mode)");
             return null;

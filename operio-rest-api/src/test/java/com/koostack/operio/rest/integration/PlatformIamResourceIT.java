@@ -122,6 +122,9 @@ class PlatformIamResourceIT {
         @Order(1)
         @DisplayName("Register platform user → 201")
         void registerUser() {
+            if (support == null) {
+                support = new IntegrationTestSupport(config);
+            }
             userEmail = "platform-admin@operio-test.com";
             username = "platform-admin";
 
