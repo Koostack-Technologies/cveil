@@ -8,9 +8,7 @@ import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
-/**
- * Query actuator that retrieves a single tenant by business identifier.
- */
+/** Query actuator that retrieves a single tenant by business identifier. */
 public class GetTenantQueryActuator
         implements QueryActuator<GetTenantQueryActuator.GetTenantQuery, TenantInfo> {
 
@@ -18,7 +16,8 @@ public class GetTenantQueryActuator
     private final RetryConfig retryConfig;
     private final CoreRecordMapper mapper;
 
-    public GetTenantQueryActuator(DSLContext dsl, RetryConfig retryConfig, CoreRecordMapper mapper) {
+    public GetTenantQueryActuator(
+            DSLContext dsl, RetryConfig retryConfig, CoreRecordMapper mapper) {
         this.dsl = dsl;
         this.retryConfig = retryConfig;
         this.mapper = mapper;

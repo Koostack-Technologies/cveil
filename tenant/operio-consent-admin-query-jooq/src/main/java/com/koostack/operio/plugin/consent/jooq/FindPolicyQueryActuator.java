@@ -6,9 +6,7 @@ import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.PurposeView;
 
-/**
- * Query actuator that looks up a policy by purpose, type, and field/category coordinates.
- */
+/** Query actuator that looks up a policy by purpose, type, and field/category coordinates. */
 public class FindPolicyQueryActuator
         implements QueryActuator<FindPolicyQueryActuator.FindPolicyQuery, PurposeView.PolicyView> {
 

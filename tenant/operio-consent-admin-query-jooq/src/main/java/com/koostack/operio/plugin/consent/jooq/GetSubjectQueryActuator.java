@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.SubjectView;
 import java.util.Optional;
 
-/**
- * Query actuator that retrieves a single subject by name.
- */
+/** Query actuator that retrieves a single subject by name. */
 public class GetSubjectQueryActuator
         implements QueryActuator<GetSubjectQueryActuator.GetSubjectQuery, Optional<SubjectView>> {
 

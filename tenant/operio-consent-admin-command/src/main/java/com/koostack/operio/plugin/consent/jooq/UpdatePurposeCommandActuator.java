@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -31,7 +31,6 @@ public class UpdatePurposeCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG = LoggerFactory.getLogger(UpdatePurposeCommandActuator.class);
 
     public record UpdatePurposeCommand(String purposeName, String description) {}
@@ -53,9 +52,10 @@ public class UpdatePurposeCommandActuator
 
         var payload =
                 new PurposeUpdatedEvent(command.purposeName(), command.description(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.PURPOSE_UPDATED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.PURPOSE_UPDATED, key, payload));
         LOG.info("Purpose updated: {}", command.purposeName());
         return null;
     }

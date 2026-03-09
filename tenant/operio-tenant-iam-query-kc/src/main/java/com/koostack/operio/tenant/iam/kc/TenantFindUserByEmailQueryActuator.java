@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that finds a tenant user by email address.
- */
+/** Query actuator that finds a tenant user by email address. */
 public class TenantFindUserByEmailQueryActuator
         implements QueryActuator<
                 TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery, IdpUser> {
@@ -32,7 +30,7 @@ public class TenantFindUserByEmailQueryActuator
      * Query input for finding a tenant user by email.
      *
      * @param tenantId the tenant identifier
-     * @param email    the email to search for
+     * @param email the email to search for
      */
     public record TenantFindUserByEmailQuery(String tenantId, String email) {}
 

@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.CategoryView;
 import java.util.Optional;
 
-/**
- * Query actuator that retrieves a single category by name.
- */
+/** Query actuator that retrieves a single category by name. */
 public class GetCategoryQueryActuator
         implements QueryActuator<
                 GetCategoryQueryActuator.GetCategoryQuery, Optional<CategoryView>> {

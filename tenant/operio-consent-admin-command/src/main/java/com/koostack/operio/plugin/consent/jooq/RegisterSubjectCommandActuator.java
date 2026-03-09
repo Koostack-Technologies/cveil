@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -52,8 +52,7 @@ public class RegisterSubjectCommandActuator
         // EventService can encrypt shreddable payloads immediately.
         if (dsarService != null) {
             String rawKey = generateDsarKey();
-            String encryptedKey =
-                    keyEncryptor != null ? keyEncryptor.apply(rawKey) : rawKey;
+            String encryptedKey = keyEncryptor != null ? keyEncryptor.apply(rawKey) : rawKey;
             UUID dsarId = SubjectDsarService.deriveDsarId(command.subjectName());
             dsarService.saveKey(dsarId, encryptedKey);
             LOG.debug("DSAR key persisted for subject: {}", command.subjectName());
@@ -62,9 +61,10 @@ public class RegisterSubjectCommandActuator
         UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
         var payload = new SubjectRegisteredEvent(command.subjectName(), command.description());
         AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.SUBJECT_REGISTERED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.SUBJECT_REGISTERED, key, payload));
         LOG.info("Subject registered: {}", command.subjectName());
         return null;
     }

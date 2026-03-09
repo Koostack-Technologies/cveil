@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.PurposeView;
 import java.util.List;
 
-/**
- * Query actuator that lists all purposes with policies and regulation links.
- */
+/** Query actuator that lists all purposes with policies and regulation links. */
 public class ListPurposesQueryActuator
         implements QueryActuator<ListPurposesQueryActuator.ListPurposesQuery, List<PurposeView>> {
 

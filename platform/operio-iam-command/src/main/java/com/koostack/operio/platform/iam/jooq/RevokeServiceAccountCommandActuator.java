@@ -3,8 +3,8 @@ package com.koostack.operio.platform.iam.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.ServiceAccountRevokedEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
@@ -24,7 +24,8 @@ import org.slf4j.LoggerFactory;
  * the Keycloak call fails the event is never recorded.
  */
 public class RevokeServiceAccountCommandActuator
-        implements CommandActuator<RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand, Void> {
+        implements CommandActuator<
+                RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand, Void> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RevokeServiceAccountCommandActuator.class);
@@ -74,12 +75,13 @@ public class RevokeServiceAccountCommandActuator
                         SERVICE_ACCOUNT_AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        IamEventTypes.SERVICE_ACCOUNT_REVOKED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                IamEventTypes.SERVICE_ACCOUNT_REVOKED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Service account revoked: realmId={}, clientId={}",
@@ -89,8 +91,7 @@ public class RevokeServiceAccountCommandActuator
     }
 
     private static UUID deriveAggregateId(String realmId, String clientId) {
-        return UUID.nameUUIDFromBytes(
-                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes((realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override

@@ -2,8 +2,8 @@ package com.koostack.operio.tenant.iam.kc;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantRoleAssignedEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
@@ -65,9 +65,13 @@ public class TenantAssignRoleCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(), TenantIamEventTypes.ROLE_ASSIGNED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.ROLE_ASSIGNED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant role assigned: tenantId={}, identifier={}, role={}",
@@ -109,7 +113,6 @@ public class TenantAssignRoleCommandActuator
             realm.users().get(kcUserId).roles().realmLevel().add(List.of(role));
         }
     }
-
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;

@@ -8,9 +8,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that resolves a user's internal ID from an email or username.
- */
+/** Query actuator that resolves a user's internal ID from an email or username. */
 public class ResolveUserIdQueryActuator
         implements QueryActuator<ResolveUserIdQueryActuator.ResolveUserIdQuery, String> {
 
@@ -27,7 +25,7 @@ public class ResolveUserIdQueryActuator
     /**
      * Query input for resolving a user ID from email or username.
      *
-     * @param realmId         the Keycloak realm
+     * @param realmId the Keycloak realm
      * @param emailOrUsername the user's email or username
      */
     public record ResolveUserIdQuery(String realmId, String emailOrUsername) {}
@@ -57,4 +55,3 @@ public class ResolveUserIdQueryActuator
         return null;
     }
 }
-

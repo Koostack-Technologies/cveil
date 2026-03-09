@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class RegisterFieldCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG = LoggerFactory.getLogger(RegisterFieldCommandActuator.class);
 
     public record RegisterFieldCommand(
@@ -42,9 +41,10 @@ public class RegisterFieldCommandActuator
                         command.description(),
                         command.entityDescription());
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.FIELD_REGISTERED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.FIELD_REGISTERED, key, payload));
         LOG.info("Field registered: field={}, entity={}", command.fieldName(), normalized);
         return null;
     }

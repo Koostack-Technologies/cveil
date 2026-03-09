@@ -157,8 +157,7 @@ public class JooqConsentAdminQueryDispatcher
                 FindPolicyQueryActuator.FindPolicyQuery.class,
                 new FindPolicyQueryActuator(policyRepository));
 
-        LOG.info(
-                "JooqConsentAdminQueryDispatcher configured with {} actuators", actuators.size());
+        LOG.info("JooqConsentAdminQueryDispatcher configured with {} actuators", actuators.size());
     }
 
     @Override
@@ -231,8 +230,7 @@ public class JooqConsentAdminQueryDispatcher
 
     @Override
     public Optional<JurisdictionView> getJurisdiction(String jurisdictionName) {
-        return dispatch(
-                new GetJurisdictionQueryActuator.GetJurisdictionQuery(jurisdictionName));
+        return dispatch(new GetJurisdictionQueryActuator.GetJurisdictionQuery(jurisdictionName));
     }
 
     @Override

@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.SubjectConsentView;
 import java.util.List;
 
-/**
- * Query actuator that retrieves the consent state for a single subject.
- */
+/** Query actuator that retrieves the consent state for a single subject. */
 public class GetSubjectConsentQueryActuator
         implements QueryActuator<
                 GetSubjectConsentQueryActuator.GetSubjectConsentQuery, SubjectConsentView> {
@@ -33,9 +31,7 @@ public class GetSubjectConsentQueryActuator
         var records = consentLedgerRepository.findBySubject(query.subjectId());
 
         List<SubjectConsentView.ConsentLedgerEntryView> entries =
-                records.stream()
-                        .map(r -> mapper.toLedgerEntryView(r, query.subjectId()))
-                        .toList();
+                records.stream().map(r -> mapper.toLedgerEntryView(r, query.subjectId())).toList();
 
         return new SubjectConsentView(query.subjectId(), entries);
     }

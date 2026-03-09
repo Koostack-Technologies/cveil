@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that finds a user by email address.
- */
+/** Query actuator that finds a user by email address. */
 public class FindUserByEmailQueryActuator
         implements QueryActuator<FindUserByEmailQueryActuator.FindUserByEmailQuery, IdpUser> {
 
@@ -29,7 +27,7 @@ public class FindUserByEmailQueryActuator
      * Query input for finding a user by email.
      *
      * @param realmId the Keycloak realm
-     * @param email   the email to search for
+     * @param email the email to search for
      */
     public record FindUserByEmailQuery(String realmId, String email) {}
 
@@ -46,4 +44,3 @@ public class FindUserByEmailQueryActuator
         return null;
     }
 }
-

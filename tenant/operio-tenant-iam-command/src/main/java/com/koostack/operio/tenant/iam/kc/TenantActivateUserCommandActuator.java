@@ -2,8 +2,8 @@ package com.koostack.operio.tenant.iam.kc;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserActivatedEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
@@ -64,9 +64,13 @@ public class TenantActivateUserCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(), TenantIamEventTypes.USER_ACTIVATED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.USER_ACTIVATED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant user activated: tenantId={}, identifier={}",
@@ -85,8 +89,6 @@ public class TenantActivateUserCommandActuator
         }
         return users.get(0);
     }
-
-
 
     private static UUID toAggregateId(String id) {
         try {

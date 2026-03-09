@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.JurisdictionView;
 import java.util.Optional;
 
-/**
- * Query actuator that retrieves a single jurisdiction by name.
- */
+/** Query actuator that retrieves a single jurisdiction by name. */
 public class GetJurisdictionQueryActuator
         implements QueryActuator<
                 GetJurisdictionQueryActuator.GetJurisdictionQuery, Optional<JurisdictionView>> {

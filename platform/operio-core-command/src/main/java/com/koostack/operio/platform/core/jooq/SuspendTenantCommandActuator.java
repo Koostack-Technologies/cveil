@@ -3,8 +3,8 @@ package com.koostack.operio.platform.core.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.core.aggregates.TenantAggregate;
@@ -25,7 +25,6 @@ public class SuspendTenantCommandActuator
         this.eventService = eventService;
     }
 
-
     public record SuspendTenantCommand(String tenantId, String reason) {}
 
     @Override
@@ -38,12 +37,13 @@ public class SuspendTenantCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         var payload = new TenantSuspendedEvent(command.tenantId(), command.reason());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        CoreEventTypes.TENANT_SUSPENDED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                CoreEventTypes.TENANT_SUSPENDED,
+                                key,
+                                payload));
         return null;
     }
 

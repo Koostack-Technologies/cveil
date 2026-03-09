@@ -8,9 +8,7 @@ import org.keycloak.admin.client.Keycloak;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that lists all users in a tenant's Keycloak realm.
- */
+/** Query actuator that lists all users in a tenant's Keycloak realm. */
 public class TenantListUsersQueryActuator
         implements QueryActuator<TenantListUsersQueryActuator.TenantListUsersQuery, List<IdpUser>> {
 

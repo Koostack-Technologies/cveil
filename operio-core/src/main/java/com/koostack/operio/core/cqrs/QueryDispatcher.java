@@ -26,4 +26,3 @@ public interface QueryDispatcher {
      */
     <I, O> O dispatch(I input);
 }
-

@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -32,7 +32,6 @@ public class LinkPurposeToRegulationCommandActuator
     public LinkPurposeToRegulationCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(LinkPurposeToRegulationCommandActuator.class);
@@ -93,9 +92,13 @@ public class LinkPurposeToRegulationCommandActuator
                         command.onGranted(),
                         command.onDenied(),
                         snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.PURPOSE_REGULATION_LINKED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId,
+                                ConsentEventTypes.PURPOSE_REGULATION_LINKED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Purpose regulation linked: purpose={}, regulation={}",

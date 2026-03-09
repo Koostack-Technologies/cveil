@@ -3,8 +3,8 @@ package com.koostack.operio.platform.core.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.core.aggregates.TenantAggregate;
@@ -27,7 +27,6 @@ public class EmitProvisioningStartedCommandActuator
         this.eventService = eventService;
     }
 
-
     public record EmitProvisioningStartedCommand(
             String tenantId, String displayName, String plan) {}
 
@@ -43,12 +42,13 @@ public class EmitProvisioningStartedCommandActuator
         var payload =
                 new TenantProvisioningStartedEvent(
                         command.tenantId(), command.displayName(), command.plan());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        CoreEventTypes.TENANT_PROVISIONING_STARTED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                CoreEventTypes.TENANT_PROVISIONING_STARTED,
+                                key,
+                                payload));
         return null;
     }
 

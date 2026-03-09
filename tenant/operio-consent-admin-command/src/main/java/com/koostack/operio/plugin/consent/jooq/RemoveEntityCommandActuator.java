@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class RemoveEntityCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG = LoggerFactory.getLogger(RemoveEntityCommandActuator.class);
 
     public record RemoveEntityCommand(String entityName) {}
@@ -35,9 +34,10 @@ public class RemoveEntityCommandActuator
         UUID aggregateId = EntityAggregate.deriveId(command.entityName());
         var payload = new EntityRemovedEvent(command.entityName());
         AggregateKey key = new AggregateKey(aggregateId, EntityAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.ENTITY_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.ENTITY_REMOVED, key, payload));
         LOG.info("Entity removed: {}", command.entityName());
         return null;
     }

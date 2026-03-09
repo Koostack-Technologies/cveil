@@ -20,8 +20,7 @@ import org.slf4j.LoggerFactory;
  * <p>Implements both the generic {@link QueryDispatcher} SPI (actuator-based routing) and the
  * legacy {@link CoreQueryService} interface (thin delegation layer for backward compatibility).
  */
-public class CoreQueryDispatcher
-        implements QueryDispatcher, CoreQueryService<JooqCoreQueryConfig> {
+public class CoreQueryDispatcher implements QueryDispatcher, CoreQueryService<JooqCoreQueryConfig> {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreQueryDispatcher.class);
 

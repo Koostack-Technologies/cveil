@@ -3,8 +3,8 @@ package com.koostack.operio.platform.iam.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserActivatedEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
@@ -63,12 +63,13 @@ public class ActivateUserCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        IamEventTypes.USER_ACTIVATED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                IamEventTypes.USER_ACTIVATED,
+                                key,
+                                payload));
 
         LOG.info(
                 "User activated: realmId={}, identifier={}, kcId={}",

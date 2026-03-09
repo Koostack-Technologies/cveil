@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.RoleRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a user by internal ID.
- */
+/** Query actuator that retrieves roles for a user by internal ID. */
 public class GetUserRolesQueryActuator
         implements QueryActuator<GetUserRolesQueryActuator.GetUserRolesQuery, Set<String>> {
 
@@ -29,7 +27,7 @@ public class GetUserRolesQueryActuator
      * Query input for getting user roles by internal ID.
      *
      * @param realmId the Keycloak realm
-     * @param userId  the user's internal ID (operio-user-id attribute)
+     * @param userId the user's internal ID (operio-user-id attribute)
      */
     public record GetUserRolesQuery(String realmId, String userId) {}
 
@@ -62,4 +60,3 @@ public class GetUserRolesQueryActuator
         return null;
     }
 }
-

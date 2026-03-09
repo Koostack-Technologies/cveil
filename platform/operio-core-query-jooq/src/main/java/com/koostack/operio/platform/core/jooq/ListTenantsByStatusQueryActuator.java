@@ -8,17 +8,17 @@ import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import java.util.List;
 import org.jooq.DSLContext;
 
-/**
- * Query actuator that lists tenants filtered by status.
- */
+/** Query actuator that lists tenants filtered by status. */
 public class ListTenantsByStatusQueryActuator
-        implements QueryActuator<ListTenantsByStatusQueryActuator.ListTenantsByStatusQuery, List<TenantInfo>> {
+        implements QueryActuator<
+                ListTenantsByStatusQueryActuator.ListTenantsByStatusQuery, List<TenantInfo>> {
 
     private final DSLContext dsl;
     private final RetryConfig retryConfig;
     private final CoreRecordMapper mapper;
 
-    public ListTenantsByStatusQueryActuator(DSLContext dsl, RetryConfig retryConfig, CoreRecordMapper mapper) {
+    public ListTenantsByStatusQueryActuator(
+            DSLContext dsl, RetryConfig retryConfig, CoreRecordMapper mapper) {
         this.dsl = dsl;
         this.retryConfig = retryConfig;
         this.mapper = mapper;

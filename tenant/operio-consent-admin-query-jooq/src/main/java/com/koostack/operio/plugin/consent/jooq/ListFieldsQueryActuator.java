@@ -5,16 +5,15 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.FieldView;
 import java.util.List;
 
-/**
- * Query actuator that lists all registered fields with entity and category info.
- */
+/** Query actuator that lists all registered fields with entity and category info. */
 public class ListFieldsQueryActuator
         implements QueryActuator<ListFieldsQueryActuator.ListFieldsQuery, List<FieldView>> {
 
     private final FieldRepository fieldRepository;
     private final ConsentAdminRecordMapper mapper;
 
-    public ListFieldsQueryActuator(FieldRepository fieldRepository, ConsentAdminRecordMapper mapper) {
+    public ListFieldsQueryActuator(
+            FieldRepository fieldRepository, ConsentAdminRecordMapper mapper) {
         this.fieldRepository = fieldRepository;
         this.mapper = mapper;
     }

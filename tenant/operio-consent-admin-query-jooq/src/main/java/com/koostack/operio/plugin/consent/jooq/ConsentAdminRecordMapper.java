@@ -177,16 +177,13 @@ public class ConsentAdminRecordMapper {
 
     // -- Consent ledger entry --------------------------------------------------
 
-    public SubjectConsentView.ConsentLedgerEntryView toLedgerEntryView(
-            Record r, String subjectId) {
+    public SubjectConsentView.ConsentLedgerEntryView toLedgerEntryView(Record r, String subjectId) {
         return new SubjectConsentView.ConsentLedgerEntryView(
                 r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
                 subjectId,
                 r.get(CONSENT_LEDGER.POLICY_ID),
                 r.get(PURPOSE.PURPOSE_NAME),
-                r.get(POLICY.POLICY_TYPE) != null
-                        ? r.get(POLICY.POLICY_TYPE).getLiteral()
-                        : null,
+                r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).getLiteral() : null,
                 r.get(FIELD.FIELD_NAME),
                 r.get(ENTITY.ENTITY_NAME),
                 r.get(CATEGORY.CATEGORY_NAME),

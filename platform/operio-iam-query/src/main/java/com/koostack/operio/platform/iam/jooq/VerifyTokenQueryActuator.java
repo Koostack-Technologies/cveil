@@ -8,9 +8,7 @@ import com.koostack.operio.plugin.platform.keycloak.KeycloakConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that verifies a JWT access token and returns the identity context.
- */
+/** Query actuator that verifies a JWT access token and returns the identity context. */
 public class VerifyTokenQueryActuator
         implements QueryActuator<VerifyTokenQueryActuator.VerifyTokenQuery, IdentityContext> {
 
@@ -27,7 +25,7 @@ public class VerifyTokenQueryActuator
     /**
      * Query input for verifying a JWT access token.
      *
-     * @param realmId     the Keycloak realm
+     * @param realmId the Keycloak realm
      * @param accessToken the JWT access token
      */
     public record VerifyTokenQuery(String realmId, String accessToken) {}
@@ -47,4 +45,3 @@ public class VerifyTokenQueryActuator
         return null;
     }
 }
-

@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.CategoryView;
 import java.util.List;
 
-/**
- * Query actuator that lists all registered categories.
- */
+/** Query actuator that lists all registered categories. */
 public class ListCategoriesQueryActuator
         implements QueryActuator<
                 ListCategoriesQueryActuator.ListCategoriesQuery, List<CategoryView>> {

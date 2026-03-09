@@ -68,8 +68,10 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
         this.registerUserActuator = new RegisterUserCommandActuator(eventService, kc);
         this.suspendUserActuator = new SuspendUserCommandActuator(eventService, kc);
         this.activateUserActuator = new ActivateUserCommandActuator(eventService, kc);
-        this.createServiceAccountActuator = new CreateServiceAccountCommandActuator(eventService, kc);
-        this.revokeServiceAccountActuator = new RevokeServiceAccountCommandActuator(eventService, kc);
+        this.createServiceAccountActuator =
+                new CreateServiceAccountCommandActuator(eventService, kc);
+        this.revokeServiceAccountActuator =
+                new RevokeServiceAccountCommandActuator(eventService, kc);
         this.assignRoleActuator = new AssignRoleCommandActuator(eventService, kc);
         this.removeRoleActuator = new RemoveRoleCommandActuator(eventService, kc);
         LOG.info("KeycloakIamCommandService configured");
@@ -94,15 +96,13 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
     @Override
     public void suspendUser(String realmId, String emailOrUsername) {
-        var command =
-                new SuspendUserCommandActuator.SuspendUserCommand(realmId, emailOrUsername);
+        var command = new SuspendUserCommandActuator.SuspendUserCommand(realmId, emailOrUsername);
         suspendUserActuator.execute(command);
     }
 
     @Override
     public void activateUser(String realmId, String emailOrUsername) {
-        var command =
-                new ActivateUserCommandActuator.ActivateUserCommand(realmId, emailOrUsername);
+        var command = new ActivateUserCommandActuator.ActivateUserCommand(realmId, emailOrUsername);
         activateUserActuator.execute(command);
     }
 
@@ -209,7 +209,6 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
     }
 
     // -- Internal helpers -----------------------------------------------------
-
 
     private static String generateRawApiKey() {
         byte[] bytes = new byte[24];

@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -32,7 +32,6 @@ public class UnassignFieldCategoryCommandActuator
     public UnassignFieldCategoryCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(UnassignFieldCategoryCommandActuator.class);
@@ -71,9 +70,13 @@ public class UnassignFieldCategoryCommandActuator
         var payload =
                 new FieldCategoryUnassignedEvent(
                         normalized, command.fieldName(), command.categoryName(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId,
+                                ConsentEventTypes.FIELD_CATEGORY_UNASSIGNED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Field category unassigned: field={}, entity={}, category={}",

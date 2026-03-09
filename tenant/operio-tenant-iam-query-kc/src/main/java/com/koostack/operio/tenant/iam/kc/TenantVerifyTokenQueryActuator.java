@@ -15,8 +15,7 @@ public class TenantVerifyTokenQueryActuator
         implements QueryActuator<
                 TenantVerifyTokenQueryActuator.TenantVerifyTokenQuery, IdentityContext> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(TenantVerifyTokenQueryActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(TenantVerifyTokenQueryActuator.class);
 
     private final JwksTokenVerifier jwksVerifier;
     private final KeycloakConfig config;
@@ -29,7 +28,7 @@ public class TenantVerifyTokenQueryActuator
     /**
      * Query input for verifying a tenant JWT access token.
      *
-     * @param tenantId    the tenant identifier
+     * @param tenantId the tenant identifier
      * @param accessToken the JWT access token
      */
     public record TenantVerifyTokenQuery(String tenantId, String accessToken) {}
@@ -38,10 +37,7 @@ public class TenantVerifyTokenQueryActuator
     public IdentityContext execute(TenantVerifyTokenQuery query) {
         String realmId = TenantKeycloakUserMapper.toRealmId(query.tenantId());
         String jwksUrl =
-                config.serverUrl()
-                        + "/realms/"
-                        + realmId
-                        + "/protocol/openid-connect/certs";
+                config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/certs";
         return jwksVerifier.verify(jwksUrl, query.accessToken(), realmId);
     }
 

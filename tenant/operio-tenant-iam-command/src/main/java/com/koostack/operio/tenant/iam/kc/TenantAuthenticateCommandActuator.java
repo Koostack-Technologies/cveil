@@ -3,8 +3,8 @@ package com.koostack.operio.tenant.iam.kc;
 import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AuthResult;
 import com.koostack.operio.core.tenant.events.TenantUserAuthenticatedEvent;
@@ -16,12 +16,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "authenticate" command for tenant IAM.
  *
- * <p>Performs the OIDC Resource Owner Password Credentials grant directly against the
- * tenant's Keycloak realm via {@link KeycloakAuthSupport}, then publishes a
- * {@link TenantUserAuthenticatedEvent}.
+ * <p>Performs the OIDC Resource Owner Password Credentials grant directly against the tenant's
+ * Keycloak realm via {@link KeycloakAuthSupport}, then publishes a {@link
+ * TenantUserAuthenticatedEvent}.
  */
 public class TenantAuthenticateCommandActuator
-        implements CommandActuator<TenantAuthenticateCommandActuator.AuthenticateCommand, AuthResult> {
+        implements CommandActuator<
+                TenantAuthenticateCommandActuator.AuthenticateCommand, AuthResult> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(TenantAuthenticateCommandActuator.class);
@@ -31,7 +32,8 @@ public class TenantAuthenticateCommandActuator
 
     private final EventService<?> eventService;
 
-    public TenantAuthenticateCommandActuator(EventService<?> eventService, KeycloakAuthSupport authSupport) {
+    public TenantAuthenticateCommandActuator(
+            EventService<?> eventService, KeycloakAuthSupport authSupport) {
         this.eventService = eventService;
         this.authSupport = authSupport;
     }
@@ -40,7 +42,7 @@ public class TenantAuthenticateCommandActuator
      * Command input for authenticating a tenant user.
      *
      * @param tenantId the tenant identifier (maps to Keycloak realm)
-     * @param email    the user's email
+     * @param email the user's email
      * @param password the user's password
      */
     public record AuthenticateCommand(String tenantId, String email, String password) {}
@@ -52,19 +54,18 @@ public class TenantAuthenticateCommandActuator
 
         // Publish domain event
         String userId = result.identity().subject();
-        var payload =
-                new TenantUserAuthenticatedEvent(command.tenantId(), userId, command.email());
+        var payload = new TenantUserAuthenticatedEvent(command.tenantId(), userId, command.email());
 
         UUID aggregateId = UUID.fromString(userId);
-        AggregateKey key =
-                new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
+        AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.USER_AUTHENTICATED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.USER_AUTHENTICATED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant user authenticated: tenantId={}, email={}, userId={}",

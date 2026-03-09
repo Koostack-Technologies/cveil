@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory;
  * Keycloak-native tenant IAM query dispatcher.
  *
  * <p>Implements both the generic {@link QueryDispatcher} SPI (actuator-based routing) and the
- * legacy {@link TenantIamQueryService} interface (thin delegation layer for backward compatibility).
+ * legacy {@link TenantIamQueryService} interface (thin delegation layer for backward
+ * compatibility).
  *
  * <p>All query methods delegate to the dispatcher, which routes to the appropriate {@link Actuator}
  * by query record type.
@@ -119,9 +120,7 @@ public class KeycloakTenantIamQueryDispatcher
                 TenantVerifyTokenQueryActuator.TenantVerifyTokenQuery.class,
                 new TenantVerifyTokenQueryActuator(jwksVerifier, config));
 
-        LOG.info(
-                "KeycloakTenantIamQueryDispatcher configured with {} actuators",
-                actuators.size());
+        LOG.info("KeycloakTenantIamQueryDispatcher configured with {} actuators", actuators.size());
     }
 
     @Override
@@ -144,8 +143,7 @@ public class KeycloakTenantIamQueryDispatcher
     @Override
     public IdpUser findUserByEmail(String tenantId, String email) {
         return dispatch(
-                new TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery(
-                        tenantId, email));
+                new TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery(tenantId, email));
     }
 
     @Override

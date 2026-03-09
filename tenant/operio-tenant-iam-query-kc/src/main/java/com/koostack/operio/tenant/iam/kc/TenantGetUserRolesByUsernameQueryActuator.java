@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a tenant user identified by username.
- */
+/** Query actuator that retrieves roles for a tenant user identified by username. */
 public class TenantGetUserRolesByUsernameQueryActuator
         implements QueryActuator<
                 TenantGetUserRolesByUsernameQueryActuator.TenantGetUserRolesByUsernameQuery,
@@ -41,10 +39,7 @@ public class TenantGetUserRolesByUsernameQueryActuator
     public Set<String> execute(TenantGetUserRolesByUsernameQuery query) {
         String realmId = TenantKeycloakUserMapper.toRealmId(query.tenantId());
         List<UserRepresentation> users =
-                adminClient
-                        .realm(realmId)
-                        .users()
-                        .searchByUsername(query.username(), true);
+                adminClient.realm(realmId).users().searchByUsername(query.username(), true);
         if (users.isEmpty()) return Set.of();
         return userMapper.fetchRoles(realmId, users.get(0).getId());
     }

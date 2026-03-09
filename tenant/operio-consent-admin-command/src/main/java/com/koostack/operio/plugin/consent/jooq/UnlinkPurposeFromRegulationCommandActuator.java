@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -33,7 +33,6 @@ public class UnlinkPurposeFromRegulationCommandActuator
     public UnlinkPurposeFromRegulationCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(UnlinkPurposeFromRegulationCommandActuator.class);
@@ -77,9 +76,13 @@ public class UnlinkPurposeFromRegulationCommandActuator
         var payload =
                 new PurposeRegulationUnlinkedEvent(
                         command.purposeName(), command.regulationName(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.PURPOSE_REGULATION_UNLINKED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId,
+                                ConsentEventTypes.PURPOSE_REGULATION_UNLINKED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Purpose regulation unlinked: purpose={}, regulation={}",

@@ -2,8 +2,8 @@ package com.koostack.operio.tenant.iam.kc;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantRoleRemovedEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
@@ -74,9 +74,13 @@ public class TenantRemoveRoleCommandActuator
         UUID aggregateId = toAggregateId(kcUserId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(), TenantIamEventTypes.ROLE_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.ROLE_REMOVED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant role removed: tenantId={}, identifier={}, role={}",
@@ -96,8 +100,6 @@ public class TenantRemoveRoleCommandActuator
         }
         return users.get(0);
     }
-
-
 
     private static UUID toAggregateId(String id) {
         try {

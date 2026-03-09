@@ -4,9 +4,7 @@ import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.FieldView;
 
-/**
- * Query actuator that retrieves a single field by name and entity.
- */
+/** Query actuator that retrieves a single field by name and entity. */
 public class GetFieldQueryActuator
         implements QueryActuator<GetFieldQueryActuator.GetFieldQuery, FieldView> {
 

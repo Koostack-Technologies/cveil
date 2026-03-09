@@ -2,8 +2,8 @@ package com.koostack.operio.tenant.iam.kc;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantServiceAccountCreatedEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
@@ -40,7 +40,8 @@ public class TenantCreateServiceAccountCommandActuator
 
     private final EventService<?> eventService;
 
-    public TenantCreateServiceAccountCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+    public TenantCreateServiceAccountCommandActuator(
+            EventService<?> eventService, Keycloak adminClient) {
         this.eventService = eventService;
         this.adminClient = adminClient;
     }
@@ -92,12 +93,13 @@ public class TenantCreateServiceAccountCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, SERVICE_ACCOUNT_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(),
-                        TenantIamEventTypes.SERVICE_ACCOUNT_CREATED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.SERVICE_ACCOUNT_CREATED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant service account created: tenantId={}, clientId={}",
@@ -168,8 +170,7 @@ public class TenantCreateServiceAccountCommandActuator
     }
 
     private static UUID deriveAggregateId(String realmId, String clientId) {
-        return UUID.nameUUIDFromBytes(
-                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes((realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 
     private static String toRealmId(String tenantId) {

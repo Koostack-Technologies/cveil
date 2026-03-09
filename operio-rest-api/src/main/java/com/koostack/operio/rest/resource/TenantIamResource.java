@@ -96,8 +96,10 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users tenant={}", tenantId);
 
-        List<IdpUser> users = tenantIam.queryDispatcher()
-                .dispatch(new TenantListUsersQueryActuator.TenantListUsersQuery(tenantId));
+        List<IdpUser> users =
+                tenantIam
+                        .queryDispatcher()
+                        .dispatch(new TenantListUsersQueryActuator.TenantListUsersQuery(tenantId));
         return Response.ok(users.stream().map(UserResponse::from).toList()).build();
     }
 
@@ -113,9 +115,12 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users/{} tenant={}", username, tenantId);
 
-        IdpUser user = tenantIam.queryDispatcher()
-                .dispatch(new TenantFindUserByUsernameQueryActuator.TenantFindUserByUsernameQuery(
-                        tenantId, username));
+        IdpUser user =
+                tenantIam
+                        .queryDispatcher()
+                        .dispatch(
+                                new TenantFindUserByUsernameQueryActuator
+                                        .TenantFindUserByUsernameQuery(tenantId, username));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + username))
@@ -144,9 +149,12 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/users/by-email email={} tenant={}", email, tenantId);
 
-        IdpUser user = tenantIam.queryDispatcher()
-                .dispatch(new TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery(
-                        tenantId, email));
+        IdpUser user =
+                tenantIam
+                        .queryDispatcher()
+                        .dispatch(
+                                new TenantFindUserByEmailQueryActuator.TenantFindUserByEmailQuery(
+                                        tenantId, email));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + email))
@@ -165,9 +173,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/suspend tenant={}", username, tenantId);
-        tenantIam.commandDispatcher()
-                .dispatch(new TenantSuspendUserCommandActuator.SuspendUserCommand(
-                        tenantId, username));
+        tenantIam
+                .commandDispatcher()
+                .dispatch(
+                        new TenantSuspendUserCommandActuator.SuspendUserCommand(
+                                tenantId, username));
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
@@ -181,9 +191,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/activate tenant={}", username, tenantId);
-        tenantIam.commandDispatcher()
-                .dispatch(new TenantActivateUserCommandActuator.ActivateUserCommand(
-                        tenantId, username));
+        tenantIam
+                .commandDispatcher()
+                .dispatch(
+                        new TenantActivateUserCommandActuator.ActivateUserCommand(
+                                tenantId, username));
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
@@ -196,10 +208,12 @@ public class TenantIamResource {
         String tenantId = requireTenantContext();
         requireIam();
 
-        Set<String> roles = tenantIam.queryDispatcher()
-                .dispatch(
-                        new TenantGetUserRolesByUsernameQueryActuator
-                                .TenantGetUserRolesByUsernameQuery(tenantId, username));
+        Set<String> roles =
+                tenantIam
+                        .queryDispatcher()
+                        .dispatch(
+                                new TenantGetUserRolesByUsernameQueryActuator
+                                        .TenantGetUserRolesByUsernameQuery(tenantId, username));
         return Response.ok(roles).build();
     }
 
@@ -215,9 +229,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("PUT /iam/users/{}/roles role={} tenant={}", username, request.role(), tenantId);
-        tenantIam.commandDispatcher()
-                .dispatch(new TenantAssignRoleCommandActuator.AssignRoleCommand(
-                        tenantId, username, request.role()));
+        tenantIam
+                .commandDispatcher()
+                .dispatch(
+                        new TenantAssignRoleCommandActuator.AssignRoleCommand(
+                                tenantId, username, request.role()));
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
@@ -233,9 +249,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("DELETE /iam/users/{}/roles/{} tenant={}", username, role, tenantId);
-        tenantIam.commandDispatcher()
-                .dispatch(new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
-                        tenantId, username, role));
+        tenantIam
+                .commandDispatcher()
+                .dispatch(
+                        new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
+                                tenantId, username, role));
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -286,9 +304,12 @@ public class TenantIamResource {
 
         @SuppressWarnings("unchecked")
         List<com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo>
-                accounts = tenantIam.queryDispatcher()
-                        .dispatch(new TenantListServiceAccountsQueryActuator
-                                .TenantListServiceAccountsQuery(tenantId));
+                accounts =
+                        tenantIam
+                                .queryDispatcher()
+                                .dispatch(
+                                        new TenantListServiceAccountsQueryActuator
+                                                .TenantListServiceAccountsQuery(tenantId));
         return Response.ok(accounts.stream().map(ServiceAccountResponse::fromTenant).toList())
                 .build();
     }
@@ -307,10 +328,13 @@ public class TenantIamResource {
 
         LOG.debug("GET /iam/service-accounts/{} tenant={}", clientId, tenantId);
 
-        var account = (com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo)
-                tenantIam.queryDispatcher()
-                        .dispatch(new TenantGetServiceAccountQueryActuator
-                                .TenantGetServiceAccountQuery(tenantId, clientId));
+        var account =
+                (com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo)
+                        tenantIam
+                                .queryDispatcher()
+                                .dispatch(
+                                        new TenantGetServiceAccountQueryActuator
+                                                .TenantGetServiceAccountQuery(tenantId, clientId));
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
@@ -331,9 +355,11 @@ public class TenantIamResource {
         requireIam();
 
         LOG.debug("DELETE /iam/service-accounts/{} tenant={}", clientId, tenantId);
-        tenantIam.commandDispatcher()
-                .dispatch(new TenantRevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
-                        tenantId, clientId));
+        tenantIam
+                .commandDispatcher()
+                .dispatch(
+                        new TenantRevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                                tenantId, clientId));
         return Response.ok(MessageResponse.of("Service account revoked")).build();
     }
 
@@ -363,9 +389,7 @@ public class TenantIamResource {
                                     .dispatch(
                                             new TenantAuthenticateCommandActuator
                                                     .AuthenticateCommand(
-                                                    tenantId,
-                                                    request.email(),
-                                                    request.password()));
+                                                    tenantId, request.email(), request.password()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)

@@ -9,19 +9,15 @@ import java.time.OffsetDateTime;
 import java.util.function.UnaryOperator;
 import org.jooq.Record;
 
-/**
- * Shared jOOQ field constants and record-to-domain mapping utilities for core tenant queries.
- */
+/** Shared jOOQ field constants and record-to-domain mapping utilities for core tenant queries. */
 public final class CoreRecordMapper {
 
     static final org.jooq.Table<?> TENANT = table(name("platform_core", "tenant"));
     static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
-    static final org.jooq.Field<String> DISPLAY_NAME =
-            field(name("display_name"), String.class);
+    static final org.jooq.Field<String> DISPLAY_NAME = field(name("display_name"), String.class);
     static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);
     static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    static final org.jooq.Field<String> SCHEMA_NAME =
-            field(name("schema_prefix"), String.class);
+    static final org.jooq.Field<String> SCHEMA_NAME = field(name("schema_prefix"), String.class);
     static final org.jooq.Field<String> REDIS_ACL_USER =
             field(name("redis_acl_user"), String.class);
     static final org.jooq.Field<String> REDIS_ACL_PASSWORD =

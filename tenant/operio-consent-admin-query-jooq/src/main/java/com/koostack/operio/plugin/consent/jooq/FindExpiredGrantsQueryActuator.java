@@ -7,9 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 
-/**
- * Query actuator that finds expired consent grants for sweeper processing.
- */
+/** Query actuator that finds expired consent grants for sweeper processing. */
 public class FindExpiredGrantsQueryActuator
         implements QueryActuator<
                 FindExpiredGrantsQueryActuator.FindExpiredGrantsQuery,
@@ -43,7 +41,8 @@ public class FindExpiredGrantsQueryActuator
                                         r,
                                         r.get(
                                                 com.koostack.operio.plugin.consent.jooq.generated
-                                                        .Tables.CONSENT_LEDGER.SUBJECT_ID)))
+                                                        .Tables.CONSENT_LEDGER
+                                                        .SUBJECT_ID)))
                 .toList();
     }
 

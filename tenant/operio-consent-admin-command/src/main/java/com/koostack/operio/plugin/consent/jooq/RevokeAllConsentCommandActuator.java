@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -22,7 +22,6 @@ public class RevokeAllConsentCommandActuator
     public RevokeAllConsentCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RevokeAllConsentCommandActuator.class);
@@ -43,9 +42,10 @@ public class RevokeAllConsentCommandActuator
                         command.userAgent());
         AggregateKey key =
                 new AggregateKey(aggregateId, SubjectConsentAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.CONSENT_ALL_REVOKED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.CONSENT_ALL_REVOKED, key, payload));
         LOG.info("Published bulk revoke event for subject: {}", command.subjectId());
         return null;
     }

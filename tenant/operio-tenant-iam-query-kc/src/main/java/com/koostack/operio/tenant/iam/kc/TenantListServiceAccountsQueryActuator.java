@@ -9,9 +9,7 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that lists all service accounts in a tenant's Keycloak realm.
- */
+/** Query actuator that lists all service accounts in a tenant's Keycloak realm. */
 public class TenantListServiceAccountsQueryActuator
         implements QueryActuator<
                 TenantListServiceAccountsQueryActuator.TenantListServiceAccountsQuery,
@@ -41,7 +39,8 @@ public class TenantListServiceAccountsQueryActuator
     @Override
     public List<ServiceAccountInfo> execute(TenantListServiceAccountsQuery query) {
         String realmId = TenantKeycloakUserMapper.toRealmId(query.tenantId());
-        LOG.debug("Listing service accounts for tenant '{}' (realm '{}')", query.tenantId(), realmId);
+        LOG.debug(
+                "Listing service accounts for tenant '{}' (realm '{}')", query.tenantId(), realmId);
         RealmResource realm = adminClient.realm(realmId);
         return realm.clients().findAll().stream()
                 .filter(c -> Boolean.TRUE.equals(c.isServiceAccountsEnabled()))

@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -24,14 +24,14 @@ import org.slf4j.LoggerFactory;
  * {@link PurposeSnapshot} with the target policy entry removed.
  */
 public class RemovePurposePolicyCommandActuator
-        implements CommandActuator<RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand, Void> {
+        implements CommandActuator<
+                RemovePurposePolicyCommandActuator.RemovePurposePolicyCommand, Void> {
 
     private final EventService<?> eventService;
 
     public RemovePurposePolicyCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RemovePurposePolicyCommandActuator.class);
@@ -91,9 +91,10 @@ public class RemovePurposePolicyCommandActuator
                         command.entityName(),
                         command.categoryName(),
                         snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.PURPOSE_POLICY_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.PURPOSE_POLICY_REMOVED, key, payload));
 
         LOG.info(
                 "Purpose policy removed: purpose={}, policyType={}",

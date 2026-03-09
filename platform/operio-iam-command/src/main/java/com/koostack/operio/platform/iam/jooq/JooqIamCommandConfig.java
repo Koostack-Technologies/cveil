@@ -14,7 +14,9 @@ import org.keycloak.admin.client.Keycloak;
  * @param keycloakConfig the Keycloak configuration for OIDC auth operations (nullable in test)
  */
 public record JooqIamCommandConfig(
-        EventService<?> eventService, DataSource platformDataSource, Keycloak keycloakAdmin,
+        EventService<?> eventService,
+        DataSource platformDataSource,
+        Keycloak keycloakAdmin,
         KeycloakConfig keycloakConfig) {
     public JooqIamCommandConfig {
         if (eventService == null) {

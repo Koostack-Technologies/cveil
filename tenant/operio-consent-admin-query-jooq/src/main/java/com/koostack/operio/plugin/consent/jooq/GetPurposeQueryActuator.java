@@ -4,9 +4,7 @@ import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.PurposeView;
 
-/**
- * Query actuator that retrieves a single purpose by name.
- */
+/** Query actuator that retrieves a single purpose by name. */
 public class GetPurposeQueryActuator
         implements QueryActuator<GetPurposeQueryActuator.GetPurposeQuery, PurposeView> {
 

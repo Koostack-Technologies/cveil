@@ -11,9 +11,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a user identified by username.
- */
+/** Query actuator that retrieves roles for a user identified by username. */
 public class GetUserRolesByUsernameQueryActuator
         implements QueryActuator<
                 GetUserRolesByUsernameQueryActuator.GetUserRolesByUsernameQuery, Set<String>> {
@@ -30,7 +28,7 @@ public class GetUserRolesByUsernameQueryActuator
     /**
      * Query input for getting user roles by username.
      *
-     * @param realmId  the Keycloak realm
+     * @param realmId the Keycloak realm
      * @param username the user's username
      */
     public record GetUserRolesByUsernameQuery(String realmId, String username) {}
@@ -38,10 +36,7 @@ public class GetUserRolesByUsernameQueryActuator
     @Override
     public Set<String> execute(GetUserRolesByUsernameQuery query) {
         List<UserRepresentation> users =
-                adminClient
-                        .realm(query.realmId())
-                        .users()
-                        .searchByUsername(query.username(), true);
+                adminClient.realm(query.realmId()).users().searchByUsername(query.username(), true);
         if (users.isEmpty()) return Set.of();
         return fetchRoles(query.realmId(), users.get(0).getId());
     }
@@ -68,4 +63,3 @@ public class GetUserRolesByUsernameQueryActuator
         return null;
     }
 }
-

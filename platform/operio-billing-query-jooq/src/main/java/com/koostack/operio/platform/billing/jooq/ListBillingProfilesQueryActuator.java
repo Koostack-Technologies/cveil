@@ -8,11 +8,11 @@ import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import java.util.List;
 import org.jooq.DSLContext;
 
-/**
- * Query actuator that lists all billing profiles.
- */
+/** Query actuator that lists all billing profiles. */
 public class ListBillingProfilesQueryActuator
-        implements QueryActuator<ListBillingProfilesQueryActuator.ListBillingProfilesQuery, List<BillingProfileInfo>> {
+        implements QueryActuator<
+                ListBillingProfilesQueryActuator.ListBillingProfilesQuery,
+                List<BillingProfileInfo>> {
 
     private final DSLContext dsl;
     private final RetryConfig retryConfig;

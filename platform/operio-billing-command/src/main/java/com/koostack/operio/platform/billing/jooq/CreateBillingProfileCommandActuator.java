@@ -3,8 +3,8 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
@@ -17,14 +17,14 @@ import java.util.UUID;
  * <p>Publishes a {@link BillingProfileCreatedEvent} to the platform event store.
  */
 public class CreateBillingProfileCommandActuator
-        implements CommandActuator<CreateBillingProfileCommandActuator.CreateBillingProfileCommand, Void> {
+        implements CommandActuator<
+                CreateBillingProfileCommandActuator.CreateBillingProfileCommand, Void> {
 
     private final EventService<?> eventService;
 
     public CreateBillingProfileCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     public record CreateBillingProfileCommand(String tenantId, String billingEmail) {}
 
@@ -38,12 +38,13 @@ public class CreateBillingProfileCommandActuator
                         PlatformConstants.PLATFORM_TENANT_ID);
 
         var payload = new BillingProfileCreatedEvent(command.tenantId(), command.billingEmail());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        BillingEventTypes.BILLING_PROFILE_CREATED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                BillingEventTypes.BILLING_PROFILE_CREATED,
+                                key,
+                                payload));
         return null;
     }
 

@@ -6,9 +6,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a tenant user by internal ID.
- */
+/** Query actuator that retrieves roles for a tenant user by internal ID. */
 public class TenantGetUserRolesQueryActuator
         implements QueryActuator<
                 TenantGetUserRolesQueryActuator.TenantGetUserRolesQuery, Set<String>> {
@@ -26,7 +24,7 @@ public class TenantGetUserRolesQueryActuator
      * Query input for getting tenant user roles by internal ID.
      *
      * @param tenantId the tenant identifier
-     * @param userId   the user's internal ID (operio-user-id attribute)
+     * @param userId the user's internal ID (operio-user-id attribute)
      */
     public record TenantGetUserRolesQuery(String tenantId, String userId) {}
 

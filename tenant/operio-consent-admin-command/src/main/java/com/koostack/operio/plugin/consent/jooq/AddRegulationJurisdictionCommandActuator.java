@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -33,7 +33,6 @@ public class AddRegulationJurisdictionCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG =
             LoggerFactory.getLogger(AddRegulationJurisdictionCommandActuator.class);
 
@@ -50,7 +49,8 @@ public class AddRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current =
+                eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
@@ -71,9 +71,13 @@ public class AddRegulationJurisdictionCommandActuator
                         command.jurisdictionName(),
                         command.description(),
                         snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.REGULATION_JURISDICTION_ADDED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId,
+                                ConsentEventTypes.REGULATION_JURISDICTION_ADDED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Regulation jurisdiction added: regulation={}, jurisdiction={}",

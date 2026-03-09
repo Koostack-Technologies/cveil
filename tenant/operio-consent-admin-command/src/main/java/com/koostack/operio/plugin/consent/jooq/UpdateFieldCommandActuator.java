@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -30,7 +30,6 @@ public class UpdateFieldCommandActuator
     public UpdateFieldCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG = LoggerFactory.getLogger(UpdateFieldCommandActuator.class);
 
@@ -59,9 +58,10 @@ public class UpdateFieldCommandActuator
         var payload =
                 new FieldUpdatedEvent(
                         normalized, command.fieldName(), command.description(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.FIELD_UPDATED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.FIELD_UPDATED, key, payload));
         LOG.info("Field updated: field={}, entity={}", command.fieldName(), normalized);
         return null;
     }

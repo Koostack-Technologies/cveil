@@ -5,13 +5,8 @@ import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.spi.Plugin;
 import java.util.Set;
 
-public interface ConsentDecisionService<T>
-extends Plugin<T>
-{
-    ConsentResponse evaluateConsent(
-        String subject,
-        Set<ConsentScope> accessRequests
-    );
+public interface ConsentDecisionService<T> extends Plugin<T> {
+    ConsentResponse evaluateConsent(String subject, Set<ConsentScope> accessRequests);
 
     /**
      * Returns the number of cached consent-decision edge-property keys for the given subject.
@@ -30,5 +25,4 @@ extends Plugin<T>
     default long deleteCachedKeysForSubject(String subject) {
         return 0;
     }
-
 }

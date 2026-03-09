@@ -3,8 +3,8 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
@@ -18,14 +18,14 @@ import java.util.UUID;
  * <p>Publishes a {@link SubscriptionRenewedEvent} to the platform event store.
  */
 public class RenewSubscriptionCommandActuator
-        implements CommandActuator<RenewSubscriptionCommandActuator.RenewSubscriptionCommand, Void> {
+        implements CommandActuator<
+                RenewSubscriptionCommandActuator.RenewSubscriptionCommand, Void> {
 
     private final EventService<?> eventService;
 
     public RenewSubscriptionCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     public record RenewSubscriptionCommand(
             String tenantId, Instant periodStart, Instant periodEnd) {}
@@ -42,12 +42,13 @@ public class RenewSubscriptionCommandActuator
         var payload =
                 new SubscriptionRenewedEvent(
                         command.tenantId(), command.periodStart(), command.periodEnd());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        BillingEventTypes.SUBSCRIPTION_RENEWED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                BillingEventTypes.SUBSCRIPTION_RENEWED,
+                                key,
+                                payload));
         return null;
     }
 

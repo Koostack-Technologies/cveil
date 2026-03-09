@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class RemoveCategoryCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG = LoggerFactory.getLogger(RemoveCategoryCommandActuator.class);
 
     public record RemoveCategoryCommand(String categoryName) {}
@@ -36,9 +35,10 @@ public class RemoveCategoryCommandActuator
         var payload = new CategoryRemovedEvent(command.categoryName());
         AggregateKey key =
                 new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.CATEGORY_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.CATEGORY_REMOVED, key, payload));
         LOG.info("Category removed: {}", command.categoryName());
         return null;
     }

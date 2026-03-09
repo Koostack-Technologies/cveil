@@ -20,7 +20,6 @@ import com.koostack.operio.plugin.consent.jooq.GetSubjectConsentQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.GetSubjectQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.GrantConsentCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.ListSubjectsQueryActuator;
-import com.koostack.operio.plugin.consent.jooq.DeleteSubjectAuditCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.RegisterSubjectCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.RemoveSubjectCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.RevokeAllConsentCommandActuator;
@@ -335,9 +334,7 @@ public class ConsentResource {
                                 entry.expiresAt()));
                 succeeded++;
             } catch (Exception e) {
-                errors.add(
-                        new BatchConsentResult.BatchItemError(
-                                i, entry.scope(), e.getMessage()));
+                errors.add(new BatchConsentResult.BatchItemError(i, entry.scope(), e.getMessage()));
             }
         }
         BatchConsentResult result =
@@ -427,9 +424,7 @@ public class ConsentResource {
                                 RequestContext.userAgent()));
                 succeeded++;
             } catch (Exception e) {
-                errors.add(
-                        new BatchConsentResult.BatchItemError(
-                                i, entry.scope(), e.getMessage()));
+                errors.add(new BatchConsentResult.BatchItemError(i, entry.scope(), e.getMessage()));
             }
         }
         BatchConsentResult result =
@@ -494,8 +489,10 @@ public class ConsentResource {
         Set<ConsentScope> coreScopes =
                 request.scopes().stream().map(ConsentScopeDto::toModel).collect(Collectors.toSet());
 
-        ConsentResponse response = consentQueryDispatcher.dispatch(
-                new EvaluateConsentQueryActuator.EvaluateConsentQuery(subjectId, coreScopes));
+        ConsentResponse response =
+                consentQueryDispatcher.dispatch(
+                        new EvaluateConsentQueryActuator.EvaluateConsentQuery(
+                                subjectId, coreScopes));
 
         return Response.ok(EvaluateResponse.fromModel(response)).build();
     }
@@ -546,8 +543,9 @@ public class ConsentResource {
 
         LOG.debug("GET /subjects/{}/summary", subjectId);
 
-        SubjectConsentView consent = consentQueryDispatcher.dispatch(
-                new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
+        SubjectConsentView consent =
+                consentQueryDispatcher.dispatch(
+                        new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
 
         return Response.ok(consent).build();
     }
@@ -598,8 +596,9 @@ public class ConsentResource {
 
         // In the new schema, the event stream is the historical record.
         // The consent ledger shows current state per subject.
-        SubjectConsentView consent = consentQueryDispatcher.dispatch(
-                new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
+        SubjectConsentView consent =
+                consentQueryDispatcher.dispatch(
+                        new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
         return Response.ok(consent).build();
     }
 
@@ -674,11 +673,14 @@ public class ConsentResource {
         LOG.debug("GET /subjects/{}/export", subjectId);
 
         try {
-            SubjectConsentView consent = consentQueryDispatcher.dispatch(
-                    new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
+            SubjectConsentView consent =
+                    consentQueryDispatcher.dispatch(
+                            new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
 
-            long cachedKeyCount = consentQueryDispatcher.dispatch(
-                    new CountSubjectCacheKeysQueryActuator.CountSubjectCacheKeysQuery(subjectId));
+            long cachedKeyCount =
+                    consentQueryDispatcher.dispatch(
+                            new CountSubjectCacheKeysQueryActuator.CountSubjectCacheKeysQuery(
+                                    subjectId));
 
             SubjectDataExport export =
                     new SubjectDataExport(subjectId, consent, cachedKeyCount, Instant.now());
@@ -796,8 +798,10 @@ public class ConsentResource {
             // Step 1: Revoke all consent for the subject
             long ledgerEntriesRevoked = 0;
             try {
-                SubjectConsentView consent = consentQueryDispatcher.dispatch(
-                        new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(subjectId));
+                SubjectConsentView consent =
+                        consentQueryDispatcher.dispatch(
+                                new GetSubjectConsentQueryActuator.GetSubjectConsentQuery(
+                                        subjectId));
                 if (consent != null && consent.entries() != null) {
                     ledgerEntriesRevoked = consent.entries().size();
                 }
@@ -815,8 +819,10 @@ public class ConsentResource {
             // Step 2: Delete cached consent-decision keys
             long cachedKeysDeleted = 0;
             try {
-                cachedKeysDeleted = consentQueryDispatcher.dispatch(
-                        new DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery(subjectId));
+                cachedKeysDeleted =
+                        consentQueryDispatcher.dispatch(
+                                new DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery(
+                                        subjectId));
             } catch (Exception e) {
                 LOG.error("eraseSubject: failed to delete cached keys for {}", subjectId, e);
                 status = "PARTIAL_FAILURE";
@@ -886,8 +892,8 @@ public class ConsentResource {
     })
     public Response listSubjects(@Context SecurityContext sc) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        List<SubjectView> subjects = consentQueryDispatcher.dispatch(
-                new ListSubjectsQueryActuator.ListSubjectsQuery());
+        List<SubjectView> subjects =
+                consentQueryDispatcher.dispatch(new ListSubjectsQueryActuator.ListSubjectsQuery());
         return Response.ok(subjects).build();
     }
 
@@ -918,8 +924,9 @@ public class ConsentResource {
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
         Roles.requireRole(sc, Roles.ADMIN_READ);
-        return ((Optional<SubjectView>) consentQueryDispatcher.dispatch(
-                new GetSubjectQueryActuator.GetSubjectQuery(name)))
+        return ((Optional<SubjectView>)
+                        consentQueryDispatcher.dispatch(
+                                new GetSubjectQueryActuator.GetSubjectQuery(name)))
                 .map(s -> Response.ok(s).build())
                 .orElse(
                         Response.status(Response.Status.NOT_FOUND)

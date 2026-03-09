@@ -473,8 +473,8 @@ public class ConsentGraphRedisRepository {
     // -----------------------------------------------------------------------
 
     /**
-     * Counts the number of edge-property keys for a given subject using SCAN.
-     * Pattern: {@code {prefix}:ep:subject:{subjectName}:policy:*}
+     * Counts the number of edge-property keys for a given subject using SCAN. Pattern: {@code
+     * {prefix}:ep:subject:{subjectName}:policy:*}
      */
     long countCachedKeysForSubject(String subjectName) {
         JedisPooled jedis = jedisProvider.get();
@@ -492,9 +492,8 @@ public class ConsentGraphRedisRepository {
     }
 
     /**
-     * Deletes all edge-property keys for a given subject using SCAN + pipelined DEL.
-     * Returns the number of keys deleted.
-     * Pattern: {@code {prefix}:ep:subject:{subjectName}:policy:*}
+     * Deletes all edge-property keys for a given subject using SCAN + pipelined DEL. Returns the
+     * number of keys deleted. Pattern: {@code {prefix}:ep:subject:{subjectName}:policy:*}
      */
     long deleteCachedKeysForSubject(String subjectName) {
         JedisPooled jedis = jedisProvider.get();

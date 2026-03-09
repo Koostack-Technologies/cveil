@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -31,7 +31,6 @@ public class UpdateRegulationCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG =
             LoggerFactory.getLogger(UpdateRegulationCommandActuator.class);
 
@@ -45,7 +44,8 @@ public class UpdateRegulationCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current =
+                eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
         List<String> jurisdictions =
                 current != null
                         ? current.jurisdictions().stream()
@@ -59,9 +59,10 @@ public class UpdateRegulationCommandActuator
         var payload =
                 new RegulationUpdatedEvent(
                         command.regulationName(), command.description(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.REGULATION_UPDATED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.REGULATION_UPDATED, key, payload));
         LOG.info("Regulation updated: {}", command.regulationName());
         return null;
     }

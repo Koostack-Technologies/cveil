@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class RemoveRegulationCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG =
             LoggerFactory.getLogger(RemoveRegulationCommandActuator.class);
 
@@ -37,9 +36,10 @@ public class RemoveRegulationCommandActuator
         var payload = new RegulationRemovedEvent(command.regulationName());
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.REGULATION_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.REGULATION_REMOVED, key, payload));
         LOG.info("Regulation removed: {}", command.regulationName());
         return null;
     }

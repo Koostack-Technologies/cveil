@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -15,14 +15,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RegisterJurisdictionCommandActuator
-        implements CommandActuator<RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand, Void> {
+        implements CommandActuator<
+                RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand, Void> {
 
     private final EventService<?> eventService;
 
     public RegisterJurisdictionCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RegisterJurisdictionCommandActuator.class);
@@ -38,9 +38,10 @@ public class RegisterJurisdictionCommandActuator
                 new JurisdictionRegisteredEvent(command.jurisdictionName(), command.description());
         AggregateKey key =
                 new AggregateKey(aggregateId, JurisdictionAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.JURISDICTION_REGISTERED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.JURISDICTION_REGISTERED, key, payload));
         LOG.info("Jurisdiction registered: {}", command.jurisdictionName());
         return null;
     }

@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -27,14 +27,14 @@ import org.slf4j.LoggerFactory;
  * the domain event.
  */
 public class AssignFieldCategoryCommandActuator
-        implements CommandActuator<AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
+        implements CommandActuator<
+                AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand, Void> {
 
     private final EventService<?> eventService;
 
     public AssignFieldCategoryCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(AssignFieldCategoryCommandActuator.class);
@@ -88,9 +88,10 @@ public class AssignFieldCategoryCommandActuator
                         command.categoryName(),
                         command.categoryDescription(),
                         snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.FIELD_CATEGORY_ASSIGNED, key, payload));
 
         LOG.info(
                 "Field category assigned: field={}, entity={}, category={}",

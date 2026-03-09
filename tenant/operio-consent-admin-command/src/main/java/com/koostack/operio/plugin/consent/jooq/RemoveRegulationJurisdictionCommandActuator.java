@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -34,7 +34,6 @@ public class RemoveRegulationJurisdictionCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG =
             LoggerFactory.getLogger(RemoveRegulationJurisdictionCommandActuator.class);
 
@@ -51,7 +50,8 @@ public class RemoveRegulationJurisdictionCommandActuator
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 
-        RegulationAggregate current = eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
+        RegulationAggregate current =
+                eventPublisher().hydrateAggregate(key, RegulationAggregate.class);
 
         List<String> jurisdictions = new ArrayList<>();
         String regDescription = null;
@@ -69,9 +69,13 @@ public class RemoveRegulationJurisdictionCommandActuator
         var payload =
                 new RegulationJurisdictionRemovedEvent(
                         command.regulationName(), command.jurisdictionName(), snapshot);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.REGULATION_JURISDICTION_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId,
+                                ConsentEventTypes.REGULATION_JURISDICTION_REMOVED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Regulation jurisdiction removed: regulation={}, jurisdiction={}",

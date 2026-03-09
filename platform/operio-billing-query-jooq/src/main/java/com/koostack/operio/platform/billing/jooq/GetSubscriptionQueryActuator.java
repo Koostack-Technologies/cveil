@@ -8,11 +8,10 @@ import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
-/**
- * Query actuator that retrieves the subscription for a single tenant.
- */
+/** Query actuator that retrieves the subscription for a single tenant. */
 public class GetSubscriptionQueryActuator
-        implements QueryActuator<GetSubscriptionQueryActuator.GetSubscriptionQuery, SubscriptionInfo> {
+        implements QueryActuator<
+                GetSubscriptionQueryActuator.GetSubscriptionQuery, SubscriptionInfo> {
 
     private final DSLContext dsl;
     private final RetryConfig retryConfig;

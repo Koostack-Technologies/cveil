@@ -6,9 +6,9 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 /**
  * Extension of {@link Actuator} for command-side operations that produce side effects.
  *
- * <p>In addition to the inherited {@link #execute(Object)} method, a command actuator
- * exposes both an {@link EventService} for publishing domain events and a {@link
- * MetricPublisherService} for emitting telemetry metrics.
+ * <p>In addition to the inherited {@link #execute(Object)} method, a command actuator exposes both
+ * an {@link EventService} for publishing domain events and a {@link MetricPublisherService} for
+ * emitting telemetry metrics.
  *
  * @param <I> the command input type
  * @param <O> the result type produced by the actuator
@@ -29,4 +29,3 @@ public interface CommandActuator<I, O> extends Actuator<I, O> {
      */
     MetricPublisherService<?> metricsPublisher();
 }
-

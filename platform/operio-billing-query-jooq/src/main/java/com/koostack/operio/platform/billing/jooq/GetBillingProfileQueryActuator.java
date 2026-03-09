@@ -8,11 +8,10 @@ import com.koostack.operio.core.query.RetryableQuery.RetryConfig;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
-/**
- * Query actuator that retrieves the billing profile for a single tenant.
- */
+/** Query actuator that retrieves the billing profile for a single tenant. */
 public class GetBillingProfileQueryActuator
-        implements QueryActuator<GetBillingProfileQueryActuator.GetBillingProfileQuery, BillingProfileInfo> {
+        implements QueryActuator<
+                GetBillingProfileQueryActuator.GetBillingProfileQuery, BillingProfileInfo> {
 
     private final DSLContext dsl;
     private final RetryConfig retryConfig;

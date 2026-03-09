@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that finds a tenant user by username.
- */
+/** Query actuator that finds a tenant user by username. */
 public class TenantFindUserByUsernameQueryActuator
         implements QueryActuator<
                 TenantFindUserByUsernameQueryActuator.TenantFindUserByUsernameQuery, IdpUser> {
@@ -40,14 +38,9 @@ public class TenantFindUserByUsernameQueryActuator
     public IdpUser execute(TenantFindUserByUsernameQuery query) {
         String realmId = TenantKeycloakUserMapper.toRealmId(query.tenantId());
         LOG.debug(
-                "Finding user by username in tenant '{}': {}",
-                query.tenantId(),
-                query.username());
+                "Finding user by username in tenant '{}': {}", query.tenantId(), query.username());
         List<UserRepresentation> users =
-                adminClient
-                        .realm(realmId)
-                        .users()
-                        .searchByUsername(query.username(), true);
+                adminClient.realm(realmId).users().searchByUsername(query.username(), true);
         return users.isEmpty() ? null : userMapper.toIdpUser(users.get(0));
     }
 

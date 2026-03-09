@@ -6,9 +6,7 @@ import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import org.jooq.DSLContext;
 
-/**
- * Query actuator that counts consent ledger entries for a subject.
- */
+/** Query actuator that counts consent ledger entries for a subject. */
 public class CountSubjectConsentEntriesQueryActuator
         implements QueryActuator<
                 CountSubjectConsentEntriesQueryActuator.CountSubjectConsentEntriesQuery, Integer> {

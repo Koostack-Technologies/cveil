@@ -11,9 +11,7 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that lists all service accounts (confidential clients) in a Keycloak realm.
- */
+/** Query actuator that lists all service accounts (confidential clients) in a Keycloak realm. */
 public class ListServiceAccountsQueryActuator
         implements QueryActuator<
                 ListServiceAccountsQueryActuator.ListServiceAccountsQuery,
@@ -63,4 +61,3 @@ public class ListServiceAccountsQueryActuator
         return null;
     }
 }
-

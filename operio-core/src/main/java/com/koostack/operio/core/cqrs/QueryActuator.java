@@ -20,4 +20,3 @@ public interface QueryActuator<I, O> extends Actuator<I, O> {
      */
     MetricPublisherService<?> metricsPublisher();
 }
-

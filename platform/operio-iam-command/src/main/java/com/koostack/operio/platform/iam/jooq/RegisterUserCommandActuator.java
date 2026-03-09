@@ -3,8 +3,8 @@ package com.koostack.operio.platform.iam.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserRegisteredEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
@@ -103,12 +103,13 @@ public class RegisterUserCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        IamEventTypes.USER_REGISTERED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                IamEventTypes.USER_REGISTERED,
+                                key,
+                                payload));
 
         LOG.info(
                 "User registered: realmId={}, username={}, email={}, kcId={}",
@@ -128,8 +129,7 @@ public class RegisterUserCommandActuator
      *
      * @return the Keycloak-assigned user ID, or {@code null} if the user already existed
      */
-    private String createKeycloakUser(
-            RegisterUserCommand command, Set<String> roles) {
+    private String createKeycloakUser(RegisterUserCommand command, Set<String> roles) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Idempotent: check if user already exists

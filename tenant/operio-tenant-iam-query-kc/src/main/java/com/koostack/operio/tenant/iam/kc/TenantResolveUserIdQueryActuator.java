@@ -8,9 +8,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that resolves a tenant user's internal ID from an email or username.
- */
+/** Query actuator that resolves a tenant user's internal ID from an email or username. */
 public class TenantResolveUserIdQueryActuator
         implements QueryActuator<
                 TenantResolveUserIdQueryActuator.TenantResolveUserIdQuery, String> {
@@ -30,7 +28,7 @@ public class TenantResolveUserIdQueryActuator
     /**
      * Query input for resolving a tenant user ID from email or username.
      *
-     * @param tenantId        the tenant identifier
+     * @param tenantId the tenant identifier
      * @param emailOrUsername the user's email or username
      */
     public record TenantResolveUserIdQuery(String tenantId, String emailOrUsername) {}
@@ -40,10 +38,7 @@ public class TenantResolveUserIdQueryActuator
         String realmId = TenantKeycloakUserMapper.toRealmId(query.tenantId());
         // Try by email first
         List<UserRepresentation> users =
-                adminClient
-                        .realm(realmId)
-                        .users()
-                        .searchByEmail(query.emailOrUsername(), true);
+                adminClient.realm(realmId).users().searchByEmail(query.emailOrUsername(), true);
         if (users.isEmpty()) {
             // Try by username
             users =

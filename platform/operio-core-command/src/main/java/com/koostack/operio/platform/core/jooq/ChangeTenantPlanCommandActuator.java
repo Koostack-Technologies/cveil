@@ -3,8 +3,8 @@ package com.koostack.operio.platform.core.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.core.aggregates.TenantAggregate;
@@ -26,7 +26,6 @@ public class ChangeTenantPlanCommandActuator
         this.eventService = eventService;
     }
 
-
     public record ChangeTenantPlanCommand(String tenantId, String newPlan) {}
 
     @Override
@@ -43,12 +42,13 @@ public class ChangeTenantPlanCommandActuator
         String oldPlan = current != null ? current.plan() : null;
 
         var payload = new TenantPlanChangedEvent(command.tenantId(), oldPlan, command.newPlan());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        CoreEventTypes.TENANT_PLAN_CHANGED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                CoreEventTypes.TENANT_PLAN_CHANGED,
+                                key,
+                                payload));
         return null;
     }
 

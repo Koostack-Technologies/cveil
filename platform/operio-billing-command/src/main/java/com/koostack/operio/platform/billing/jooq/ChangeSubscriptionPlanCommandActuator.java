@@ -3,8 +3,8 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
@@ -25,7 +25,6 @@ public class ChangeSubscriptionPlanCommandActuator
     public ChangeSubscriptionPlanCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     public record ChangeSubscriptionPlanCommand(
             String tenantId,
@@ -52,12 +51,13 @@ public class ChangeSubscriptionPlanCommandActuator
                         command.evalLimit(),
                         command.subjectLimit(),
                         command.burstLimit());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                BillingEventTypes.SUBSCRIPTION_PLAN_CHANGED,
+                                key,
+                                payload));
         return null;
     }
 

@@ -8,16 +8,13 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import org.jooq.Record;
 
-/**
- * Shared jOOQ field constants and record-to-domain mapping utilities for billing queries.
- */
+/** Shared jOOQ field constants and record-to-domain mapping utilities for billing queries. */
 public final class BillingRecordMapper {
 
     // -- billing_profile table ------------------------------------------------
     static final org.jooq.Table<?> BILLING_PROFILE =
             table(name("platform_billing", "billing_profile"));
-    static final org.jooq.Field<String> BP_TENANT_ID =
-            field(name("tenant_id"), String.class);
+    static final org.jooq.Field<String> BP_TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> BP_BILLING_EMAIL =
             field(name("billing_email"), String.class);
     static final org.jooq.Field<String> BP_TAX_ID = field(name("tax_id"), String.class);
@@ -33,16 +30,12 @@ public final class BillingRecordMapper {
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- subscription table ---------------------------------------------------
-    static final org.jooq.Table<?> SUBSCRIPTION =
-            table(name("platform_billing", "subscription"));
-    static final org.jooq.Field<String> SUB_TENANT_ID =
-            field(name("tenant_id"), String.class);
-    static final org.jooq.Field<String> SUB_PLAN_TIER =
-            field(name("plan_tier"), String.class);
+    static final org.jooq.Table<?> SUBSCRIPTION = table(name("platform_billing", "subscription"));
+    static final org.jooq.Field<String> SUB_TENANT_ID = field(name("tenant_id"), String.class);
+    static final org.jooq.Field<String> SUB_PLAN_TIER = field(name("plan_tier"), String.class);
     static final org.jooq.Field<Long> SUB_EVAL_LIMIT =
             field(name("eval_limit_monthly"), Long.class);
-    static final org.jooq.Field<Long> SUB_SUBJECT_LIMIT =
-            field(name("subject_limit"), Long.class);
+    static final org.jooq.Field<Long> SUB_SUBJECT_LIMIT = field(name("subject_limit"), Long.class);
     static final org.jooq.Field<Integer> SUB_BURST_LIMIT =
             field(name("burst_limit_per_min"), Integer.class);
     static final org.jooq.Field<String> SUB_STATUS = field(name("status"), String.class);

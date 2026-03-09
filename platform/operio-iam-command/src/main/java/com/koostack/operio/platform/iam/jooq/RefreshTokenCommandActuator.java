@@ -4,8 +4,8 @@ import com.koostack.operio.common.keycloak.KeycloakAuthSupport;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AuthResult;
 import com.koostack.operio.core.platform.events.TokenRefreshedEvent;
@@ -17,8 +17,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "refresh token" command for platform IAM.
  *
- * <p>Performs the OIDC refresh-token grant directly against Keycloak
- * via {@link KeycloakAuthSupport}, then publishes a {@link TokenRefreshedEvent}.
+ * <p>Performs the OIDC refresh-token grant directly against Keycloak via {@link
+ * KeycloakAuthSupport}, then publishes a {@link TokenRefreshedEvent}.
  */
 public class RefreshTokenCommandActuator
         implements CommandActuator<RefreshTokenCommandActuator.RefreshTokenCommand, AuthResult> {
@@ -30,7 +30,8 @@ public class RefreshTokenCommandActuator
 
     private final EventService<?> eventService;
 
-    public RefreshTokenCommandActuator(EventService<?> eventService, KeycloakAuthSupport authSupport) {
+    public RefreshTokenCommandActuator(
+            EventService<?> eventService, KeycloakAuthSupport authSupport) {
         this.eventService = eventService;
         this.authSupport = authSupport;
     }
@@ -38,15 +39,14 @@ public class RefreshTokenCommandActuator
     /**
      * Command input for refreshing a platform access token.
      *
-     * @param realmId      the Keycloak realm
+     * @param realmId the Keycloak realm
      * @param refreshToken the refresh token
      */
     public record RefreshTokenCommand(String realmId, String refreshToken) {}
 
     @Override
     public AuthResult execute(RefreshTokenCommand command) {
-        AuthResult result = authSupport.refreshToken(
-                command.realmId(), command.refreshToken());
+        AuthResult result = authSupport.refreshToken(command.realmId(), command.refreshToken());
 
         // Publish domain event
         String userId = result.identity().subject();
@@ -57,17 +57,15 @@ public class RefreshTokenCommandActuator
                 new AggregateKey(
                         aggregateId, USER_AGGREGATE_TYPE, PlatformConstants.PLATFORM_TENANT_ID);
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        IamEventTypes.TOKEN_REFRESHED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                IamEventTypes.TOKEN_REFRESHED,
+                                key,
+                                payload));
 
-        LOG.info(
-                "Token refreshed: realmId={}, userId={}",
-                command.realmId(),
-                userId);
+        LOG.info("Token refreshed: realmId={}, userId={}", command.realmId(), userId);
 
         return result;
     }

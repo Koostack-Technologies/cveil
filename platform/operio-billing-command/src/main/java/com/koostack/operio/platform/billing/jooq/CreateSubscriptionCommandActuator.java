@@ -3,9 +3,9 @@ package com.koostack.operio.platform.billing.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
 import com.koostack.operio.core.exception.OperioServiceException;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
@@ -22,14 +22,14 @@ import java.util.UUID;
  * store.
  */
 public class CreateSubscriptionCommandActuator
-        implements CommandActuator<CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
+        implements CommandActuator<
+                CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
 
     private final EventService<?> eventService;
 
     public CreateSubscriptionCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     public record CreateSubscriptionCommand(String tenantId, String planTier) {}
 
@@ -73,12 +73,13 @@ public class CreateSubscriptionCommandActuator
                         Math.toIntExact(plan.evalLimit()),
                         Math.toIntExact(plan.subjectLimit()),
                         plan.burstLimit());
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        BillingEventTypes.SUBSCRIPTION_CREATED,
-                        billingKey,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                BillingEventTypes.SUBSCRIPTION_CREATED,
+                                billingKey,
+                                payload));
         return null;
     }
 

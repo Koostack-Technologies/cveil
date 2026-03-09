@@ -21,15 +21,15 @@ import com.koostack.operio.core.spi.PluginBundle;
 import com.koostack.operio.core.tenant.authz.AuthzProvider;
 import com.koostack.operio.core.tenant.consent.invalidation.SubscriptionManager;
 import com.koostack.operio.platform.billing.jooq.BillingProjectionHandler;
+import com.koostack.operio.platform.billing.jooq.BillingQueryDispatcher;
 import com.koostack.operio.platform.billing.jooq.JooqBillingCommandConfig;
 import com.koostack.operio.platform.billing.jooq.JooqBillingDispatcher;
 import com.koostack.operio.platform.billing.jooq.JooqBillingQueryConfig;
-import com.koostack.operio.platform.billing.jooq.BillingQueryDispatcher;
 import com.koostack.operio.platform.core.jooq.CoreProjectionHandler;
+import com.koostack.operio.platform.core.jooq.CoreQueryDispatcher;
 import com.koostack.operio.platform.core.jooq.JooqCoreCommandConfig;
 import com.koostack.operio.platform.core.jooq.JooqCoreDispatcher;
 import com.koostack.operio.platform.core.jooq.JooqCoreQueryConfig;
-import com.koostack.operio.platform.core.jooq.CoreQueryDispatcher;
 import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerConfig;
 import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
 import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
@@ -262,7 +262,6 @@ public class OperioProducers {
         JooqConsentAdminServiceConfig retainedJooqConfig = null;
         com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService retainedDsarService = null;
 
-
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)
                 && consentBundle instanceof CoreConsentBundle coreBundle) {
             // Event service for the command service (publishes to event store + Redis streams)
@@ -343,7 +342,8 @@ public class OperioProducers {
         // Register Redis-backed query actuators on the consent query dispatcher.
         // These depend on ConsentDecisionService which is only available after build.
         var consentDecisionService = tenantService.consentService();
-        if (consentDecisionService != null && queryService instanceof JooqConsentAdminQueryDispatcher qd) {
+        if (consentDecisionService != null
+                && queryService instanceof JooqConsentAdminQueryDispatcher qd) {
             qd.registerActuator(
                     EvaluateConsentQueryActuator.EvaluateConsentQuery.class,
                     new EvaluateConsentQueryActuator(consentDecisionService));
@@ -353,7 +353,9 @@ public class OperioProducers {
             qd.registerActuator(
                     DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery.class,
                     new DeleteSubjectCacheKeysQueryActuator(consentDecisionService));
-            LOG.info("Operio REST API: Redis-backed query actuators registered (evaluate, cache count, cache delete)");
+            LOG.info(
+                    "Operio REST API: Redis-backed query actuators registered (evaluate, cache"
+                            + " count, cache delete)");
         }
 
         LOG.info("Operio REST API: initialized successfully (appName={})", tenantService.appName());

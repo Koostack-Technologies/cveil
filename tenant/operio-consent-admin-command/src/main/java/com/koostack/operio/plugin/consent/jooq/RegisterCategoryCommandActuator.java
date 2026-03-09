@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class RegisterCategoryCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG =
             LoggerFactory.getLogger(RegisterCategoryCommandActuator.class);
 
@@ -37,9 +36,10 @@ public class RegisterCategoryCommandActuator
         var payload = new CategoryRegisteredEvent(command.categoryName(), command.description());
         AggregateKey key =
                 new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.CATEGORY_REGISTERED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.CATEGORY_REGISTERED, key, payload));
         LOG.info("Category registered: {}", command.categoryName());
         return null;
     }

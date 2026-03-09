@@ -8,9 +8,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves a single user by internal ID.
- */
+/** Query actuator that retrieves a single user by internal ID. */
 public class GetUserQueryActuator
         implements QueryActuator<GetUserQueryActuator.GetUserQuery, IdpUser> {
 
@@ -28,7 +26,7 @@ public class GetUserQueryActuator
      * Query input for getting a user by ID.
      *
      * @param realmId the Keycloak realm
-     * @param userId  the user's internal ID (operio-user-id attribute)
+     * @param userId the user's internal ID (operio-user-id attribute)
      */
     public record GetUserQuery(String realmId, String userId) {}
 
@@ -50,4 +48,3 @@ public class GetUserQueryActuator
         return null;
     }
 }
-

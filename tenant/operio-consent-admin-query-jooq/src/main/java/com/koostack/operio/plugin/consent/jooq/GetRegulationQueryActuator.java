@@ -4,9 +4,7 @@ import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.RegulationView;
 
-/**
- * Query actuator that retrieves a single regulation by name.
- */
+/** Query actuator that retrieves a single regulation by name. */
 public class GetRegulationQueryActuator
         implements QueryActuator<GetRegulationQueryActuator.GetRegulationQuery, RegulationView> {
 

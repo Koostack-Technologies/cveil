@@ -3,8 +3,8 @@ package com.koostack.operio.platform.iam.jooq;
 import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.ServiceAccountCreatedEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
@@ -92,12 +92,13 @@ public class CreateServiceAccountCommandActuator
                         SERVICE_ACCOUNT_AGGREGATE_TYPE,
                         PlatformConstants.PLATFORM_TENANT_ID);
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        PlatformConstants.PLATFORM_TENANT_ID,
-                        IamEventTypes.SERVICE_ACCOUNT_CREATED,
-                        key,
-                        payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                PlatformConstants.PLATFORM_TENANT_ID,
+                                IamEventTypes.SERVICE_ACCOUNT_CREATED,
+                                key,
+                                payload));
 
         LOG.info("Service account created: realmId={}, clientId={}", command.realmId(), clientId);
 
@@ -165,8 +166,7 @@ public class CreateServiceAccountCommandActuator
     }
 
     private static UUID deriveAggregateId(String realmId, String clientId) {
-        return UUID.nameUUIDFromBytes(
-                (realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes((realmId + ":" + clientId).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override

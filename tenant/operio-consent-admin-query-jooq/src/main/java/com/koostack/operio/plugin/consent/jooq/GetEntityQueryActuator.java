@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.EntityView;
 import java.util.Optional;
 
-/**
- * Query actuator that retrieves a single entity by name.
- */
+/** Query actuator that retrieves a single entity by name. */
 public class GetEntityQueryActuator
         implements QueryActuator<GetEntityQueryActuator.GetEntityQuery, Optional<EntityView>> {
 

@@ -2,8 +2,8 @@ package com.koostack.operio.tenant.iam.kc;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.tenant.events.TenantUserRegisteredEvent;
 import com.koostack.operio.core.tenant.iam.TenantIamEventTypes;
@@ -105,9 +105,13 @@ public class TenantRegisterUserCommandActuator
         UUID aggregateId = UUID.fromString(userId);
         AggregateKey key = new AggregateKey(aggregateId, USER_AGGREGATE_TYPE, command.tenantId());
 
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        command.tenantId(), TenantIamEventTypes.USER_REGISTERED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                command.tenantId(),
+                                TenantIamEventTypes.USER_REGISTERED,
+                                key,
+                                payload));
 
         LOG.info(
                 "Tenant user registered: tenantId={}, username={}, email={}",
@@ -210,7 +214,6 @@ public class TenantRegisterUserCommandActuator
         }
         return null;
     }
-
 
     private static String toRealmId(String tenantId) {
         return "t_" + tenantId;

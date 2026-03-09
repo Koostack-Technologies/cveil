@@ -110,10 +110,13 @@ public class KeycloakTenantIamDispatcher
      */
     public void registerAuthActuators() {
         if (keycloakConfig == null || keycloakAdmin == null) {
-            LOG.warn("Cannot register tenant auth actuators — keycloakConfig/keycloakAdmin not set");
+            LOG.warn(
+                    "Cannot register tenant auth actuators — keycloakConfig/keycloakAdmin not set");
             return;
         }
-        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, RealmResolver.tenantPrefix());
+        var authSupport =
+                new KeycloakAuthSupport(
+                        keycloakConfig, keycloakAdmin, RealmResolver.tenantPrefix());
         actuators.put(
                 TenantAuthenticateCommandActuator.AuthenticateCommand.class,
                 new TenantAuthenticateCommandActuator(eventService, authSupport));
@@ -152,14 +155,15 @@ public class KeycloakTenantIamDispatcher
 
     @Override
     public void suspendUser(String tenantId, String emailOrUsername) {
-        dispatch(new TenantSuspendUserCommandActuator.SuspendUserCommand(
-                tenantId, emailOrUsername));
+        dispatch(
+                new TenantSuspendUserCommandActuator.SuspendUserCommand(tenantId, emailOrUsername));
     }
 
     @Override
     public void activateUser(String tenantId, String emailOrUsername) {
-        dispatch(new TenantActivateUserCommandActuator.ActivateUserCommand(
-                tenantId, emailOrUsername));
+        dispatch(
+                new TenantActivateUserCommandActuator.ActivateUserCommand(
+                        tenantId, emailOrUsername));
     }
 
     @Override
@@ -183,14 +187,16 @@ public class KeycloakTenantIamDispatcher
 
     @Override
     public void assignRole(String tenantId, String emailOrUsername, String role) {
-        dispatch(new TenantAssignRoleCommandActuator.AssignRoleCommand(
-                tenantId, emailOrUsername, role));
+        dispatch(
+                new TenantAssignRoleCommandActuator.AssignRoleCommand(
+                        tenantId, emailOrUsername, role));
     }
 
     @Override
     public void removeRole(String tenantId, String emailOrUsername, String role) {
-        dispatch(new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
-                tenantId, emailOrUsername, role));
+        dispatch(
+                new TenantRemoveRoleCommandActuator.RemoveRoleCommand(
+                        tenantId, emailOrUsername, role));
     }
 
     // -- Internal helpers -----------------------------------------------------

@@ -4,7 +4,6 @@ import com.koostack.operio.core.models.IdpUser;
 import java.time.Instant;
 import java.util.List;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.UserRepresentation;
 
 /**
@@ -63,4 +62,3 @@ public class KeycloakUserMapper {
         return null;
     }
 }
-

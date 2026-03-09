@@ -132,7 +132,8 @@ public class KeycloakIamDispatcher
                 RefreshTokenCommandActuator.RefreshTokenCommand.class,
                 new RefreshTokenCommandActuator(eventService, authSupport));
         actuators.put(
-                LogoutCommandActuator.LogoutCommand.class, new LogoutCommandActuator(eventService, authSupport));
+                LogoutCommandActuator.LogoutCommand.class,
+                new LogoutCommandActuator(eventService, authSupport));
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
     }
 
@@ -183,16 +184,12 @@ public class KeycloakIamDispatcher
 
     @Override
     public void assignRole(String realmId, String emailOrUsername, String role) {
-        dispatch(
-                new AssignRoleCommandActuator.AssignRoleCommand(
-                        realmId, emailOrUsername, role));
+        dispatch(new AssignRoleCommandActuator.AssignRoleCommand(realmId, emailOrUsername, role));
     }
 
     @Override
     public void removeRole(String realmId, String emailOrUsername, String role) {
-        dispatch(
-                new RemoveRoleCommandActuator.RemoveRoleCommand(
-                        realmId, emailOrUsername, role));
+        dispatch(new RemoveRoleCommandActuator.RemoveRoleCommand(realmId, emailOrUsername, role));
     }
 
     // -- Legacy API key compat ------------------------------------------------

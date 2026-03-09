@@ -107,8 +107,7 @@ public class PlatformCqrsHolder {
         if (coreQueryService instanceof QueryDispatcher qd) {
             return qd;
         }
-        throw new IllegalStateException(
-                "Core query service does not implement QueryDispatcher");
+        throw new IllegalStateException("Core query service does not implement QueryDispatcher");
     }
 
     @SuppressWarnings("unchecked")

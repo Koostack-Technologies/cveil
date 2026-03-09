@@ -119,7 +119,10 @@ public class CatalogueResource {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         consentDispatcher.dispatch(
                 new RegisterFieldCommandActuator.RegisterFieldCommand(
-                        req.fieldName(), req.entityName(), req.description(), req.entityDescription()));
+                        req.fieldName(),
+                        req.entityName(),
+                        req.description(),
+                        req.entityDescription()));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Field registered: " + req.fieldName()))
                 .build();
@@ -339,8 +342,7 @@ public class CatalogueResource {
                             + entityName
                             + "' — it still has fields assigned. Remove them first.");
         }
-        consentDispatcher.dispatch(
-                new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
+        consentDispatcher.dispatch(new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
         return Response.ok(MessageResponse.of("Entity removed")).build();
     }
 

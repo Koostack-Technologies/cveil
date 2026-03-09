@@ -119,12 +119,12 @@ public class KeycloakIamQueryDispatcher
                 VerifyTokenQueryActuator.VerifyTokenQuery.class,
                 new VerifyTokenQueryActuator(jwksVerifier, config));
         @SuppressWarnings("removal")
-        var ignored = actuators.put(
-                FindByKeyHashQueryActuator.FindByKeyHashQuery.class,
-                new FindByKeyHashQueryActuator(platformDataSource));
+        var ignored =
+                actuators.put(
+                        FindByKeyHashQueryActuator.FindByKeyHashQuery.class,
+                        new FindByKeyHashQueryActuator(platformDataSource));
 
-        LOG.info(
-                "KeycloakIamQueryDispatcher configured with {} actuators", actuators.size());
+        LOG.info("KeycloakIamQueryDispatcher configured with {} actuators", actuators.size());
     }
 
     @Override
@@ -208,8 +208,7 @@ public class KeycloakIamQueryDispatcher
 
     @Override
     public IdentityContext verifyToken(String realmId, String accessToken) {
-        return dispatch(
-                new VerifyTokenQueryActuator.VerifyTokenQuery(realmId, accessToken));
+        return dispatch(new VerifyTokenQueryActuator.VerifyTokenQuery(realmId, accessToken));
     }
 
     @Override
@@ -225,4 +224,3 @@ public class KeycloakIamQueryDispatcher
         return dispatch(new FindByKeyHashQueryActuator.FindByKeyHashQuery(keyHash));
     }
 }
-

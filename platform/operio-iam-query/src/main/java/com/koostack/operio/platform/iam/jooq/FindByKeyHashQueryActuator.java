@@ -69,4 +69,3 @@ public class FindByKeyHashQueryActuator
         return null;
     }
 }
-

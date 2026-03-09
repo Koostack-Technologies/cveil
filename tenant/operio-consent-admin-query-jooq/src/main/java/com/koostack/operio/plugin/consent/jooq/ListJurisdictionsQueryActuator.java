@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.JurisdictionView;
 import java.util.List;
 
-/**
- * Query actuator that lists all jurisdictions.
- */
+/** Query actuator that lists all jurisdictions. */
 public class ListJurisdictionsQueryActuator
         implements QueryActuator<
                 ListJurisdictionsQueryActuator.ListJurisdictionsQuery, List<JurisdictionView>> {

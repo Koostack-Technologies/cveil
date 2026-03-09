@@ -8,9 +8,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves a single tenant user by internal ID.
- */
+/** Query actuator that retrieves a single tenant user by internal ID. */
 public class TenantGetUserQueryActuator
         implements QueryActuator<TenantGetUserQueryActuator.TenantGetUserQuery, IdpUser> {
 
@@ -28,7 +26,7 @@ public class TenantGetUserQueryActuator
      * Query input for getting a tenant user by ID.
      *
      * @param tenantId the tenant identifier
-     * @param userId   the user's internal ID (operio-user-id attribute)
+     * @param userId the user's internal ID (operio-user-id attribute)
      */
     public record TenantGetUserQuery(String tenantId, String userId) {}
 

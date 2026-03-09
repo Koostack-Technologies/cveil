@@ -9,9 +9,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a tenant user identified by email.
- */
+/** Query actuator that retrieves roles for a tenant user identified by email. */
 public class TenantGetUserRolesByEmailQueryActuator
         implements QueryActuator<
                 TenantGetUserRolesByEmailQueryActuator.TenantGetUserRolesByEmailQuery,
@@ -33,7 +31,7 @@ public class TenantGetUserRolesByEmailQueryActuator
      * Query input for getting tenant user roles by email.
      *
      * @param tenantId the tenant identifier
-     * @param email    the user's email
+     * @param email the user's email
      */
     public record TenantGetUserRolesByEmailQuery(String tenantId, String email) {}
 

@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.SubjectView;
 import java.util.List;
 
-/**
- * Query actuator that lists all registered subjects.
- */
+/** Query actuator that lists all registered subjects. */
 public class ListSubjectsQueryActuator
         implements QueryActuator<ListSubjectsQueryActuator.ListSubjectsQuery, List<SubjectView>> {
 

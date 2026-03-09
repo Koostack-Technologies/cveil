@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -23,7 +23,6 @@ public class UpdateSubjectCommandActuator
         this.eventService = eventService;
     }
 
-
     private static final Logger LOG = LoggerFactory.getLogger(UpdateSubjectCommandActuator.class);
 
     public record UpdateSubjectCommand(String subjectName, String description) {}
@@ -35,9 +34,10 @@ public class UpdateSubjectCommandActuator
         UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
         var payload = new SubjectUpdatedEvent(command.subjectName(), command.description());
         AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.SUBJECT_UPDATED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.SUBJECT_UPDATED, key, payload));
         LOG.info("Subject updated: {}", command.subjectName());
         return null;
     }

@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.RegulationView;
 import java.util.List;
 
-/**
- * Query actuator that lists all regulations with jurisdictions.
- */
+/** Query actuator that lists all regulations with jurisdictions. */
 public class ListRegulationsQueryActuator
         implements QueryActuator<
                 ListRegulationsQueryActuator.ListRegulationsQuery, List<RegulationView>> {

@@ -10,9 +10,7 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves a single tenant service account by client ID.
- */
+/** Query actuator that retrieves a single tenant service account by client ID. */
 public class TenantGetServiceAccountQueryActuator
         implements QueryActuator<
                 TenantGetServiceAccountQueryActuator.TenantGetServiceAccountQuery,

@@ -195,8 +195,8 @@ public class PlatformIamResource {
         Set<String> roles =
                 cqrs.iamQueryDispatcher()
                         .dispatch(
-                                new GetUserRolesByUsernameQueryActuator
-                                        .GetUserRolesByUsernameQuery(PLATFORM_REALM, username));
+                                new GetUserRolesByUsernameQueryActuator.GetUserRolesByUsernameQuery(
+                                        PLATFORM_REALM, username));
         return Response.ok(roles).build();
     }
 
@@ -214,8 +214,7 @@ public class PlatformIamResource {
         cqrs.iamDispatcher()
                 .dispatch(
                         new com.koostack.operio.platform.iam.jooq.AssignRoleCommandActuator
-                                .AssignRoleCommand(
-                                PLATFORM_REALM, username, request.role()));
+                                .AssignRoleCommand(PLATFORM_REALM, username, request.role()));
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 

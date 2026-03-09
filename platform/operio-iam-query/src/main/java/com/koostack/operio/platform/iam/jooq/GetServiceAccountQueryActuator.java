@@ -11,15 +11,12 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves a single service account by client ID.
- */
+/** Query actuator that retrieves a single service account by client ID. */
 public class GetServiceAccountQueryActuator
         implements QueryActuator<
                 GetServiceAccountQueryActuator.GetServiceAccountQuery, ServiceAccountInfo> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(GetServiceAccountQueryActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GetServiceAccountQueryActuator.class);
 
     private final Keycloak adminClient;
 
@@ -30,17 +27,14 @@ public class GetServiceAccountQueryActuator
     /**
      * Query input for getting a service account by client ID.
      *
-     * @param realmId  the Keycloak realm
+     * @param realmId the Keycloak realm
      * @param clientId the Keycloak client ID
      */
     public record GetServiceAccountQuery(String realmId, String clientId) {}
 
     @Override
     public ServiceAccountInfo execute(GetServiceAccountQuery query) {
-        LOG.debug(
-                "Getting service account '{}' in realm '{}'",
-                query.clientId(),
-                query.realmId());
+        LOG.debug("Getting service account '{}' in realm '{}'", query.clientId(), query.realmId());
         RealmResource realm = adminClient.realm(query.realmId());
         List<ClientRepresentation> clients = realm.clients().findByClientId(query.clientId());
         if (clients.isEmpty()) return null;
@@ -62,4 +56,3 @@ public class GetServiceAccountQueryActuator
         return null;
     }
 }
-

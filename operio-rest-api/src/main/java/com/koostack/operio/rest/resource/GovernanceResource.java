@@ -439,8 +439,7 @@ public class GovernanceResource {
             @PathParam("jurisdictionName") String jurisdictionName) {
         Roles.requireRole(sc, Roles.ADMIN_WRITE);
         consentDispatcher.dispatch(
-                new RemoveRegulationJurisdictionCommandActuator
-                                .RemoveRegulationJurisdictionCommand(
+                new RemoveRegulationJurisdictionCommandActuator.RemoveRegulationJurisdictionCommand(
                         regulationName, jurisdictionName));
         return Response.ok(MessageResponse.of("Jurisdiction removed from regulation")).build();
     }

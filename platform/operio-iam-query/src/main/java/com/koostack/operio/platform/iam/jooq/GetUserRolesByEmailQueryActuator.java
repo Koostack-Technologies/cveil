@@ -11,9 +11,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Query actuator that retrieves roles for a user identified by email.
- */
+/** Query actuator that retrieves roles for a user identified by email. */
 public class GetUserRolesByEmailQueryActuator
         implements QueryActuator<
                 GetUserRolesByEmailQueryActuator.GetUserRolesByEmailQuery, Set<String>> {
@@ -31,7 +29,7 @@ public class GetUserRolesByEmailQueryActuator
      * Query input for getting user roles by email.
      *
      * @param realmId the Keycloak realm
-     * @param email   the user's email
+     * @param email the user's email
      */
     public record GetUserRolesByEmailQuery(String realmId, String email) {}
 
@@ -65,4 +63,3 @@ public class GetUserRolesByEmailQueryActuator
         return null;
     }
 }
-

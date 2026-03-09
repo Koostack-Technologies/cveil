@@ -121,14 +121,17 @@ public class JooqConsentAdminCommandService
         updatePurposeActuator = new UpdatePurposeCommandActuator(eventService);
         removePurposeActuator = new RemovePurposeCommandActuator(eventService);
         linkPurposeToRegulationActuator = new LinkPurposeToRegulationCommandActuator(eventService);
-        unlinkPurposeFromRegulationActuator = new UnlinkPurposeFromRegulationCommandActuator(eventService);
+        unlinkPurposeFromRegulationActuator =
+                new UnlinkPurposeFromRegulationCommandActuator(eventService);
         addPurposePolicyActuator = new AddPurposePolicyCommandActuator(eventService);
         removePurposePolicyActuator = new RemovePurposePolicyCommandActuator(eventService);
         registerRegulationActuator = new RegisterRegulationCommandActuator(eventService);
         updateRegulationActuator = new UpdateRegulationCommandActuator(eventService);
         removeRegulationActuator = new RemoveRegulationCommandActuator(eventService);
-        addRegulationJurisdictionActuator = new AddRegulationJurisdictionCommandActuator(eventService);
-        removeRegulationJurisdictionActuator = new RemoveRegulationJurisdictionCommandActuator(eventService);
+        addRegulationJurisdictionActuator =
+                new AddRegulationJurisdictionCommandActuator(eventService);
+        removeRegulationJurisdictionActuator =
+                new RemoveRegulationJurisdictionCommandActuator(eventService);
         registerJurisdictionActuator = new RegisterJurisdictionCommandActuator(eventService);
         updateJurisdictionActuator = new UpdateJurisdictionCommandActuator(eventService);
         removeJurisdictionActuator = new RemoveJurisdictionCommandActuator(eventService);
@@ -243,8 +246,7 @@ public class JooqConsentAdminCommandService
                 deleteSubjectAuditActuator);
         if (shredSubjectActuator != null) {
             actuators.put(
-                    ShredSubjectCommandActuator.ShredSubjectCommand.class,
-                    shredSubjectActuator);
+                    ShredSubjectCommandActuator.ShredSubjectCommand.class, shredSubjectActuator);
         }
 
         LOG.info(
@@ -275,7 +277,8 @@ public class JooqConsentAdminCommandService
 
     @Override
     public void removeEntityCommand(String entityName) {
-        removeEntityActuator.execute(new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
+        removeEntityActuator.execute(
+                new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
     }
 
     // -----------------------------------------------------------------------
@@ -367,7 +370,8 @@ public class JooqConsentAdminCommandService
 
     @Override
     public void removePurposeCommand(String purposeName) {
-        removePurposeActuator.execute(new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
+        removePurposeActuator.execute(
+                new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
     }
 
     @Override
@@ -504,7 +508,8 @@ public class JooqConsentAdminCommandService
 
     @Override
     public void removeSubjectCommand(String subjectName) {
-        removeSubjectActuator.execute(new RemoveSubjectCommandActuator.RemoveSubjectCommand(subjectName));
+        removeSubjectActuator.execute(
+                new RemoveSubjectCommandActuator.RemoveSubjectCommand(subjectName));
     }
 
     // -----------------------------------------------------------------------

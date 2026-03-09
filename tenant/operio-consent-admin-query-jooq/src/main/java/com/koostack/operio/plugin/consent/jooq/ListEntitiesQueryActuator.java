@@ -5,9 +5,7 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.EntityView;
 import java.util.List;
 
-/**
- * Query actuator that lists all registered entities.
- */
+/** Query actuator that lists all registered entities. */
 public class ListEntitiesQueryActuator
         implements QueryActuator<ListEntitiesQueryActuator.ListEntitiesQuery, List<EntityView>> {
 

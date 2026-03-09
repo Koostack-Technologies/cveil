@@ -6,11 +6,10 @@ import com.koostack.operio.core.platform.core.models.TenantCredentials;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
-/**
- * Query actuator that retrieves Redis ACL credentials for a tenant.
- */
+/** Query actuator that retrieves Redis ACL credentials for a tenant. */
 public class GetTenantCredentialsQueryActuator
-        implements QueryActuator<GetTenantCredentialsQueryActuator.GetTenantCredentialsQuery, TenantCredentials> {
+        implements QueryActuator<
+                GetTenantCredentialsQueryActuator.GetTenantCredentialsQuery, TenantCredentials> {
 
     private final DSLContext dsl;
     private final CoreRecordMapper mapper;

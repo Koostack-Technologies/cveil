@@ -2,8 +2,8 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.cqrs.CommandActuator;
 import com.koostack.operio.core.event.EventService;
-import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
+import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
@@ -15,14 +15,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class RemoveJurisdictionCommandActuator
-        implements CommandActuator<RemoveJurisdictionCommandActuator.RemoveJurisdictionCommand, Void> {
+        implements CommandActuator<
+                RemoveJurisdictionCommandActuator.RemoveJurisdictionCommand, Void> {
 
     private final EventService<?> eventService;
 
     public RemoveJurisdictionCommandActuator(EventService<?> eventService) {
         this.eventService = eventService;
     }
-
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RemoveJurisdictionCommandActuator.class);
@@ -37,9 +37,10 @@ public class RemoveJurisdictionCommandActuator
         var payload = new JurisdictionRemovedEvent(command.jurisdictionName());
         AggregateKey key =
                 new AggregateKey(aggregateId, JurisdictionAggregate.AGGREGATE_TYPE, tenantId);
-        eventPublisher().publishEvent(
-                PublishDomainEventInput.of(
-                        tenantId, ConsentEventTypes.JURISDICTION_REMOVED, key, payload));
+        eventPublisher()
+                .publishEvent(
+                        PublishDomainEventInput.of(
+                                tenantId, ConsentEventTypes.JURISDICTION_REMOVED, key, payload));
         LOG.info("Jurisdiction removed: {}", command.jurisdictionName());
         return null;
     }
