@@ -3,11 +3,9 @@ package com.koostack.operio.rest.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.bundle.core.CoreConsentBundle;
-import com.koostack.operio.core.DefaultPlatformService;
 import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.PlatformService;
 import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.cqrs.QueryDispatcher;
@@ -637,65 +635,6 @@ public class OperioProducers {
         };
     }
 
-    /**
-     * Produces the {@link PlatformService} singleton — handles cross-tenant IAM operations (user
-     * registration, email verification, password reset).
-     *
-     * <p>In production mode with an IdpProvider configured, returns a {@link
-     * DefaultPlatformService} backed by the IdpProvider. In embedded mode or when no IdpProvider is
-     * available, returns {@code null}.
-     */
-    @Produces
-    @ApplicationScoped
-    public PlatformService platformService(TenantService tenantService) {
-        // Force TenantService initialization — this triggers wirePlatformCqrsServices()
-        // which sets coreCommandService, billingCommandService, etc. on this producer bean.
-        // Without this call, the proxy would remain uninitialized.
-        String appName = tenantService.appName();
-        LOG.info(
-                "Operio REST API: platformService() — TenantService initialized (appName={}),"
-                        + " coreCommandService={}",
-                appName,
-                coreCommandService);
-
-        IdpProvider<?> idp = null;
-        if (idpProviderInstance.isResolvable()) {
-            try {
-                idp = idpProviderInstance.get();
-            } catch (Exception e) {
-                LOG.debug("Operio REST API: IdpProvider not available: {}", e.getMessage());
-            }
-        }
-
-        // PlatformService can operate without IdpProvider (createTenant doesn't need it)
-        if (idp == null && coreCommandService == null) {
-            LOG.debug(
-                    "Operio REST API: PlatformService not available (no IdpProvider and no CQRS"
-                            + " services)");
-            return null;
-        }
-
-        String resolvedAppName = config.appName().orElse(Operio.DEFAULT_APP_NAME);
-        PlatformService service =
-                new DefaultPlatformService(
-                        resolvedAppName,
-                        idp,
-                        coreCommandService,
-                        billingCommandService,
-                        coreQueryService,
-                        planQueryService,
-                        null,
-                        null);
-        LOG.info(
-                "Operio REST API: PlatformService wired (DefaultPlatformService, idp={},"
-                        + " coreCmd={}, billingCmd={}, planQuery={})",
-                idp != null,
-                coreCommandService != null,
-                billingCommandService != null,
-                planQueryService != null);
-        return service;
-    }
-
     // -----------------------------------------------------------------------
     // Per-tenant stream consumer (production only)
     // -----------------------------------------------------------------------
@@ -956,8 +895,7 @@ public class OperioProducers {
      * services, projection handlers, and the platform stream consumer.
      *
      * <p>Called once during {@link #tenantService()} initialization in production mode. The command
-     * services are stored as instance fields so that {@link #platformService()} can pass them to
-     * {@link DefaultPlatformService}.
+     * and query services are stored as instance fields and exposed via {@link PlatformCqrsHolder}.
      */
     private void wirePlatformCqrsServices(Operio.Builder builder) {
         OperioConfig.DbConfig platformDb = config.platformDb().orElse(null);

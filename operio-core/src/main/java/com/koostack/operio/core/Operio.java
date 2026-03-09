@@ -26,8 +26,8 @@ import java.util.logging.Logger;
  * Abstract base class for Operio application services.
  *
  * <p>Provides the {@link Builder} and plugin-wiring infrastructure shared by all concrete service
- * implementations ({@link TenantService}, {@link PlatformService}). Manages plugin lifecycle,
- * namespacing, and health checks.
+ * implementations ({@link TenantService}). Manages plugin lifecycle, namespacing, and health
+ * checks.
  *
  * <h2>Construction</h2>
  *
@@ -311,22 +311,6 @@ public abstract class Operio implements OperioService {
                 com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> queryService) {
             DefaultTenantService service =
                     new DefaultTenantService(this, commandService, queryService);
-            if (verifyOnBuild) {
-                service.verifyReady();
-            }
-            return service;
-        }
-
-        /**
-         * Builds a {@link DefaultPlatformService} from this builder's configuration. Uses the
-         * registered IdpProvider, CoreCommandService, and BillingCommandService.
-         *
-         * @return a fully-wired DefaultPlatformService
-         */
-        public DefaultPlatformService buildPlatformService() {
-            DefaultPlatformService service =
-                    new DefaultPlatformService(
-                            appName, idpProvider, coreCommandService, billingCommandService);
             if (verifyOnBuild) {
                 service.verifyReady();
             }

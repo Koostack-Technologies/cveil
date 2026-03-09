@@ -7,8 +7,8 @@ import java.util.List;
  * Query service for subscription plans — reads pre-seeded plan definitions from the {@code
  * platform_core.plan} table.
  *
- * <p>Used by {@code DefaultPlatformService.createTenant()} to validate that the requested plan
- * exists and is active, and to retrieve limits for subscription creation.
+ * <p>Used by the platform tenant-creation flow to validate that the requested plan exists and is
+ * active, and to retrieve limits for subscription creation.
  *
  * @param <T> the configuration type for the backing implementation
  */
