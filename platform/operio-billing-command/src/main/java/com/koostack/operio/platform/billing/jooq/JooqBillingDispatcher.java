@@ -80,7 +80,7 @@ public class JooqBillingDispatcher
                 new UpdatePaymentMethodStatusCommandActuator(eventService));
         actuators.put(
                 CreateSubscriptionCommandActuator.CreateSubscriptionCommand.class,
-                new CreateSubscriptionCommandActuator(eventService));
+                new CreateSubscriptionCommandActuator(eventService, config.planQueryService()));
         actuators.put(
                 ChangeSubscriptionPlanCommandActuator.ChangeSubscriptionPlanCommand.class,
                 new ChangeSubscriptionPlanCommandActuator(eventService));

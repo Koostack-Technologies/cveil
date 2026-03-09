@@ -10,40 +10,35 @@ import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.billing.BillingEventTypes;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
 import com.koostack.operio.core.platform.billing.events.SubscriptionCreatedEvent;
-import com.koostack.operio.core.platform.plan.aggregates.PlanAggregate;
+import com.koostack.operio.core.platform.plan.PlanQueryService;
 import java.util.UUID;
 
 /**
  * Actuator that handles the "create subscription" command.
  *
- * <p>Hydrates the {@link PlanAggregate} from the event store to validate that the requested plan
- * exists and is active, and hydrates the {@link BillingProfileAggregate} to verify no subscription
- * already exists. On success, publishes a {@link SubscriptionCreatedEvent} to the platform event
- * store.
+ * <p>Validates the requested plan via {@link PlanQueryService} (SQL-backed) to ensure it exists and
+ * is active, hydrates the {@link BillingProfileAggregate} to verify no subscription already exists,
+ * then publishes a {@link SubscriptionCreatedEvent} to the platform event store.
  */
 public class CreateSubscriptionCommandActuator
         implements CommandActuator<
                 CreateSubscriptionCommandActuator.CreateSubscriptionCommand, Void> {
 
     private final EventService<?> eventService;
+    private final PlanQueryService<?> planQueryService;
 
-    public CreateSubscriptionCommandActuator(EventService<?> eventService) {
+    public CreateSubscriptionCommandActuator(
+            EventService<?> eventService, PlanQueryService<?> planQueryService) {
         this.eventService = eventService;
+        this.planQueryService = planQueryService;
     }
 
     public record CreateSubscriptionCommand(String tenantId, String planTier) {}
 
     @Override
     public Void execute(CreateSubscriptionCommand command) {
-        // Hydrate plan aggregate to validate existence and active status
-        UUID planAggregateId = PlanAggregate.deriveId(command.planTier());
-        AggregateKey planKey =
-                new AggregateKey(
-                        planAggregateId,
-                        PlanAggregate.AGGREGATE_TYPE,
-                        PlatformConstants.PLATFORM_TENANT_ID);
-
-        PlanAggregate plan = eventPublisher().hydrateAggregate(planKey, PlanAggregate.class);
+        // Validate plan existence and active status via SQL-backed query service
+        PlanQueryService.PlanInfo plan = planQueryService.getPlan(command.planTier());
         if (plan == null) {
             throw new OperioServiceException("Plan '" + command.planTier() + "' does not exist");
         }

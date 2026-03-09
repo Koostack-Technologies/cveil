@@ -1025,7 +1025,7 @@ public class OperioProducers {
         coreCmdSvc.configure(new JooqCoreCommandConfig(platformEventService));
 
         JooqBillingDispatcher billingCmdSvc = new JooqBillingDispatcher();
-        billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService));
+        // Billing dispatcher configured after planQueryService is available (below)
 
         com.koostack.operio.platform.iam.jooq.KeycloakIamDispatcher iamCmdSvc =
                 new com.koostack.operio.platform.iam.jooq.KeycloakIamDispatcher();
@@ -1088,6 +1088,9 @@ public class OperioProducers {
 
         this.coreQueryService = coreQuerySvc;
         this.planQueryService = planQuerySvc;
+
+        // Configure billing dispatcher now that planQueryService is available
+        billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService, planQuerySvc));
 
         com.koostack.operio.platform.iam.jooq.KeycloakIamQueryDispatcher iamQuerySvc =
                 new com.koostack.operio.platform.iam.jooq.KeycloakIamQueryDispatcher();
@@ -1202,9 +1205,20 @@ public class OperioProducers {
                         com.koostack.operio.tenant.iam.kc.KeycloakTenantIamDispatcher
                         tenantDispatcher
                 && this.tenantEventService != null) {
+            // Tenant realms have per-realm client secrets — force dynamic Admin API resolution
+            // by omitting the static operioClientSecret (which belongs to the platform realm).
+            var tenantKcConfig =
+                    new com.koostack.operio.plugin.platform.keycloak.KeycloakConfig(
+                            kcIamConfig.serverUrl(),
+                            kcIamConfig.adminRealm(),
+                            kcIamConfig.adminClientId(),
+                            kcIamConfig.adminUsername(),
+                            kcIamConfig.adminPassword(),
+                            kcIamConfig.operioClientId(),
+                            null);
             tenantDispatcher.configure(
                     new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandConfig(
-                            this.tenantEventService, iamCmdKeycloak, kcIamConfig));
+                            this.tenantEventService, iamCmdKeycloak, tenantKcConfig));
             tenantDispatcher.registerAuthActuators();
             LOG.info(
                     "Operio REST API: KeycloakTenantIamDispatcher reconfigured with Keycloak admin"
