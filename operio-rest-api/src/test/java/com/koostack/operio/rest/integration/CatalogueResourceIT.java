@@ -106,10 +106,8 @@ class CatalogueResourceIT {
             // Initialize test support after we know config is populated
             support = new IntegrationTestSupport(config, TENANT_ID);
 
-            // Wait for the CQRS projection to make the API key usable
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
-            support.awaitEventTableReady(Duration.ofSeconds(15));
-            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
+            // Wait for tenant provisioning to complete
+            support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
 
         @Test
@@ -137,9 +135,6 @@ class CatalogueResourceIT {
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
-
-            // Wait for the CQRS projection to make the read-only key usable
-            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(30));
         }
 
         @Test

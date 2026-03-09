@@ -564,7 +564,7 @@ class CreateTenantPipelineIT {
                     assertThat(rs.getString("key_prefix"))
                             .as("key_prefix for API key %d", count)
                             .isNotNull()
-                            .startsWith("opk_");
+                            .startsWith("opr_");
                     assertThat(rs.getString("status"))
                             .as("status for API key %d", count)
                             .isEqualTo("active");

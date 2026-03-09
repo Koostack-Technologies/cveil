@@ -57,6 +57,7 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":common:operio-jooq"))
     implementation(project(":common:operio-redis"))
+    implementation(project(":common:operio-tenant-registry"))
     implementation(project(":tenant:operio-consent-admin-projection-jooq")) // Admin schema projection handler
     implementation(project(":tenant:operio-consent-decision-projection-redis")) // Graph projection handler + query service
     implementation(project(":tenant:operio-tenant-event-jooq")) // TenantStreamConsumer

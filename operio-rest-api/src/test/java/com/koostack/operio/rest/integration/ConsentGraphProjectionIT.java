@@ -125,9 +125,7 @@ class ConsentGraphProjectionIT {
             apiKey = response.jsonPath().getString("rawKey");
             assertNotNull(apiKey);
             support = new IntegrationTestSupport(config, TENANT_ID);
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
-            support.awaitEventTableReady(Duration.ofSeconds(15));
-            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
+            support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
     }
 

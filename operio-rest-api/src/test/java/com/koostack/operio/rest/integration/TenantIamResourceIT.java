@@ -133,9 +133,7 @@ class TenantIamResourceIT {
             supportA = new IntegrationTestSupport(config, TENANT_A_ID);
 
             // Wait for CQRS projections
-            supportA.awaitApiKeyUsable(tenantAAdminApiKey, Duration.ofSeconds(30));
-            supportA.awaitEventTableReady(Duration.ofSeconds(30));
-            supportA.awaitTenantDiscoverable(TENANT_A_ID, Duration.ofSeconds(30));
+            supportA.awaitTenantReady(TENANT_A_ID, Duration.ofSeconds(90));
         }
 
         @Test
@@ -823,8 +821,7 @@ class TenantIamResourceIT {
 
             // Wait for CQRS projections
             var supportB = new IntegrationTestSupport(config, TENANT_B_ID);
-            supportB.awaitApiKeyUsable(tenantBApiKey, Duration.ofSeconds(30));
-            supportB.awaitTenantDiscoverable(TENANT_B_ID, Duration.ofSeconds(30));
+            supportB.awaitTenantReady(TENANT_B_ID, Duration.ofSeconds(90));
             supportB.close();
         }
 
@@ -951,7 +948,6 @@ class TenantIamResourceIT {
 
             tenantAApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(tenantAApiKey);
-            supportA.awaitApiKeyUsable(tenantAApiKey, Duration.ofSeconds(30));
         }
 
         @Test

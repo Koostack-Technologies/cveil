@@ -87,7 +87,7 @@ public class SubjectLifecycleIT {
                             .contentType(ContentType.JSON)
                             .body(
                                     """
-                    {"tenantId": "%s", "keyName": "sl-it-key", "environment": "TEST",
+                    {"tenantId": "%s", "subject": "sl-it-key",
                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]}
                     """
                                             .formatted(TENANT_ID))
@@ -102,9 +102,7 @@ public class SubjectLifecycleIT {
         @DisplayName("Init support")
         void initSupport() {
             support = new IntegrationTestSupport(config, TENANT_ID);
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
-            support.awaitEventTableReady(Duration.ofSeconds(15));
-            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
+            support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
             assertThat(support).isNotNull();
         }
     }
@@ -221,7 +219,7 @@ public class SubjectLifecycleIT {
                     .body(
                             """
                     {"purposeName": "%s", "regulationName": "%s",
-                    "lawfulBasis": "consent", "onGranted": "allow", "onDenied": "deny"}
+                    "lawfulBasis": "consent", "onGranted": "PLAINTEXT", "onDenied": "REDACT_ALL"}
                     """
                                     .formatted(PURPOSE, REGULATION))
                     .post("/api/v1/governance/purposes/regulations")
@@ -243,6 +241,23 @@ public class SubjectLifecycleIT {
                     .post("/api/v1/governance/purposes/policies")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
+        }
+
+        @Test
+        @Order(9)
+        @DisplayName("Await governance projection (policy visible in DB)")
+        void awaitGovernanceProjected() {
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(60))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var rows = support.query("SELECT count(*) AS cnt FROM policy");
+                                int cnt = ((Number) rows.get(0).get("cnt")).intValue();
+                                assertThat(cnt)
+                                        .as("Expected at least 1 policy row projected")
+                                        .isGreaterThanOrEqualTo(1);
+                            });
         }
     }
 
@@ -305,9 +320,16 @@ public class SubjectLifecycleIT {
         @Order(4)
         @DisplayName("Verify subject has consent ledger entries")
         void ledgerEntriesExist() {
-            assertThat(support.countConsentLedgerEntries(SUBJECT_REMOVE))
-                    .as("Subject should have consent entries before removal")
-                    .isGreaterThan(0);
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    assertThat(support.countConsentLedgerEntries(SUBJECT_REMOVE))
+                                            .as(
+                                                    "Subject should have consent entries before"
+                                                            + " removal")
+                                            .isGreaterThan(0));
         }
 
         @Test
@@ -549,9 +571,16 @@ public class SubjectLifecycleIT {
         @Order(2)
         @DisplayName("Verify consent ledger entries exist BEFORE delete")
         void ledgerExistsBefore() {
-            assertThat(support.countConsentLedgerEntries(SUBJECT_DSAR))
-                    .as("Consent ledger should have entries before DSAR delete")
-                    .isGreaterThan(0);
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    assertThat(support.countConsentLedgerEntries(SUBJECT_DSAR))
+                                            .as(
+                                                    "Consent ledger should have entries before DSAR"
+                                                            + " delete")
+                                            .isGreaterThan(0));
         }
 
         @Test
@@ -602,11 +631,19 @@ public class SubjectLifecycleIT {
         @Order(7)
         @DisplayName("Verify dsar_audit_log row inserted")
         void dsarAuditLogInserted() {
-            var auditRows = support.queryDsarAuditLog(SUBJECT_DSAR);
-            assertThat(auditRows)
-                    .as("DSAR audit log should have at least one entry for subject")
-                    .isNotEmpty();
-            assertThat(auditRows.get(0).get("subject_id").toString()).isEqualTo(SUBJECT_DSAR);
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var auditRows = support.queryDsarAuditLog(SUBJECT_DSAR);
+                                assertThat(auditRows)
+                                        .as(
+                                                "DSAR audit log should have at least one entry for subject")
+                                        .isNotEmpty();
+                                assertThat(auditRows.get(0).get("subject_id").toString())
+                                        .isEqualTo(SUBJECT_DSAR);
+                            });
         }
 
         @Test

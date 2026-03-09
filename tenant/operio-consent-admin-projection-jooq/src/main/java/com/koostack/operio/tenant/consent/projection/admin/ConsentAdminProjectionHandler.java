@@ -450,9 +450,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String lawfulBasis = textOrNull(node, "lawfulBasis");
         String onGranted = textOrNull(node, "onGranted");
         String onDenied = textOrNull(node, "onDenied");
-        // DB columns are NOT NULL — apply defaults matching the schema
-        if (onGranted == null) onGranted = "PLAINTEXT";
-        if (onDenied == null) onDenied = "REDACT_ALL";
+        // DB columns are NOT NULL — apply defaults if absent or unrecognized
+        if (onGranted == null || MaskingType.lookupLiteral(onGranted) == null)
+            onGranted = "PLAINTEXT";
+        if (onDenied == null || MaskingType.lookupLiteral(onDenied) == null)
+            onDenied = "REDACT_ALL";
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         Long purposeId = resolvePurposeId(purposeName);
@@ -730,6 +732,10 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleSubjectRemoved(JsonNode node) {
         String subjectName = node.get("subjectName").asText();
 
+        // Delete consent_ledger entries first (FK references subject.subject_name)
+        dsl.deleteFrom(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectName))
+                .execute();
         dsl.deleteFrom(SUBJECT).where(SUBJECT.SUBJECT_NAME.eq(subjectName)).execute();
     }
 
@@ -758,6 +764,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         LocalDateTime expiresAt = instantToLocal(node, "expiresAt");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         ConsentAction consentAction = ConsentAction.lookupLiteral(action);
+
+        // Ensure the subject row exists (consent events may arrive before the
+        // SUBJECT_REGISTERED projection when both are published in quick succession).
+        dsl.insertInto(SUBJECT)
+                .set(SUBJECT.SUBJECT_NAME, subjectId)
+                .set(SUBJECT.CREATED_AT, now)
+                .set(SUBJECT.UPDATED_AT, now)
+                .onConflict(SUBJECT.SUBJECT_NAME)
+                .doNothing()
+                .execute();
 
         dsl.insertInto(CONSENT_LEDGER)
                 .set(CONSENT_LEDGER.POLICY_ID, policyId)

@@ -203,6 +203,7 @@ public class KeycloakIamDispatcher
                     "platformDataSource not configured — cannot create API keys");
         }
 
+        String keyId = java.util.UUID.randomUUID().toString();
         String rawKey = generateRawApiKey();
         String keyHash = sha256Hex(rawKey);
         String keyPrefix = rawKey.substring(0, Math.min(rawKey.length(), KEY_PREFIX_LENGTH));
@@ -217,24 +218,55 @@ public class KeycloakIamDispatcher
             }
 
             String sql =
-                    "INSERT INTO platform_iam.api_key (key_hash, key_prefix, name, tenant_id,"
-                        + " platform_user_id, subject, roles, status) VALUES (?, ?, ?, ?, 'system',"
-                        + " ?, ?, 'active')";
+                    "INSERT INTO platform_iam.api_key (key_hash, key_prefix, key_id, name,"
+                        + " tenant_id, platform_user_id, subject, roles, environment, status)"
+                        + " VALUES (?, ?, ?, ?, ?, 'system', ?, ?, ?, 'active')";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, keyHash);
                 ps.setString(2, keyPrefix);
-                ps.setString(3, name);
-                ps.setString(4, tenantId);
-                ps.setString(5, name);
-                ps.setString(6, roles);
+                ps.setString(3, keyId);
+                ps.setString(4, name);
+                ps.setString(5, tenantId);
+                ps.setString(6, name);
+                ps.setString(7, roles);
+                ps.setString(8, environment);
                 ps.executeUpdate();
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to create API key: " + e.getMessage(), e);
         }
 
-        LOG.info("API key created: tenant={}, subject={}, prefix={}", tenantId, name, keyPrefix);
-        return new CreateApiTokenResult(keyPrefix, keyPrefix, rawKey);
+        // Emit ApiKeyGenerated event to the platform event store
+        if (eventService != null) {
+            try {
+                var event =
+                        new com.koostack.operio.core.platform.events.ApiKeyGeneratedEvent(
+                                tenantId, keyId, keyPrefix, keyHash, name, environment, roles,
+                                null);
+                var aggregateId =
+                        java.util.UUID.nameUUIDFromBytes(
+                                ("api-key:" + tenantId + ":" + keyId)
+                                        .getBytes(StandardCharsets.UTF_8));
+                var key =
+                        new com.koostack.operio.core.models.AggregateKey(
+                                aggregateId,
+                                "ApiKey",
+                                com.koostack.operio.core.PlatformConstants.PLATFORM_TENANT_ID);
+                eventService.publishEvent(
+                        com.koostack.operio.core.event.models.PublishDomainEventInput.of(
+                                com.koostack.operio.core.PlatformConstants.PLATFORM_TENANT_ID,
+                                com.koostack.operio.core.platform.iam.IamEventTypes
+                                        .API_KEY_GENERATED,
+                                key,
+                                event));
+            } catch (Exception e) {
+                LOG.warn("Failed to emit ApiKeyGenerated event for tenant {}: {}", tenantId,
+                        e.getMessage());
+            }
+        }
+
+        LOG.info("API key created: tenant={}, env={}, prefix={}", tenantId, environment, keyPrefix);
+        return new CreateApiTokenResult(keyId, keyPrefix, rawKey);
     }
 
     @SuppressWarnings("deprecation")

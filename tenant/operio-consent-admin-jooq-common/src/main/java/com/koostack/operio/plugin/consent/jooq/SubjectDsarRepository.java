@@ -60,8 +60,9 @@ public class SubjectDsarRepository {
     public boolean allEventsPublished(UUID dsarId) {
         int unpublished =
                 dsl.fetchCount(
-                        dsl.selectFrom(DSL.table("event"))
-                                .where(DSL.field("dsar_id", UUID.class).eq(dsarId))
+                        DSL.table("event"),
+                        DSL.field("dsar_id", UUID.class)
+                                .eq(dsarId)
                                 .and(DSL.field("published", Boolean.class).eq(false)));
         return unpublished == 0;
     }

@@ -2,6 +2,8 @@ package com.koostack.operio.rest.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.koostack.operio.common.registry.TenantRegistry;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.rest.config.OperioConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -51,6 +53,16 @@ import redis.clients.jedis.resps.StreamEntry;
  * }</pre>
  */
 public class IntegrationTestSupport implements AutoCloseable {
+
+    /**
+     * Shared TenantRegistry that subscribes to the platform event stream with its own consumer
+     * group. All IntegrationTestSupport instances share this single registry, which tracks tenant
+     * lifecycle events (TENANT_PROVISIONED, TENANT_SUSPENDED, etc.) in real time. Used by
+     * {@link #awaitTenantReady(String, Duration)} to verify that provisioning is complete.
+     */
+    private static volatile TenantRegistry sharedRegistry;
+
+    private static final Object REGISTRY_LOCK = new Object();
 
     private final JedisPooled jedis;
     private final String jdbcUrl;
@@ -562,6 +574,47 @@ public class IntegrationTestSupport implements AutoCloseable {
     // -- Polling helpers ------------------------------------------------------
 
     /**
+     * Waits until a tenant is fully provisioned by checking the shared {@link TenantRegistry}.
+     * The registry subscribes to the platform Redis stream and marks a tenant as active only after
+     * the {@code TENANT_PROVISIONED} event has been delivered. This event is emitted <em>after</em>
+     * all provisioning infrastructure is ready (Flyway migrations, Redis streams, API keys), so
+     * this single gate replaces the need for separate {@code awaitEventTableReady},
+     * {@code awaitTenantDiscoverable}, and SQL-based provisioned checks.
+     *
+     * <p>The shared registry uses a dedicated consumer group ({@code "test-tenant-registry"}) so
+     * it does not interfere with the production registry's consumer group.
+     *
+     * @param tenantId the tenant to wait for
+     * @param timeout  maximum wait time
+     */
+    public void awaitTenantReady(String tenantId, Duration timeout) {
+        TenantRegistry registry = ensureSharedRegistry();
+        // Phase 1: wait for TENANT_PROVISIONED in the registry
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> registry.isActive(tenantId));
+
+        // Phase 2: wait for the production stream consumer to create its
+        // consumer groups on the tenant's Redis stream. This ensures the
+        // reconciliation loop has added the tenant and the projection
+        // pipeline is fully wired before the test proceeds.
+        String streamKey = "operio:stream:tenant:" + tenantId;
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> {
+                    try {
+                        var groups = jedis.xinfoGroups(streamKey);
+                        return groups.stream()
+                                .anyMatch(g -> "admin-projection".equals(g.getName()));
+                    } catch (Exception e) {
+                        return false;
+                    }
+                });
+    }
+
+    /**
      * Polls until an API key is usable for authentication (CQRS projection lag). Sends a
      * lightweight GET /api/v1/health request with the bearer token and waits until it returns a
      * non-401 status.
@@ -585,49 +638,20 @@ public class IntegrationTestSupport implements AutoCloseable {
                         });
     }
 
-    /**
-     * Waits until the per-tenant event table is accessible via JDBC. The event schema ({@code
-     * t_{tenantId}_event}) is created asynchronously during tenant provisioning, so callers must
-     * wait before issuing commands that write events.
-     */
-    public void awaitEventTableReady(Duration timeout) {
-        Awaitility.await()
-                .atMost(timeout)
-                .pollInterval(Duration.ofMillis(200))
-                .ignoreExceptions()
-                .until(
-                        () -> {
-                            try (var conn = openConnection();
-                                    var stmt = conn.createStatement();
-                                    var rs = stmt.executeQuery("SELECT count(*) FROM event")) {
-                                return rs.next();
-                            }
-                        });
-    }
+    // -- Lazy shared TenantRegistry -----------------------------------------------
 
-    /**
-     * Waits until the tenant row appears in platform_core.tenant, meaning the core projection has
-     * processed the registration event and the outbox poller can discover this tenant for event
-     * publishing.
-     */
-    public void awaitTenantDiscoverable(String tenantId, Duration timeout) {
-        Awaitility.await()
-                .atMost(timeout)
-                .pollInterval(Duration.ofMillis(200))
-                .ignoreExceptions()
-                .until(
-                        () -> {
-                            try (var conn = openConnection();
-                                    var stmt = conn.createStatement();
-                                    var rs =
-                                            stmt.executeQuery(
-                                                    "SELECT 1 FROM platform_core.tenant WHERE"
-                                                            + " tenant_id = '"
-                                                            + tenantId
-                                                            + "'")) {
-                                return rs.next();
-                            }
-                        });
+    private TenantRegistry ensureSharedRegistry() {
+        TenantRegistry reg = sharedRegistry;
+        if (reg != null) return reg;
+        synchronized (REGISTRY_LOCK) {
+            if (sharedRegistry != null) return sharedRegistry;
+            JedisPooled jedisForRegistry = new JedisPooled(redisHost, redisPort);
+            sharedRegistry =
+                    new TenantRegistry(
+                            Set.of(), JedisProvider.shared(jedisForRegistry), "test-tenant-registry");
+            sharedRegistry.start();
+            return sharedRegistry;
+        }
     }
 
     /**

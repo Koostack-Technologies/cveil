@@ -56,6 +56,7 @@ import com.koostack.operio.tenant.event.jooq.OutboxPoller;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
+import com.koostack.operio.common.registry.TenantRegistry;
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -664,9 +665,14 @@ public class OperioProducers {
     private com.koostack.operio.tenant.consent.projection.decision.ExpiredConsentReaper
             expiredConsentReaper;
     private OutboxPoller tenantOutboxPoller;
+    private TenantRegistry tenantRegistry;
+    private java.util.concurrent.ScheduledExecutorService tenantReconciler;
 
     /** Consent-DB DSLContext set during tenantService() — reused by the outbox poller. */
     private DSLContext consentEventDsl;
+
+    /** Platform DSLContext set during wirePlatformCqrsServices() — used for tenant hydration. */
+    private DSLContext platformDsl;
 
     /** Tenant event service set during consent bundle creation — reused for tenant IAM commands. */
     @SuppressWarnings("rawtypes")
@@ -755,9 +761,12 @@ public class OperioProducers {
                             .createTenantAwareContext(consentDbConfig, "operio-admin-projection");
         }
 
-        // Build consumer with handlers
+        // Build consumer with handlers.
+        // Block timeout of 500ms balances responsiveness with CPU usage —
+        // virtual threads unmount during the blocking XREADGROUP so the cost
+        // is negligible even with many tenants.
         TenantStreamConsumer consumer =
-                new TenantStreamConsumer(JedisProvider.shared(adminRedisPool), 2000L, 100);
+                new TenantStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100);
         consumer.registerHandler("graph-projection", graphHandler);
 
         if (tenantDsl != null) {
@@ -807,57 +816,85 @@ public class OperioProducers {
 
         this.tenantStreamConsumer = consumer;
 
-        // -- Outbox poller: relays tenant events from Postgres → Redis streams.
-        // The event service is configured without Redis (chicken-and-egg:
-        // Redis config is only available after wirePlatformCqrsServices).
-        // We create the outbox poller here with the shared admin Redis pool.
-        if (consentEventDsl != null && coreQueryService != null) {
-            @SuppressWarnings("unchecked")
-            CoreQueryService<?> typedCqs = coreQueryService;
-            java.util.function.Supplier<java.util.List<String>> outboxTenantDiscovery =
-                    () -> {
-                        try {
-                            // Exclude the platform tenant — it has its own dedicated outbox poller
-                            return typedCqs.listTenants().stream()
-                                    .map(t -> t.tenantId())
-                                    .filter(id -> !PlatformConstants.PLATFORM_TENANT_ID.equals(id))
-                                    .toList();
-                        } catch (Exception e) {
-                            LOG.warn("Outbox tenant discovery failed", e);
-                            return java.util.List.of();
-                        }
-                    };
+        // -- TenantRegistry + Outbox poller + Stream consumer reconciliation ---
+        // The TenantRegistry is the single source of truth for active tenants.
+        // It is hydrated at startup from the platform event log and kept
+        // current by subscribing to the platform Redis stream.
+        if (consentEventDsl != null && platformDsl != null) {
+            // Hydrate initial active tenants from the platform event log.
+            // Replays tenant lifecycle events to determine which tenants are
+            // currently active (provisioned/activated minus suspended/deleted).
+            java.util.Set<String> initialTenants = hydrateTenantSetFromEventLog(platformDsl);
+            LOG.info(
+                    "Operio REST API: hydrated {} active tenants from event log: {}",
+                    initialTenants.size(),
+                    initialTenants);
+
+            this.tenantRegistry =
+                    new TenantRegistry(initialTenants, JedisProvider.shared(adminRedisPool));
+            this.tenantRegistry.start();
+
+            // Outbox poller: reads from registry on each poll cycle
             RedisEventPublisher outboxPublisher =
                     new RedisEventPublisher(JedisProvider.shared(adminRedisPool));
             this.tenantOutboxPoller =
-                    new OutboxPoller(consentEventDsl, outboxPublisher, outboxTenantDiscovery);
+                    new OutboxPoller(
+                            consentEventDsl,
+                            outboxPublisher,
+                            () -> java.util.List.copyOf(tenantRegistry.activeTenants()));
             this.tenantOutboxPoller.start(2);
-            LOG.info("Operio REST API: tenant outbox poller started (2 workers)");
+            LOG.info("Operio REST API: tenant outbox poller started (2 workers, registry-backed)");
 
-            // Register all known tenants with the stream consumer so the
-            // projection handlers start reading events immediately.
-            try {
-                java.util.List<String> knownTenants = outboxTenantDiscovery.get();
-                for (String tid : knownTenants) {
-                    consumer.addTenant(tid);
-                }
-                if (!knownTenants.isEmpty()) {
-                    LOG.info(
-                            "Operio REST API: registered {} known tenants with stream consumer: {}",
-                            knownTenants.size(),
-                            knownTenants);
-                }
-            } catch (Exception e) {
-                LOG.warn(
-                        "Operio REST API: failed to register known tenants with stream consumer",
-                        e);
+            // Register known tenants with the stream consumer immediately
+            for (String tid : initialTenants) {
+                consumer.addTenant(tid);
             }
+            if (!initialTenants.isEmpty()) {
+                LOG.info(
+                        "Operio REST API: registered {} known tenants with stream consumer",
+                        initialTenants.size());
+            }
+
+            // Reconciliation loop: periodically syncs the stream consumer's
+            // tenant set with the registry. addTenant/removeTenant are
+            // idempotent so repeated calls are no-ops.
+            this.tenantReconciler =
+                    java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                        Thread t = new Thread(r, "tenant-reconciler");
+                        t.setDaemon(true);
+                        return t;
+                    });
+            this.tenantReconciler.scheduleWithFixedDelay(
+                    () -> {
+                        try {
+                            java.util.Set<String> registered = consumer.activeTenants();
+                            java.util.Set<String> desired = tenantRegistry.activeTenants();
+                            // Add new tenants
+                            for (String tid : desired) {
+                                if (!registered.contains(tid)) {
+                                    consumer.addTenant(tid);
+                                    LOG.info("Reconciler: added tenant '{}' to stream consumer", tid);
+                                }
+                            }
+                            // Remove departed tenants
+                            for (String tid : registered) {
+                                if (!desired.contains(tid)) {
+                                    consumer.removeTenant(tid);
+                                    LOG.info("Reconciler: removed tenant '{}' from stream consumer", tid);
+                                }
+                            }
+                        } catch (Exception e) {
+                            LOG.warn("Tenant reconciliation cycle failed", e);
+                        }
+                    },
+                    2, 2, java.util.concurrent.TimeUnit.SECONDS);
+            LOG.info("Operio REST API: tenant reconciler started (2s interval)");
         } else {
             LOG.warn(
                     "Operio REST API: tenant outbox poller NOT started — consentEventDsl={},"
-                            + " coreQueryService={}",
+                            + " platformDsl={}",
                     consentEventDsl != null,
-                    coreQueryService != null);
+                    platformDsl != null);
         }
 
         LOG.info(
@@ -1062,6 +1099,7 @@ public class OperioProducers {
                         new org.jooq.conf.Settings()
                                 .withRenderNameCase(org.jooq.conf.RenderNameCase.LOWER)
                                 .withRenderSchema(false));
+        this.platformDsl = platformDsl;
 
         // -- Query services ---------------------------------------------------
         // Build a decryptor for encrypted DB fields (e.g. redis_acl_password).
@@ -1289,23 +1327,13 @@ public class OperioProducers {
                         null));
 
         TenantManagerProjectionHandler tenantMgrProjection =
-                new TenantManagerProjectionHandler(tenantManagerSvc, coreCmdSvc, iamCmdSvc);
+                new TenantManagerProjectionHandler(
+                        tenantManagerSvc, coreCmdSvc, iamCmdSvc,
+                        JedisProvider.shared(adminRedisPool));
 
-        // Wire callback so newly provisioned tenants are registered with the
-        // consent stream consumer (the consumer is created later in
-        // tenantStreamConsumer(), but the callback captures `this` and
-        // accesses the field lazily).
-        tenantMgrProjection.setOnTenantProvisioned(
-                tenantId -> {
-                    TenantStreamConsumer tsc = this.tenantStreamConsumer;
-                    if (tsc != null) {
-                        tsc.addTenant(tenantId);
-                        LOG.info(
-                                "Operio REST API: registered new tenant '{}' with consent stream"
-                                        + " consumer",
-                                tenantId);
-                    }
-                });
+        // No callback needed — the TenantRegistry (created in tenantStreamConsumer())
+        // subscribes to the platform stream and discovers new tenants via
+        // TENANT_PROVISIONED events. The reconciler loop syncs the consumer.
 
         // Startup reconciliation — run Flyway migrations for all existing
         // active tenants via the new CQRS TenantManagerService.
@@ -1314,7 +1342,7 @@ public class OperioProducers {
 
         // -- Platform stream consumer -----------------------------------------
         AbstractStreamConsumer consumer =
-                new AbstractStreamConsumer(JedisProvider.shared(adminRedisPool), 2000L, 100) {
+                new AbstractStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100) {
                     @Override
                     protected String streamKeyForTenant(String tenantId) {
                         // Must match the hardcoded "operio" prefix in
@@ -1339,6 +1367,58 @@ public class OperioProducers {
     // -----------------------------------------------------------------------
     // Internal wiring helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Replays tenant lifecycle events from the platform event log to determine the current set of
+     * active tenants. This is the write-side source of truth — no projection dependency.
+     *
+     * <p>Active = has {@code TENANT_PROVISIONED} or {@code TENANT_ACTIVATED} as its most recent
+     * lifecycle event (not {@code TENANT_SUSPENDED} or {@code TENANT_DELETED}).
+     */
+    private static java.util.Set<String> hydrateTenantSetFromEventLog(DSLContext dsl) {
+        // Query all tenant lifecycle events from the platform event store,
+        // ordered by version ascending so we can replay them sequentially.
+        var lifecycleTypes = java.util.Set.of(
+                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_PROVISIONED,
+                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED,
+                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_SUSPENDED,
+                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_DELETED);
+
+        var records = dsl.select(
+                        org.jooq.impl.DSL.field("event_type", String.class),
+                        org.jooq.impl.DSL.field("payload", String.class))
+                .from(org.jooq.impl.DSL.table("event"))
+                .where(org.jooq.impl.DSL.field("event_type").in(lifecycleTypes))
+                .orderBy(org.jooq.impl.DSL.field("event_id").asc())
+                .fetch();
+
+        var activeTenants = new java.util.HashSet<String>();
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        for (var record : records) {
+            String eventType = record.get(0, String.class);
+            String payload = record.get(1, String.class);
+            String tenantId = null;
+            try {
+                var node = mapper.readTree(payload);
+                var tid = node.get("tenantId");
+                if (tid != null && !tid.isNull()) tenantId = tid.asText();
+            } catch (Exception e) {
+                LOG.warn("Failed to parse tenant event payload: {}", payload, e);
+                continue;
+            }
+            if (tenantId == null) continue;
+
+            if (com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_PROVISIONED.equals(eventType)
+                    || com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED.equals(eventType)) {
+                activeTenants.add(tenantId);
+            } else {
+                activeTenants.remove(tenantId);
+            }
+        }
+
+        return activeTenants;
+    }
 
     /**
      * Creates the appropriate consent bundle based on the deployment mode.

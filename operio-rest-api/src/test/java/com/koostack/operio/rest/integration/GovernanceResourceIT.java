@@ -117,9 +117,7 @@ class GovernanceResourceIT {
             assertNotNull(apiKey);
 
             support = new IntegrationTestSupport(config, TENANT_ID);
-            support.awaitApiKeyUsable(apiKey, Duration.ofSeconds(30));
-            support.awaitEventTableReady(Duration.ofSeconds(15));
-            support.awaitTenantDiscoverable(TENANT_ID, Duration.ofSeconds(30));
+            support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
 
         @Test
@@ -147,7 +145,6 @@ class GovernanceResourceIT {
 
             readOnlyApiKey = response.jsonPath().getString("rawKey");
             assertNotNull(readOnlyApiKey);
-            support.awaitApiKeyUsable(readOnlyApiKey, Duration.ofSeconds(30));
         }
 
         @Test

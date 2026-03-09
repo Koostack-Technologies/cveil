@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
 import com.koostack.operio.core.platform.iam.IamCommandService;
+import com.koostack.operio.plugin.redis.common.JedisProvider;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.exceptions.JedisDataException;
 
 /**
  * Event consumer that reacts to core domain events to manage tenant infrastructure lifecycle.
@@ -31,29 +34,27 @@ public class TenantManagerProjectionHandler {
     private static final String[] API_KEY_ENVIRONMENTS = {"DEV", "TEST", "PROD"};
     private static final String DEFAULT_TENANT_ROLES =
             "admin:read,admin:write,consent:read,consent:write";
+    /** Must match {@code RedisEventPublisher.STREAM_KEY_PREFIX} in operio-tenant-event-jooq. */
+    private static final String TENANT_STREAM_PREFIX = "operio:stream:tenant:";
+    /** Default consumer group name created on the tenant stream at provisioning time. */
+    private static final String DEFAULT_CONSUMER_GROUP = "default";
 
     private final JooqTenantManagerService tenantManager;
     private final CoreCommandService<?> coreCommandService;
     private final IamCommandService<?> iamCommandService;
+    private final JedisProvider jedisProvider;
     private final ObjectMapper mapper;
-    private volatile java.util.function.Consumer<String> onTenantProvisioned;
 
     public TenantManagerProjectionHandler(
             JooqTenantManagerService tenantManager,
             CoreCommandService<?> coreCommandService,
-            IamCommandService<?> iamCommandService) {
+            IamCommandService<?> iamCommandService,
+            JedisProvider jedisProvider) {
         this.tenantManager = tenantManager;
         this.coreCommandService = coreCommandService;
         this.iamCommandService = iamCommandService;
+        this.jedisProvider = jedisProvider;
         this.mapper = new ObjectMapper();
-    }
-
-    /**
-     * Sets a callback invoked after a tenant is fully provisioned. Used to register the new tenant
-     * with the consent stream consumer.
-     */
-    public void setOnTenantProvisioned(java.util.function.Consumer<String> callback) {
-        this.onTenantProvisioned = callback;
     }
 
     /** Handle a platform stream event. */
@@ -101,7 +102,24 @@ public class TenantManagerProjectionHandler {
             LOG.info("Stored Redis ACL credentials for tenant '{}'", tenantId);
         }
 
-        // 2. Generate 3 API tokens (DEV, TEST, PROD)
+        // 2. Create per-tenant Redis event stream so it exists before TENANT_PROVISIONED
+        //    is emitted. Uses XGROUP CREATE with MKSTREAM to atomically create both
+        //    the stream and a default consumer group.
+        String streamKey = TENANT_STREAM_PREFIX + tenantId;
+        try {
+            jedisProvider
+                    .get()
+                    .xgroupCreate(streamKey, DEFAULT_CONSUMER_GROUP, new StreamEntryID(), true);
+            LOG.info("Created Redis event stream '{}' for tenant '{}'", streamKey, tenantId);
+        } catch (JedisDataException e) {
+            if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
+                LOG.debug("Redis stream '{}' already exists for tenant '{}'", streamKey, tenantId);
+            } else {
+                throw e;
+            }
+        }
+
+        // 3. Generate 3 API tokens (DEV, TEST, PROD)
         for (String env : API_KEY_ENVIRONMENTS) {
             String keyName = tenantId + "-" + env.toLowerCase();
             IamCommandService.CreateApiTokenResult tokenResult =
@@ -114,23 +132,13 @@ public class TenantManagerProjectionHandler {
                     tokenResult.keyPrefix());
         }
 
-        // 3. Emit TenantProvisioned event
+        // 4. Emit TenantProvisioned event
         coreCommandService.provisionTenant(tenantId, result.schemaName(), result.redisAclUser());
         LOG.info(
                 "Tenant '{}' fully provisioned: schema={}, redisUser={}, apiKeys=3",
                 tenantId,
                 result.schemaName(),
                 result.redisAclUser());
-
-        // 4. Notify listeners (e.g., register with consent stream consumer)
-        var callback = this.onTenantProvisioned;
-        if (callback != null) {
-            try {
-                callback.accept(tenantId);
-            } catch (Exception e) {
-                LOG.warn("onTenantProvisioned callback failed for tenant '{}'", tenantId, e);
-            }
-        }
     }
 
     private void handleTenantDeleted(String payload) throws Exception {
