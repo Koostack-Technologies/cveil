@@ -1,13 +1,10 @@
 package com.koostack.operio.core;
 
 /**
- * Polymorphic base interface for Operio application services.
- *
- * <p>{@link TenantService} extends this interface to provide tenant-scoped business operations. It
- * composes lower-level command and query services into cohesive application-layer workflows.
+ * Base interface for Operio application services.
  *
  * <p>{@link Operio} is the abstract base class that implements this interface, providing the
- * builder and plugin-wiring infrastructure shared by all concrete service implementations.
+ * builder and plugin-wiring infrastructure for the consent management platform.
  */
 public interface OperioService {
 

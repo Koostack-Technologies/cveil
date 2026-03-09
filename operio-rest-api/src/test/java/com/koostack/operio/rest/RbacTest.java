@@ -3,17 +3,18 @@ package com.koostack.operio.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
+import com.koostack.operio.core.models.PurposeView;
 import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
@@ -393,18 +394,50 @@ class RbacTest {
     class ConsentResourceRbac {
 
         private ConsentResource resource;
-        private TenantService tenantService;
+        private CommandDispatcher consentDispatcher;
+        private QueryDispatcher consentQueryDispatcher;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new ConsentResource();
-            tenantService = mock(TenantService.class);
+            consentDispatcher = mock(CommandDispatcher.class);
+            consentQueryDispatcher = mock(QueryDispatcher.class);
+            OperioConfig operioConfig = mock(OperioConfig.class);
 
-            // Inject TenantService via reflection
-            var operioField = ConsentResource.class.getDeclaredField("tenantService");
-            operioField.setAccessible(true);
-            operioField.set(resource, tenantService);
+            setField(resource, "consentDispatcher", consentDispatcher);
+            setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
+            setField(resource, "operioConfig", operioConfig);
+
+            when(consentQueryDispatcher.dispatch(any()))
+                    .thenAnswer(
+                            inv -> {
+                                Object input = inv.getArgument(0);
+                                if (input.getClass().getSimpleName().equals("FindPolicyQuery")) {
+                                    return new PurposeView.PolicyView(
+                                            1L,
+                                            "CATEGORY",
+                                            new PurposeView.CategoryRef(1L, "pii"),
+                                            null);
+                                }
+                                if (input.getClass()
+                                        .getSimpleName()
+                                        .equals("EvaluateConsentQuery")) {
+                                    return new ConsentResponse(
+                                            "subject-1",
+                                            Collections.emptySet(),
+                                            Collections.emptySet(),
+                                            Collections.emptyMap(),
+                                            Collections.emptyMap());
+                                }
+                                if (input.getClass()
+                                        .getSimpleName()
+                                        .equals("GetSubjectConsentQuery")) {
+                                    return new SubjectConsentView(
+                                            "subj-1", Collections.emptyList());
+                                }
+                                return null;
+                            });
         }
 
         // -- Test data helpers --
@@ -534,12 +567,6 @@ class RbacTest {
         @DisplayName("POST /subjects/consent/grant-all")
         class GrantAll {
 
-            @BeforeEach
-            void stubBatch() {
-                when(tenantService.grantAllConsent(anyString(), anyList()))
-                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
-            }
-
             @Test
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
@@ -580,12 +607,6 @@ class RbacTest {
         @DisplayName("POST /subjects/consent/revoke-all")
         class RevokeAll {
 
-            @BeforeEach
-            void stubBatch() {
-                when(tenantService.revokeAllConsent(anyString(), anyList()))
-                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
-            }
-
             @Test
             @DisplayName("consent:write → 200")
             void consentWriteAllowed() {
@@ -617,19 +638,6 @@ class RbacTest {
         @Nested
         @DisplayName("POST /subjects/consent/evaluate")
         class Evaluate {
-
-            @BeforeEach
-            @SuppressWarnings("unchecked")
-            void stubEvaluate() {
-                ConsentResponse stubResponse =
-                        new ConsentResponse(
-                                "subject-1",
-                                Collections.emptySet(),
-                                Collections.emptySet(),
-                                Collections.emptyMap(),
-                                Collections.emptyMap());
-                doReturn(stubResponse).when(tenantService).evaluateConsent(anyString(), anySet());
-            }
 
             @Test
             @DisplayName("consent:read → 200")
@@ -692,12 +700,6 @@ class RbacTest {
         @DisplayName("GET /subjects/{id}/summary")
         class SubjectSummary {
 
-            @BeforeEach
-            void stubSummary() {
-                when(tenantService.getSubjectConsent(anyString()))
-                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
-            }
-
             @Test
             @DisplayName("consent:read → 200")
             void consentReadAllowed() {
@@ -737,12 +739,6 @@ class RbacTest {
         @DisplayName("GET /subjects/{id}/history")
         class SubjectHistory {
 
-            @BeforeEach
-            void stubHistory() {
-                when(tenantService.getSubjectConsent(anyString()))
-                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
-            }
-
             @Test
             @DisplayName("consent:read → 200")
             void consentReadAllowed() {
@@ -781,25 +777,6 @@ class RbacTest {
         @Nested
         @DisplayName("Cross-cutting consent role checks")
         class ConsentCrossCutting {
-
-            @BeforeEach
-            @SuppressWarnings("unchecked")
-            void stubAll() {
-                when(tenantService.grantAllConsent(anyString(), anyList()))
-                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
-                when(tenantService.revokeAllConsent(anyString(), anyList()))
-                        .thenReturn(new BatchConsentResult(1, 0, Collections.emptyList()));
-                ConsentResponse stubResponse =
-                        new ConsentResponse(
-                                "subject-1",
-                                Collections.emptySet(),
-                                Collections.emptySet(),
-                                Collections.emptyMap(),
-                                Collections.emptyMap());
-                doReturn(stubResponse).when(tenantService).evaluateConsent(anyString(), anySet());
-                when(tenantService.getSubjectConsent(anyString()))
-                        .thenReturn(new SubjectConsentView("subj-1", Collections.emptyList()));
-            }
 
             @Test
             @DisplayName("admin:read cannot access any consent endpoint")
@@ -862,19 +839,20 @@ class RbacTest {
     class CatalogueResourceRbac {
 
         private CatalogueResource resource;
-        private TenantService tenantService;
+        private CommandDispatcher consentDispatcher;
+        private QueryDispatcher consentQueryDispatcher;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new CatalogueResource();
-            tenantService = mock(TenantService.class);
+            consentDispatcher = mock(CommandDispatcher.class);
+            consentQueryDispatcher = mock(QueryDispatcher.class);
 
-            when(tenantService.listFields()).thenReturn(Collections.emptyList());
+            when(consentQueryDispatcher.dispatch(any())).thenReturn(Collections.emptyList());
 
-            var field = CatalogueResource.class.getDeclaredField("tenantService");
-            field.setAccessible(true);
-            field.set(resource, tenantService);
+            setField(resource, "consentDispatcher", consentDispatcher);
+            setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
         }
 
         // -- Read endpoints --
@@ -1098,20 +1076,20 @@ class RbacTest {
     class GovernanceResourceRbac {
 
         private GovernanceResource resource;
-        private TenantService tenantService;
+        private CommandDispatcher consentDispatcher;
+        private QueryDispatcher consentQueryDispatcher;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new GovernanceResource();
-            tenantService = mock(TenantService.class);
+            consentDispatcher = mock(CommandDispatcher.class);
+            consentQueryDispatcher = mock(QueryDispatcher.class);
 
-            when(tenantService.listPurposes()).thenReturn(Collections.emptyList());
-            when(tenantService.listRegulations()).thenReturn(Collections.emptyList());
+            when(consentQueryDispatcher.dispatch(any())).thenReturn(Collections.emptyList());
 
-            var field = GovernanceResource.class.getDeclaredField("tenantService");
-            field.setAccessible(true);
-            field.set(resource, tenantService);
+            setField(resource, "consentDispatcher", consentDispatcher);
+            setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
         }
 
         // -- Read endpoints --
@@ -1745,5 +1723,11 @@ class RbacTest {
             SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
             assertDoesNotThrow(() -> Roles.requireAnyRole(ctx));
         }
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        var field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 }

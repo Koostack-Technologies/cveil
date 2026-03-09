@@ -37,10 +37,7 @@ class EmbeddedConsentBundleTest {
 
         @BeforeAll
         void buildOperio() {
-            operio =
-                    Operio.builder()
-                            .withBundle(new EmbeddedConsentBundle())
-                            .buildTenantService(null, null);
+            operio = Operio.builder().withBundle(new EmbeddedConsentBundle()).build();
         }
 
         @Test
@@ -97,7 +94,7 @@ class EmbeddedConsentBundleTest {
                             .withBundle(
                                     new EmbeddedConsentBundle(
                                             "my-test-app", jooqConfig, caffeineConfig, null))
-                            .buildTenantService(null, null);
+                            .build();
         }
 
         @Test
@@ -137,7 +134,7 @@ class EmbeddedConsentBundleTest {
             operio =
                     Operio.builder()
                             .withConsentProvider(syncService.caffeineDecisionService())
-                            .buildTenantService(null, null);
+                            .build();
         }
 
         @Test
@@ -194,7 +191,7 @@ class EmbeddedConsentBundleTest {
             operio =
                     Operio.builder()
                             .withConsentProvider(syncService.caffeineDecisionService())
-                            .buildTenantService(null, null);
+                            .build();
         }
 
         @Test
@@ -434,7 +431,7 @@ class EmbeddedConsentBundleTest {
         @DisplayName("zero-arg constructor builds successfully")
         void zeroArg() {
             var bundle = new EmbeddedConsentBundle();
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertNotNull(operio.consentService());
         }
 
@@ -447,7 +444,7 @@ class EmbeddedConsentBundleTest {
                             (com.koostack.operio.plugin.discovery.sensitive.annotation
                                             .AnnotationDiscoveryConfig)
                                     null);
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertNotNull(operio.consentService());
         }
 
@@ -460,7 +457,7 @@ class EmbeddedConsentBundleTest {
             var caffeineConfig = new CaffeineConsentDecisionServiceConfig(5_000);
 
             var bundle = new EmbeddedConsentBundle(jooqConfig, caffeineConfig);
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertNotNull(operio.consentService());
         }
 
@@ -468,7 +465,7 @@ class EmbeddedConsentBundleTest {
         @DisplayName("appName + discovery constructor sets appName")
         void appNameAndDiscovery() {
             var bundle = new EmbeddedConsentBundle("test-app", null);
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertEquals("test-app", operio.appName());
         }
 
@@ -481,7 +478,7 @@ class EmbeddedConsentBundleTest {
             var caffeineConfig = new CaffeineConsentDecisionServiceConfig();
 
             var bundle = new EmbeddedConsentBundle("another-app", jooqConfig, caffeineConfig);
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertEquals("another-app", operio.appName());
         }
 
@@ -494,7 +491,7 @@ class EmbeddedConsentBundleTest {
             var caffeineConfig = new CaffeineConsentDecisionServiceConfig(20_000);
 
             var bundle = new EmbeddedConsentBundle("full-app", jooqConfig, caffeineConfig, null);
-            Operio operio = Operio.builder().withBundle(bundle).buildTenantService(null, null);
+            Operio operio = Operio.builder().withBundle(bundle).build();
             assertEquals("full-app", operio.appName());
             assertNotNull(operio.consentService());
         }
@@ -523,7 +520,7 @@ class EmbeddedConsentBundleTest {
             operio =
                     Operio.builder()
                             .withConsentProvider(syncService.caffeineDecisionService())
-                            .buildTenantService(null, null);
+                            .build();
         }
 
         @Test
@@ -604,7 +601,7 @@ class EmbeddedConsentBundleTest {
             Operio operio =
                     Operio.builder()
                             .withConsentProvider(syncService.caffeineDecisionService())
-                            .buildTenantService(null, null);
+                            .build();
 
             var scope = ConsentScope.to("PII", "lastName", "Employee", "reporting");
 
@@ -635,7 +632,7 @@ class EmbeddedConsentBundleTest {
             Operio operio =
                     Operio.builder()
                             .withConsentProvider(syncService.caffeineDecisionService())
-                            .buildTenantService(null, null);
+                            .build();
 
             var scope = ConsentScope.to("PII", "lastName", "Employee", "reporting");
 
@@ -711,7 +708,7 @@ class EmbeddedConsentBundleTest {
                                             null)
                                     // withReconcileOnStartup() NOT called
                                     )
-                            .buildTenantService(null, null);
+                            .build();
 
             ConsentResponse r2 = phase2.consentService().evaluateConsent("user-1", Set.of(scope));
             assertFalse(
@@ -746,7 +743,7 @@ class EmbeddedConsentBundleTest {
                                                     new CaffeineConsentDecisionServiceConfig(),
                                                     null)
                                             .withReconcileOnStartup(null))
-                            .buildTenantService(null, null);
+                            .build();
 
             ConsentResponse r2 = phase2.consentService().evaluateConsent("emp-1", Set.of(scope));
             assertFalse(
@@ -772,7 +769,7 @@ class EmbeddedConsentBundleTest {
                                                     new CaffeineConsentDecisionServiceConfig(),
                                                     null)
                                             .withReconcileOnStartup())
-                            .buildTenantService(null, null);
+                            .build();
 
             assertNotNull(operio.consentService());
 

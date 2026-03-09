@@ -151,7 +151,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.username()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.username"),
                     "Error should mention operio.db.username, got: " + ex.getMessage());
@@ -167,7 +167,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.username()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.username"),
                     "Error should mention operio.db.username, got: " + ex.getMessage());
@@ -180,7 +180,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.username()).thenReturn(Optional.of("   "));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.username"),
                     "Error should mention operio.db.username, got: " + ex.getMessage());
@@ -193,7 +193,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.password()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.password"),
                     "Error should mention operio.db.password, got: " + ex.getMessage());
@@ -209,7 +209,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.password()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.password"),
                     "Error should mention operio.db.password, got: " + ex.getMessage());
@@ -222,7 +222,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.password()).thenReturn(Optional.of("  \t  "));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.password"),
                     "Error should mention operio.db.password, got: " + ex.getMessage());
@@ -235,7 +235,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.url()).thenReturn(null);
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.url"),
                     "Error should mention operio.db.url, got: " + ex.getMessage());
@@ -248,7 +248,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.url()).thenReturn("");
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db.url"),
                     "Error should mention operio.db.url, got: " + ex.getMessage());
@@ -261,7 +261,7 @@ class ProductionConfigValidationTest {
             when(config.db()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.db"),
                     "Error should mention operio.db, got: " + ex.getMessage());
@@ -283,7 +283,7 @@ class ProductionConfigValidationTest {
             when(platformDbConfig.username()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db.username"),
                     "Error should mention operio.platform-db.username, got: " + ex.getMessage());
@@ -300,7 +300,7 @@ class ProductionConfigValidationTest {
             when(platformDbConfig.username()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db.username"),
                     "Error should mention operio.platform-db.username, got: " + ex.getMessage());
@@ -313,7 +313,7 @@ class ProductionConfigValidationTest {
             when(platformDbConfig.password()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db.password"),
                     "Error should mention operio.platform-db.password, got: " + ex.getMessage());
@@ -330,7 +330,7 @@ class ProductionConfigValidationTest {
             when(platformDbConfig.password()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db.password"),
                     "Error should mention operio.platform-db.password, got: " + ex.getMessage());
@@ -343,7 +343,7 @@ class ProductionConfigValidationTest {
             when(platformDbConfig.url()).thenReturn(null);
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db.url"),
                     "Error should mention operio.platform-db.url, got: " + ex.getMessage());
@@ -356,7 +356,7 @@ class ProductionConfigValidationTest {
             when(config.platformDb()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.platform-db"),
                     "Error should mention operio.platform-db, got: " + ex.getMessage());
@@ -378,7 +378,7 @@ class ProductionConfigValidationTest {
             when(config.redis()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.redis"),
                     "Error should mention operio.redis, got: " + ex.getMessage());
@@ -400,7 +400,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.username()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("non-blank"),
                     "Error should explain the value must be non-blank, got: " + ex.getMessage());
@@ -413,7 +413,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.password()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("environment variable")
                             || ex.getMessage().contains("application.yml"),
@@ -428,7 +428,7 @@ class ProductionConfigValidationTest {
             when(dbConfig.username()).thenReturn(Optional.empty());
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             assertTrue(
                     ex.getMessage().contains("operio.mode=production"),
                     "Error should mention that this is a production-mode requirement, got: "
@@ -453,7 +453,7 @@ class ProductionConfigValidationTest {
             lenient().when(dbConfig.password()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             // URL validation should fire before username/password since it
             // is checked first in the code path
             assertTrue(
@@ -469,7 +469,7 @@ class ProductionConfigValidationTest {
             lenient().when(dbConfig.password()).thenReturn(Optional.of(""));
 
             IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.tenantService());
+                    assertThrows(IllegalStateException.class, () -> producers.operioInit());
             // Username is validated before password
             assertTrue(
                     ex.getMessage().contains("operio.db.username"),

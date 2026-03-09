@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Actuator that handles the "assign field category" command.
  *
- * <p>Absorbs orchestration logic formerly split between {@code DefaultTenantService} (query service
+ * <p>Absorbs orchestration logic formerly split between the legacy service layer (query service
  * call to build the snapshot) and {@code JooqConsentAdminCommandService} (event publishing).
  * Instead of calling the query service, the actuator hydrates the {@link FieldAggregate} directly
  * from the event log via {@link EventService#hydrateAggregate}, builds the snapshot, and publishes

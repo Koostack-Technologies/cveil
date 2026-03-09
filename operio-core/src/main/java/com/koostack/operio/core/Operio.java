@@ -25,9 +25,8 @@ import java.util.logging.Logger;
 /**
  * Abstract base class for Operio application services.
  *
- * <p>Provides the {@link Builder} and plugin-wiring infrastructure shared by all concrete service
- * implementations ({@link TenantService}). Manages plugin lifecycle, namespacing, and health
- * checks.
+ * <p>Provides the {@link Builder} and plugin-wiring infrastructure for the Operio consent
+ * management platform. Manages plugin lifecycle, namespacing, and health checks.
  *
  * <h2>Construction</h2>
  *
@@ -298,23 +297,28 @@ public abstract class Operio implements OperioService {
             return appName;
         }
 
+        /** Returns the consent decision service registered on this builder, or {@code null}. */
+        public ConsentDecisionService<?> consentService() {
+            return consentService;
+        }
+
+        /** Returns the consent graph query service registered on this builder, or {@code null}. */
+        public com.koostack.operio.core.tenant.consent.ConsentGraphQueryService<?>
+                consentGraphService() {
+            return consentGraphService;
+        }
+
         /**
-         * Builds a {@link DefaultTenantService} from this builder's configuration.
+         * Builds an {@link Operio} instance containing all configured plugins.
          *
-         * @param commandService the consent admin command service
-         * @param queryService the consent admin query service
-         * @return a fully-wired DefaultTenantService
+         * @return a fully-wired {@link Operio} instance
          */
-        public DefaultTenantService buildTenantService(
-                com.koostack.operio.core.tenant.consent.ConsentAdminCommandService<?>
-                        commandService,
-                com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> queryService) {
-            DefaultTenantService service =
-                    new DefaultTenantService(this, commandService, queryService);
+        public Operio build() {
+            Operio operio = new Operio(this) {};
             if (verifyOnBuild) {
-                service.verifyReady();
+                operio.verifyReady();
             }
-            return service;
+            return operio;
         }
 
         /**

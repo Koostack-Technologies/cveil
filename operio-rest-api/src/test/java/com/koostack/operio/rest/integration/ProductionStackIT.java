@@ -4,7 +4,6 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -97,8 +96,6 @@ class ProductionStackIT {
     // CDI injection — if any of these fail, the container didn't wire
     // -----------------------------------------------------------------------
 
-    @Inject TenantService tenantService;
-
     @Inject OperioConfig config;
 
     @Inject
@@ -132,12 +129,13 @@ class ProductionStackIT {
 
         @Test
         @Order(2)
-        @DisplayName("Operio bean is injected (production mode)")
-        void operioInjected() {
-            assertNotNull(tenantService, "TenantService bean must be injected");
+        @DisplayName("OperioConfig is injected (production mode)")
+        void operioConfigInjected() {
+            assertNotNull(config, "OperioConfig bean must be injected");
+            assertTrue(config.appName().isPresent(), "App name must be configured");
             assertEquals(
                     "operio-integration-test",
-                    tenantService.appName(),
+                    config.appName().get(),
                     "App name should match test application.yml");
         }
 

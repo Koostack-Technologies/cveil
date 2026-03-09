@@ -1,11 +1,8 @@
 package com.koostack.operio.spring.config;
 
-import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.sdk.IdentityResolver;
 import com.koostack.operio.core.spi.PluginBundle;
-import com.koostack.operio.core.tenant.consent.ConsentAdminCommandService;
-import com.koostack.operio.core.tenant.consent.ConsentAdminQueryService;
 import com.koostack.operio.spring.aspect.ConsentRequiredAspect;
 import com.koostack.operio.spring.aspect.SensitiveAspect;
 import org.slf4j.Logger;
@@ -202,8 +199,6 @@ public class OperioAutoConfiguration {
     public Operio operio(
             ObjectProvider<PluginBundle> bundles,
             ObjectProvider<IdentityResolver<?>> identityResolvers,
-            ObjectProvider<ConsentAdminCommandService<?>> commandServices,
-            ObjectProvider<ConsentAdminQueryService<?>> queryServices,
             OperioProperties props) {
         Operio.Builder builder = Operio.builder();
 
@@ -237,7 +232,6 @@ public class OperioAutoConfiguration {
             LOG.debug(
                     "Operio SDK: no IdentityResolver bean found — "
                             + "falling back to SPI ServiceLoader discovery");
-            // Operio.Builder will discover via ServiceLoader if nothing is set
         } else {
             LOG.warn(
                     "Operio SDK: found {} IdentityResolver beans — "
@@ -246,40 +240,7 @@ public class OperioAutoConfiguration {
                     resolverList.size());
         }
 
-        // Resolve command + query services (from Spring beans or SPI ServiceLoader)
-        @SuppressWarnings("rawtypes")
-        ConsentAdminCommandService commandService =
-                commandServices
-                        .orderedStream()
-                        .findFirst()
-                        .orElseGet(
-                                () ->
-                                        java.util.ServiceLoader.load(
-                                                        ConsentAdminCommandService.class)
-                                                .findFirst()
-                                                .orElseThrow(
-                                                        () ->
-                                                                new IllegalStateException(
-                                                                        "No ConsentAdminCommandService"
-                                                                            + " found on"
-                                                                            + " classpath")));
-        @SuppressWarnings("rawtypes")
-        ConsentAdminQueryService queryService =
-                queryServices
-                        .orderedStream()
-                        .findFirst()
-                        .orElseGet(
-                                () ->
-                                        java.util.ServiceLoader.load(ConsentAdminQueryService.class)
-                                                .findFirst()
-                                                .orElseThrow(
-                                                        () ->
-                                                                new IllegalStateException(
-                                                                        "No ConsentAdminQueryService"
-                                                                            + " found on"
-                                                                            + " classpath")));
-
-        DefaultTenantService operio = builder.buildTenantService(commandService, queryService);
+        Operio operio = builder.build();
         LOG.info(
                 "Operio SDK: initialized (mode={}, appName={})", props.getMode(), operio.appName());
         return operio;

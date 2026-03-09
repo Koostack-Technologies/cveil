@@ -1,7 +1,7 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.exception.OperioConfigurationException;
+import com.koostack.operio.rest.config.OperioHealthService;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.dto.CommonDtos.HealthResponse;
 import jakarta.inject.Inject;
@@ -39,7 +39,7 @@ public class HealthResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(HealthResource.class);
 
-    @Inject TenantService tenantService;
+    @Inject OperioHealthService healthService;
 
     @GET
     @Operation(
@@ -68,7 +68,7 @@ public class HealthResource {
     })
     public Response health() {
         try {
-            tenantService.verifyReady();
+            healthService.verifyReady();
             LOG.trace("Health check: UP");
             return Response.ok(HealthResponse.up()).build();
         } catch (OperioConfigurationException e) {

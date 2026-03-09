@@ -1,9 +1,9 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.ConsentGraphModels.ConsentGraph;
 import com.koostack.operio.core.models.ConsentGraphModels.GraphPageInfo;
+import com.koostack.operio.plugin.consent.jooq.GetConsentGraphQueryActuator;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.interceptor.TenantScoped;
@@ -43,8 +43,6 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @SecurityRequirement(name = OperioOpenApiConfig.SECURITY_SCHEME)
 @RequestScoped
 public class GraphResource {
-
-    @Inject TenantService tenantService;
 
     @Inject
     @Named("consentQueryDispatcher")
@@ -92,9 +90,10 @@ public class GraphResource {
 
         int clampedLimit = Math.max(1, Math.min(limit, 1000));
 
-        // TODO(consent-bizlogic-migrate): Redis graph query → GetConsentGraphQueryActuator
         ConsentGraph graph =
-                tenantService.getConsentGraph(cursor, clampedLimit, rootType, rootName, depth);
+                consentQueryDispatcher.dispatch(
+                        new GetConsentGraphQueryActuator.GetConsentGraphQuery(
+                                cursor, clampedLimit, rootType, rootName, depth));
 
         return Response.ok(ConsentGraphResponse.from(graph)).build();
     }

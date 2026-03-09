@@ -3,10 +3,8 @@ package com.koostack.operio.rest.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.bundle.core.CoreConsentBundle;
-import com.koostack.operio.core.DefaultTenantService;
 import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.PlatformConstants;
-import com.koostack.operio.core.TenantService;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
@@ -35,6 +33,7 @@ import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.CountSubjectCacheKeysQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.EvaluateConsentQueryActuator;
+import com.koostack.operio.plugin.consent.jooq.GetConsentGraphQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminCommandService;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
@@ -57,7 +56,6 @@ import com.koostack.operio.tenant.event.jooq.OutboxPoller;
 import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
 import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
-import io.quarkus.arc.ClientProxy;
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -159,6 +157,9 @@ public class OperioProducers {
     /** Consent query dispatcher — stored for CDI exposure as QueryDispatcher. */
     private JooqConsentAdminQueryDispatcher consentAdminQueryDispatcher;
 
+    /** Health-checkable plugins collected during tenantService() init. */
+    private java.util.List<com.koostack.operio.core.spi.Plugin<?>> healthPlugins;
+
     @Inject OperioConfig config;
 
     @Inject Instance<IdpProvider<?>> idpProviderInstance;
@@ -182,12 +183,12 @@ public class OperioProducers {
      *   <li>Sets the application name if configured.
      * </ol>
      *
-     * @return the fully-wired {@link TenantService} instance
+     * @return the fully-wired {@link Operio} instance (used for CDI initialization ordering)
      * @throws IllegalStateException if required configuration is missing for the selected mode
      */
     @Produces
     @ApplicationScoped
-    public TenantService tenantService() {
+    public Operio operioInit() {
         String mode = config.mode();
         LOG.info("Operio REST API: initializing (mode={})", mode);
 
@@ -255,10 +256,8 @@ public class OperioProducers {
         com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> effectiveQueryService =
                 queryService;
 
-        // Retained outside the if-block so SubjectDsarService can be wired after
-        // buildTenantService()
-        JooqConsentAdminServiceConfig retainedJooqConfig = null;
-        com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService retainedDsarService = null;
+        // DSAR service and key encryptor are wired into the command config above;
+        // no additional wiring needed.
 
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)
                 && consentBundle instanceof CoreConsentBundle coreBundle) {
@@ -314,8 +313,6 @@ public class OperioProducers {
             commandService.configure(
                     new ConsentAdminCommandConfig(eventService, dsarService, keyEncryptor));
             queryService.configure(jooqConfig);
-            retainedJooqConfig = jooqConfig;
-            retainedDsarService = dsarService;
 
             LOG.info(
                     "Operio REST API: command service (event-sourced) and query service (jOOQ)"
@@ -327,19 +324,22 @@ public class OperioProducers {
             wirePlatformCqrsServices(builder);
         }
 
-        DefaultTenantService tenantService =
-                builder.buildTenantService(commandService, effectiveQueryService);
+        // Propagate appName to consent service (was previously done inside Operio constructor)
+        var consentDecisionService = builder.consentService();
+        if (consentDecisionService instanceof Operio.AppNameAware appNameAware) {
+            appNameAware.setAppName(
+                    builder.appName() != null ? builder.appName() : Operio.DEFAULT_APP_NAME);
+        }
 
-        // Wire retained DSAR deps onto DefaultTenantService for backward compat
-        // (legacy endpoints that still use tenantService directly).
-        if (retainedDsarService != null) {
-            tenantService.setSubjectDsarService(retainedDsarService);
-            LOG.info("Operio REST API: SubjectDsarService wired (jooq)");
+        // Store health-checkable plugins for OperioHealthService producer
+        this.healthPlugins = new java.util.ArrayList<>();
+        if (consentDecisionService instanceof com.koostack.operio.core.spi.Plugin<?> p) {
+            this.healthPlugins.add(p);
         }
 
         // Register Redis-backed query actuators on the consent query dispatcher.
-        // These depend on ConsentDecisionService which is only available after build.
-        var consentDecisionService = tenantService.consentService();
+        // ConsentDecisionService and ConsentGraphQueryService come from the Builder
+        // (populated by CoreConsentBundle during apply()).
         if (consentDecisionService != null
                 && queryService instanceof JooqConsentAdminQueryDispatcher qd) {
             qd.registerActuator(
@@ -351,18 +351,39 @@ public class OperioProducers {
             qd.registerActuator(
                     DeleteSubjectCacheKeysQueryActuator.DeleteSubjectCacheKeysQuery.class,
                     new DeleteSubjectCacheKeysQueryActuator(consentDecisionService));
+
+            var consentGraphService = builder.consentGraphService();
+            if (consentGraphService != null) {
+                qd.registerActuator(
+                        GetConsentGraphQueryActuator.GetConsentGraphQuery.class,
+                        new GetConsentGraphQueryActuator(consentGraphService));
+            }
+
             LOG.info(
                     "Operio REST API: Redis-backed query actuators registered (evaluate, cache"
-                            + " count, cache delete)");
+                            + " count, cache delete, graph)");
         }
 
-        LOG.info("Operio REST API: initialized successfully (appName={})", tenantService.appName());
-        return tenantService;
+        Operio operio = builder.build();
+        LOG.info(
+                "Operio REST API: initialized successfully (appName={})",
+                builder.appName() != null ? builder.appName() : Operio.DEFAULT_APP_NAME);
+        return operio;
     }
 
     // -----------------------------------------------------------------------
     // Sub-service producers
     // -----------------------------------------------------------------------
+
+    /**
+     * Produces the {@link OperioHealthService} singleton — verifies readiness of all configured
+     * plugins. Replaces the former {@code Operio.verifyReady()} used by HealthResource.
+     */
+    @Produces
+    @ApplicationScoped
+    public OperioHealthService healthService() {
+        return new OperioHealthService(healthPlugins != null ? healthPlugins : java.util.List.of());
+    }
 
     /**
      * Produces the {@link TokenValidationService} singleton — used by {@code ApiKeyAuthFilter} to
@@ -371,21 +392,18 @@ public class OperioProducers {
      * <p>In production mode this returns the {@code ApiKeyTokenVerifier} wired during {@link
      * #operio()} construction. In embedded mode it returns {@code null}.
      *
-     * @param tenantService the built {@link TenantService} instance (injected by CDI)
+     * @param operio the built {@link Operio} instance (ensures CDI initialization ordering)
      * @return the token validation service, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @Unremovable
     @SuppressWarnings("rawtypes")
-    public TokenValidationService tokenValidationService(TenantService tenantService) {
-        TenantService unwrapped = ClientProxy.unwrap(tenantService);
-        if (unwrapped instanceof DefaultTenantService dts) {
-            TokenValidationService service = dts.tokenValidationService();
-            if (service != null) {
-                LOG.debug("Operio REST API: TokenValidationService available");
-                return service;
-            }
+    public TokenValidationService tokenValidationService(Operio operio) {
+        // Operio parameter ensures CDI initialization ordering
+        if (tokenVerifier != null) {
+            LOG.debug("Operio REST API: TokenValidationService available");
+            return tokenVerifier;
         }
         LOG.debug("Operio REST API: TokenValidationService not available (embedded mode)");
         return null;
@@ -399,19 +417,15 @@ public class OperioProducers {
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public PlatformCqrsHolder platformCqrsHolder(TenantService tenantService) {
-        TenantService unwrapped = ClientProxy.unwrap(tenantService);
-        TokenValidationService tvs = null;
-        if (unwrapped instanceof DefaultTenantService dts) {
-            tvs = dts.tokenValidationService();
-        }
+    public PlatformCqrsHolder platformCqrsHolder(Operio operio) {
+        // Operio parameter ensures CDI initialization ordering
         LOG.debug(
                 "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}, tvs={}",
                 iamCommandService != null,
                 iamQueryService != null,
                 coreQueryService != null,
                 coreCommandService != null,
-                tvs != null);
+                tokenVerifier != null);
         return new PlatformCqrsHolder(
                 iamCommandService,
                 iamQueryService,
@@ -419,7 +433,7 @@ public class OperioProducers {
                 coreCommandService,
                 billingCommandService,
                 planQueryService,
-                tvs);
+                tokenVerifier);
     }
 
     /**
@@ -493,7 +507,7 @@ public class OperioProducers {
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public TenantIamHolder tenantIamHolder(TenantService tenantService) {
+    public TenantIamHolder tenantIamHolder(Operio operio) {
         LOG.debug(
                 "TenantIamHolder — cmd={}, query={}",
                 tenantIamCommandService != null,
@@ -666,14 +680,13 @@ public class OperioProducers {
      * during provisioning and startup reconciliation. Shutdown is handled by the {@link
      * #onShutdown} CDI lifecycle callback.
      *
-     * @param tenantService the built {@link TenantService} instance (triggers bundle initialization
-     *     first)
+     * @param operio the built {@link Operio} instance (triggers bundle initialization first)
      * @return the tenant stream consumer, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @io.quarkus.runtime.Startup
-    public TenantStreamConsumer tenantStreamConsumer(TenantService tenantService) {
+    public TenantStreamConsumer tenantStreamConsumer(Operio operio) {
         if (adminRedisPool == null || tenantAwareJedisProvider == null) {
             LOG.info("Operio REST API: tenant stream consumer not wired (embedded mode)");
             return null;
