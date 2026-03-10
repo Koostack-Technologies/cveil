@@ -1,7 +1,5 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.platform.iam.IamCommandService;
-import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.GetTenantQueryActuator;
@@ -11,14 +9,10 @@ import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyCreatedResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.TenantResponse;
 import com.koostack.operio.rest.dto.PlatformDtos.UpdatePlanRequest;
 import com.koostack.operio.rest.interceptor.TenantScoped;
-import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.ratelimit.RateLimitService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -64,8 +58,6 @@ public class PlatformResource {
     private static final Logger LOG = LoggerFactory.getLogger(PlatformResource.class);
 
     @Inject PlatformCqrsHolder cqrs;
-
-    @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
     @Inject RateLimitService rateLimitService;
 
@@ -283,186 +275,6 @@ public class PlatformResource {
 
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
-    }
-
-    // -------------------------------------------------------------------
-    // API Keys
-    // -------------------------------------------------------------------
-
-    @POST
-    @Path("/api-keys")
-    @Operation(
-            operationId = "createApiKey",
-            summary = "Create an API key for a tenant",
-            description =
-                    "Generates a new API key for the specified tenant with the given "
-                            + "roles. The raw key is returned only once in the response body and "
-                            + "is never stored in plaintext. Requires the super-admin role.")
-    @APIResponses({
-        @APIResponse(
-                responseCode = "201",
-                description = "API key created (raw key returned once)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ApiKeyCreatedResponse.class))),
-        @APIResponse(
-                responseCode = "400",
-                description = "Validation error",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-        @APIResponse(
-                responseCode = "403",
-                description = "Missing required role (super-admin)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-    })
-    public Response createApiKey(
-            @Context SecurityContext securityContext, @Valid CreateApiKeyRequest request) {
-        requireSuperAdmin(securityContext);
-        requireCqrsServices();
-
-        LOG.info(
-                "POST /platform/api-keys - tenant={}, subject={}",
-                request.tenantId(),
-                request.subject());
-
-        String roles = request.roles() != null ? String.join(",", request.roles()) : null;
-
-        IamCommandService.CreateApiTokenResult result =
-                cqrs.iamCommandService()
-                        .createApiToken(request.tenantId(), request.subject(), "PROD", roles);
-
-        ApiKeyCreatedResponse response =
-                new ApiKeyCreatedResponse(
-                        result.plaintextKey(),
-                        result.keyPrefix(),
-                        request.tenantId(),
-                        request.subject(),
-                        request.roles());
-
-        bootstrapLifecycle.markBootstrapConsumed();
-
-        return Response.status(Response.Status.CREATED).entity(response).build();
-    }
-
-    @GET
-    @Path("/api-keys")
-    @Operation(
-            operationId = "listApiKeys",
-            summary = "List API keys for a tenant",
-            description =
-                    "Returns metadata for all API keys belonging to the specified "
-                            + "tenant. Never returns the raw key or its hash. "
-                            + "Requires the super-admin role.")
-    @APIResponses({
-        @APIResponse(
-                responseCode = "200",
-                description = "List of API key metadata",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema =
-                                        @Schema(
-                                                type = SchemaType.ARRAY,
-                                                implementation = ApiKeyResponse.class))),
-        @APIResponse(
-                responseCode = "400",
-                description = "Missing tenantId query parameter",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-        @APIResponse(
-                responseCode = "403",
-                description = "Missing required role (super-admin)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-    })
-    public Response listApiKeys(
-            @Context SecurityContext securityContext,
-            @Parameter(
-                            description = "Tenant identifier to list API keys for",
-                            required = true,
-                            example = "acme_corp")
-                    @QueryParam("tenantId")
-                    String tenantId) {
-        requireSuperAdmin(securityContext);
-        requireCqrsServices();
-
-        if (tenantId == null || tenantId.isBlank()) {
-            throw new IllegalArgumentException("Query parameter 'tenantId' is required");
-        }
-
-        LOG.debug("GET /platform/api-keys?tenantId={}", tenantId);
-
-        List<IamQueryService.ApiKeyInfo> keys = cqrs.iamQueryService().listApiKeys(tenantId);
-
-        List<ApiKeyResponse> dtos = keys.stream().map(ApiKeyResponse::fromIamModel).toList();
-
-        return Response.ok(dtos).build();
-    }
-
-    @DELETE
-    @Path("/api-keys/{prefix}")
-    @Operation(
-            operationId = "revokeApiKey",
-            summary = "Revoke an API key by prefix",
-            description =
-                    "Revokes an API key identified by its 8-character prefix. The key becomes"
-                            + " immediately unusable. Requires the super-admin role.")
-    @APIResponses({
-        @APIResponse(
-                responseCode = "200",
-                description = "API key revoked successfully",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = MessageResponse.class))),
-        @APIResponse(
-                responseCode = "403",
-                description = "Missing required role (super-admin)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-        @APIResponse(
-                responseCode = "404",
-                description = "API key not found",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-    })
-    public Response revokeApiKey(
-            @Context SecurityContext securityContext,
-            @Parameter(
-                            description = "The 8-character key prefix used for identification",
-                            required = true,
-                            example = "opr_live")
-                    @PathParam("prefix")
-                    String keyPrefix) {
-        requireSuperAdmin(securityContext);
-        requireCqrsServices();
-
-        LOG.info("DELETE /platform/api-keys/{}", keyPrefix);
-
-        IamQueryService.ApiKeyInfo key = cqrs.iamQueryService().findByKeyPrefix(keyPrefix);
-        if (key == null) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found", "API key not found: " + keyPrefix))
-                    .build();
-        }
-
-        cqrs.iamCommandService().revokeApiToken(key.tenantId(), key.keyId());
-
-        return Response.ok(MessageResponse.of("API key '" + keyPrefix + "' revoked")).build();
     }
 
     // -------------------------------------------------------------------

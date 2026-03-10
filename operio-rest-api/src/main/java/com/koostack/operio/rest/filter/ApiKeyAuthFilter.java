@@ -4,7 +4,6 @@ import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
-import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
@@ -251,39 +250,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 5. Verify via TokenValidationService (API key hash lookup)
-        TokenValidationService<?> tokenValidationService =
-                cqrsHolder.isTokenValidationAvailable()
-                        ? cqrsHolder.tokenValidationService()
-                        : null;
-        if (tokenValidationService == null) {
-            LOG.error(
-                    "No TokenValidationService configured — cannot authenticate requests. "
-                            + "Is operio.mode=production with platform-db configured?");
-            abortUnauthorized(
-                    ctx, "Authentication service not available — " + "server configuration error");
-            return;
-        }
-
-        try {
-            IdentityContext identity = tokenValidationService.verifyToken(token);
-            LOG.debug(
-                    "Authenticated: subject={}, tenantId={}, provider={}, roles={}",
-                    identity.subject(),
-                    identity.tenantId(),
-                    identity.provider(),
-                    identity.roles());
-            applyAuthentication(
-                    ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
-        } catch (OperioAuthException e) {
-            LOG.debug("Authentication failed: {}", e.getMessage());
-            abortUnauthorized(ctx, e.getMessage());
-        } catch (Exception e) {
-            // Unexpected error during verification — log at error level but
-            // still return 401 to the caller (don't leak internal details).
-            LOG.error("Unexpected error during token verification", e);
-            abortUnauthorized(ctx, "Authentication failed — internal error");
-        }
+        // 5. Unrecognized token format — not bootstrap, not config, not JWT.
+        abortUnauthorized(ctx, "Invalid credentials");
     }
 
     // -----------------------------------------------------------------------

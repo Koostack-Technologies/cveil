@@ -138,8 +138,6 @@ public class OperioProducers {
     @SuppressWarnings("rawtypes")
     private com.koostack.operio.core.platform.iam.IamQueryService iamQueryService;
 
-    private com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier;
-
     /** Platform event service — unified event store for all events. */
     private JooqPlatformEventService platformEventService;
 
@@ -211,18 +209,8 @@ public class OperioProducers {
                             }
                         });
 
-        // -- Token verifier (production only) ------------------------------------
-        // The token verifier uses IamQueryService from the CQRS stack.
-        if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
-            com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier =
-                    new com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier();
-            builder.withTokenValidationService(tokenVerifier);
-            this.tokenVerifier = tokenVerifier;
-
-            LOG.info("Operio REST API: token verifier wired (api-key)");
-        } else {
-            LOG.info("Operio REST API: embedded mode — token verifier not wired");
-        }
+        // -- Token verifier removed (API keys deprecated, JWT used instead) ---
+        LOG.info("Operio REST API: JWT-only auth — no API key token verifier needed");
 
         // -- IdP provider (production only, when Keycloak is configured) ------
         if (idpProviderInstance.isResolvable()) {
@@ -367,27 +355,19 @@ public class OperioProducers {
     }
 
     /**
-     * Produces the {@link TokenValidationService} singleton — used by {@code ApiKeyAuthFilter} to
-     * authenticate bearer tokens on every request.
-     *
-     * <p>In production mode this returns the {@code ApiKeyTokenVerifier} wired during {@link
-     * #operio()} construction. In embedded mode it returns {@code null}.
+     * Produces a {@code null} {@link TokenValidationService} — API key hash-based authentication
+     * has been removed in favor of Keycloak JWT. Retained for CDI injection compatibility.
      *
      * @param operio the built {@link Operio} instance (ensures CDI initialization ordering)
-     * @return the token validation service, or {@code null} in embedded mode
+     * @return {@code null} — no token validation service needed
      */
     @Produces
     @ApplicationScoped
     @Unremovable
     @SuppressWarnings("rawtypes")
     public TokenValidationService tokenValidationService(Operio operio) {
-        // Force CDI proxy resolution so operioInit() completes first.
         operio.appName();
-        if (tokenVerifier != null) {
-            LOG.debug("Operio REST API: TokenValidationService available");
-            return tokenVerifier;
-        }
-        LOG.debug("Operio REST API: TokenValidationService not available (embedded mode)");
+        LOG.debug("Operio REST API: TokenValidationService not used (JWT auth active)");
         return null;
     }
 
@@ -404,12 +384,11 @@ public class OperioProducers {
         // snapshot the infrastructure fields into the immutable holder.
         operio.appName();
         LOG.debug(
-                "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}, tvs={}",
+                "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}",
                 iamCommandService != null,
                 iamQueryService != null,
                 coreQueryService != null,
-                coreCommandService != null,
-                tokenVerifier != null);
+                coreCommandService != null);
         return new PlatformCqrsHolder(
                 iamCommandService,
                 iamQueryService,
@@ -417,7 +396,7 @@ public class OperioProducers {
                 coreCommandService,
                 billingCommandService,
                 planQueryService,
-                tokenVerifier);
+                null);
     }
 
     /**
@@ -1143,12 +1122,6 @@ public class OperioProducers {
                 instanceof com.koostack.operio.platform.iam.jooq.KeycloakIamDispatcher dispatcher) {
             dispatcher.setQueryService(iamQuerySvc);
             LOG.info("Operio REST API: KeycloakIamDispatcher wired with IamQueryService");
-        }
-
-        // Wire API key token verifier to IamQueryService for hash-based lookup
-        if (this.tokenVerifier != null) {
-            this.tokenVerifier.setIamQueryService(iamQuerySvc);
-            LOG.info("Operio REST API: ApiKeyTokenVerifier wired to IamQueryService");
         }
 
         // -- Tenant IAM services eliminated (Phase 9) ---

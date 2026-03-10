@@ -103,7 +103,7 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
                             ? config.tenantDiscovery()
                             : () -> List.of("platform");
             this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, discovery);
-            this.outboxPoller.start(2);
+            this.outboxPoller.start();
         }
 
         log.info(

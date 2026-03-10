@@ -455,32 +455,6 @@ class OpenApiAnnotationTest {
             assertTrue(paramCount >= 1, "getTenant should have at least 1 @Parameter");
         }
 
-        @Test
-        @DisplayName("listApiKeys has @Parameter on tenantId query param")
-        void listApiKeysHasParameter() throws Exception {
-            Method m =
-                    PlatformResource.class.getMethod(
-                            "listApiKeys", jakarta.ws.rs.core.SecurityContext.class, String.class);
-            long paramCount =
-                    Arrays.stream(m.getParameters())
-                            .filter(p -> p.isAnnotationPresent(Parameter.class))
-                            .count();
-            assertTrue(paramCount >= 1, "listApiKeys should have at least 1 @Parameter");
-        }
-
-        @Test
-        @DisplayName("createApiKey returns 201 per @APIResponse")
-        void createApiKeyReturns201() throws Exception {
-            Method m =
-                    PlatformResource.class.getMethod(
-                            "createApiKey",
-                            jakarta.ws.rs.core.SecurityContext.class,
-                            com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest.class);
-            APIResponses responses = m.getAnnotation(APIResponses.class);
-            boolean has201 =
-                    Arrays.stream(responses.value()).anyMatch(r -> r.responseCode().equals("201"));
-            assertTrue(has201, "createApiKey should document a 201 response");
-        }
     }
 
     // ===================================================================

@@ -28,7 +28,6 @@ import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.resource.CatalogueResource;
@@ -1479,100 +1478,6 @@ class RbacTest {
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
                 assertThrows(OperioAuthException.class, () -> resource.deleteTenant(ctx, "t1"));
-            }
-        }
-
-        @Nested
-        @DisplayName("POST /platform/api-keys (createApiKey)")
-        class CreateApiKey {
-
-            @Test
-            @DisplayName("super-admin → 201")
-            void superAdminAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(iamCommandService.createApiToken(anyString(), anyString(), anyString(), any()))
-                        .thenReturn(
-                                new IamCommandService.CreateApiTokenResult(
-                                        "key-id-1", "opr_live", "opr_live_test1234567890abcdef"));
-                CreateApiKeyRequest request =
-                        new CreateApiKeyRequest(
-                                "tenant-1",
-                                "test-subject",
-                                Set.of("consent:read", "consent:write"));
-                Response response = resource.createApiKey(ctx, request);
-                assertEquals(201, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:write → 403")
-            void adminWriteDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                CreateApiKeyRequest request =
-                        new CreateApiKeyRequest("tenant-1", "test-subject", Set.of("consent:read"));
-                assertThrows(OperioAuthException.class, () -> resource.createApiKey(ctx, request));
-            }
-        }
-
-        @Nested
-        @DisplayName("GET /platform/api-keys (listApiKeys)")
-        class ListApiKeys {
-
-            @Test
-            @DisplayName("super-admin → 200")
-            void superAdminAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(iamQueryService.listApiKeys("t1")).thenReturn(Collections.emptyList());
-                Response response = resource.listApiKeys(ctx, "t1");
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("consent:read → 403")
-            void consentReadDenied() {
-                SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
-                assertThrows(OperioAuthException.class, () -> resource.listApiKeys(ctx, "t1"));
-            }
-        }
-
-        @Nested
-        @DisplayName("DELETE /platform/api-keys/{prefix} (revokeApiKey)")
-        class RevokeApiKey {
-
-            @Test
-            @DisplayName("super-admin → 200")
-            void superAdminAllowed() {
-                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(iamQueryService.findByKeyPrefix("opr_live"))
-                        .thenReturn(
-                                new IamQueryService.ApiKeyInfo(
-                                        "key-1",
-                                        "opr_live",
-                                        "test",
-                                        "t1",
-                                        "PROD",
-                                        null,
-                                        null,
-                                        "active",
-                                        Instant.now(),
-                                        null));
-                Response response = resource.revokeApiKey(ctx, "opr_live");
-                assertEquals(200, response.getStatus());
-            }
-
-            @Test
-            @DisplayName("admin:write → 403")
-            void adminWriteDenied() {
-                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(
-                        OperioAuthException.class, () -> resource.revokeApiKey(ctx, "opr_live"));
-            }
-
-            @Test
-            @DisplayName("no roles → 403")
-            void noRolesDenied() {
-                assertThrows(
-                        OperioAuthException.class,
-                        () -> resource.revokeApiKey(emptySecurityContext(), "opr_live"));
             }
         }
 

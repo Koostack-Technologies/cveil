@@ -43,8 +43,8 @@ public class OutboxPoller {
     private static final ObjectMapper objectMapper =
             new ObjectMapper().registerModule(new JavaTimeModule());
 
-    private static final int DEFAULT_BATCH_SIZE = 50;
-    private static final long DEFAULT_POLL_INTERVAL_MS = 500;
+    private static final int DEFAULT_BATCH_SIZE = 200;
+    private static final long DEFAULT_POLL_INTERVAL_MS = 250;
 
     private final DSLContext dsl;
     private final RedisEventPublisher redisPublisher;
@@ -89,20 +89,17 @@ public class OutboxPoller {
         this.encryptionKey = encryptionKey;
     }
 
-    /** Starts the outbox poller with the given number of worker threads. */
-    public void start(int workerCount) {
+    /**
+     * Starts the outbox poller with virtual threads for per-tenant parallelism. Each tenant's
+     * publish batch runs on its own virtual thread (~1KB stack), eliminating the fixed-thread
+     * bottleneck when many tenants are active concurrently.
+     */
+    public void start() {
         if (!running.compareAndSet(false, true)) {
             log.warn("OutboxPoller is already running");
             return;
         }
-        workers =
-                Executors.newFixedThreadPool(
-                        workerCount,
-                        r -> {
-                            Thread t = new Thread(r, "outbox-worker");
-                            t.setDaemon(true);
-                            return t;
-                        });
+        workers = Executors.newVirtualThreadPerTaskExecutor();
         scheduler =
                 Executors.newSingleThreadScheduledExecutor(
                         r -> {
@@ -112,10 +109,7 @@ public class OutboxPoller {
                         });
         scheduler.scheduleWithFixedDelay(
                 this::discoverAndDispatch, 0, pollIntervalMs, TimeUnit.MILLISECONDS);
-        log.info(
-                "OutboxPoller started with {} workers, polling every {}ms",
-                workerCount,
-                pollIntervalMs);
+        log.info("OutboxPoller started with virtual threads, polling every {}ms", pollIntervalMs);
     }
 
     /** Gracefully shuts down the poller, waiting up to 5 seconds for in-flight work to complete. */
@@ -152,7 +146,8 @@ public class OutboxPoller {
     /**
      * Claims and publishes a batch of unpublished events. Uses {@code FOR UPDATE SKIP LOCKED} so
      * concurrent workers (across nodes) do not block each other. Routes each event to the correct
-     * Redis stream based on the tenant_id from TenantContext.
+     * Redis stream based on the tenant_id from TenantContext. Uses pipelined XADD to eliminate
+     * per-event network round-trips.
      */
     private void publishBatch() {
         try {
@@ -183,6 +178,7 @@ public class OutboxPoller {
                         }
 
                         List<Long> publishedIds = new ArrayList<>();
+                        List<Map<String, String>> fieldsBatch = new ArrayList<>();
 
                         for (var record : batch) {
                             String payload = record.getPayload();
@@ -228,8 +224,12 @@ public class OutboxPoller {
                             if (record.getTenantId() != null) {
                                 fields.put("tenantId", record.getTenantId());
                             }
-                            redisPublisher.publishRaw(streamKey, fields);
+                            fieldsBatch.add(fields);
                             publishedIds.add(record.getEventId());
+                        }
+
+                        if (!fieldsBatch.isEmpty()) {
+                            redisPublisher.publishBatchPipelined(streamKey, fieldsBatch);
                         }
 
                         if (!publishedIds.isEmpty()) {

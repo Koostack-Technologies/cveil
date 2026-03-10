@@ -2,10 +2,12 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.Pipeline;
 
 /**
  * Publishes events to Redis Streams for real-time fanout.
@@ -56,5 +58,28 @@ public class RedisEventPublisher {
     /** Publishes to the default platform stream (backward compatibility). */
     public void publishRaw(Map<String, String> fields) {
         publishRaw(platformStreamKey(), fields);
+    }
+
+    /**
+     * Publishes a batch of events to the specified Redis Stream using a pipeline. All XADD commands
+     * are buffered and sent in a single round-trip, eliminating per-event network overhead.
+     */
+    public void publishBatchPipelined(String streamKey, List<Map<String, String>> batch) {
+        if (batch == null || batch.isEmpty()) {
+            return;
+        }
+        try {
+            JedisPooled jedis = jedisProvider.get();
+            Pipeline pipeline = jedis.pipelined();
+            for (Map<String, String> fields : batch) {
+                pipeline.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
+            }
+            pipeline.sync();
+            log.debug("Pipelined {} events to Redis stream {}", batch.size(), streamKey);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to pipeline " + batch.size() + " events to Redis stream " + streamKey,
+                    e);
+        }
     }
 }

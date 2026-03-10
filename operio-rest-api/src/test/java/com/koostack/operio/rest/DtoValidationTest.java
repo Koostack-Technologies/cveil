@@ -14,7 +14,6 @@ import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -843,90 +842,6 @@ class DtoValidationTest {
                             .validate(
                                     new CreateTenantRequest(
                                             "acme", stringOfLength(256), "free", null))
-                            .isEmpty());
-        }
-    }
-
-    // =======================================================================
-    // CreateApiKeyRequest
-    // =======================================================================
-
-    @Nested
-    @DisplayName("CreateApiKeyRequest")
-    class CreateApiKeyRequestValidation {
-
-        @Test
-        void valid_noViolations() {
-            assertTrue(
-                    validator
-                            .validate(
-                                    new CreateApiKeyRequest(
-                                            "acme",
-                                            "admin@acme.com",
-                                            Set.of("admin", "consent-writer")))
-                            .isEmpty());
-        }
-
-        @Test
-        void validEmptyRoles_noViolations() {
-            // Empty set is allowed (non-null)
-            assertTrue(
-                    validator
-                            .validate(new CreateApiKeyRequest("acme", "admin@acme.com", Set.of()))
-                            .isEmpty());
-        }
-
-        @Test
-        void nullTenantId_violation() {
-            assertFalse(
-                    validator
-                            .validate(new CreateApiKeyRequest(null, "admin@acme.com", Set.of()))
-                            .isEmpty());
-        }
-
-        @Test
-        void blankTenantId_violation() {
-            assertFalse(
-                    validator
-                            .validate(new CreateApiKeyRequest("", "admin@acme.com", Set.of()))
-                            .isEmpty());
-        }
-
-        @Test
-        void nullSubject_violation() {
-            assertFalse(
-                    validator.validate(new CreateApiKeyRequest("acme", null, Set.of())).isEmpty());
-        }
-
-        @Test
-        void blankSubject_violation() {
-            assertFalse(
-                    validator.validate(new CreateApiKeyRequest("acme", "  ", Set.of())).isEmpty());
-        }
-
-        @Test
-        void nullRoles_violation() {
-            assertFalse(
-                    validator
-                            .validate(new CreateApiKeyRequest("acme", "admin@acme.com", null))
-                            .isEmpty());
-        }
-
-        @Test
-        void tenantIdTooLong_violation() {
-            assertFalse(
-                    validator
-                            .validate(
-                                    new CreateApiKeyRequest(stringOfLength(64), "admin", Set.of()))
-                            .isEmpty());
-        }
-
-        @Test
-        void subjectTooLong_violation() {
-            assertFalse(
-                    validator
-                            .validate(
-                                    new CreateApiKeyRequest("acme", stringOfLength(256), Set.of()))
                             .isEmpty());
         }
     }

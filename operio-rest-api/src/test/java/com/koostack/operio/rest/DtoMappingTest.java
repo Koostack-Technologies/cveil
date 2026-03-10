@@ -2,7 +2,6 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.models.ApiKeyInfo;
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
 import com.koostack.operio.core.models.ConsentResponse;
@@ -28,9 +27,6 @@ import com.koostack.operio.rest.dto.ConsentDtos.EvaluateResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyCreatedResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.TenantResponse;
 import java.time.Instant;
@@ -501,109 +497,6 @@ class DtoMappingTest {
 
             TenantResponse dto = TenantResponse.fromModel(model);
             assertEquals("SUSPENDED", dto.status());
-        }
-    }
-
-    // =======================================================================
-    // PlatformDtos — API Key
-    // =======================================================================
-
-    @Nested
-    @DisplayName("PlatformDtos — API Key")
-    class ApiKeyDtoTests {
-
-        @Test
-        @DisplayName("CreateApiKeyRequest holds all fields")
-        void createApiKeyRequest() {
-            CreateApiKeyRequest req =
-                    new CreateApiKeyRequest(
-                            "acme_corp", "admin@acme.com", Set.of("admin", "consent-writer"));
-
-            assertEquals("acme_corp", req.tenantId());
-            assertEquals("admin@acme.com", req.subject());
-            assertEquals(Set.of("admin", "consent-writer"), req.roles());
-        }
-
-        @Test
-        @DisplayName("CreateApiKeyRequest with empty roles")
-        void createApiKeyRequestEmptyRoles() {
-            CreateApiKeyRequest req =
-                    new CreateApiKeyRequest("acme_corp", "readonly@acme.com", Set.of());
-
-            assertTrue(req.roles().isEmpty());
-        }
-
-        @Test
-        @DisplayName("ApiKeyCreatedResponse holds all fields including rawKey")
-        void apiKeyCreatedResponse() {
-            ApiKeyCreatedResponse resp =
-                    new ApiKeyCreatedResponse(
-                            "opr_live_abc123def456ghi789",
-                            "opr_live",
-                            "acme_corp",
-                            "admin@acme.com",
-                            Set.of("admin"));
-
-            assertEquals("opr_live_abc123def456ghi789", resp.rawKey());
-            assertEquals("opr_live", resp.keyPrefix());
-            assertEquals("acme_corp", resp.tenantId());
-            assertEquals("admin@acme.com", resp.subject());
-            assertEquals(Set.of("admin"), resp.roles());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() maps all fields")
-        void apiKeyResponseFromModel() {
-            Instant createdAt = Instant.now().minus(1, ChronoUnit.HOURS);
-            ApiKeyInfo model =
-                    new ApiKeyInfo(
-                            "opr_live",
-                            "acme_corp",
-                            "admin@acme.com",
-                            Set.of("admin", "consent-writer"),
-                            "ACTIVE",
-                            createdAt);
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-
-            assertEquals("opr_live", dto.keyPrefix());
-            assertEquals("acme_corp", dto.tenantId());
-            assertEquals("admin@acme.com", dto.subject());
-            assertEquals(Set.of("admin", "consent-writer"), dto.roles());
-            assertEquals("ACTIVE", dto.status());
-            assertEquals(createdAt, dto.createdAt());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() preserves REVOKED status")
-        void apiKeyResponseRevoked() {
-            ApiKeyInfo model =
-                    new ApiKeyInfo(
-                            "opr_live",
-                            "acme_corp",
-                            "old@acme.com",
-                            Set.of("admin"),
-                            "REVOKED",
-                            Instant.now());
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-            assertEquals("REVOKED", dto.status());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() preserves empty roles")
-        void apiKeyResponseEmptyRoles() {
-            ApiKeyInfo model =
-                    new ApiKeyInfo(
-                            "opr_live",
-                            "acme_corp",
-                            "svc@acme.com",
-                            Set.of(),
-                            "ACTIVE",
-                            Instant.now());
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-            assertTrue(dto.roles().isEmpty());
         }
     }
 
