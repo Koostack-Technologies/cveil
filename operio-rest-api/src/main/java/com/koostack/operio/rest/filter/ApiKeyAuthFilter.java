@@ -390,8 +390,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /**
      * Extracts the first organization alias from the Keycloak {@code organization} claim.
      *
-     * <p>Keycloak 26+ with Organizations enabled adds: {@code "organization":["org-alias"]}
-     * This method finds the first element in that JSON array.
+     * <p>Keycloak 26+ with Organizations enabled adds: {@code "organization":["org-alias"]} This
+     * method finds the first element in that JSON array.
      */
     private static String extractFirstOrganizationAlias(String json) {
         // Try singular "organization" (Keycloak 26 default)

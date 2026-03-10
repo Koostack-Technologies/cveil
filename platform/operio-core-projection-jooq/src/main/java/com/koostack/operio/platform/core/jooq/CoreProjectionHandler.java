@@ -157,10 +157,14 @@ public class CoreProjectionHandler {
     private void handleRedisProvisioned(String payload) throws Exception {
         var node = mapper.readTree(payload);
         String id = node.get("tenantId").asText();
-        String aclUser = node.has("aclUser") && !node.get("aclUser").isNull()
-                ? node.get("aclUser").asText() : null;
-        String aclPassword = node.has("aclPassword") && !node.get("aclPassword").isNull()
-                ? node.get("aclPassword").asText() : null;
+        String aclUser =
+                node.has("aclUser") && !node.get("aclUser").isNull()
+                        ? node.get("aclUser").asText()
+                        : null;
+        String aclPassword =
+                node.has("aclPassword") && !node.get("aclPassword").isNull()
+                        ? node.get("aclPassword").asText()
+                        : null;
 
         if (aclUser == null || aclPassword == null) {
             LOG.info("Redis provisioned for tenant {} without ACL credentials", id);

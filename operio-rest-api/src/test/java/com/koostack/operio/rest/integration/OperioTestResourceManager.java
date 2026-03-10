@@ -287,8 +287,8 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
     // -----------------------------------------------------------------------
 
     /**
-     * Creates the {@code operio} realm in Keycloak with the {@code operio-backend}
-     * confidential client and all default Operio roles.
+     * Creates the {@code operio} realm in Keycloak with the {@code operio-backend} confidential
+     * client and all default Operio roles.
      *
      * @return the auto-generated client secret for {@code operio-backend}
      */
@@ -340,18 +340,25 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
             realmResource.clientScopes().findAll().stream()
                     .filter(s -> "organization".equals(s.getName()))
                     .findFirst()
-                    .ifPresent(orgScope -> {
-                        // Remove from optional first (Keycloak may reject adding as
-                        // default if it's already registered as optional).
-                        try {
-                            realmResource.clients().get(internalId)
-                                    .removeOptionalClientScope(orgScope.getId());
-                        } catch (Exception ignored) { }
-                        realmResource.clients().get(internalId)
-                                .addDefaultClientScope(orgScope.getId());
-                        LOG.info("Added 'organization' as default client scope for '{}'",
-                                OPERIO_CLIENT_ID);
-                    });
+                    .ifPresent(
+                            orgScope -> {
+                                // Remove from optional first (Keycloak may reject adding as
+                                // default if it's already registered as optional).
+                                try {
+                                    realmResource
+                                            .clients()
+                                            .get(internalId)
+                                            .removeOptionalClientScope(orgScope.getId());
+                                } catch (Exception ignored) {
+                                }
+                                realmResource
+                                        .clients()
+                                        .get(internalId)
+                                        .addDefaultClientScope(orgScope.getId());
+                                LOG.info(
+                                        "Added 'organization' as default client scope for '{}'",
+                                        OPERIO_CLIENT_ID);
+                            });
 
             // Create default roles
             for (String roleName : DEFAULT_ROLES) {

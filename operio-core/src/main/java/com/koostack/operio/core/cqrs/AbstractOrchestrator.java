@@ -93,9 +93,7 @@ public abstract class AbstractOrchestrator<I, O> {
         return d;
     }
 
-    /**
-     * Returns an unmodifiable view of all registered dispatchers.
-     */
+    /** Returns an unmodifiable view of all registered dispatchers. */
     protected Map<String, CommandDispatcher> dispatchers() {
         return Collections.unmodifiableMap(dispatchers);
     }
@@ -268,19 +266,26 @@ public abstract class AbstractOrchestrator<I, O> {
         SagaContext context = new SagaContext();
         List<SagaStep<I>> completed = new ArrayList<>();
 
-        LOG.log(Level.INFO, "{0}: starting saga with {1} step(s)",
+        LOG.log(
+                Level.INFO,
+                "{0}: starting saga with {1} step(s)",
                 new Object[] {orchestratorName(), steps.size()});
 
         for (SagaStep<I> step : steps) {
             try {
-                LOG.log(Level.FINE, "{0}: executing step ''{1}''",
+                LOG.log(
+                        Level.FINE,
+                        "{0}: executing step ''{1}''",
                         new Object[] {orchestratorName(), step.name()});
                 step.action.execute(input, context);
                 completed.add(step);
-                LOG.log(Level.FINE, "{0}: step ''{1}'' completed",
+                LOG.log(
+                        Level.FINE,
+                        "{0}: step ''{1}'' completed",
                         new Object[] {orchestratorName(), step.name()});
             } catch (Exception ex) {
-                LOG.log(Level.SEVERE,
+                LOG.log(
+                        Level.SEVERE,
                         String.format(
                                 "%s: step '%s' failed — compensating %d prior step(s): %s",
                                 orchestratorName(), step.name(), completed.size(), ex.getMessage()),
@@ -289,15 +294,13 @@ public abstract class AbstractOrchestrator<I, O> {
                 compensate(input, context, completed);
 
                 throw new OrchestratorException(
-                        orchestratorName(),
-                        step.name(),
-                        completed.size(),
-                        steps.size(),
-                        ex);
+                        orchestratorName(), step.name(), completed.size(), steps.size(), ex);
             }
         }
 
-        LOG.log(Level.INFO, "{0}: saga completed successfully ({1} step(s))",
+        LOG.log(
+                Level.INFO,
+                "{0}: saga completed successfully ({1} step(s))",
                 new Object[] {orchestratorName(), steps.size()});
         return toResult(input, context);
     }
@@ -311,15 +314,20 @@ public abstract class AbstractOrchestrator<I, O> {
             SagaStep<I> step = completed.get(i);
             if (step.compensation != null) {
                 try {
-                    LOG.log(Level.INFO, "{0}: compensating step ''{1}''",
+                    LOG.log(
+                            Level.INFO,
+                            "{0}: compensating step ''{1}''",
                             new Object[] {orchestratorName(), step.name()});
                     step.compensation.compensate(input, context);
-                    LOG.log(Level.INFO, "{0}: compensation for step ''{1}'' succeeded",
+                    LOG.log(
+                            Level.INFO,
+                            "{0}: compensation for step ''{1}'' succeeded",
                             new Object[] {orchestratorName(), step.name()});
                 } catch (Exception compEx) {
                     // Compensation failure must not prevent other compensations from running.
                     // This is logged at SEVERE level for manual remediation.
-                    LOG.log(Level.SEVERE,
+                    LOG.log(
+                            Level.SEVERE,
                             String.format(
                                     "%s: compensation for step '%s' FAILED — manual remediation"
                                             + " required: %s",
@@ -327,7 +335,9 @@ public abstract class AbstractOrchestrator<I, O> {
                             compEx);
                 }
             } else {
-                LOG.log(Level.WARNING, "{0}: step ''{1}'' has no compensation action — skipping",
+                LOG.log(
+                        Level.WARNING,
+                        "{0}: step ''{1}'' has no compensation action — skipping",
                         new Object[] {orchestratorName(), step.name()});
             }
         }

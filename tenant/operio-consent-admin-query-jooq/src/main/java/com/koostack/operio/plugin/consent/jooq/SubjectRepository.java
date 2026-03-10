@@ -32,6 +32,9 @@ public class SubjectRepository {
     }
 
     public List<Subject> findAll() {
-        return dsl.selectFrom(SUBJECT).where(SUBJECT.TENANT_ID.eq(TenantContext.require())).orderBy(SUBJECT.SUBJECT_NAME).fetchInto(Subject.class);
+        return dsl.selectFrom(SUBJECT)
+                .where(SUBJECT.TENANT_ID.eq(TenantContext.require()))
+                .orderBy(SUBJECT.SUBJECT_NAME)
+                .fetchInto(Subject.class);
     }
 }

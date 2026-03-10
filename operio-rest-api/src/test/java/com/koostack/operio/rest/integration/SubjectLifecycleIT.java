@@ -8,7 +8,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -68,8 +67,7 @@ public class SubjectLifecycleIT {
         void createTenant() {
             String result =
                     IntegrationTestSupport.provisionTenantViaOrchestrator(
-                            BOOTSTRAP_KEY, TENANT_ID, "Subject Lifecycle IT", "pro",
-                            "Test1234!");
+                            BOOTSTRAP_KEY, TENANT_ID, "Subject Lifecycle IT", "pro", "Test1234!");
             assertThat(result).isEqualTo(TENANT_ID);
         }
 

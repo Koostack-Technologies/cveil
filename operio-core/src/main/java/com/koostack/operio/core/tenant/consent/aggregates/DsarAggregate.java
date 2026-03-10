@@ -38,8 +38,7 @@ public record DsarAggregate(
         return switch (eventType) {
             case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> {
                 var e = mapper.convertValue(payloadNode, SubjectAuditDeletedEvent.class);
-                var base = current != null ? current
-                        : DsarAggregate.create(null, e.subjectId());
+                var base = current != null ? current : DsarAggregate.create(null, e.subjectId());
                 yield base.withDeletionRequest(e.deletionRequestId());
             }
             default -> throw new IllegalArgumentException(

@@ -24,18 +24,19 @@ import java.util.Set;
  * deterministic saga with compensation on failure.
  *
  * <p>Steps executed in order (when an organization name is provided):
+ *
  * <ol>
- *   <li><b>register-user</b> — creates the user in Keycloak via IAM dispatcher.</li>
+ *   <li><b>register-user</b> — creates the user in Keycloak via IAM dispatcher.
  *   <li><b>create-organization</b> — creates a Keycloak Organization via IAM dispatcher.
- *       Compensation: deletes the organization.</li>
- *   <li><b>add-org-member</b> — adds the user as an org member via IAM dispatcher.
- *       Compensation: removes the member.</li>
- *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub via IAM dispatcher.
- *       Non-fatal — failure is swallowed.</li>
- *   <li><b>create-tenant</b> — creates the tenant aggregate via Core dispatcher.
- *       Compensation: soft-deletes the tenant.</li>
- *   <li><b>create-billing-profile</b> — creates billing profile via Billing dispatcher.</li>
- *   <li><b>create-subscription</b> — creates subscription via Billing dispatcher.</li>
+ *       Compensation: deletes the organization.
+ *   <li><b>add-org-member</b> — adds the user as an org member via IAM dispatcher. Compensation:
+ *       removes the member.
+ *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub via IAM dispatcher. Non-fatal —
+ *       failure is swallowed.
+ *   <li><b>create-tenant</b> — creates the tenant aggregate via Core dispatcher. Compensation:
+ *       soft-deletes the tenant.
+ *   <li><b>create-billing-profile</b> — creates billing profile via Billing dispatcher.
+ *   <li><b>create-subscription</b> — creates subscription via Billing dispatcher.
  * </ol>
  *
  * <p>If no organization name is provided, only step 1 (register-user) is executed.
@@ -58,14 +59,14 @@ public class RegisterUserOrchestrator
     /**
      * Command input for the full registration saga.
      *
-     * @param realmId                 the Keycloak realm
-     * @param username                the user's unique login name
-     * @param email                   the user's email address
-     * @param fullName                the user's display name (nullable)
-     * @param roles                   initial roles to assign (nullable)
-     * @param temporaryPassword       if true, user must change password on first login
-     * @param password                the user's initial password (nullable)
-     * @param organizationName        the organization/tenant name (null to skip org + tenant steps)
+     * @param realmId the Keycloak realm
+     * @param username the user's unique login name
+     * @param email the user's email address
+     * @param fullName the user's display name (nullable)
+     * @param roles initial roles to assign (nullable)
+     * @param temporaryPassword if true, user must change password on first login
+     * @param password the user's initial password (nullable)
+     * @param organizationName the organization/tenant name (null to skip org + tenant steps)
      * @param organizationDisplayName human-readable org display name (nullable)
      */
     public record RegisterUserWithOrgCommand(
@@ -110,8 +111,8 @@ public class RegisterUserOrchestrator
     /**
      * Creates the orchestrator with all three dispatchers.
      *
-     * @param iamDispatcher     dispatcher for IAM bounded context (Keycloak)
-     * @param coreDispatcher    dispatcher for Core bounded context (tenants)
+     * @param iamDispatcher dispatcher for IAM bounded context (Keycloak)
+     * @param coreDispatcher dispatcher for Core bounded context (tenants)
      * @param billingDispatcher dispatcher for Billing bounded context (profiles, subscriptions)
      */
     public RegisterUserOrchestrator(
@@ -259,8 +260,7 @@ public class RegisterUserOrchestrator
                                                 : in.organizationName();
                                 dispatcher(DISPATCHER_CORE)
                                         .dispatch(
-                                                new CreateTenantCommandActuator
-                                                        .CreateTenantCommand(
+                                                new CreateTenantCommandActuator.CreateTenantCommand(
                                                         in.organizationName(),
                                                         displayName,
                                                         "free"));
@@ -269,8 +269,7 @@ public class RegisterUserOrchestrator
                             (in, ctx) -> {
                                 dispatcher(DISPATCHER_CORE)
                                         .dispatch(
-                                                new DeleteTenantCommandActuator
-                                                        .DeleteTenantCommand(
+                                                new DeleteTenantCommandActuator.DeleteTenantCommand(
                                                         in.organizationName()));
                             }));
 
@@ -311,8 +310,7 @@ public class RegisterUserOrchestrator
             RegisterUserWithOrgCommand input, SagaContext context) {
         RegisterUserCommandActuator.RegisterUserResult userResult = context.get("userResult");
         boolean tenantCreated =
-                context.has("tenantCreated")
-                        && Boolean.TRUE.equals(context.get("tenantCreated"));
+                context.has("tenantCreated") && Boolean.TRUE.equals(context.get("tenantCreated"));
 
         return new RegisterUserWithOrgResult(
                 userResult.username(),
@@ -347,4 +345,3 @@ public class RegisterUserOrchestrator
         return "RegisterUserOrchestrator";
     }
 }
-

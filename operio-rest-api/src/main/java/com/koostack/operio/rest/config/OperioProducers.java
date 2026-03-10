@@ -158,7 +158,8 @@ public class OperioProducers {
     @Inject OperioConfig config;
 
     @SuppressWarnings("rawtypes")
-    @Inject Instance<IdpProvider> idpProviderInstance;
+    @Inject
+    Instance<IdpProvider> idpProviderInstance;
 
     @Inject Instance<AuthzProvider<?>> authzProviderInstance;
 
@@ -590,8 +591,7 @@ public class OperioProducers {
     @Produces
     @ApplicationScoped
     @SuppressWarnings("rawtypes")
-    public IdpTenantResolver idpTenantResolver(
-            Instance<IdpProvider> defaultIdpProviderInstance) {
+    public IdpTenantResolver idpTenantResolver(Instance<IdpProvider> defaultIdpProviderInstance) {
         if (!defaultIdpProviderInstance.isResolvable()) {
             LOG.debug("Operio REST API: IdpTenantResolver — no IdpProvider bean found");
             return IdpTenantResolver.unavailable();

@@ -46,8 +46,10 @@ public record SubjectConsentAggregate(
         return switch (eventType) {
             case ConsentEventTypes.CONSENT_GRANTED -> {
                 var e = mapper.convertValue(payloadNode, ConsentGrantedEvent.class);
-                var base = current != null ? current
-                        : SubjectConsentAggregate.create(null, e.subjectId());
+                var base =
+                        current != null
+                                ? current
+                                : SubjectConsentAggregate.create(null, e.subjectId());
                 yield base.withEntry(
                         new LedgerEntry(
                                 e.policyId(),

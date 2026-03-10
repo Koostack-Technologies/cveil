@@ -710,9 +710,11 @@ public class IntegrationTestSupport implements AutoCloseable {
 
         String passwordField = "";
         if (password != null) {
-            passwordField = """
+            passwordField =
+                    """
                     , "password": "%s"
-                    """.formatted(password);
+                    """
+                            .formatted(password);
         }
 
         io.restassured.response.Response response =
@@ -732,8 +734,12 @@ public class IntegrationTestSupport implements AutoCloseable {
                         }
                         """
                                         .formatted(
-                                                username, email, displayName, passwordField,
-                                                tenantId, displayName))
+                                                username,
+                                                email,
+                                                displayName,
+                                                passwordField,
+                                                tenantId,
+                                                displayName))
                         .when()
                         .post("/api/v1/platform/iam/users");
 
@@ -752,7 +758,8 @@ public class IntegrationTestSupport implements AutoCloseable {
     // -----------------------------------------------------------------------
 
     /** Auth info returned by login/provision helpers. */
-    public record AuthInfo(String accessToken, String refreshToken, String tenantId, String email) {}
+    public record AuthInfo(
+            String accessToken, String refreshToken, String tenantId, String email) {}
 
     /**
      * Logs in a user via {@code POST /api/v1/platform/iam/login} and returns the JWT access token.

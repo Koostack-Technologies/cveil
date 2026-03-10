@@ -82,7 +82,8 @@ public class RegisterUserCommandActuator
      * @param email the user's email
      * @param realmId the realm the user was registered in
      */
-    public record RegisterUserResult(String username, String email, String realmId, String keycloakUserId) {
+    public record RegisterUserResult(
+            String username, String email, String realmId, String keycloakUserId) {
         /** Backward-compatible constructor (no KC user ID). */
         public RegisterUserResult(String username, String email, String realmId) {
             this(username, email, realmId, null);
@@ -138,7 +139,8 @@ public class RegisterUserCommandActuator
                 command.email(),
                 keycloakUserId);
 
-        return new RegisterUserResult(command.username(), command.email(), command.realmId(), keycloakUserId);
+        return new RegisterUserResult(
+                command.username(), command.email(), command.realmId(), keycloakUserId);
     }
 
     // -- Keycloak operations --------------------------------------------------

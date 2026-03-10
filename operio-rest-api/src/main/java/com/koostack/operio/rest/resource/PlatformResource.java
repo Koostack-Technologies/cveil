@@ -278,7 +278,8 @@ public class PlatformResource {
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        cqrs.coreDispatcher().dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
+        cqrs.coreDispatcher()
+                .dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
 
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
@@ -525,9 +526,10 @@ public class PlatformResource {
 
         LOG.info("PUT /platform/tenants/{}/plan - newPlan={}", tenantId, request.plan());
 
-        cqrs.coreDispatcher().dispatch(
-                new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
-                        tenantId, request.plan()));
+        cqrs.coreDispatcher()
+                .dispatch(
+                        new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
+                                tenantId, request.plan()));
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);

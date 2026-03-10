@@ -28,9 +28,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 /**
  * End-to-end integration test for the full create-tenant pipeline via user registration.
  *
- * <p>Validates the entire flow from {@code POST /api/v1/platform/iam/users} (with
- * {@code organizationName}) through the 7-step orchestrator saga, event sourcing, and projections
- * under the unified schema architecture (RLS-based isolation, single event store).
+ * <p>Validates the entire flow from {@code POST /api/v1/platform/iam/users} (with {@code
+ * organizationName}) through the 7-step orchestrator saga, event sourcing, and projections under
+ * the unified schema architecture (RLS-based isolation, single event store).
  *
  * <h2>What this test verifies</h2>
  *

@@ -82,8 +82,7 @@ public class ProvisionRedisCommandActuator
                     aclUser.getBytes(StandardCharsets.UTF_8),
                     "on".getBytes(StandardCharsets.UTF_8),
                     (">" + aclPassword).getBytes(StandardCharsets.UTF_8),
-                    ("~operio:stream:tenant:" + tenantId + ":*")
-                            .getBytes(StandardCharsets.UTF_8),
+                    ("~operio:stream:tenant:" + tenantId + ":*").getBytes(StandardCharsets.UTF_8),
                     ("~" + tenantId + ":*").getBytes(StandardCharsets.UTF_8),
                     ("~" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
                     ("&" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
@@ -95,8 +94,7 @@ public class ProvisionRedisCommandActuator
 
         // Publish domain event (includes credentials for projection to store)
         var payload =
-                new RedisProvisionedEvent(
-                        tenantId, streamKey, pubSubChannel, aclUser, aclPassword);
+                new RedisProvisionedEvent(tenantId, streamKey, pubSubChannel, aclUser, aclPassword);
 
         UUID aggregateId =
                 UUID.nameUUIDFromBytes(("redis:" + tenantId).getBytes(StandardCharsets.UTF_8));

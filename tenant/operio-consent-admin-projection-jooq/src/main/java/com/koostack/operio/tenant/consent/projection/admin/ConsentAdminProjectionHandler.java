@@ -170,7 +170,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             // Remove field_category links for all fields of this entity
             dsl.deleteFrom(FIELD_CATEGORY)
                     .where(
-                            FIELD_CATEGORY.TENANT_ID.eq(tid)
+                            FIELD_CATEGORY
+                                    .TENANT_ID
+                                    .eq(tid)
                                     .and(
                                             FIELD_CATEGORY.FIELD_ID.in(
                                                     dsl.select(FIELD.FIELD_ID)
@@ -228,7 +230,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         if (categoryId != null) {
             dsl.deleteFrom(FIELD_CATEGORY)
                     .where(
-                            FIELD_CATEGORY.CATEGORY_ID.eq(categoryId)
+                            FIELD_CATEGORY
+                                    .CATEGORY_ID
+                                    .eq(categoryId)
                                     .and(FIELD_CATEGORY.TENANT_ID.eq(tid)))
                     .execute();
         }
@@ -273,14 +277,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         if (jurisdictionId != null) {
             dsl.deleteFrom(REGULATION_JURISDICTION)
                     .where(
-                            REGULATION_JURISDICTION.JURISDICTION_ID.eq(jurisdictionId)
+                            REGULATION_JURISDICTION
+                                    .JURISDICTION_ID
+                                    .eq(jurisdictionId)
                                     .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid)))
                     .execute();
         }
 
         dsl.deleteFrom(JURISDICTION)
                 .where(
-                        JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName)
+                        JURISDICTION
+                                .JURISDICTION_NAME
+                                .eq(jurisdictionName)
                                 .and(JURISDICTION.TENANT_ID.eq(tid)))
                 .execute();
     }
@@ -360,7 +368,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             // FK order: consent_ledger → policy → field_category → field
             dsl.deleteFrom(CONSENT_LEDGER)
                     .where(
-                            CONSENT_LEDGER.TENANT_ID.eq(tid)
+                            CONSENT_LEDGER
+                                    .TENANT_ID
+                                    .eq(tid)
                                     .and(
                                             CONSENT_LEDGER.POLICY_ID.in(
                                                     dsl.select(POLICY.POLICY_ID)
@@ -377,7 +387,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                     .where(POLICY.FIELD_ID.eq(fieldId).and(POLICY.TENANT_ID.eq(tid)))
                     .execute();
             dsl.deleteFrom(FIELD_CATEGORY)
-                    .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId).and(FIELD_CATEGORY.TENANT_ID.eq(tid)))
+                    .where(
+                            FIELD_CATEGORY
+                                    .FIELD_ID
+                                    .eq(fieldId)
+                                    .and(FIELD_CATEGORY.TENANT_ID.eq(tid)))
                     .execute();
             dsl.deleteFrom(FIELD)
                     .where(FIELD.FIELD_ID.eq(fieldId).and(FIELD.TENANT_ID.eq(tid)))
@@ -423,7 +437,10 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(FIELD_CATEGORY.CATEGORY_ID, categoryId)
                 .set(FIELD_CATEGORY.CREATED_AT, now)
                 .set(FIELD_CATEGORY.UPDATED_AT, now)
-                .onConflict(FIELD_CATEGORY.TENANT_ID, FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
+                .onConflict(
+                        FIELD_CATEGORY.TENANT_ID,
+                        FIELD_CATEGORY.FIELD_ID,
+                        FIELD_CATEGORY.CATEGORY_ID)
                 .doNothing()
                 .execute();
     }
@@ -482,7 +499,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             // FK order: consent_ledger → policy → purpose_regulation → purpose
             dsl.deleteFrom(CONSENT_LEDGER)
                     .where(
-                            CONSENT_LEDGER.TENANT_ID.eq(tid)
+                            CONSENT_LEDGER
+                                    .TENANT_ID
+                                    .eq(tid)
                                     .and(
                                             CONSENT_LEDGER.POLICY_ID.in(
                                                     dsl.select(POLICY.POLICY_ID)
@@ -500,7 +519,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                     .execute();
             dsl.deleteFrom(PURPOSE_REGULATION)
                     .where(
-                            PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId)
+                            PURPOSE_REGULATION
+                                    .PURPOSE_ID
+                                    .eq(purposeId)
                                     .and(PURPOSE_REGULATION.TENANT_ID.eq(tid)))
                     .execute();
         }
@@ -544,7 +565,10 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(PURPOSE_REGULATION.ON_DENIED, MaskingType.lookupLiteral(onDenied))
                 .set(PURPOSE_REGULATION.CREATED_AT, now)
                 .set(PURPOSE_REGULATION.UPDATED_AT, now)
-                .onConflict(PURPOSE_REGULATION.TENANT_ID, PURPOSE_REGULATION.PURPOSE_ID, PURPOSE_REGULATION.REGULATION_ID)
+                .onConflict(
+                        PURPOSE_REGULATION.TENANT_ID,
+                        PURPOSE_REGULATION.PURPOSE_ID,
+                        PURPOSE_REGULATION.REGULATION_ID)
                 .doUpdate()
                 .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
                 .set(PURPOSE_REGULATION.ON_GRANTED, MaskingType.lookupLiteral(onGranted))
@@ -644,7 +668,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 // Delete consent_ledger entries referencing this policy first
                 dsl.deleteFrom(CONSENT_LEDGER)
                         .where(
-                                CONSENT_LEDGER.TENANT_ID.eq(tid)
+                                CONSENT_LEDGER
+                                        .TENANT_ID
+                                        .eq(tid)
                                         .and(
                                                 CONSENT_LEDGER.POLICY_ID.in(
                                                         dsl.select(POLICY.POLICY_ID)
@@ -674,7 +700,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             if (categoryId != null) {
                 dsl.deleteFrom(CONSENT_LEDGER)
                         .where(
-                                CONSENT_LEDGER.TENANT_ID.eq(tid)
+                                CONSENT_LEDGER
+                                        .TENANT_ID
+                                        .eq(tid)
                                         .and(
                                                 CONSENT_LEDGER.POLICY_ID.in(
                                                         dsl.select(POLICY.POLICY_ID)
@@ -737,19 +765,25 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         if (regulationId != null) {
             dsl.deleteFrom(REGULATION_JURISDICTION)
                     .where(
-                            REGULATION_JURISDICTION.REGULATION_ID.eq(regulationId)
+                            REGULATION_JURISDICTION
+                                    .REGULATION_ID
+                                    .eq(regulationId)
                                     .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid)))
                     .execute();
             dsl.deleteFrom(PURPOSE_REGULATION)
                     .where(
-                            PURPOSE_REGULATION.REGULATION_ID.eq(regulationId)
+                            PURPOSE_REGULATION
+                                    .REGULATION_ID
+                                    .eq(regulationId)
                                     .and(PURPOSE_REGULATION.TENANT_ID.eq(tid)))
                     .execute();
         }
 
         dsl.deleteFrom(REGULATION)
                 .where(
-                        REGULATION.REGULATION_NAME.eq(regulationName)
+                        REGULATION
+                                .REGULATION_NAME
+                                .eq(regulationName)
                                 .and(REGULATION.TENANT_ID.eq(tid)))
                 .execute();
     }
@@ -855,7 +889,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         // Delete consent_ledger entries first (FK references subject.subject_name)
         dsl.deleteFrom(CONSENT_LEDGER)
-                .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectName).and(CONSENT_LEDGER.TENANT_ID.eq(tid)))
+                .where(
+                        CONSENT_LEDGER
+                                .SUBJECT_ID
+                                .eq(subjectName)
+                                .and(CONSENT_LEDGER.TENANT_ID.eq(tid)))
                 .execute();
         dsl.deleteFrom(SUBJECT)
                 .where(SUBJECT.SUBJECT_NAME.eq(subjectName).and(SUBJECT.TENANT_ID.eq(tid)))
@@ -988,7 +1026,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         // Delete consent ledger entries for this subject
         dsl.deleteFrom(CONSENT_LEDGER)
-                .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId).and(CONSENT_LEDGER.TENANT_ID.eq(tid)))
+                .where(
+                        CONSENT_LEDGER
+                                .SUBJECT_ID
+                                .eq(subjectId)
+                                .and(CONSENT_LEDGER.TENANT_ID.eq(tid)))
                 .execute();
 
         // Record the DSAR action

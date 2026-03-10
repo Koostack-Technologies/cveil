@@ -289,7 +289,8 @@ public class GraphResourceIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM operio_consent.policy WHERE tenant_id = '"
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy"
+                                                        + " WHERE tenant_id = '"
                                                         + TENANT_ID
                                                         + "'");
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();

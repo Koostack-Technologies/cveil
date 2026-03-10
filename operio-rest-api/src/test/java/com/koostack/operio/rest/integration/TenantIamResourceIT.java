@@ -136,8 +136,7 @@ class TenantIamResourceIT {
                                         .as("Tenant A organization should exist")
                                         .contains(TENANT_A_ID);
 
-                                List<Map<String, Object>> orgs =
-                                        response.jsonPath().getList("$");
+                                List<Map<String, Object>> orgs = response.jsonPath().getList("$");
                                 for (var entry : orgs) {
                                     if (TENANT_A_ID.equals(entry.get("orgName"))) {
                                         tenantAOrgId = String.valueOf(entry.get("orgId"));
@@ -365,11 +364,7 @@ class TenantIamResourceIT {
                             () ->
                                     given().header("Authorization", bootstrapAuth())
                                             .when()
-                                            .get(
-                                                    BASE_PATH
-                                                            + "/users/"
-                                                            + tenantAUsername
-                                                            + "/roles")
+                                            .get(BASE_PATH + "/users/" + tenantAUsername + "/roles")
                                             .then()
                                             .statusCode(200)
                                             .body("$", notNullValue()));
@@ -410,8 +405,7 @@ class TenantIamResourceIT {
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles =
-                                        support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
+                                var roles = support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
                                 assertThat(roles)
                                         .extracting("name")
                                         .as("User should have tenant-write role")
@@ -449,10 +443,8 @@ class TenantIamResourceIT {
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles =
-                                        support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
-                                var roleNames =
-                                        roles.stream().map(r -> r.getName()).toList();
+                                var roles = support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
+                                var roleNames = roles.stream().map(r -> r.getName()).toList();
                                 assertThat(roleNames)
                                         .as("User should not have tenant-write role")
                                         .doesNotContain("tenant-write");
@@ -776,8 +768,7 @@ class TenantIamResourceIT {
                                         .as("Tenant B organization should exist")
                                         .contains(TENANT_B_ID);
 
-                                List<Map<String, Object>> orgs =
-                                        response.jsonPath().getList("$");
+                                List<Map<String, Object>> orgs = response.jsonPath().getList("$");
                                 for (var entry : orgs) {
                                     if (TENANT_B_ID.equals(entry.get("orgName"))) {
                                         tenantBOrgId = String.valueOf(entry.get("orgId"));
@@ -835,9 +826,7 @@ class TenantIamResourceIT {
         @DisplayName("Both tenants share the single operio Keycloak realm")
         void sharedOperioRealm() {
             var realmNames =
-                    support.keycloak().realms().findAll().stream()
-                            .map(r -> r.getRealm())
-                            .toList();
+                    support.keycloak().realms().findAll().stream().map(r -> r.getRealm()).toList();
             assertThat(realmNames)
                     .as("No per-tenant realm should exist for tenant A")
                     .doesNotContain("t_" + TENANT_A_ID);

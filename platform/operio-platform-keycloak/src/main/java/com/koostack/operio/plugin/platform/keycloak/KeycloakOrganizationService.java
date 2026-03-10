@@ -53,8 +53,8 @@ public class KeycloakOrganizationService {
         org.setAlias(orgName);
         org.setEnabled(true);
         org.setDescription("Operio tenant: " + orgName);
-        org.addDomain(new OrganizationDomainRepresentation(
-                orgName.replace('_', '-') + ".operio.local"));
+        org.addDomain(
+                new OrganizationDomainRepresentation(orgName.replace('_', '-') + ".operio.local"));
 
         Response response = orgs().create(org);
         try {

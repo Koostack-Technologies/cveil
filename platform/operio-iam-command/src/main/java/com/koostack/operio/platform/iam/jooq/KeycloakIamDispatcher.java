@@ -137,7 +137,6 @@ public class KeycloakIamDispatcher
                     new ProvisionRedisCommandActuator(eventService, jedis));
         }
 
-
         LOG.info("KeycloakIamDispatcher configured with {} actuators", actuators.size());
     }
 
