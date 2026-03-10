@@ -36,6 +36,8 @@ import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
+import com.koostack.operio.plugin.event.jooq.TenantStreamConsumer;
+// TenantRegistry import removed — no async tenant discovery needed (Phase 8)
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
@@ -49,8 +51,6 @@ import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectio
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphRedisRepository;
 // Tenant event service imports removed — unified event store handles all events (Phase 8)
-import com.koostack.operio.plugin.event.jooq.TenantStreamConsumer;
-// TenantRegistry import removed — no async tenant discovery needed (Phase 8)
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;

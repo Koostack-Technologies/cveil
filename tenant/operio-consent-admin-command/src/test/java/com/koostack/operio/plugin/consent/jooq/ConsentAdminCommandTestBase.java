@@ -2,12 +2,11 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import com.koostack.operio.core.event.models.TenantEvent;
 import com.koostack.operio.core.models.AggregateRoot;
+import com.koostack.operio.plugin.event.jooq.EventRepository;
+import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
+import com.koostack.operio.plugin.event.jooq.PlatformAggregateEventApplier;
+import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
-import com.koostack.operio.tenant.event.jooq.AggregateEventApplier;
-import com.koostack.operio.tenant.event.jooq.EventRepository;
-import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
-import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
-import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -28,7 +27,7 @@ import redis.clients.jedis.resps.StreamEntry;
 
 /**
  * Base test class providing PostgreSQL + Redis containers and a fully configured {@link
- * JooqConsentAdminCommandService} backed by a real {@link JooqTenantEventService}.
+ * JooqConsentAdminCommandService} backed by a real {@link JooqPlatformEventService}.
  *
  * <p>The Redis container is started with a per-tenant ACL user ({@code t_test_tenant}) so the
  * outbox poller can authenticate and publish events. A background consumer thread captures all
@@ -40,7 +39,7 @@ abstract class ConsentAdminCommandTestBase {
     static final String TEST_TENANT = "test_tenant";
 
     /** Stream key for the test tenant, derived from the shard function. */
-    static final String STREAM_KEY = RedisEventPublisher.streamKeyForTenant(TEST_TENANT);
+    static final String STREAM_KEY = "operio:stream:tenant:" + TEST_TENANT;
 
     private static final String TENANT_ACL_USER = "t_" + TEST_TENANT;
     private static final String TENANT_ACL_PASS = "testpass";
@@ -74,7 +73,7 @@ abstract class ConsentAdminCommandTestBase {
                             "&*",
                             "+@all");
 
-    static JooqTenantEventService eventService;
+    static JooqPlatformEventService eventService;
     static JooqConsentAdminCommandService commandService;
     static DSLContext dsl;
     static JedisPooled testJedis;
@@ -93,8 +92,8 @@ abstract class ConsentAdminCommandTestBase {
                         new TenantAwareJedisProvider.TenantRedisCredentials(
                                 "t_" + tenantId, TENANT_ACL_PASS);
 
-        TenantEventJooqConfig eventConfig =
-                new TenantEventJooqConfig(
+        PlatformEventJooqConfig eventConfig =
+                new PlatformEventJooqConfig(
                         postgres.getJdbcUrl(),
                         "POSTGRES",
                         postgres.getUsername(),
@@ -103,7 +102,7 @@ abstract class ConsentAdminCommandTestBase {
                         credentialLookup,
                         () -> List.of(TEST_TENANT));
 
-        eventService = new JooqTenantEventService();
+        eventService = new JooqPlatformEventService();
         eventService.configure(eventConfig);
 
         dsl = DSL.using(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
@@ -224,6 +223,6 @@ abstract class ConsentAdminCommandTestBase {
             String aggregateType, java.util.UUID aggregateId, Class<T> type) {
         EventRepository repo = new EventRepository(dsl);
         var events = repo.fetchChangesForAggregate(aggregateType, aggregateId.toString());
-        return (T) AggregateEventApplier.replay(events, type);
+        return (T) PlatformAggregateEventApplier.replay(events, type);
     }
 }

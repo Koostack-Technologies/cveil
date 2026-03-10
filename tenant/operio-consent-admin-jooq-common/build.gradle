@@ -9,7 +9,6 @@ plugins {
 dependencies {
     // --- Runtime / API -------------------------------------------------------
     api project(':operio-core')
-    api project(':tenant:operio-consent-admin-schema')
     implementation project(":common:operio-jooq")
 
     // --- Test ----------------------------------------------------------------
@@ -35,7 +34,6 @@ dependencies {
 
 def h2DbFile = layout.buildDirectory.file("h2/consent")
 def generatedDir = layout.buildDirectory.dir("generated-src/jooq/main")
-def schemaProject = project(':tenant:operio-consent-admin-schema')
 
 tasks.register('generateJooq', JavaExec) {
     description = 'Runs Flyway migrations against a build-time H2 instance and generates jOOQ sources'
@@ -48,7 +46,7 @@ tasks.register('generateJooq', JavaExec) {
         "jdbc:h2:file:${h2DbFile.get().asFile.absolutePath}"
     }
     def migrationPath = provider {
-        "${schemaProject.projectDir}/src/main/resources/db/migration/consent"
+        "${projectDir}/src/main/resources/db/migration/consent"
     }
     def outputPath = provider {
         generatedDir.get().asFile.absolutePath
@@ -58,7 +56,7 @@ tasks.register('generateJooq', JavaExec) {
         [h2Url.get(), outputPath.get(), migrationPath.get(), 'com.koostack.operio.plugin.consent.jooq.generated']
     } as CommandLineArgumentProvider)
 
-    inputs.dir("${schemaProject.projectDir}/src/main/resources/db/migration")
+    inputs.dir("${projectDir}/src/main/resources/db/migration/consent")
     outputs.dir(generatedDir)
 
     doFirst {

@@ -5,10 +5,10 @@ plugins {
 
 dependencies {
     api(project(":operio-core"))
-    implementation(project(":tenant:operio-tenant-event-jooq"))
     implementation("org.slf4j:slf4j-api:2.0.16")
 
     // --- Test ----------------------------------------------------------------
+    testImplementation(project(":platform:operio-platform-event-jooq"))
     testImplementation(project(":common:operio-jooq"))
     testImplementation(project(":common:operio-redis"))
     testImplementation("org.mockito:mockito-core:5.14.2")

@@ -1,4 +1,4 @@
-package com.koostack.operio.tenant.event.jooq;
+package com.koostack.operio.plugin.event.jooq;
 
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.stream.AbstractStreamConsumer;
@@ -13,10 +13,11 @@ import com.koostack.operio.plugin.redis.common.stream.StreamHandler;
  * <p>Existing callers that register a {@link StreamEventHandler} continue to work — the handler is
  * adapted to the shared {@link StreamHandler} contract automatically.
  *
- * @see RedisEventPublisher#streamKeyForTenant(String)
  * @see AbstractStreamConsumer
  */
 public class TenantStreamConsumer extends AbstractStreamConsumer {
+
+    private static final String STREAM_KEY_PREFIX = "operio:stream:tenant:";
 
     /**
      * @param jedisProvider Redis connection provider (shared/admin pool)
@@ -30,7 +31,7 @@ public class TenantStreamConsumer extends AbstractStreamConsumer {
 
     @Override
     protected String streamKeyForTenant(String tenantId) {
-        return RedisEventPublisher.streamKeyForTenant(tenantId);
+        return STREAM_KEY_PREFIX + tenantId;
     }
 
     /**

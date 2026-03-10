@@ -2,8 +2,6 @@ package com.koostack.operio.rest.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.koostack.operio.common.registry.TenantRegistry;
-import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.rest.config.OperioConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -55,13 +53,11 @@ import redis.clients.jedis.resps.StreamEntry;
 public class IntegrationTestSupport implements AutoCloseable {
 
     /**
-     * Shared TenantRegistry that subscribes to the platform event stream with its own consumer
-     * group. All IntegrationTestSupport instances share this single registry, which tracks tenant
-     * lifecycle events (TENANT_CREATED, TENANT_SUSPENDED, etc.) in real time. Used by {@link
-     * #awaitTenantReady(String, Duration)} to verify that the tenant is active.
+     * In the new architecture, tenants are created synchronously via the orchestrator — no async
+     * registry is needed. This field is retained as a placeholder for Phase 11 integration test
+     * rewrite.
      */
-    private static volatile TenantRegistry sharedRegistry;
-
+    @SuppressWarnings("unused")
     private static final Object REGISTRY_LOCK = new Object();
 
     private final JedisPooled jedis;
@@ -574,28 +570,36 @@ public class IntegrationTestSupport implements AutoCloseable {
     // -- Polling helpers ------------------------------------------------------
 
     /**
-     * Waits until a tenant is active by checking the shared {@link TenantRegistry}. The registry
-     * subscribes to the platform Redis stream and marks a tenant as active after the {@code
-     * TENANT_CREATED} event has been delivered and processed.
-     *
-     * <p>The shared registry uses a dedicated consumer group ({@code "test-tenant-registry"}) so it
-     * does not interfere with the production registry's consumer group.
+     * Waits until a tenant is ready by checking that the production stream consumer has created its
+     * consumer groups on the tenant's Redis stream. In the new architecture, tenant creation is
+     * synchronous (via the orchestrator), so we only need to wait for the projection pipeline.
      *
      * @param tenantId the tenant to wait for
      * @param timeout maximum wait time
      */
     public void awaitTenantReady(String tenantId, Duration timeout) {
-        TenantRegistry registry = ensureSharedRegistry();
-        // Phase 1: wait for TENANT_CREATED in the registry
+        // Wait for the tenant row to exist in the database
         Awaitility.await()
                 .atMost(timeout)
                 .pollInterval(Duration.ofMillis(200))
-                .until(() -> registry.isActive(tenantId));
+                .until(
+                        () -> {
+                            try (Connection conn =
+                                    DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword)) {
+                                var rs =
+                                        conn.createStatement()
+                                                .executeQuery(
+                                                        "SELECT 1 FROM platform_core.tenant WHERE"
+                                                                + " tenant_id = '"
+                                                                + tenantId
+                                                                + "' AND status = 'ACTIVE'");
+                                return rs.next();
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        });
 
-        // Phase 2: wait for the production stream consumer to create its
-        // consumer groups on the tenant's Redis stream. This ensures the
-        // reconciliation loop has added the tenant and the projection
-        // pipeline is fully wired before the test proceeds.
+        // Wait for the production stream consumer to create its consumer groups
         String streamKey = "operio:stream:tenant:" + tenantId;
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
@@ -634,24 +638,6 @@ public class IntegrationTestSupport implements AutoCloseable {
                                 return false;
                             }
                         });
-    }
-
-    // -- Lazy shared TenantRegistry -----------------------------------------------
-
-    private TenantRegistry ensureSharedRegistry() {
-        TenantRegistry reg = sharedRegistry;
-        if (reg != null) return reg;
-        synchronized (REGISTRY_LOCK) {
-            if (sharedRegistry != null) return sharedRegistry;
-            JedisPooled jedisForRegistry = new JedisPooled(redisHost, redisPort);
-            sharedRegistry =
-                    new TenantRegistry(
-                            Set.of(),
-                            JedisProvider.shared(jedisForRegistry),
-                            "test-tenant-registry");
-            sharedRegistry.start();
-            return sharedRegistry;
-        }
     }
 
     /**

@@ -8,7 +8,6 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -29,10 +28,7 @@ public final class IamDtos {
     /** Request body for {@code POST /users}. */
     public record RegisterUserRequest(
             @NotBlank(message = "username must not be blank") @Size(max = 255) String username,
-            @NotBlank(message = "email must not be blank")
-                    @Email(message = "email must be a valid email address")
-                    @Size(max = 320)
-                    String email,
+            @NotBlank(message = "email must not be blank") @Email(message = "email must be a valid email address") @Size(max = 320) String email,
             @Size(max = 255) String fullName,
             Set<String> roles,
             boolean temporaryPassword,
@@ -48,13 +44,15 @@ public final class IamDtos {
             String orgId,
             String orgName) {
         public static UserRegisteredResponse from(IamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(r.username(), r.email(), r.realmId(), null, null, null);
+            return new UserRegisteredResponse(
+                    r.username(), r.email(), r.realmId(), null, null, null);
         }
 
         public static UserRegisteredResponse from(
                 com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
                         r) {
-            return new UserRegisteredResponse(r.username(), r.email(), r.realmId(), null, null, null);
+            return new UserRegisteredResponse(
+                    r.username(), r.email(), r.realmId(), null, null, null);
         }
 
         public static UserRegisteredResponse from(
@@ -62,8 +60,12 @@ public final class IamDtos {
                                 .RegisterUserWithOrgResult
                         r) {
             return new UserRegisteredResponse(
-                    r.username(), r.email(), r.realmId(),
-                    r.keycloakUserId(), r.orgId(), r.orgName());
+                    r.username(),
+                    r.email(),
+                    r.realmId(),
+                    r.keycloakUserId(),
+                    r.orgId(),
+                    r.orgName());
         }
     }
 

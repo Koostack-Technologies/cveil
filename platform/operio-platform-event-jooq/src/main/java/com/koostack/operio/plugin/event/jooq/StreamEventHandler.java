@@ -1,4 +1,4 @@
-package com.koostack.operio.tenant.event.jooq;
+package com.koostack.operio.plugin.event.jooq;
 
 import java.util.Map;
 

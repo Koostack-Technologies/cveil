@@ -31,8 +31,8 @@ import org.slf4j.LoggerFactory;
  * the single Keycloak realm ({@code operio}).
  *
  * <p>User registration optionally creates a Keycloak Organization (tenant) and provisions Redis
- * infrastructure via the {@link RegisterUserOrchestrator}. Organization membership determines tenant
- * scope for consent operations.
+ * infrastructure via the {@link RegisterUserOrchestrator}. Organization membership determines
+ * tenant scope for consent operations.
  *
  * <p>Most management endpoints require the {@code super-admin} role. Authentication endpoints
  * (login, refresh, logout) are open.
@@ -61,8 +61,8 @@ public class PlatformIamResource {
             summary = "Register a user",
             description =
                     "Creates a new user in Keycloak. If organizationName is provided, also creates"
-                        + " the organization, adds the user as a member, and provisions Redis"
-                        + " infrastructure.")
+                            + " the organization, adds the user as a member, and provisions Redis"
+                            + " infrastructure.")
     public Response registerUser(@Context SecurityContext sc, @Valid RegisterUserRequest request) {
         requireSuperAdmin(sc);
         requireCqrs();
@@ -149,7 +149,8 @@ public class PlatformIamResource {
         IdpUser user =
                 cqrs.iamQueryDispatcher()
                         .dispatch(
-                                new FindUserByEmailQueryActuator.FindUserByEmailQuery(REALM, email));
+                                new FindUserByEmailQueryActuator.FindUserByEmailQuery(
+                                        REALM, email));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + email))
@@ -168,8 +169,7 @@ public class PlatformIamResource {
 
         LOG.debug("PUT /platform/iam/users/{}/suspend", username);
         cqrs.iamDispatcher()
-                .dispatch(
-                        new SuspendUserCommandActuator.SuspendUserCommand(REALM, username));
+                .dispatch(new SuspendUserCommandActuator.SuspendUserCommand(REALM, username));
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
@@ -183,8 +183,7 @@ public class PlatformIamResource {
 
         LOG.debug("PUT /platform/iam/users/{}/activate", username);
         cqrs.iamDispatcher()
-                .dispatch(
-                        new ActivateUserCommandActuator.ActivateUserCommand(REALM, username));
+                .dispatch(new ActivateUserCommandActuator.ActivateUserCommand(REALM, username));
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
@@ -234,8 +233,7 @@ public class PlatformIamResource {
 
         LOG.debug("DELETE /platform/iam/users/{}/roles/{}", username, role);
         cqrs.iamDispatcher()
-                .dispatch(
-                        new RemoveRoleCommandActuator.RemoveRoleCommand(REALM, username, role));
+                .dispatch(new RemoveRoleCommandActuator.RemoveRoleCommand(REALM, username, role));
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -291,8 +289,7 @@ public class PlatformIamResource {
     @GET
     @Path("/organizations/{orgId}")
     @Operation(operationId = "getOrganization", summary = "Get organization by ID")
-    public Response getOrganization(
-            @Context SecurityContext sc, @PathParam("orgId") String orgId) {
+    public Response getOrganization(@Context SecurityContext sc, @PathParam("orgId") String orgId) {
         requireSuperAdmin(sc);
         requireCqrs();
 
@@ -438,9 +435,7 @@ public class PlatformIamResource {
                                                 REALM, clientId));
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(
-                            ErrorResponse.of(
-                                    "not_found", "Service account not found: " + clientId))
+                    .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
                     .build();
         }
         return Response.ok(ServiceAccountResponse.from(account)).build();
@@ -523,8 +518,7 @@ public class PlatformIamResource {
 
         LOG.debug("POST /platform/iam/logout");
         cqrs.iamDispatcher()
-                .dispatch(
-                        new LogoutCommandActuator.LogoutCommand(REALM, request.refreshToken()));
+                .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, request.refreshToken()));
         return Response.ok(MessageResponse.of("Logged out")).build();
     }
 
