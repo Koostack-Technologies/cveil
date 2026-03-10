@@ -11,7 +11,7 @@ import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.plugin.consent.jooq.generated.enums.ConsentAction;
 import com.koostack.operio.plugin.consent.jooq.generated.enums.MaskingType;
 import com.koostack.operio.plugin.consent.jooq.generated.enums.PolicyType;
-import com.koostack.operio.tenant.event.jooq.StreamEventHandler;
+import com.koostack.operio.plugin.event.jooq.StreamEventHandler;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;

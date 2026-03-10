@@ -27,11 +27,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Platform-level IAM endpoints for managing users, service accounts, and authentication in the
- * platform Keycloak realm ({@code operio-platform}).
+ * Unified IAM endpoints for managing users, organizations, service accounts, and authentication in
+ * the single Keycloak realm ({@code operio}).
  *
- * <p>All endpoints require the {@code super-admin} role. This resource operates on the platform
- * realm — for tenant-scoped IAM, see {@link TenantIamResource}.
+ * <p>User registration optionally creates a Keycloak Organization (tenant) and provisions Redis
+ * infrastructure via the {@link RegisterUserOrchestrator}. Organization membership determines tenant
+ * scope for consent operations.
+ *
+ * <p>Most management endpoints require the {@code super-admin} role. Authentication endpoints
+ * (login, refresh, logout) are open.
  */
 @Path("/api/v1/platform/iam")
 @TenantScoped
@@ -42,7 +46,7 @@ import org.slf4j.LoggerFactory;
 public class PlatformIamResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformIamResource.class);
-    private static final String PLATFORM_REALM = "operio-platform";
+    private static final String REALM = "operio";
 
     @Inject PlatformCqrsHolder cqrs;
 
@@ -53,29 +57,34 @@ public class PlatformIamResource {
     @POST
     @Path("/users")
     @Operation(
-            operationId = "platformRegisterUser",
-            summary = "Register a platform user",
-            description = "Creates a new user in the platform Keycloak realm.")
+            operationId = "registerUser",
+            summary = "Register a user",
+            description =
+                    "Creates a new user in Keycloak. If organizationName is provided, also creates"
+                        + " the organization, adds the user as a member, and provisions Redis"
+                        + " infrastructure.")
     public Response registerUser(@Context SecurityContext sc, @Valid RegisterUserRequest request) {
         requireSuperAdmin(sc);
         requireCqrs();
 
         LOG.debug(
-                "POST /platform/iam/users username={}, email={}",
+                "POST /platform/iam/users username={}, email={}, org={}",
                 request.username(),
-                request.email());
+                request.email(),
+                request.organizationName());
 
         var command =
-                new com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator
-                        .RegisterUserCommand(
-                        PLATFORM_REALM,
+                new RegisterUserOrchestrator.RegisterUserWithOrgCommand(
+                        REALM,
                         request.username(),
                         request.email(),
                         request.fullName(),
                         request.roles(),
-                        request.temporaryPassword());
-        com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
-                result = cqrs.iamDispatcher().dispatch(command);
+                        request.temporaryPassword(),
+                        request.organizationName(),
+                        request.organizationDisplayName());
+        RegisterUserOrchestrator.RegisterUserWithOrgResult result =
+                cqrs.iamDispatcher().dispatch(command);
         return Response.status(Response.Status.CREATED)
                 .entity(UserRegisteredResponse.from(result))
                 .build();
@@ -83,7 +92,7 @@ public class PlatformIamResource {
 
     @GET
     @Path("/users")
-    @Operation(operationId = "platformListUsers", summary = "List platform users")
+    @Operation(operationId = "listUsers", summary = "List users")
     public Response listUsers(@Context SecurityContext sc) {
         requireSuperAdmin(sc);
         requireCqrs();
@@ -92,13 +101,13 @@ public class PlatformIamResource {
 
         List<IdpUser> users =
                 cqrs.iamQueryDispatcher()
-                        .dispatch(new ListUsersQueryActuator.ListUsersQuery(PLATFORM_REALM));
+                        .dispatch(new ListUsersQueryActuator.ListUsersQuery(REALM));
         return Response.ok(users.stream().map(UserResponse::from).toList()).build();
     }
 
     @GET
     @Path("/users/{username}")
-    @Operation(operationId = "platformGetUser", summary = "Get platform user by username")
+    @Operation(operationId = "getUser", summary = "Get user by username")
     public Response getUser(
             @Context SecurityContext sc,
             @Parameter(description = "Username") @PathParam("username") String username) {
@@ -111,7 +120,7 @@ public class PlatformIamResource {
                 cqrs.iamQueryDispatcher()
                         .dispatch(
                                 new FindUserByUsernameQueryActuator.FindUserByUsernameQuery(
-                                        PLATFORM_REALM, username));
+                                        REALM, username));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + username))
@@ -122,9 +131,7 @@ public class PlatformIamResource {
 
     @GET
     @Path("/users/by-email")
-    @Operation(
-            operationId = "platformFindUserByEmail",
-            summary = "Find a platform user by email address")
+    @Operation(operationId = "findUserByEmail", summary = "Find a user by email address")
     public Response findUserByEmail(
             @Context SecurityContext sc,
             @Parameter(description = "Email address") @QueryParam("email") String email) {
@@ -142,8 +149,7 @@ public class PlatformIamResource {
         IdpUser user =
                 cqrs.iamQueryDispatcher()
                         .dispatch(
-                                new FindUserByEmailQueryActuator.FindUserByEmailQuery(
-                                        PLATFORM_REALM, email));
+                                new FindUserByEmailQueryActuator.FindUserByEmailQuery(REALM, email));
         if (user == null) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(ErrorResponse.of("not_found", "User not found: " + email))
@@ -154,7 +160,7 @@ public class PlatformIamResource {
 
     @PUT
     @Path("/users/{username}/suspend")
-    @Operation(operationId = "platformSuspendUser", summary = "Suspend a platform user")
+    @Operation(operationId = "suspendUser", summary = "Suspend a user")
     public Response suspendUser(
             @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
@@ -163,14 +169,13 @@ public class PlatformIamResource {
         LOG.debug("PUT /platform/iam/users/{}/suspend", username);
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq.SuspendUserCommandActuator
-                                .SuspendUserCommand(PLATFORM_REALM, username));
+                        new SuspendUserCommandActuator.SuspendUserCommand(REALM, username));
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
     @PUT
     @Path("/users/{username}/activate")
-    @Operation(operationId = "platformActivateUser", summary = "Activate a platform user")
+    @Operation(operationId = "activateUser", summary = "Activate a user")
     public Response activateUser(
             @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
@@ -179,14 +184,13 @@ public class PlatformIamResource {
         LOG.debug("PUT /platform/iam/users/{}/activate", username);
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq.ActivateUserCommandActuator
-                                .ActivateUserCommand(PLATFORM_REALM, username));
+                        new ActivateUserCommandActuator.ActivateUserCommand(REALM, username));
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
     @GET
     @Path("/users/{username}/roles")
-    @Operation(operationId = "platformGetUserRoles", summary = "Get platform user roles")
+    @Operation(operationId = "getUserRoles", summary = "Get user roles")
     public Response getUserRoles(
             @Context SecurityContext sc, @PathParam("username") String username) {
         requireSuperAdmin(sc);
@@ -196,13 +200,13 @@ public class PlatformIamResource {
                 cqrs.iamQueryDispatcher()
                         .dispatch(
                                 new GetUserRolesByUsernameQueryActuator.GetUserRolesByUsernameQuery(
-                                        PLATFORM_REALM, username));
+                                        REALM, username));
         return Response.ok(roles).build();
     }
 
     @PUT
     @Path("/users/{username}/roles")
-    @Operation(operationId = "platformAssignRole", summary = "Assign role to a platform user")
+    @Operation(operationId = "assignRole", summary = "Assign role to a user")
     public Response assignRole(
             @Context SecurityContext sc,
             @PathParam("username") String username,
@@ -213,14 +217,14 @@ public class PlatformIamResource {
         LOG.debug("PUT /platform/iam/users/{}/roles role={}", username, request.role());
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq.AssignRoleCommandActuator
-                                .AssignRoleCommand(PLATFORM_REALM, username, request.role()));
+                        new AssignRoleCommandActuator.AssignRoleCommand(
+                                REALM, username, request.role()));
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
     @DELETE
     @Path("/users/{username}/roles/{role}")
-    @Operation(operationId = "platformRemoveRole", summary = "Remove role from a platform user")
+    @Operation(operationId = "removeRole", summary = "Remove role from a user")
     public Response removeRole(
             @Context SecurityContext sc,
             @PathParam("username") String username,
@@ -231,9 +235,139 @@ public class PlatformIamResource {
         LOG.debug("DELETE /platform/iam/users/{}/roles/{}", username, role);
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq.RemoveRoleCommandActuator
-                                .RemoveRoleCommand(PLATFORM_REALM, username, role));
+                        new RemoveRoleCommandActuator.RemoveRoleCommand(REALM, username, role));
         return Response.ok(MessageResponse.of("Role removed")).build();
+    }
+
+    // -----------------------------------------------------------------------
+    // Organizations
+    // -----------------------------------------------------------------------
+
+    @POST
+    @Path("/organizations")
+    @Operation(
+            operationId = "createOrganization",
+            summary = "Create an organization",
+            description =
+                    "Creates a Keycloak Organization (tenant). Organizations scope consent"
+                            + " data and Redis infrastructure.")
+    public Response createOrganization(
+            @Context SecurityContext sc, @Valid CreateOrganizationRequest request) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("POST /platform/iam/organizations name={}", request.name());
+
+        var command =
+                new CreateOrganizationCommandActuator.CreateOrganizationCommand(
+                        request.name(), request.displayName());
+        CreateOrganizationCommandActuator.CreateOrganizationResult result =
+                cqrs.iamDispatcher().dispatch(command);
+        return Response.status(Response.Status.CREATED)
+                .entity(OrganizationCreatedResponse.from(result))
+                .build();
+    }
+
+    @GET
+    @Path("/organizations")
+    @Operation(operationId = "listOrganizations", summary = "List organizations")
+    public Response listOrganizations(
+            @Context SecurityContext sc,
+            @QueryParam("offset") @DefaultValue("0") int offset,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("GET /platform/iam/organizations offset={} limit={}", offset, limit);
+
+        List<IamQueryService.OrganizationInfo> orgs =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(
+                                new ListOrganizationsQueryActuator.ListOrganizationsQuery(
+                                        offset, limit));
+        return Response.ok(orgs.stream().map(OrganizationResponse::from).toList()).build();
+    }
+
+    @GET
+    @Path("/organizations/{orgId}")
+    @Operation(operationId = "getOrganization", summary = "Get organization by ID")
+    public Response getOrganization(
+            @Context SecurityContext sc, @PathParam("orgId") String orgId) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("GET /platform/iam/organizations/{}", orgId);
+
+        IamQueryService.OrganizationInfo org =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(new GetOrganizationQueryActuator.GetOrganizationQuery(orgId));
+        if (org == null) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("not_found", "Organization not found: " + orgId))
+                    .build();
+        }
+        return Response.ok(OrganizationResponse.from(org)).build();
+    }
+
+    @GET
+    @Path("/organizations/{orgId}/members")
+    @Operation(operationId = "listOrgMembers", summary = "List organization members")
+    public Response listOrgMembers(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @QueryParam("offset") @DefaultValue("0") int offset,
+            @QueryParam("limit") @DefaultValue("100") int limit) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("GET /platform/iam/organizations/{}/members", orgId);
+
+        List<IamQueryService.OrgMemberInfo> members =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(
+                                new ListOrgMembersQueryActuator.ListOrgMembersQuery(
+                                        orgId, offset, limit));
+        return Response.ok(members.stream().map(OrgMemberResponse::from).toList()).build();
+    }
+
+    @POST
+    @Path("/organizations/{orgId}/members")
+    @Operation(operationId = "addOrgMember", summary = "Add a member to an organization")
+    public Response addOrgMember(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @Valid AddOrgMemberRequest request) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("POST /platform/iam/organizations/{}/members userId={}", orgId, request.userId());
+
+        cqrs.iamDispatcher()
+                .dispatch(
+                        new AddOrgMemberCommandActuator.AddOrgMemberCommand(
+                                orgId, null, request.userId(), request.username()));
+        return Response.status(Response.Status.CREATED)
+                .entity(MessageResponse.of("Member added to organization"))
+                .build();
+    }
+
+    @DELETE
+    @Path("/organizations/{orgId}/members/{userId}")
+    @Operation(operationId = "removeOrgMember", summary = "Remove a member from an organization")
+    public Response removeOrgMember(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @PathParam("userId") String userId) {
+        requireSuperAdmin(sc);
+        requireCqrs();
+
+        LOG.debug("DELETE /platform/iam/organizations/{}/members/{}", orgId, userId);
+
+        cqrs.iamDispatcher()
+                .dispatch(
+                        new RemoveOrgMemberCommandActuator.RemoveOrgMemberCommand(
+                                orgId, null, userId));
+        return Response.ok(MessageResponse.of("Member removed from organization")).build();
     }
 
     // -----------------------------------------------------------------------
@@ -243,8 +377,8 @@ public class PlatformIamResource {
     @POST
     @Path("/service-accounts")
     @Operation(
-            operationId = "platformCreateServiceAccount",
-            summary = "Create a platform service account",
+            operationId = "createServiceAccount",
+            summary = "Create a service account",
             description =
                     "Creates a Keycloak confidential client with service account enabled. "
                             + "The client secret is returned once — store it securely.")
@@ -256,12 +390,10 @@ public class PlatformIamResource {
         LOG.debug("POST /platform/iam/service-accounts name={}", request.name());
 
         var command =
-                new com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
-                        .CreateServiceAccountCommand(
-                        PLATFORM_REALM, request.name(), request.roles());
-        com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
-                        .CreateServiceAccountResult
-                result = cqrs.iamDispatcher().dispatch(command);
+                new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
+                        REALM, request.name(), request.roles());
+        CreateServiceAccountCommandActuator.CreateServiceAccountResult result =
+                cqrs.iamDispatcher().dispatch(command);
         return Response.status(Response.Status.CREATED)
                 .entity(ServiceAccountCreatedResponse.from(result))
                 .build();
@@ -269,9 +401,7 @@ public class PlatformIamResource {
 
     @GET
     @Path("/service-accounts")
-    @Operation(
-            operationId = "platformListServiceAccounts",
-            summary = "List platform service accounts")
+    @Operation(operationId = "listServiceAccounts", summary = "List service accounts")
     public Response listServiceAccounts(@Context SecurityContext sc) {
         requireSuperAdmin(sc);
         requireCqrs();
@@ -281,18 +411,16 @@ public class PlatformIamResource {
         var accounts =
                 cqrs.iamQueryDispatcher()
                         .<ListServiceAccountsQueryActuator.ListServiceAccountsQuery,
-                                java.util.List<IamQueryService.ServiceAccountInfo>>
+                                List<IamQueryService.ServiceAccountInfo>>
                                 dispatch(
                                         new ListServiceAccountsQueryActuator
-                                                .ListServiceAccountsQuery(PLATFORM_REALM));
+                                                .ListServiceAccountsQuery(REALM));
         return Response.ok(accounts.stream().map(ServiceAccountResponse::from).toList()).build();
     }
 
     @GET
     @Path("/service-accounts/{clientId}")
-    @Operation(
-            operationId = "platformGetServiceAccount",
-            summary = "Get a platform service account by client ID")
+    @Operation(operationId = "getServiceAccount", summary = "Get a service account by client ID")
     public Response getServiceAccount(
             @Context SecurityContext sc,
             @Parameter(description = "Client ID") @PathParam("clientId") String clientId) {
@@ -307,10 +435,12 @@ public class PlatformIamResource {
                                 IamQueryService.ServiceAccountInfo>
                                 dispatch(
                                         new GetServiceAccountQueryActuator.GetServiceAccountQuery(
-                                                PLATFORM_REALM, clientId));
+                                                REALM, clientId));
         if (account == null) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
+                    .entity(
+                            ErrorResponse.of(
+                                    "not_found", "Service account not found: " + clientId))
                     .build();
         }
         return Response.ok(ServiceAccountResponse.from(account)).build();
@@ -318,9 +448,7 @@ public class PlatformIamResource {
 
     @DELETE
     @Path("/service-accounts/{clientId}")
-    @Operation(
-            operationId = "platformRevokeServiceAccount",
-            summary = "Revoke a platform service account")
+    @Operation(operationId = "revokeServiceAccount", summary = "Revoke a service account")
     public Response revokeServiceAccount(
             @Context SecurityContext sc, @PathParam("clientId") String clientId) {
         requireSuperAdmin(sc);
@@ -329,9 +457,8 @@ public class PlatformIamResource {
         LOG.debug("DELETE /platform/iam/service-accounts/{}", clientId);
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq
-                                .RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
-                                PLATFORM_REALM, clientId));
+                        new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
+                                REALM, clientId));
         return Response.ok(MessageResponse.of("Service account revoked")).build();
     }
 
@@ -342,9 +469,9 @@ public class PlatformIamResource {
     @POST
     @Path("/login")
     @Operation(
-            operationId = "platformLogin",
-            summary = "Authenticate a platform user",
-            description = "Resource Owner Password Credentials grant against the platform realm.")
+            operationId = "login",
+            summary = "Authenticate a user",
+            description = "Resource Owner Password Credentials grant against the operio realm.")
     public Response login(@Valid LoginRequest request) {
         requireCqrs();
 
@@ -355,12 +482,8 @@ public class PlatformIamResource {
                     (com.koostack.operio.core.models.AuthResult)
                             cqrs.iamDispatcher()
                                     .dispatch(
-                                            new com.koostack.operio.platform.iam.jooq
-                                                    .AuthenticateCommandActuator
-                                                    .AuthenticateCommand(
-                                                    PLATFORM_REALM,
-                                                    request.email(),
-                                                    request.password()));
+                                            new AuthenticateCommandActuator.AuthenticateCommand(
+                                                    REALM, request.email(), request.password()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -371,7 +494,7 @@ public class PlatformIamResource {
 
     @POST
     @Path("/refresh")
-    @Operation(operationId = "platformRefresh", summary = "Refresh platform access token")
+    @Operation(operationId = "refresh", summary = "Refresh access token")
     public Response refresh(@Valid RefreshTokenRequest request) {
         requireCqrs();
 
@@ -382,10 +505,8 @@ public class PlatformIamResource {
                     (com.koostack.operio.core.models.AuthResult)
                             cqrs.iamDispatcher()
                                     .dispatch(
-                                            new com.koostack.operio.platform.iam.jooq
-                                                    .RefreshTokenCommandActuator
-                                                    .RefreshTokenCommand(
-                                                    PLATFORM_REALM, request.refreshToken()));
+                                            new RefreshTokenCommandActuator.RefreshTokenCommand(
+                                                    REALM, request.refreshToken()));
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.operio.core.exception.OperioAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -396,15 +517,14 @@ public class PlatformIamResource {
 
     @POST
     @Path("/logout")
-    @Operation(operationId = "platformLogout", summary = "Logout a platform user")
+    @Operation(operationId = "logout", summary = "Logout a user")
     public Response logout(@Context SecurityContext sc, @Valid LogoutRequest request) {
         requireCqrs();
 
         LOG.debug("POST /platform/iam/logout");
         cqrs.iamDispatcher()
                 .dispatch(
-                        new com.koostack.operio.platform.iam.jooq.LogoutCommandActuator
-                                .LogoutCommand(PLATFORM_REALM, request.refreshToken()));
+                        new LogoutCommandActuator.LogoutCommand(REALM, request.refreshToken()));
         return Response.ok(MessageResponse.of("Logged out")).build();
     }
 

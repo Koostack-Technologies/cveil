@@ -49,7 +49,7 @@ import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectio
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphRedisRepository;
 // Tenant event service imports removed — unified event store handles all events (Phase 8)
-import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
+import com.koostack.operio.plugin.event.jooq.TenantStreamConsumer;
 // TenantRegistry import removed — no async tenant discovery needed (Phase 8)
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -139,9 +139,6 @@ public class OperioProducers {
     private com.koostack.operio.core.platform.iam.IamQueryService iamQueryService;
 
     private com.koostack.operio.plugin.platform.jooq.ApiKeyTokenVerifier tokenVerifier;
-
-    private com.koostack.operio.core.tenant.iam.TenantIamCommandService tenantIamCommandService;
-    private com.koostack.operio.core.tenant.iam.TenantIamQueryService tenantIamQueryService;
 
     /** Platform event service — unified event store for all events. */
     private JooqPlatformEventService platformEventService;
@@ -483,23 +480,6 @@ public class OperioProducers {
         }
         LOG.debug("Operio REST API: billing CommandDispatcher not available (embedded mode)");
         return null;
-    }
-
-    /**
-     * Produces a {@link TenantIamHolder} wrapping the tenant-scoped IAM command/query services.
-     * Services may be {@code null} when Keycloak is not configured.
-     */
-    @Produces
-    @ApplicationScoped
-    @SuppressWarnings("rawtypes")
-    public TenantIamHolder tenantIamHolder(Operio operio) {
-        // Force CDI proxy resolution so operioInit() completes first.
-        operio.appName();
-        LOG.debug(
-                "TenantIamHolder — cmd={}, query={}",
-                tenantIamCommandService != null,
-                tenantIamQueryService != null);
-        return new TenantIamHolder(tenantIamCommandService, tenantIamQueryService);
     }
 
     /**
@@ -1161,11 +1141,10 @@ public class OperioProducers {
             LOG.info("Operio REST API: ApiKeyTokenVerifier wired to IamQueryService");
         }
 
-        // -- Tenant IAM services deprecated — unified IAM handles everything ---
-        // TenantIamCommandService and TenantIamQueryService are deprecated
-        // (forRemoval = true) and will be deleted in Phase 10. For now,
-        // tenantIamHolder produces null services (TenantIamResource disabled).
-        LOG.info("Operio REST API: tenant IAM services NOT wired — deprecated, use unified IAM");
+        // -- Tenant IAM services eliminated (Phase 9) ---
+        // TenantIamResource and TenantIamHolder deleted. All IAM operations
+        // go through PlatformIamResource → unified KeycloakIamDispatcher.
+        LOG.info("Operio REST API: tenant IAM services removed — unified IAM active");
 
         builder.withCoreQueryService(coreQuerySvc);
         builder.withBillingQueryService(billingQuerySvc);

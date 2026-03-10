@@ -15,7 +15,6 @@ rootProject.name = "operio"
 include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
 
 include("plugins:operio-audit-slf4j")
-include("tenant:operio-consent-admin-schema")
 include("tenant:operio-consent-admin-jooq-common")
 include("tenant:operio-consent-admin-command")
 include("tenant:operio-consent-admin-query-jooq")
@@ -23,7 +22,6 @@ include("tenant:operio-subject-dsar-jooq")
 include("common:operio-jooq")
 include("common:operio-keycloak")
 include("common:operio-redis")
-include("common:operio-tenant-registry")
 include("sdk:operio-identity-http")
 include("sdk:operio-identity-spring-security")
 include("plugins:operio-masking-jackson")
@@ -35,7 +33,6 @@ include("plugins:operio-consent-sync-embedded")
 include("operio-bundle-embedded")
 include("platform:operio-platform-jooq")
 include("platform:operio-platform-event-jooq")
-include("tenant:operio-tenant-event-jooq")
 include("tenant:operio-consent-admin-projection-jooq")
 include("tenant:operio-consent-decision-projection-redis")
 
@@ -64,17 +61,11 @@ include("platform:operio-iam-projection-jooq")
 include("platform:operio-platform-keycloak")
 
 // --- Tenant IAM ---
-include("tenant:operio-tenant-iam-command")
-include("tenant:operio-tenant-iam-query-kc")
-include("tenant:operio-tenant-iam-projection-kc")
-
-// --- Platform Tenant Manager ---
-include("platform:operio-tenant-manager-jooq")
+// (Tenant IAM modules deleted — merged into platform IAM)
 
 // --- Platform Plan Query ---
 include("platform:operio-plan-query-jooq")
 
 // --- Metrics ---
 include("platform:operio-platform-metrics-redis")
-include("tenant:operio-tenant-metrics-redis")
 include("common:operio-metrics-worker")

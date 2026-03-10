@@ -57,10 +57,8 @@ dependencies {
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
     implementation(project(":common:operio-jooq"))
     implementation(project(":common:operio-redis"))
-    implementation(project(":common:operio-tenant-registry"))
     implementation(project(":tenant:operio-consent-admin-projection-jooq")) // Admin schema projection handler
     implementation(project(":tenant:operio-consent-decision-projection-redis")) // Graph projection handler + query service
-    implementation(project(":tenant:operio-tenant-event-jooq")) // TenantStreamConsumer
     implementation(project(":tenant:operio-consent-admin-command")) // ConsentAdminCommandService
     implementation(project(":tenant:operio-consent-admin-query-jooq")) // ConsentAdminQueryService
     implementation(project(":tenant:operio-subject-dsar-jooq")) // JooqSubjectDsarService
@@ -73,16 +71,10 @@ dependencies {
     implementation(project(":platform:operio-billing-query-jooq")) // JooqBillingQueryService
     implementation(project(":platform:operio-core-projection-jooq")) // CoreProjectionHandler
     implementation(project(":platform:operio-billing-projection-jooq")) // BillingProjectionHandler
-    implementation(project(":platform:operio-tenant-manager-jooq")) // TenantManagerProjectionHandler
     implementation(project(":platform:operio-iam-command")) // KeycloakIamDispatcher
     implementation(project(":platform:operio-iam-query")) // JooqIamQueryService
     implementation(project(":platform:operio-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:operio-plan-query-jooq"))
-
-    // -- Tenant IAM modules ---------------------------------------------------
-    implementation(project(":tenant:operio-tenant-iam-command")) // KeycloakTenantIamDispatcher
-    implementation(project(":tenant:operio-tenant-iam-query-kc")) // KeycloakTenantIamQueryService
-    implementation(project(":tenant:operio-tenant-iam-projection-kc")) // TenantIamProjectionHandler
 
     // platform schemas
 
@@ -91,7 +83,6 @@ dependencies {
     implementation(project(":platform:operio-billing-schema")) // Billing schema (plans, subscriptions, etc.)
 
     // -- Metrics modules (MetricPublisherService + projections) ----------------
-    implementation(project(":tenant:operio-tenant-metrics-redis")) // TenantRedisMetricPublisher + projections
     implementation(project(":platform:operio-platform-metrics-redis")) // PlatformRedisMetricPublisher + projections
 
     // -- JDBC drivers (runtime only) ------------------------------------------

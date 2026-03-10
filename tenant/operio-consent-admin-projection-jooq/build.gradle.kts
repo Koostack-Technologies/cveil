@@ -5,9 +5,8 @@ plugins {
 
 dependencies {
     api(project(":operio-core"))
-    implementation(project(":tenant:operio-consent-admin-schema"))
+    implementation(project(":platform:operio-platform-event-jooq"))
     implementation(project(":tenant:operio-consent-admin-jooq-common"))
-    implementation(project(":tenant:operio-tenant-event-jooq"))
     implementation(project(":common:operio-jooq"))
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")

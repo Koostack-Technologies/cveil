@@ -8,15 +8,15 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 /**
- * Request and response DTOs for IAM endpoints ({@code /api/v1/platform/iam/*} and {@code
- * /api/v1/iam/*}).
+ * Request and response DTOs for IAM endpoints ({@code /api/v1/platform/iam/*}).
  *
- * <p>Covers user management, service account lifecycle, authentication (login/refresh/logout), and
- * role assignment. All types are Java records — immutable, serializable by Jackson, and cheap to
- * allocate.
+ * <p>Covers user management, organization lifecycle, service accounts, authentication
+ * (login/refresh/logout), and role assignment. All types are Java records — immutable, serializable
+ * by Jackson, and cheap to allocate.
  */
 public final class IamDtos {
 
@@ -29,26 +29,41 @@ public final class IamDtos {
     /** Request body for {@code POST /users}. */
     public record RegisterUserRequest(
             @NotBlank(message = "username must not be blank") @Size(max = 255) String username,
-            @NotBlank(message = "email must not be blank") @Email(message = "email must be a valid email address") @Size(max = 320) String email,
+            @NotBlank(message = "email must not be blank")
+                    @Email(message = "email must be a valid email address")
+                    @Size(max = 320)
+                    String email,
             @Size(max = 255) String fullName,
             Set<String> roles,
-            boolean temporaryPassword) {}
+            boolean temporaryPassword,
+            @Size(max = 255) String organizationName,
+            @Size(max = 255) String organizationDisplayName) {}
 
-    /** Response after user registration. */
-    public record UserRegisteredResponse(String username, String email, String realmId) {
+    /** Response after user registration (with optional org). */
+    public record UserRegisteredResponse(
+            String username,
+            String email,
+            String realmId,
+            String keycloakUserId,
+            String orgId,
+            String orgName) {
         public static UserRegisteredResponse from(IamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
+            return new UserRegisteredResponse(r.username(), r.email(), r.realmId(), null, null, null);
         }
 
         public static UserRegisteredResponse from(
                 com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
                         r) {
-            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
+            return new UserRegisteredResponse(r.username(), r.email(), r.realmId(), null, null, null);
         }
 
-        public static UserRegisteredResponse fromTenant(
-                com.koostack.operio.core.tenant.iam.TenantIamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(r.username(), r.email(), r.realmId());
+        public static UserRegisteredResponse from(
+                com.koostack.operio.platform.iam.jooq.RegisterUserOrchestrator
+                                .RegisterUserWithOrgResult
+                        r) {
+            return new UserRegisteredResponse(
+                    r.username(), r.email(), r.realmId(),
+                    r.keycloakUserId(), r.orgId(), r.orgName());
         }
     }
 
@@ -63,6 +78,45 @@ public final class IamDtos {
 
     /** Request body for role assignment/removal. */
     public record RoleRequest(@NotBlank(message = "role must not be blank") String role) {}
+
+    // ===================================================================
+    // Organizations
+    // ===================================================================
+
+    /** Request body for {@code POST /organizations}. */
+    public record CreateOrganizationRequest(
+            @NotBlank(message = "name must not be blank") @Size(max = 255) String name,
+            @Size(max = 255) String displayName) {}
+
+    /** Response after organization creation. */
+    public record OrganizationCreatedResponse(String orgId, String orgName) {
+        public static OrganizationCreatedResponse from(
+                com.koostack.operio.platform.iam.jooq.CreateOrganizationCommandActuator
+                                .CreateOrganizationResult
+                        r) {
+            return new OrganizationCreatedResponse(r.orgId(), r.orgName());
+        }
+    }
+
+    /** Response for organization queries. */
+    public record OrganizationResponse(
+            String orgId, String orgName, String displayName, boolean enabled) {
+        public static OrganizationResponse from(IamQueryService.OrganizationInfo o) {
+            return new OrganizationResponse(o.orgId(), o.orgName(), o.displayName(), o.enabled());
+        }
+    }
+
+    /** Request body for {@code POST /organizations/{orgId}/members}. */
+    public record AddOrgMemberRequest(
+            @NotBlank(message = "userId must not be blank") String userId,
+            @Size(max = 255) String username) {}
+
+    /** Response for organization member queries. */
+    public record OrgMemberResponse(String userId, String username, String email) {
+        public static OrgMemberResponse from(IamQueryService.OrgMemberInfo m) {
+            return new OrgMemberResponse(m.userId(), m.username(), m.email());
+        }
+    }
 
     // ===================================================================
     // Service Accounts
@@ -87,13 +141,6 @@ public final class IamDtos {
                         r) {
             return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
         }
-
-        public static ServiceAccountCreatedResponse fromTenant(
-                com.koostack.operio.core.tenant.iam.TenantIamCommandService
-                                .CreateServiceAccountResult
-                        r) {
-            return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
-        }
     }
 
     /** Response for service account queries. */
@@ -105,17 +152,6 @@ public final class IamDtos {
             String status,
             Instant createdAt) {
         public static ServiceAccountResponse from(IamQueryService.ServiceAccountInfo sa) {
-            return new ServiceAccountResponse(
-                    sa.clientId(),
-                    sa.name(),
-                    sa.realmId(),
-                    sa.roles(),
-                    sa.status(),
-                    sa.createdAt());
-        }
-
-        public static ServiceAccountResponse fromTenant(
-                com.koostack.operio.core.tenant.iam.TenantIamQueryService.ServiceAccountInfo sa) {
             return new ServiceAccountResponse(
                     sa.clientId(),
                     sa.name(),

@@ -9,7 +9,7 @@ import com.koostack.operio.core.tenant.consent.ConsentEventTypes;
 import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMessage;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationAction;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationPublisher;
-import com.koostack.operio.tenant.event.jooq.StreamEventHandler;
+import com.koostack.operio.plugin.event.jooq.StreamEventHandler;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;

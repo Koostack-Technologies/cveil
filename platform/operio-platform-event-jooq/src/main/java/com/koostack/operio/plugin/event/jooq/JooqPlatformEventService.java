@@ -2,7 +2,7 @@ package com.koostack.operio.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.koostack.operio.core.event.PlatformEventService;
+import com.koostack.operio.core.event.EventService;
 import com.koostack.operio.core.event.Shreddable;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * <p>Supports the digital shredder pattern: events implementing {@link Shreddable} are encrypted
  * with per-subject DSAR keys before persistence.
  */
-public class JooqPlatformEventService implements PlatformEventService<PlatformEventJooqConfig> {
+public class JooqPlatformEventService implements EventService<PlatformEventJooqConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(JooqPlatformEventService.class);
     private static final ObjectMapper objectMapper =
