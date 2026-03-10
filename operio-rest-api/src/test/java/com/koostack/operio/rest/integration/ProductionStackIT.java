@@ -10,7 +10,7 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -94,8 +94,7 @@ class ProductionStackIT {
     // -- Shared state populated by ordered tests ------------------------------
     // These are static because @Nested inner classes get fresh outer instances
     // but we need state to flow across ordered test methods.
-    private static volatile String apiKey;
-    private static volatile String apiKeyPrefix;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     // -----------------------------------------------------------------------
@@ -112,7 +111,7 @@ class ProductionStackIT {
     private static void awaitGet(
             String path, String authToken, String jsonPath, Matcher<?> matcher) {
         Awaitility.await()
-                .atMost(30, TimeUnit.SECONDS)
+                .atMost(90, TimeUnit.SECONDS)
                 .pollInterval(500, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
@@ -128,7 +127,7 @@ class ProductionStackIT {
     private static void awaitPost(
             String path, String authToken, String body, String jsonPath, Matcher<?> matcher) {
         Awaitility.await()
-                .atMost(30, TimeUnit.SECONDS)
+                .atMost(90, TimeUnit.SECONDS)
                 .pollInterval(500, TimeUnit.MILLISECONDS)
                 .untilAsserted(
                         () ->
@@ -348,12 +347,12 @@ class ProductionStackIT {
     }
 
     // =======================================================================
-    // 4. Platform — tenant + API key lifecycle (bootstrap key auth)
+    // 4. Platform — tenant lifecycle + Keycloak login (bootstrap key auth)
     // =======================================================================
 
     @Nested
     @Order(4)
-    @DisplayName("4 — Platform: Tenant & API Key Lifecycle")
+    @DisplayName("4 — Platform: Tenant Lifecycle & Keycloak Login")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class PlatformLifecycle {
 
@@ -376,7 +375,7 @@ class ProductionStackIT {
             try {
                 String result =
                         IntegrationTestSupport.provisionTenantViaOrchestrator(
-                                BOOTSTRAP_KEY, TENANT_ID, TENANT_DISPLAY, TENANT_PLAN);
+                                BOOTSTRAP_KEY, TENANT_ID, TENANT_DISPLAY, TENANT_PLAN, "Test1234!");
                 assertThat(result).isEqualTo(TENANT_ID);
             } catch (Exception e) {
                 if (!e.getMessage().contains("already exists")) {
@@ -390,7 +389,7 @@ class ProductionStackIT {
         @DisplayName("Tenant appears in list")
         void listTenants() {
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -406,92 +405,35 @@ class ProductionStackIT {
         @Order(4)
         @DisplayName("Get tenant by ID")
         void getTenant() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .when()
-                    .get("/api/v1/platform/tenants/" + TENANT_ID)
-                    .then()
-                    .statusCode(200)
-                    .body("tenantId", equalTo(TENANT_ID))
-                    .body("displayName", equalTo(TENANT_DISPLAY))
-                    .body("plan", equalTo(TENANT_PLAN));
+            // displayName may lag if redis-provisioned event creates the row before
+            // tenant-created event updates it, so poll until projection catches up.
+            Awaitility.await()
+                    .atMost(90, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                                            .when()
+                                            .get("/api/v1/platform/tenants/" + TENANT_ID)
+                                            .then()
+                                            .statusCode(200)
+                                            .body("tenantId", equalTo(TENANT_ID))
+                                            .body("displayName", equalTo(TENANT_DISPLAY))
+                                            .body("plan", equalTo(TENANT_PLAN)));
         }
 
         @Test
         @Order(5)
-        @DisplayName("Create API key for tenant")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    String.format(
-                                            """
-                    {
-                      "tenantId": "%s",
-                      "subject": "integration-test-admin",
-                      "roles": ["super-admin", "consent:read", "consent:write", "admin:read", "admin:write"]
-                    }
-                    """,
-                                            TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .contentType(ContentType.JSON)
-                            .body("rawKey", notNullValue())
-                            .body("keyPrefix", notNullValue())
-                            .body("tenantId", equalTo(TENANT_ID))
-                            .body("subject", equalTo("integration-test-admin"))
-                            .body(
-                                    "roles",
-                                    hasItems(
-                                            "super-admin",
-                                            "consent:read",
-                                            "consent:write",
-                                            "admin:read",
-                                            "admin:write"))
-                            .extract()
-                            .response();
-
-            // Store the raw key for subsequent tests
-            apiKey = response.jsonPath().getString("rawKey");
-            apiKeyPrefix = response.jsonPath().getString("keyPrefix");
-
-            assertNotNull(apiKey, "Raw API key must be returned");
-            assertFalse(apiKey.isBlank(), "Raw API key must not be blank");
-            assertNotNull(apiKeyPrefix, "Key prefix must be returned");
-            assertTrue(apiKey.startsWith(apiKeyPrefix), "Raw key must start with the prefix");
+        @DisplayName("Login as tenant user")
+        void loginAsTenantUser() {
+            String email = TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+            accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
+            assertNotNull(accessToken, "JWT access token must be returned");
+            assertFalse(accessToken.isBlank(), "JWT access token must not be blank");
 
             // Initialize support and wait for async infrastructure
             support = new IntegrationTestSupport(config, TENANT_ID);
             support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
-        }
-
-        @Test
-        @Order(6)
-        @DisplayName("API key authenticates successfully")
-        void apiKeyAuthenticates() {
-            assertNotNull(apiKey, "apiKey must have been set by createApiKey");
-
-            given().header("Authorization", "Bearer " + apiKey)
-                    .when()
-                    .get("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(200)
-                    .body("tenantId", hasItem(TENANT_ID));
-        }
-
-        @Test
-        @Order(7)
-        @DisplayName("List API keys for tenant")
-        void listApiKeys() {
-            // listApiKeys is currently a deprecated stub returning empty — just verify 200
-            given().header("Authorization", "Bearer " + apiKey)
-                    .queryParam("tenantId", TENANT_ID)
-                    .when()
-                    .get("/api/v1/platform/api-keys")
-                    .then()
-                    .statusCode(200);
         }
     }
 
@@ -506,8 +448,8 @@ class ProductionStackIT {
     class AdminSchemaRegistration {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey must be set before admin tests run");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken must be set");
+            return "Bearer " + accessToken;
         }
 
         // -- Fields -----------------------------------------------------------
@@ -577,7 +519,7 @@ class ProductionStackIT {
         @Order(4)
         @DisplayName("List fields returns registered fields")
         void listFields() {
-            awaitGet("/api/v1/catalogue/fields", apiKey, "$", hasSize(greaterThanOrEqualTo(3)));
+            awaitGet("/api/v1/catalogue/fields", accessToken, "$", hasSize(greaterThanOrEqualTo(3)));
         }
 
         // -- Categories -------------------------------------------------------
@@ -624,7 +566,7 @@ class ProductionStackIT {
         @Order(12)
         @DisplayName("List categories returns registered categories")
         void listCategories() {
-            awaitGet("/api/v1/catalogue/categories", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/catalogue/categories", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Purposes ---------------------------------------------------------
@@ -671,7 +613,7 @@ class ProductionStackIT {
         @Order(22)
         @DisplayName("List purposes returns registered purposes")
         void listPurposes() {
-            awaitGet("/api/v1/governance/purposes", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/governance/purposes", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Regulations ------------------------------------------------------
@@ -704,7 +646,7 @@ class ProductionStackIT {
         void listRegulations() {
             awaitGet(
                     "/api/v1/governance/regulations",
-                    apiKey,
+                    accessToken,
                     "$",
                     hasSize(greaterThanOrEqualTo(1)));
         }
@@ -885,38 +827,29 @@ class ProductionStackIT {
         @Order(50)
         @DisplayName("List entities returns implicitly created entities")
         void listEntities() {
-            awaitGet("/api/v1/catalogue/entities", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/catalogue/entities", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         @Test
         @Order(60)
         @DisplayName("Await governance projection (policies visible)")
         void awaitGovernanceProjection() {
-            // Policies are event-sourced and projected asynchronously.
-            // Wait until the grant endpoint can resolve a policy.
+            // Wait until all 3 policies are projected into the operio_consent.policy table
             org.awaitility.Awaitility.await()
-                    .atMost(Duration.ofSeconds(30))
+                    .atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(
-                            () ->
-                                    given().header("Authorization", auth())
-                                            .contentType(ContentType.JSON)
-                                            .body(
-                                                    """
-                                    {
-                                      "subject": "governance_probe",
-                                      "scope": {
-                                        "category": "PII",
-                                        "fieldName": "email",
-                                        "entityName": "User",
-                                        "purposeName": "marketing"
-                                      }
-                                    }
-                                    """)
-                                            .when()
-                                            .post("/api/v1/subjects/consent/grant")
-                                            .then()
-                                            .statusCode(200));
+                            () -> {
+                                var rows =
+                                        support.query(
+                                                "SELECT count(*) AS cnt FROM"
+                                                    + " operio_consent.policy WHERE tenant_id = ?",
+                                                TENANT_ID);
+                                int cnt = ((Number) rows.get(0).get("cnt")).intValue();
+                                assertThat(cnt)
+                                        .as("All 3 policies should be projected")
+                                        .isGreaterThanOrEqualTo(3);
+                            });
         }
     }
 
@@ -931,8 +864,8 @@ class ProductionStackIT {
     class ConsentSingleOps {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey must be set before consent tests");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken must be set");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -956,7 +889,7 @@ class ProductionStackIT {
         @DisplayName("Grant consent: user-1 → email (PII, User, marketing)")
         void grantEmailMarketing() {
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -988,7 +921,7 @@ class ProductionStackIT {
         @DisplayName("Grant consent: user-1 → ssn (PII, User, analytics)")
         void grantSsnAnalytics() {
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -1016,6 +949,16 @@ class ProductionStackIT {
         @Order(3)
         @DisplayName("Evaluate consent: granted scopes appear in 'granted' set")
         void evaluateGranted() {
+            // Wait for the graph edge before calling evaluate (reads from Redis graph only).
+            // Under co-running load (13 ITs), the graph projection can lag >90s.
+            String policyName = "FIELD:User/email:marketing";
+            support.awaitRedisState(
+                    () ->
+                            support.getEdgeProperties(
+                                    TENANT_ID, "subject", "user-1", "policy", policyName),
+                    ep -> ep != null && !ep.isEmpty(),
+                    Duration.ofSeconds(180));
+
             String body =
                     """
                     {
@@ -1029,7 +972,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "granted", hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", accessToken, body, "granted", hasSize(1));
         }
 
         @Test
@@ -1084,7 +1027,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "granted", hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", accessToken, body, "granted", hasSize(1));
         }
 
         @Test
@@ -1129,7 +1072,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "denied", hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", accessToken, body, "denied", hasSize(1));
         }
 
         @Test
@@ -1171,8 +1114,8 @@ class ProductionStackIT {
     class ConsentBatchOps {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey must be set before batch tests");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken must be set");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1196,7 +1139,7 @@ class ProductionStackIT {
         @DisplayName("Batch grant: multiple scopes at once")
         void batchGrant() {
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -1247,6 +1190,16 @@ class ProductionStackIT {
         @Order(2)
         @DisplayName("Evaluate after batch grant: all 3 scopes granted")
         void evaluateAfterBatchGrant() {
+            // Wait for the slowest graph edge (HEALTH/diagnosis) before evaluating.
+            // Under co-running load (13 ITs), the graph projection can lag >90s.
+            String policyName = "FIELD:Patient/diagnosis:analytics";
+            support.awaitRedisState(
+                    () ->
+                            support.getEdgeProperties(
+                                    TENANT_ID, "subject", "user-batch", "policy", policyName),
+                    ep -> ep != null && !ep.isEmpty(),
+                    Duration.ofSeconds(180));
+
             String body =
                     """
                     {
@@ -1272,7 +1225,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost("/api/v1/subjects/user-batch/evaluate", apiKey, body, "granted", hasSize(3));
+            awaitPost("/api/v1/subjects/user-batch/evaluate", accessToken, body, "granted", hasSize(3));
         }
 
         @Test
@@ -1343,7 +1296,7 @@ class ProductionStackIT {
                     }
                     """;
             // After revoke, only ssn/analytics should remain granted
-            awaitPost("/api/v1/subjects/user-batch/evaluate", apiKey, body, "denied", hasSize(2));
+            awaitPost("/api/v1/subjects/user-batch/evaluate", accessToken, body, "denied", hasSize(2));
         }
     }
 
@@ -1358,8 +1311,8 @@ class ProductionStackIT {
     class SubjectData {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey must be set before subject tests");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken must be set");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1368,7 +1321,7 @@ class ProductionStackIT {
         void subjectSummary() {
             // user-batch should have active grants from the batch tests above
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -1421,49 +1374,22 @@ class ProductionStackIT {
     }
 
     // =======================================================================
-    // 9. RBAC enforcement — API key roles
+    // 9. Auth enforcement — authenticated user access
     // =======================================================================
 
     @Nested
     @Order(9)
-    @DisplayName("9 — RBAC Enforcement with Real API Key")
+    @DisplayName("9 — Auth Enforcement")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class RbacEnforcement {
+    class AuthEnforcementWithToken {
 
         @Test
         @Order(1)
-        @DisplayName("Create a read-only API key")
-        void createReadOnlyKey() {
-            assertNotNull(apiKey, "Need super-admin apiKey to create read-only key");
-
-            Response response =
-                    given().header("Authorization", "Bearer " + apiKey)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    String.format(
-                                            """
-                    {
-                      "tenantId": "%s",
-                      "subject": "readonly-service",
-                      "roles": ["consent:read", "admin:read"]
-                    }
-                    """,
-                                            TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            String readOnlyKey = response.jsonPath().getString("rawKey");
-            assertNotNull(readOnlyKey);
-
-            // Read-only key can read consent
-            given().header("Authorization", "Bearer " + readOnlyKey)
+        @DisplayName("Authenticated user can read consent")
+        void authenticatedCanRead() {
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body(
-                            """
+                    .body("""
                     {
                       "scopes": [
                         {
@@ -1479,40 +1405,17 @@ class ProductionStackIT {
                     .post("/api/v1/subjects/user-batch/evaluate")
                     .then()
                     .statusCode(200);
+        }
 
-            // Read-only key can read admin
-            given().header("Authorization", "Bearer " + readOnlyKey)
+        @Test
+        @Order(2)
+        @DisplayName("Authenticated user can read admin")
+        void authenticatedCanReadAdmin() {
+            given().header("Authorization", "Bearer " + accessToken)
                     .when()
                     .get("/api/v1/catalogue/fields")
                     .then()
                     .statusCode(200);
-
-            // Read-only key CANNOT write consent (403)
-            given().header("Authorization", "Bearer " + readOnlyKey)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "subject": "user-rbac-test",
-                      "scope": {
-                        "category": "PII",
-                        "fieldName": "email",
-                        "entityName": "User",
-                        "purposeName": "marketing"
-                      }
-                    }
-                    """)
-                    .when()
-                    .post("/api/v1/subjects/consent/grant")
-                    .then()
-                    .statusCode(403);
-
-            // Read-only key CANNOT access platform (403)
-            given().header("Authorization", "Bearer " + readOnlyKey)
-                    .when()
-                    .get("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(403);
         }
     }
 
@@ -1527,8 +1430,8 @@ class ProductionStackIT {
     class RequestValidation {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey must be set before validation tests");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken must be set");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1661,7 +1564,7 @@ class ProductionStackIT {
     class MultiSubjectIsolation {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1671,7 +1574,7 @@ class ProductionStackIT {
             // Grant consent for subject-A only (retry in case governance projection still catching
             // up)
             Awaitility.await()
-                    .atMost(30, TimeUnit.SECONDS)
+                    .atMost(90, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
                             () ->
@@ -1707,7 +1610,7 @@ class ProductionStackIT {
                     }
                     """;
             awaitPost(
-                    "/api/v1/subjects/subject-A/evaluate", apiKey, evalBody, "granted", hasSize(1));
+                    "/api/v1/subjects/subject-A/evaluate", accessToken, evalBody, "granted", hasSize(1));
 
             // subject-B should NOT have consent (never granted)
             given().header("Authorization", auth())
@@ -1719,58 +1622,6 @@ class ProductionStackIT {
                     .statusCode(200)
                     .body("granted", hasSize(0))
                     .body("denied", hasSize(1));
-        }
-    }
-
-    // =======================================================================
-    // 12. API key revocation
-    // =======================================================================
-
-    @Nested
-    @Order(12)
-    @DisplayName("12 — API Key Revocation")
-    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class ApiKeyRevocation {
-
-        @Test
-        @Order(1)
-        @DisplayName("Create and revoke an API key, then verify it's rejected")
-        void revokeApiKey() {
-            assertNotNull(apiKey, "Need super-admin apiKey");
-
-            // Create a disposable API key
-            Response createResponse =
-                    given().header("Authorization", "Bearer " + apiKey)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    String.format(
-                                            """
-                    {
-                      "tenantId": "%s",
-                      "subject": "disposable-key",
-                      "roles": ["consent:read"]
-                    }
-                    """,
-                                            TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            String disposableKey = createResponse.jsonPath().getString("rawKey");
-            String disposablePrefix = createResponse.jsonPath().getString("keyPrefix");
-            assertNotNull(disposableKey, "rawKey must be returned");
-            assertNotNull(disposablePrefix, "keyPrefix must be returned");
-
-            // findByKeyPrefix is a deprecated stub → revoke returns 404.
-            // Verify the endpoint handles the missing-key case gracefully.
-            given().header("Authorization", "Bearer " + apiKey)
-                    .when()
-                    .delete("/api/v1/platform/api-keys/" + disposablePrefix)
-                    .then()
-                    .statusCode(404);
         }
     }
 

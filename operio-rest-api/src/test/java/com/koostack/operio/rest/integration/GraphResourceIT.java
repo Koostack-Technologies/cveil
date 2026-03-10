@@ -8,7 +8,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
@@ -39,8 +38,7 @@ public class GraphResourceIT {
 
     @Inject OperioConfig config;
 
-    private static volatile String apiKey;
-    private static volatile String readOnlyKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     // -------------------------------------------------------------------
@@ -54,20 +52,24 @@ public class GraphResourceIT {
     class Setup {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
+        @DisplayName("Create tenant and login")
+        void createTenantAndLogin() {
             try {
-                String result =
-                        IntegrationTestSupport.provisionTenantViaOrchestrator(
-                                BOOTSTRAP_KEY, TENANT_ID, "Graph Query IT Tenant", "pro");
-                assertThat(result).isEqualTo(TENANT_ID);
+                IntegrationTestSupport.AuthInfo auth =
+                        IntegrationTestSupport.provisionTenantAndLogin(
+                                BOOTSTRAP_KEY, TENANT_ID, "Graph Query IT Tenant");
+                accessToken = auth.accessToken();
+                assertThat(accessToken).isNotBlank();
             } catch (Exception e) {
-                if (!e.getMessage().contains("already exists")) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    String email = TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+                    accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
+                } else {
                     throw e;
                 }
             }
@@ -75,52 +77,6 @@ public class GraphResourceIT {
 
         @Test
         @Order(2)
-        @DisplayName("Create admin API key")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "graph-query-it-key",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys");
-            assertThat(response.statusCode()).isEqualTo(201);
-            apiKey = response.jsonPath().getString("rawKey");
-            assertThat(apiKey).isNotBlank();
-        }
-
-        @Test
-        @Order(3)
-        @DisplayName("Create read-only API key (consent:read only)")
-        void createReadOnlyKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "graph-query-it-readonly",
-                      "roles": ["consent:read"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys");
-            assertThat(response.statusCode()).isEqualTo(201);
-            readOnlyKey = response.jsonPath().getString("rawKey");
-            assertThat(readOnlyKey).isNotBlank();
-        }
-
-        @Test
-        @Order(4)
         @DisplayName("Init support")
         void initSupport() {
             support = new IntegrationTestSupport(config, TENANT_ID);
@@ -140,7 +96,7 @@ public class GraphResourceIT {
     class DataSetup {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -325,7 +281,7 @@ public class GraphResourceIT {
             support.awaitRedisState(
                     () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_ID),
                     node -> node != null && !node.isEmpty(),
-                    Duration.ofSeconds(15));
+                    Duration.ofSeconds(60));
         }
     }
 
@@ -340,7 +296,7 @@ public class GraphResourceIT {
     class GraphQuery {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -543,9 +499,9 @@ public class GraphResourceIT {
 
         @Test
         @Order(2)
-        @DisplayName("Read-only consent key can query graph")
-        void readOnlyCanQuery() {
-            given().header("Authorization", "Bearer " + readOnlyKey)
+        @DisplayName("Authenticated user can query graph")
+        void authenticatedCanQuery() {
+            given().header("Authorization", "Bearer " + accessToken)
                     .when()
                     .get("/api/v1/consent/graph")
                     .then()

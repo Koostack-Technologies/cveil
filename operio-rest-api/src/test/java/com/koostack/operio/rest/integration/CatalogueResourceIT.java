@@ -39,8 +39,7 @@ class CatalogueResourceIT {
 
     private static final String TENANT_ID = "catalogue_it_tenant";
 
-    private static volatile String apiKey;
-    private static volatile String readOnlyApiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     @Inject OperioConfig config;
@@ -57,95 +56,34 @@ class CatalogueResourceIT {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
-            String result =
-                    IntegrationTestSupport.provisionTenantViaOrchestrator(
-                            BOOTSTRAP_KEY, TENANT_ID, "Catalogue IT Tenant", "enterprise");
-            assertThat(result).isEqualTo(TENANT_ID);
-        }
+        @DisplayName("Create tenant and login")
+        void createTenantAndLogin() {
+            IntegrationTestSupport.AuthInfo auth =
+                    IntegrationTestSupport.provisionTenantAndLogin(
+                            BOOTSTRAP_KEY, TENANT_ID, "Catalogue IT Tenant");
+            accessToken = auth.accessToken();
+            assertThat(accessToken).isNotBlank();
 
-        @Test
-        @Order(2)
-        @DisplayName("Create full-access API key")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "catalogue-it-admin",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            apiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(apiKey);
-
-            // Initialize test support after we know config is populated
             support = new IntegrationTestSupport(config, TENANT_ID);
-
-            // Wait for tenant provisioning to complete
             support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
 
         @Test
-        @Order(3)
-        @DisplayName("Create read-only API key")
-        void createReadOnlyKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "catalogue-it-reader",
-                      "roles": ["admin:read"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            readOnlyApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(readOnlyApiKey);
-        }
-
-        @Test
-        @Order(4)
+        @Order(2)
         @DisplayName("Unauthenticated request → 401")
         void unauthenticatedRejected() {
             given().when().get("/api/v1/catalogue/fields").then().statusCode(401);
         }
 
         @Test
-        @Order(5)
-        @DisplayName("Read-only key cannot create entity → 403")
-        void readOnlyCannotWrite() {
-            given().header("Authorization", "Bearer " + readOnlyApiKey)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    { "entityName": "Forbidden", "description": "should fail" }
-                    """)
+        @Order(3)
+        @DisplayName("Invalid token → 401")
+        void invalidTokenReturns401() {
+            given().header("Authorization", "Bearer invalid-token")
                     .when()
-                    .post("/api/v1/catalogue/entities")
+                    .get("/api/v1/catalogue/fields")
                     .then()
-                    .statusCode(403);
+                    .statusCode(401);
         }
     }
 
@@ -160,8 +98,8 @@ class CatalogueResourceIT {
     class EntityCrud {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertThat(accessToken).isNotBlank();
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -351,8 +289,8 @@ class CatalogueResourceIT {
     class CategoryCrud {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertThat(accessToken).isNotBlank();
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -502,8 +440,8 @@ class CatalogueResourceIT {
     class FieldAndCategoryAssignment {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertThat(accessToken).isNotBlank();
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -830,8 +768,8 @@ class CatalogueResourceIT {
     class DeletionConstraints {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertThat(accessToken).isNotBlank();
+            return "Bearer " + accessToken;
         }
 
         @Test

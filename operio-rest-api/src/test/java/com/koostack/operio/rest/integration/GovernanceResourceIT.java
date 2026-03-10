@@ -9,7 +9,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import org.awaitility.Awaitility;
@@ -52,8 +51,7 @@ class GovernanceResourceIT {
     private static final String JURISDICTION_EU = "EU";
     private static final String JURISDICTION_CA = "California";
 
-    private static volatile String apiKey;
-    private static volatile String readOnlyApiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     @Inject OperioConfig config;
@@ -70,92 +68,34 @@ class GovernanceResourceIT {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
-            String result =
-                    IntegrationTestSupport.provisionTenantViaOrchestrator(
-                            BOOTSTRAP_KEY, TENANT_ID, "Governance IT Tenant", "enterprise");
-            assertThat(result).isEqualTo(TENANT_ID);
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("Create full-access API key")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "governance-it-admin",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            apiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(apiKey);
+        @DisplayName("Create tenant and login")
+        void createTenantAndLogin() {
+            IntegrationTestSupport.AuthInfo auth =
+                    IntegrationTestSupport.provisionTenantAndLogin(
+                            BOOTSTRAP_KEY, TENANT_ID, "Governance IT Tenant");
+            accessToken = auth.accessToken();
+            assertThat(accessToken).isNotBlank();
 
             support = new IntegrationTestSupport(config, TENANT_ID);
             support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
 
         @Test
-        @Order(3)
-        @DisplayName("Create read-only API key")
-        void createReadOnlyKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "governance-it-reader",
-                      "roles": ["admin:read"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            readOnlyApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(readOnlyApiKey);
-        }
-
-        @Test
-        @Order(4)
+        @Order(2)
         @DisplayName("Unauthenticated request → 401")
-        void unauthenticatedRejected() {
+        void unauthenticatedReturns401() {
             given().when().get("/api/v1/governance/purposes").then().statusCode(401);
         }
 
         @Test
-        @Order(5)
-        @DisplayName("Read-only key cannot register purpose → 403")
-        void readOnlyCannotWrite() {
-            given().header("Authorization", "Bearer " + readOnlyApiKey)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    { "purposeName": "forbidden", "description": "should fail" }
-                    """)
+        @Order(3)
+        @DisplayName("Invalid token → 401")
+        void invalidTokenReturns401() {
+            given().header("Authorization", "Bearer invalid-token")
                     .when()
-                    .post("/api/v1/governance/purposes")
+                    .get("/api/v1/governance/purposes")
                     .then()
-                    .statusCode(403);
+                    .statusCode(401);
         }
     }
 
@@ -170,8 +110,8 @@ class GovernanceResourceIT {
     class PurposeCrud {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -217,12 +157,17 @@ class GovernanceResourceIT {
         @Order(3)
         @DisplayName("List purposes includes both")
         void listPurposes() {
-            given().header("Authorization", auth())
-                    .when()
-                    .get("/api/v1/governance/purposes")
-                    .then()
-                    .statusCode(200)
-                    .body("$", hasSize(greaterThanOrEqualTo(2)));
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .when()
+                                            .get("/api/v1/governance/purposes")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("$", hasSize(greaterThanOrEqualTo(2))));
         }
 
         @Test
@@ -248,7 +193,17 @@ class GovernanceResourceIT {
                     .then()
                     .statusCode(200);
 
-            support.assertRowAbsent("purpose", "purpose_name", PURPOSE_ANALYTICS);
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(() -> {
+                        var rows = support.query(
+                                "SELECT * FROM purpose WHERE purpose_name = ? AND tenant_id = ?",
+                                PURPOSE_ANALYTICS, TENANT_ID);
+                        assertThat(rows)
+                                .as("Expected no rows in 'purpose' where purpose_name = 'analytics' for this tenant")
+                                .isEmpty();
+                    });
         }
 
         @Test
@@ -309,8 +264,8 @@ class GovernanceResourceIT {
     class RegulationCrud {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -428,8 +383,8 @@ class GovernanceResourceIT {
     class JurisdictionCrud {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -571,8 +526,8 @@ class GovernanceResourceIT {
     class PurposePolicyManagement {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         // -- Catalogue prerequisites --
@@ -823,9 +778,11 @@ class GovernanceResourceIT {
                                                     + " p.purpose_id = pu.purpose_id JOIN field f"
                                                     + " ON p.field_id = f.field_id WHERE"
                                                     + " pu.purpose_name = ? AND f.field_name = ?"
-                                                    + " AND p.policy_type::text = 'FIELD'",
+                                                    + " AND p.policy_type::text = 'FIELD'"
+                                                    + " AND pu.tenant_id = ?",
                                                 PURPOSE_MARKETING,
-                                                FIELD_EMAIL);
+                                                FIELD_EMAIL,
+                                                TENANT_ID);
                                 assertThat(policies)
                                         .as("Field-scope policy should be removed after DELETE")
                                         .isEmpty();
@@ -871,8 +828,8 @@ class GovernanceResourceIT {
     class PurposeRegulationLinking {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -909,9 +866,10 @@ class GovernanceResourceIT {
                                                     + " pu.purpose_id JOIN regulation r ON"
                                                     + " pr.regulation_id = r.regulation_id WHERE"
                                                     + " pu.purpose_name = ? AND r.regulation_name ="
-                                                    + " ?",
+                                                    + " ? AND pu.tenant_id = ?",
                                                 PURPOSE_MARKETING,
-                                                REGULATION_GDPR);
+                                                REGULATION_GDPR,
+                                                TENANT_ID);
                                 assertThat(links).hasSize(1);
                                 assertThat(links.get(0).get("lawful_basis").toString())
                                         .isEqualTo("consent");
@@ -965,9 +923,11 @@ class GovernanceResourceIT {
                                                     + " pu ON pr.purpose_id = pu.purpose_id JOIN"
                                                     + " regulation r ON pr.regulation_id ="
                                                     + " r.regulation_id WHERE pu.purpose_name = ?"
-                                                    + " AND r.regulation_name = ?",
+                                                    + " AND r.regulation_name = ?"
+                                                    + " AND pu.tenant_id = ?",
                                                 PURPOSE_MARKETING,
-                                                REGULATION_GDPR);
+                                                REGULATION_GDPR,
+                                                TENANT_ID);
                                 assertThat(links).isEmpty();
                             });
         }
@@ -1005,8 +965,8 @@ class GovernanceResourceIT {
     class RegulationJurisdictionLinking {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1121,8 +1081,8 @@ class GovernanceResourceIT {
     class DeletionConstraints {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test

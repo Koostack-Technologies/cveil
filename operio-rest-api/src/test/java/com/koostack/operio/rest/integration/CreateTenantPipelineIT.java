@@ -41,13 +41,13 @@ import org.junit.jupiter.api.TestMethodOrder;
  *   <li>Tenant row materializes in platform_core.tenant
  *   <li>Billing profile and subscription rows exist
  *   <li>Unified consent tables and event table exist
- *   <li>API keys can be generated via POST /api/v1/platform/api-keys
+ *   <li>Keycloak login succeeds for the tenant admin user
  *   <li>Tenant status reflects creation
  *   <li>Pre-seeded plans exist in plan table
  * </ol>
  *
- * <p>Keycloak is not required — the test runs without an IdpProvider. Authentication uses the
- * bootstrap key configured in test application.yml.
+ * <p>Keycloak is required — the test provisions a tenant via user registration and then logs
+ * in via {@code POST /api/v1/platform/iam/login} to obtain a JWT access token.
  *
  * @see OperioTestResourceManager
  */
@@ -62,6 +62,10 @@ class CreateTenantPipelineIT {
 
     private static final String TENANT_ID = "pipeline_test_tenant";
     private static final String TENANT_DISPLAY = "Pipeline Test Tenant";
+    private static final String ADMIN_EMAIL =
+            TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+
+    private static volatile String accessToken;
 
     // Async operations timeout
     private static final Duration ASYNC_TIMEOUT = Duration.ofSeconds(30);
@@ -99,16 +103,17 @@ class CreateTenantPipelineIT {
                             String.format(
                                     """
                     {
-                      "username": "pipeline-test-admin",
-                      "email": "pipeline-test@operio-test.com",
+                      "username": "pipeline-test-tenant-admin",
+                      "email": "%s",
                       "fullName": "Pipeline Test Admin",
+                      "password": "Test1234!",
                       "roles": ["super-admin"],
                       "temporaryPassword": false,
                       "organizationName": "%s",
                       "organizationDisplayName": "%s"
                     }
                     """,
-                                    TENANT_ID, TENANT_DISPLAY))
+                                    ADMIN_EMAIL, TENANT_ID, TENANT_DISPLAY))
                     .when()
                     .post("/api/v1/platform/iam/users")
                     .then()
@@ -146,8 +151,8 @@ class CreateTenantPipelineIT {
                             String.format(
                                     """
                     {
-                      "username": "pipeline-test-admin",
-                      "email": "pipeline-test@operio-test.com",
+                      "username": "pipeline-test-tenant-admin",
+                      "email": "%s",
                       "fullName": "Duplicate User",
                       "roles": ["super-admin"],
                       "temporaryPassword": false,
@@ -155,7 +160,7 @@ class CreateTenantPipelineIT {
                       "organizationDisplayName": "Duplicate Org"
                     }
                     """,
-                                    TENANT_ID))
+                                    ADMIN_EMAIL, TENANT_ID))
                     .when()
                     .post("/api/v1/platform/iam/users")
                     .then()
@@ -390,39 +395,23 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 5. API Key Generation (on-demand via IAM endpoint)
+    // 5. Keycloak Login (JWT auth replaces API key generation)
     // =======================================================================
 
     @Nested
     @Order(5)
-    @DisplayName("5 — API key can be generated via POST /api/v1/platform/api-keys")
+    @DisplayName("5 — Keycloak login succeeds for tenant admin")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class ApiKeyGeneration {
+    class KeycloakLogin {
 
         @Test
         @Order(1)
-        @DisplayName("API key can be created for the registered tenant")
-        void apiKeyCanBeCreated() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            String.format(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "pipeline-test-admin",
-                      "roles": ["super-admin"]
-                    }
-                    """,
-                                    TENANT_ID))
-                    .when()
-                    .post("/api/v1/platform/api-keys")
-                    .then()
-                    .statusCode(201)
-                    .contentType(ContentType.JSON)
-                    .body("tenantId", equalTo(TENANT_ID))
-                    .body("rawKey", notNullValue())
-                    .body("keyPrefix", notNullValue());
+        @DisplayName("Tenant admin can log in and obtain a JWT access token")
+        void tenantAdminCanLogin() {
+            accessToken = IntegrationTestSupport.loginUser(ADMIN_EMAIL, "Test1234!");
+            assertThat(accessToken).as("JWT access token").isNotNull().isNotBlank();
+            // Valid JWT has three dot-separated parts
+            assertThat(accessToken.split("\\.")).as("JWT structure").hasSize(3);
         }
     }
 

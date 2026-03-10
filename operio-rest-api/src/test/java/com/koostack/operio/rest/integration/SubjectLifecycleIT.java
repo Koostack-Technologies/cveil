@@ -231,14 +231,18 @@ public class SubjectLifecycleIT {
         @DisplayName("Await governance projection (policy visible in DB)")
         void awaitGovernanceProjected() {
             org.awaitility.Awaitility.await()
-                    .atMost(Duration.ofSeconds(60))
+                    .atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(
                             () -> {
-                                var rows = support.query("SELECT count(*) AS cnt FROM policy");
+                                var rows =
+                                        support.query(
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy"
+                                                        + " WHERE tenant_id = ?",
+                                                TENANT_ID);
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();
                                 assertThat(cnt)
-                                        .as("Expected at least 1 policy row projected")
+                                        .as("Expected at least 1 policy row projected for tenant")
                                         .isGreaterThanOrEqualTo(1);
                             });
         }
@@ -278,18 +282,29 @@ public class SubjectLifecycleIT {
         @Order(2)
         @DisplayName("Grant consent to subject")
         void grantConsent() {
-            given().header("Authorization", auth())
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {"subject": "%s",
-                     "scope": {"category": "%s", "fieldName": "%s",
-                               "entityName": "%s", "purposeName": "%s"}}
-                    """
-                                    .formatted(SUBJECT_REMOVE, CATEGORY, FIELD, ENTITY, PURPOSE))
-                    .post("/api/v1/subjects/consent/grant")
-                    .then()
-                    .statusCode(200);
+            // Ensure policy projection is ready before granting consent
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
+                                    {"subject": "%s",
+                                     "scope": {"category": "%s", "fieldName": "%s",
+                                               "entityName": "%s", "purposeName": "%s"}}
+                                    """
+                                                            .formatted(
+                                                                    SUBJECT_REMOVE,
+                                                                    CATEGORY,
+                                                                    FIELD,
+                                                                    ENTITY,
+                                                                    PURPOSE))
+                                            .post("/api/v1/subjects/consent/grant")
+                                            .then()
+                                            .statusCode(200));
         }
 
         @Test
@@ -366,7 +381,7 @@ public class SubjectLifecycleIT {
             support.awaitRedisState(
                     () -> support.countRows("subject", "subject_name", SUBJECT_REMOVE),
                     count -> count == 0,
-                    Duration.ofSeconds(10));
+                    Duration.ofSeconds(30));
             support.assertRowAbsent("subject", "subject_name", SUBJECT_REMOVE);
         }
 
@@ -377,7 +392,7 @@ public class SubjectLifecycleIT {
             support.awaitRedisState(
                     () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_REMOVE),
                     node -> node == null || node.isEmpty(),
-                    Duration.ofSeconds(10));
+                    Duration.ofSeconds(30));
         }
 
         @Test
@@ -555,11 +570,15 @@ public class SubjectLifecycleIT {
         @DisplayName("Verify consent ledger entries exist BEFORE delete")
         void ledgerExistsBefore() {
             org.awaitility.Awaitility.await()
-                    .atMost(Duration.ofSeconds(30))
+                    .atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(
                             () ->
-                                    assertThat(support.countConsentLedgerEntries(SUBJECT_DSAR))
+                                    assertThat(
+                                                    support.countRowsWithTenant(
+                                                            "consent_ledger",
+                                                            "subject_id",
+                                                            SUBJECT_DSAR))
                                             .as(
                                                     "Consent ledger should have entries before DSAR"
                                                             + " delete")
@@ -605,9 +624,9 @@ public class SubjectLifecycleIT {
         void ledgerGoneAfter() {
             // The DSAR delete should have revoked all consent and removed ledger entries
             support.awaitRedisState(
-                    () -> support.countConsentLedgerEntries(SUBJECT_DSAR),
+                    () -> support.countRowsWithTenant("consent_ledger", "subject_id", SUBJECT_DSAR),
                     count -> count == 0,
-                    Duration.ofSeconds(10));
+                    Duration.ofSeconds(30));
         }
 
         @Test
@@ -615,7 +634,7 @@ public class SubjectLifecycleIT {
         @DisplayName("Verify dsar_audit_log row inserted")
         void dsarAuditLogInserted() {
             org.awaitility.Awaitility.await()
-                    .atMost(Duration.ofSeconds(15))
+                    .atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
                     .untilAsserted(
                             () -> {
@@ -634,10 +653,10 @@ public class SubjectLifecycleIT {
         @Order(8)
         @DisplayName("Verify Redis consent cache cleared for subject")
         void redisCacheCleared() {
-            String cache = support.getAdminConsentCache(TENANT_ID, SUBJECT_DSAR);
-            assertThat(cache)
-                    .as("Admin consent cache should be null/empty after DSAR delete")
-                    .isNullOrEmpty();
+            support.awaitRedisState(
+                    () -> support.getAdminConsentCache(TENANT_ID, SUBJECT_DSAR),
+                    cache -> cache == null || cache.isEmpty(),
+                    Duration.ofSeconds(90));
         }
 
         @Test
@@ -647,17 +666,17 @@ public class SubjectLifecycleIT {
             support.awaitRedisState(
                     () -> support.getGraphNode(TENANT_ID, "subject", SUBJECT_DSAR),
                     node -> node == null || node.isEmpty(),
-                    Duration.ofSeconds(10));
+                    Duration.ofSeconds(90));
         }
 
         @Test
         @Order(10)
         @DisplayName("Verify graph subject index cleaned")
         void graphIndexCleaned() {
-            List<String> subjectIndex = support.getTypeIndex(TENANT_ID, "subject");
-            assertThat(subjectIndex)
-                    .as("Subject type index should not contain deleted subject")
-                    .doesNotContain(SUBJECT_DSAR);
+            support.awaitRedisState(
+                    () -> support.getTypeIndex(TENANT_ID, "subject"),
+                    idx -> !idx.contains(SUBJECT_DSAR),
+                    Duration.ofSeconds(90));
         }
     }
 

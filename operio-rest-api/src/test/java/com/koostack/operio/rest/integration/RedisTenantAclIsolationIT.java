@@ -1,7 +1,6 @@
 package com.koostack.operio.rest.integration;
 
 import static io.restassured.RestAssured.given;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -9,7 +8,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.util.Map;
 import java.util.Set;
@@ -61,8 +59,8 @@ import redis.clients.jedis.exceptions.JedisAccessControlException;
  * <p>Tests are ordered to build on each other:
  *
  * <ol>
- *   <li><strong>Setup</strong> — creates two tenants (A and B) and API keys via the REST API using
- *       the bootstrap key.
+ *   <li><strong>Setup</strong> — creates two tenants (A and B) via the orchestrator and obtains
+ *       JWT access tokens via Keycloak login using the bootstrap key.
  *   <li><strong>Write isolation</strong> — writes keys in each tenant's namespace using per-tenant
  *       ACL connections, verifies cross-tenant writes are rejected.
  *   <li><strong>Read isolation</strong> — verifies cross-tenant reads are rejected.
@@ -93,8 +91,8 @@ class RedisTenantAclIsolationIT {
     private static final String APP_NAME = "operio"; // default app name
 
     // -- Shared state populated by ordered tests ------------------------------
-    private static volatile String tenantAApiKey;
-    private static volatile String tenantBApiKey;
+    private static volatile String accessTokenA;
+    private static volatile String accessTokenB;
     private static volatile String tenantAAclUser;
     private static volatile String tenantAAclPassword;
     private static volatile String tenantBAclUser;
@@ -141,15 +139,24 @@ class RedisTenantAclIsolationIT {
 
         @Test
         @Order(2)
-        @DisplayName("create tenant A")
-        void createTenantA() {
+        @DisplayName("provision tenant A and obtain JWT")
+        void provisionTenantA() {
             try {
-                String result =
-                        IntegrationTestSupport.provisionTenantViaOrchestrator(
-                                BOOTSTRAP_KEY, TENANT_A, "ACL Test Tenant A", "pro");
-                assertThat(result).isEqualTo(TENANT_A);
+                IntegrationTestSupport.AuthInfo authA =
+                        IntegrationTestSupport.provisionTenantAndLogin(
+                                BOOTSTRAP_KEY, TENANT_A, "ACL Test Tenant A");
+                accessTokenA = authA.accessToken();
+                assertNotNull(accessTokenA, "Access token for tenant A must be returned");
+                assertFalse(accessTokenA.isBlank());
             } catch (Exception e) {
-                if (!e.getMessage().contains("already exists")) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    // Tenant already provisioned — just log in
+                    String password = "Test1234!";
+                    String username = TENANT_A.replace("_", "-") + "-admin";
+                    String email = username + "@operio-test.com";
+                    accessTokenA = IntegrationTestSupport.loginUser(email, password);
+                    assertNotNull(accessTokenA, "Access token for tenant A must be returned");
+                } else {
                     throw e;
                 }
             }
@@ -157,15 +164,24 @@ class RedisTenantAclIsolationIT {
 
         @Test
         @Order(3)
-        @DisplayName("create tenant B")
-        void createTenantB() {
+        @DisplayName("provision tenant B and obtain JWT")
+        void provisionTenantB() {
             try {
-                String result =
-                        IntegrationTestSupport.provisionTenantViaOrchestrator(
-                                BOOTSTRAP_KEY, TENANT_B, "ACL Test Tenant B", "pro");
-                assertThat(result).isEqualTo(TENANT_B);
+                IntegrationTestSupport.AuthInfo authB =
+                        IntegrationTestSupport.provisionTenantAndLogin(
+                                BOOTSTRAP_KEY, TENANT_B, "ACL Test Tenant B");
+                accessTokenB = authB.accessToken();
+                assertNotNull(accessTokenB, "Access token for tenant B must be returned");
+                assertFalse(accessTokenB.isBlank());
             } catch (Exception e) {
-                if (!e.getMessage().contains("already exists")) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    // Tenant already provisioned — just log in
+                    String password = "Test1234!";
+                    String username = TENANT_B.replace("_", "-") + "-admin";
+                    String email = username + "@operio-test.com";
+                    accessTokenB = IntegrationTestSupport.loginUser(email, password);
+                    assertNotNull(accessTokenB, "Access token for tenant B must be returned");
+                } else {
                     throw e;
                 }
             }
@@ -173,68 +189,6 @@ class RedisTenantAclIsolationIT {
 
         @Test
         @Order(4)
-        @DisplayName("create API key for tenant A")
-        void createApiKeyA() {
-            Response resp =
-                    given().contentType(ContentType.JSON)
-                            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .body(
-                                    Map.of(
-                                            "tenantId",
-                                            TENANT_A,
-                                            "subject",
-                                            "acl-test-a",
-                                            "roles",
-                                            Set.of(
-                                                    "consent:read",
-                                                    "consent:write",
-                                                    "admin:read",
-                                                    "admin:write")))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(anyOf(is(201), is(200)))
-                            .extract()
-                            .response();
-
-            tenantAApiKey = resp.jsonPath().getString("rawKey");
-            assertNotNull(tenantAApiKey, "API key for tenant A must be returned");
-            assertFalse(tenantAApiKey.isBlank());
-        }
-
-        @Test
-        @Order(5)
-        @DisplayName("create API key for tenant B")
-        void createApiKeyB() {
-            Response resp =
-                    given().contentType(ContentType.JSON)
-                            .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .body(
-                                    Map.of(
-                                            "tenantId",
-                                            TENANT_B,
-                                            "subject",
-                                            "acl-test-b",
-                                            "roles",
-                                            Set.of(
-                                                    "consent:read",
-                                                    "consent:write",
-                                                    "admin:read",
-                                                    "admin:write")))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(anyOf(is(201), is(200)))
-                            .extract()
-                            .response();
-
-            tenantBApiKey = resp.jsonPath().getString("rawKey");
-            assertNotNull(tenantBApiKey, "API key for tenant B must be returned");
-            assertFalse(tenantBApiKey.isBlank());
-        }
-
-        @Test
-        @Order(6)
         @DisplayName("resolve Redis ACL credentials from platform DB")
         void resolveAclCredentials() {
             // Use the admin Redis connection to look up the ACL user list
@@ -746,7 +700,7 @@ class RedisTenantAclIsolationIT {
         void registerSchemaA() {
             // Register a field + category for tenant A
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "fieldName", "email",
@@ -758,7 +712,7 @@ class RedisTenantAclIsolationIT {
                     .statusCode(anyOf(is(200), is(201), is(204)));
 
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "categoryName", "pii",
@@ -769,7 +723,7 @@ class RedisTenantAclIsolationIT {
                     .statusCode(anyOf(is(200), is(201), is(204)));
 
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "fieldName", "email",
@@ -786,7 +740,7 @@ class RedisTenantAclIsolationIT {
         @DisplayName("register schema for tenant B")
         void registerSchemaB() {
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "fieldName", "email",
@@ -798,7 +752,7 @@ class RedisTenantAclIsolationIT {
                     .statusCode(anyOf(is(200), is(201), is(204)));
 
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "categoryName", "pii",
@@ -809,7 +763,7 @@ class RedisTenantAclIsolationIT {
                     .statusCode(anyOf(is(200), is(201), is(204)));
 
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "fieldName", "email",
@@ -827,7 +781,7 @@ class RedisTenantAclIsolationIT {
         void grantConsentTenantA() {
             // Grant consent for subject "alice" in tenant A
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "subject",
@@ -844,7 +798,7 @@ class RedisTenantAclIsolationIT {
 
             // Evaluate in tenant A — should be granted
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "subject",
@@ -864,7 +818,7 @@ class RedisTenantAclIsolationIT {
             // Evaluate in tenant B — "alice" should NOT have any grants
             // (tenant B has never granted consent for alice)
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "subject",
@@ -890,7 +844,7 @@ class RedisTenantAclIsolationIT {
         void grantConsentTenantB() {
             // Grant consent for subject "bob" in tenant B
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "subject",
@@ -907,7 +861,7 @@ class RedisTenantAclIsolationIT {
 
             // Evaluate "bob" in tenant B — should be granted
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantBApiKey)
+                    .header("Authorization", "Bearer " + accessTokenB)
                     .body(
                             Map.of(
                                     "subject",
@@ -926,7 +880,7 @@ class RedisTenantAclIsolationIT {
 
             // Evaluate "bob" in tenant A — should NOT have any grants
             given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + tenantAApiKey)
+                    .header("Authorization", "Bearer " + accessTokenA)
                     .body(
                             Map.of(
                                     "subject",

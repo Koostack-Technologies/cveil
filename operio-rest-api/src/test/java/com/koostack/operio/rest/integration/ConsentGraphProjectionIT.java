@@ -9,7 +9,7 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
+
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
@@ -62,7 +62,7 @@ class ConsentGraphProjectionIT {
 
     private static final Duration AWAIT_TIMEOUT = Duration.ofSeconds(30);
 
-    private static volatile String apiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     @Inject OperioConfig config;
@@ -73,45 +73,28 @@ class ConsentGraphProjectionIT {
 
     @Nested
     @Order(1)
-    @DisplayName("1 — Setup (tenant + API key)")
+    @DisplayName("1 — Setup (tenant + Keycloak login)")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class Setup {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
-            String result =
-                    IntegrationTestSupport.provisionTenantViaOrchestrator(
-                            BOOTSTRAP_KEY, TENANT_ID, "Graph Projection IT Tenant", "enterprise");
-            assertThat(result).isEqualTo(TENANT_ID);
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("Create full-access API key")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "graph-it-admin",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            apiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(apiKey);
+        @DisplayName("Provision tenant and obtain access token")
+        void provisionTenantAndLogin() {
+            try {
+                IntegrationTestSupport.AuthInfo auth =
+                        IntegrationTestSupport.provisionTenantAndLogin(
+                                BOOTSTRAP_KEY, TENANT_ID, "Graph Projection IT Tenant");
+                accessToken = auth.accessToken();
+                assertThat(accessToken).isNotBlank();
+            } catch (Exception e) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    String email = TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+                    accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
+                } else {
+                    throw e;
+                }
+            }
             support = new IntegrationTestSupport(config, TENANT_ID);
             support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
         }
@@ -128,8 +111,8 @@ class ConsentGraphProjectionIT {
     class DataSetup {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -535,8 +518,8 @@ class ConsentGraphProjectionIT {
     class GrantConsentGraph {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -659,8 +642,8 @@ class ConsentGraphProjectionIT {
     class RevokeConsentGraph {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -739,8 +722,8 @@ class ConsentGraphProjectionIT {
     class SubjectErasureGraph {
 
         private String auth() {
-            assertNotNull(apiKey, "apiKey required");
-            return "Bearer " + apiKey;
+            assertNotNull(accessToken, "accessToken required");
+            return "Bearer " + accessToken;
         }
 
         @Test

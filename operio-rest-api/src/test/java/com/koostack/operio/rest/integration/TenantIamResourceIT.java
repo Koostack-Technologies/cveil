@@ -48,7 +48,6 @@ class TenantIamResourceIT {
 
     // Shared mutable state across nested test classes
     private static volatile IntegrationTestSupport support;
-    private static volatile String tenantBApiKey;
 
     private static volatile String tenantAUsername;
     private static volatile String tenantAUserEmail;
@@ -58,7 +57,7 @@ class TenantIamResourceIT {
     private static volatile String serviceAccountClientSecret;
     private static volatile String accessToken;
     private static volatile String refreshToken;
-    private static volatile String readOnlyApiKey;
+    private static volatile String readOnlyAccessToken;
 
     @Inject OperioConfig config;
 
@@ -855,36 +854,64 @@ class TenantIamResourceIT {
 
         @Test
         @Order(2)
-        @DisplayName("Create read-only API key for RBAC test")
-        void createReadOnlyApiKey() {
-            Response response =
-                    given().header("Authorization", bootstrapAuth())
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
+        @DisplayName("Create read-only user and login for RBAC test")
+        void createReadOnlyUserAndLogin() {
+            String readOnlyEmail = "iam-it-reader@operio-test.com";
+            String readOnlyPassword = "Test1234!";
+
+            given().header("Authorization", bootstrapAuth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
                     {
-                      "tenantId": "%s",
-                      "subject": "iam-it-reader",
-                      "roles": ["tenant-read"]
+                      "username": "iam-it-reader",
+                      "email": "%s",
+                      "fullName": "IAM IT Reader",
+                      "roles": ["tenant-read"],
+                      "temporaryPassword": false
                     }
                     """
-                                            .formatted(TENANT_A_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
+                                    .formatted(readOnlyEmail))
+                    .when()
+                    .post(BASE_PATH + "/users")
+                    .then()
+                    .statusCode(201);
 
-            readOnlyApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(readOnlyApiKey);
+            support.awaitKeycloakUserExists(
+                    PLATFORM_REALM, readOnlyEmail, Duration.ofSeconds(30));
+
+            var users =
+                    support.keycloak()
+                            .realm(PLATFORM_REALM)
+                            .users()
+                            .searchByEmail(readOnlyEmail, true);
+            assertThat(users).isNotEmpty();
+            var kcUserId = users.get(0).getId();
+
+            var userRep =
+                    support.keycloak()
+                            .realm(PLATFORM_REALM)
+                            .users()
+                            .get(kcUserId)
+                            .toRepresentation();
+            userRep.setEmailVerified(true);
+            support.keycloak().realm(PLATFORM_REALM).users().get(kcUserId).update(userRep);
+
+            var cred = new org.keycloak.representations.idm.CredentialRepresentation();
+            cred.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
+            cred.setValue(readOnlyPassword);
+            cred.setTemporary(false);
+            support.keycloak().realm(PLATFORM_REALM).users().get(kcUserId).resetPassword(cred);
+
+            readOnlyAccessToken = IntegrationTestSupport.loginUser(readOnlyEmail, readOnlyPassword);
+            assertNotNull(readOnlyAccessToken);
         }
 
         @Test
         @Order(3)
         @DisplayName("tenant-read role cannot manage users → 403")
         void tenantReadCannotManageUsers() {
-            given().header("Authorization", "Bearer " + readOnlyApiKey)
+            given().header("Authorization", "Bearer " + readOnlyAccessToken)
                     .contentType(ContentType.JSON)
                     .body(
                             """

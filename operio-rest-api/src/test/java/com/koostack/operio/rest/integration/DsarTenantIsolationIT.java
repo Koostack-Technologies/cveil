@@ -11,7 +11,6 @@ import com.koostack.operio.rest.dto.ConsentDtos.SubjectDataExport;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.HashMap;
@@ -48,98 +47,70 @@ class DsarTenantIsolationIT {
     private static final String TENANT_A = "dsar_iso_tenant_a";
     private static final String TENANT_B = "dsar_iso_tenant_b";
 
-    private static volatile String keyTenantA;
-    private static volatile String keyTenantB;
+    private static volatile String accessTokenA;
+    private static volatile String accessTokenB;
     private static volatile IntegrationTestSupport supportA;
     private static volatile IntegrationTestSupport supportB;
 
     @Inject OperioConfig config;
 
     // ===================================================================
-    // Phase 0 — Provision tenants, API keys, and governance data
+    // Phase 0 — Provision tenants and obtain JWT tokens
     // ===================================================================
 
     @Test
     @Order(0)
-    @DisplayName("Provision tenant A")
-    void provisionTenantA() {
-        String result =
-                IntegrationTestSupport.provisionTenantViaOrchestrator(
-                        BOOTSTRAP_KEY, TENANT_A, TENANT_A, "free");
-        assertThat(result).isEqualTo(TENANT_A);
-    }
-
-    @Test
-    @Order(1)
-    @DisplayName("Provision tenant B")
-    void provisionTenantB() {
-        String result =
-                IntegrationTestSupport.provisionTenantViaOrchestrator(
-                        BOOTSTRAP_KEY, TENANT_B, TENANT_B, "free");
-        assertThat(result).isEqualTo(TENANT_B);
-    }
-
-    @Test
-    @Order(2)
-    @DisplayName("Create API key for tenant A")
-    void createApiKeyA() {
-        Response response =
-                given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                        .contentType(ContentType.JSON)
-                        .body(
-                                """
-                {"tenantId": "%s",
-                 "subject": "dsar-iso-admin-a",
-                 "roles": ["admin:read","admin:write","consent:read","consent:write"]}
-                """
-                                        .formatted(TENANT_A))
-                        .when()
-                        .post("/api/v1/platform/api-keys")
-                        .then()
-                        .statusCode(201)
-                        .extract()
-                        .response();
-        keyTenantA = response.jsonPath().getString("rawKey");
-        assertThat(keyTenantA).isNotNull();
+    @DisplayName("Provision tenant A and login")
+    void provisionAndLoginTenantA() {
+        try {
+            IntegrationTestSupport.AuthInfo authA =
+                    IntegrationTestSupport.provisionTenantAndLogin(
+                            BOOTSTRAP_KEY, TENANT_A, "Tenant A Display");
+            accessTokenA = authA.accessToken();
+            assertThat(accessTokenA).isNotBlank();
+        } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                String email = TENANT_A.replace("_", "-") + "-admin@operio-test.com";
+                accessTokenA = IntegrationTestSupport.loginUser(email, "Test1234!");
+            } else {
+                throw e;
+            }
+        }
         supportA = new IntegrationTestSupport(config, TENANT_A);
         supportA.awaitTenantReady(TENANT_A, Duration.ofSeconds(90));
     }
 
     @Test
-    @Order(3)
-    @DisplayName("Create API key for tenant B")
-    void createApiKeyB() {
-        Response response =
-                given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                        .contentType(ContentType.JSON)
-                        .body(
-                                """
-                {"tenantId": "%s",
-                 "subject": "dsar-iso-admin-b",
-                 "roles": ["admin:read","admin:write","consent:read","consent:write"]}
-                """
-                                        .formatted(TENANT_B))
-                        .when()
-                        .post("/api/v1/platform/api-keys")
-                        .then()
-                        .statusCode(201)
-                        .extract()
-                        .response();
-        keyTenantB = response.jsonPath().getString("rawKey");
-        assertThat(keyTenantB).isNotNull();
+    @Order(1)
+    @DisplayName("Provision tenant B and login")
+    void provisionAndLoginTenantB() {
+        try {
+            IntegrationTestSupport.AuthInfo authB =
+                    IntegrationTestSupport.provisionTenantAndLogin(
+                            BOOTSTRAP_KEY, TENANT_B, "Tenant B Display");
+            accessTokenB = authB.accessToken();
+            assertThat(accessTokenB).isNotBlank();
+        } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                String email = TENANT_B.replace("_", "-") + "-admin@operio-test.com";
+                accessTokenB = IntegrationTestSupport.loginUser(email, "Test1234!");
+            } else {
+                throw e;
+            }
+        }
         supportB = new IntegrationTestSupport(config, TENANT_B);
         supportB.awaitTenantReady(TENANT_B, Duration.ofSeconds(90));
     }
 
     @Test
-    @Order(4)
+    @Order(2)
     @DisplayName("Set up governance data for both tenants")
     void setupGovernance() {
-        setupGovernanceForTenant(keyTenantA);
-        setupGovernanceForTenant(keyTenantB);
+        setupGovernanceForTenant(accessTokenA);
+        setupGovernanceForTenant(accessTokenB);
 
         // Await governance projection (policies visible)
-        for (String key : new String[] {keyTenantA, keyTenantB}) {
+        for (String key : new String[] {accessTokenA, accessTokenB}) {
             org.awaitility.Awaitility.await()
                     .atMost(Duration.ofSeconds(30))
                     .pollInterval(Duration.ofMillis(500))
@@ -170,7 +141,7 @@ class DsarTenantIsolationIT {
     void testExportTenantIsolation() {
         String subject = "export_isolation_1";
 
-        grantConsent(keyTenantA, subject, "email", "User", "marketing");
+        grantConsent(accessTokenA, subject, "email", "User", "marketing");
 
         // Await async projection of consent ledger entry
         org.awaitility.Awaitility.await()
@@ -178,11 +149,11 @@ class DsarTenantIsolationIT {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(
                         () -> {
-                            SubjectDataExport export = exportSubject(keyTenantA, subject);
+                            SubjectDataExport export = exportSubject(accessTokenA, subject);
                             assertThat(export.consent().entries()).isNotEmpty();
                         });
 
-        SubjectDataExport exportB = exportSubject(keyTenantB, subject);
+        SubjectDataExport exportB = exportSubject(accessTokenB, subject);
         assertThat(exportB.subject()).isEqualTo(subject);
         assertThat(exportB.consent().entries()).isEmpty();
     }
@@ -197,8 +168,8 @@ class DsarTenantIsolationIT {
     void testDeleteTenantIsolation() {
         String subject = "delete_isolation_1";
 
-        grantConsent(keyTenantA, subject, "phone", "User", "analytics");
-        grantConsent(keyTenantB, subject, "phone", "User", "analytics");
+        grantConsent(accessTokenA, subject, "phone", "User", "analytics");
+        grantConsent(accessTokenB, subject, "phone", "User", "analytics");
 
         // Await consent visible in both tenants before deleting
         org.awaitility.Awaitility.await()
@@ -206,18 +177,18 @@ class DsarTenantIsolationIT {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(
                         () -> {
-                            assertThat(exportSubject(keyTenantA, subject).consent().entries())
+                            assertThat(exportSubject(accessTokenA, subject).consent().entries())
                                     .isNotEmpty();
-                            assertThat(exportSubject(keyTenantB, subject).consent().entries())
+                            assertThat(exportSubject(accessTokenB, subject).consent().entries())
                                     .isNotEmpty();
                         });
 
         String confirmToken = "DELETE_" + subject;
-        DsarDeletionReceipt receipt = deleteSubject(keyTenantA, subject, confirmToken);
+        DsarDeletionReceipt receipt = deleteSubject(accessTokenA, subject, confirmToken);
         assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
 
         // After deletion in tenant A, tenant B should still have data
-        SubjectDataExport exportB = exportSubject(keyTenantB, subject);
+        SubjectDataExport exportB = exportSubject(accessTokenB, subject);
         assertThat(exportB.consent().entries()).isNotEmpty();
     }
 
@@ -231,9 +202,9 @@ class DsarTenantIsolationIT {
     void testDsarAuditPerTenant() {
         String subject = "audit_isolation_1";
 
-        grantConsent(keyTenantA, subject, "email", "User", "sales");
+        grantConsent(accessTokenA, subject, "email", "User", "sales");
         String confirmToken = "DELETE_" + subject;
-        DsarDeletionReceipt receipt = deleteSubject(keyTenantA, subject, confirmToken);
+        DsarDeletionReceipt receipt = deleteSubject(accessTokenA, subject, confirmToken);
 
         assertThat(receipt.subject()).isEqualTo(subject);
         assertThat(receipt.status()).isEqualTo("PENDING_SHRED");
@@ -245,8 +216,8 @@ class DsarTenantIsolationIT {
     // Helper methods
     // ===================================================================
 
-    private void setupGovernanceForTenant(String apiKey) {
-        String auth = "Bearer " + apiKey;
+    private void setupGovernanceForTenant(String accessToken) {
+        String auth = "Bearer " + accessToken;
 
         given().header("Authorization", auth)
                 .contentType(ContentType.JSON)
@@ -341,8 +312,8 @@ class DsarTenantIsolationIT {
         }
     }
 
-    private void registerSubject(String apiKey, String subject) {
-        given().header("Authorization", "Bearer " + apiKey)
+    private void registerSubject(String accessToken, String subject) {
+        given().header("Authorization", "Bearer " + accessToken)
                 .contentType(ContentType.JSON)
                 .body(Map.of("subjectName", subject, "description", "DSAR test subject"))
                 .when()
@@ -352,12 +323,12 @@ class DsarTenantIsolationIT {
     }
 
     private void grantConsent(
-            String apiKey,
+            String accessToken,
             String subject,
             String fieldName,
             String entityName,
             String purposeName) {
-        registerSubject(apiKey, subject);
+        registerSubject(accessToken, subject);
 
         // Wait for subject projection before granting consent
         org.awaitility.Awaitility.await()
@@ -365,7 +336,7 @@ class DsarTenantIsolationIT {
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(
                         () ->
-                                given().header("Authorization", "Bearer " + apiKey)
+                                given().header("Authorization", "Bearer " + accessToken)
                                         .contentType(ContentType.JSON)
                                         .body(
                                                 Map.of(
@@ -382,8 +353,8 @@ class DsarTenantIsolationIT {
                                         .statusCode(200));
     }
 
-    private SubjectDataExport exportSubject(String apiKey, String subject) {
-        return given().header("Authorization", "Bearer " + apiKey)
+    private SubjectDataExport exportSubject(String accessToken, String subject) {
+        return given().header("Authorization", "Bearer " + accessToken)
                 .contentType(ContentType.JSON)
                 .when()
                 .get("/api/v1/subjects/{id}/export", subject)
@@ -393,9 +364,10 @@ class DsarTenantIsolationIT {
                 .as(SubjectDataExport.class);
     }
 
-    private DsarDeletionReceipt deleteSubject(String apiKey, String subject, String confirmToken) {
+    private DsarDeletionReceipt deleteSubject(
+            String accessToken, String subject, String confirmToken) {
         io.restassured.response.Response raw =
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .queryParam("confirm", confirmToken)
                         .when()

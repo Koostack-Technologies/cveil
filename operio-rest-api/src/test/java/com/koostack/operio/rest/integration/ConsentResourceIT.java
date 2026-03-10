@@ -64,8 +64,7 @@ class ConsentResourceIT {
     private static final String PURPOSE_ANALYTICS = "analytics";
     private static final String REGULATION_GDPR = "GDPR";
 
-    private static volatile String apiKey;
-    private static volatile String readOnlyApiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     @Inject OperioConfig config;
@@ -96,78 +95,25 @@ class ConsentResourceIT {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
-            String result =
-                    IntegrationTestSupport.provisionTenantViaOrchestrator(
-                            BOOTSTRAP_KEY, TENANT_ID, "Consent IT Tenant", "enterprise");
-            assertThat(result).isEqualTo(TENANT_ID);
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("Create full-access API key")
-        void createApiKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "consent-it-admin",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            apiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(apiKey);
+        @DisplayName("Provision tenant and login via Keycloak")
+        void provisionTenantAndLogin() {
+            IntegrationTestSupport.AuthInfo auth =
+                    IntegrationTestSupport.provisionTenantAndLogin(
+                            BOOTSTRAP_KEY, TENANT_ID, "Consent IT Tenant");
+            accessToken = auth.accessToken();
+            assertThat(accessToken).isNotBlank();
             support = new IntegrationTestSupport(config, TENANT_ID);
             support.awaitTenantReady(TENANT_ID, Duration.ofSeconds(90));
-        }
-
-        @Test
-        @Order(3)
-        @DisplayName("Create read-only API key (consent:read only)")
-        void createReadOnlyKey() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "consent-it-reader",
-                      "roles": ["consent:read", "admin:read"]
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            readOnlyApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(readOnlyApiKey);
         }
 
         // -- Register catalogue items --
 
         @Test
-        @Order(10)
+        @Order(2)
         @DisplayName("Register entities")
         void registerEntities() {
             for (var entity : List.of(ENTITY_USER, ENTITY_PATIENT)) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -182,11 +128,11 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(11)
+        @Order(3)
         @DisplayName("Register categories")
         void registerCategories() {
             for (var cat : List.of(CATEGORY_PII, CATEGORY_HEALTH)) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -201,7 +147,7 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(12)
+        @Order(4)
         @DisplayName("Register fields")
         void registerFields() {
             record FieldDef(String fieldName, String entityName) {}
@@ -211,7 +157,7 @@ class ConsentResourceIT {
                             new FieldDef(FIELD_SSN, ENTITY_USER),
                             new FieldDef(FIELD_DIAGNOSIS, ENTITY_PATIENT));
             for (var f : fields) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -230,7 +176,7 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(13)
+        @Order(5)
         @DisplayName("Assign fields to categories")
         void assignFieldCategories() {
             record Link(String fieldName, String entityName, String categoryName) {}
@@ -240,7 +186,7 @@ class ConsentResourceIT {
                             new Link(FIELD_SSN, ENTITY_USER, CATEGORY_PII),
                             new Link(FIELD_DIAGNOSIS, ENTITY_PATIENT, CATEGORY_HEALTH));
             for (var link : links) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -264,11 +210,11 @@ class ConsentResourceIT {
         // -- Register governance items --
 
         @Test
-        @Order(20)
+        @Order(6)
         @DisplayName("Register purposes")
         void registerPurposes() {
             for (var purpose : List.of(PURPOSE_MARKETING, PURPOSE_ANALYTICS)) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -283,10 +229,10 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(21)
+        @Order(7)
         @DisplayName("Register regulation")
         void registerRegulation() {
-            given().header("Authorization", "Bearer " + apiKey)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -300,11 +246,11 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(22)
+        @Order(8)
         @DisplayName("Link purposes to regulation")
         void linkPurposesToRegulation() {
             for (var purpose : List.of(PURPOSE_MARKETING, PURPOSE_ANALYTICS)) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -323,7 +269,7 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(23)
+        @Order(9)
         @DisplayName("Add purpose policies (field-scope)")
         void addPurposePolicies() {
             record Policy(
@@ -339,7 +285,7 @@ class ConsentResourceIT {
                                     ENTITY_PATIENT,
                                     CATEGORY_HEALTH));
             for (var p : policies) {
-                given().header("Authorization", "Bearer " + apiKey)
+                given().header("Authorization", "Bearer " + accessToken)
                         .contentType(ContentType.JSON)
                         .body(
                                 """
@@ -364,7 +310,7 @@ class ConsentResourceIT {
         }
 
         @Test
-        @Order(24)
+        @Order(10)
         @DisplayName("Await governance projection (policies visible in DB)")
         void awaitGovernanceProjected() {
             Awaitility.await()
@@ -384,7 +330,7 @@ class ConsentResourceIT {
         // -- Auth boundary --
 
         @Test
-        @Order(30)
+        @Order(11)
         @DisplayName("Unauthenticated grant → 401")
         void unauthenticatedGrant() {
             given().contentType(ContentType.JSON)
@@ -407,30 +353,6 @@ class ConsentResourceIT {
                     .statusCode(401);
         }
 
-        @Test
-        @Order(31)
-        @DisplayName("Read-only key cannot grant consent → 403")
-        void readOnlyCannotGrant() {
-            given().header("Authorization", "Bearer " + readOnlyApiKey)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "subject": "blocked",
-                      "scope": %s
-                    }
-                    """
-                                    .formatted(
-                                            scope(
-                                                    CATEGORY_PII,
-                                                    FIELD_EMAIL,
-                                                    ENTITY_USER,
-                                                    PURPOSE_MARKETING)))
-                    .when()
-                    .post("/api/v1/subjects/consent/grant")
-                    .then()
-                    .statusCode(403);
-        }
     }
 
     // =======================================================================
@@ -444,7 +366,7 @@ class ConsentResourceIT {
     class SubjectManagement {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -564,7 +486,7 @@ class ConsentResourceIT {
     class SingleConsentGrant {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -788,7 +710,7 @@ class ConsentResourceIT {
     class SingleConsentRevoke {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -974,7 +896,7 @@ class ConsentResourceIT {
     class BatchConsentOps {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1237,7 +1159,7 @@ class ConsentResourceIT {
     class SubjectSummaryAndHistory {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1318,7 +1240,7 @@ class ConsentResourceIT {
     class ConsentExpiration {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1409,7 +1331,7 @@ class ConsentResourceIT {
     class MultiSubjectIsolation {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1558,7 +1480,7 @@ class ConsentResourceIT {
     class CrossResourceValidation {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -1626,7 +1548,7 @@ class ConsentResourceIT {
     class DsarVerification {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test

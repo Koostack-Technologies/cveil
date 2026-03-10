@@ -67,6 +67,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String redisHost;
     private final int redisPort;
     private final String tenantSchema; // consent/tenant schema name for search_path
+    private final String tenantId; // business tenant ID for tenant-aware queries
     private final String keycloakUrl; // null → Keycloak helpers disabled
     private Keycloak keycloakAdmin; // lazy-initialized
 
@@ -100,6 +101,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.dbUsername = db.username().orElse("operio_test");
         this.dbPassword = db.password().orElse("operio_test_password");
         this.tenantSchema = tenantId != null ? "operio_consent" : null;
+        this.tenantId = tenantId;
 
         this.keycloakUrl =
                 config.keycloak().flatMap(kc -> kc.url()).filter(u -> !u.isBlank()).orElse(null);
@@ -326,6 +328,23 @@ public class IntegrationTestSupport implements AutoCloseable {
         try (var conn = openConnection();
                 var ps = conn.prepareStatement(sql)) {
             ps.setObject(1, whereValue);
+            try (var rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Count failed: " + sql, e);
+        }
+    }
+
+    /** Counts rows with both a column filter and tenant_id isolation. */
+    public long countRowsWithTenant(String table, String whereColumn, Object whereValue) {
+        var sql =
+                "SELECT COUNT(*) FROM " + table + " WHERE " + whereColumn + " = ? AND tenant_id = ?";
+        try (var conn = openConnection();
+                var ps = conn.prepareStatement(sql)) {
+            ps.setObject(1, whereValue);
+            ps.setObject(2, tenantId);
             try (var rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);

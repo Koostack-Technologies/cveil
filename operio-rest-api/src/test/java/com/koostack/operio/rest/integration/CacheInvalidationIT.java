@@ -8,7 +8,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -45,7 +44,7 @@ public class CacheInvalidationIT {
 
     @Inject OperioConfig config;
 
-    private static volatile String apiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     // Pub/Sub infrastructure
@@ -71,15 +70,20 @@ public class CacheInvalidationIT {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant")
-        void createTenant() {
+        @DisplayName("Create tenant and login")
+        void createTenantAndLogin() {
             try {
-                String result =
-                        IntegrationTestSupport.provisionTenantViaOrchestrator(
-                                BOOTSTRAP_KEY, TENANT_ID, "Cache Invalidation IT", "pro");
-                assertThat(result).isEqualTo(TENANT_ID);
+                IntegrationTestSupport.AuthInfo auth =
+                        IntegrationTestSupport.provisionTenantAndLogin(
+                                BOOTSTRAP_KEY, TENANT_ID, "Cache Invalidation IT");
+                accessToken = auth.accessToken();
+                assertThat(accessToken).isNotBlank();
             } catch (Exception e) {
-                if (!e.getMessage().contains("already exists")) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    // Tenant already exists — just login
+                    String email = TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+                    accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
+                } else {
                     throw e;
                 }
             }
@@ -87,24 +91,6 @@ public class CacheInvalidationIT {
 
         @Test
         @Order(2)
-        @DisplayName("Create API key")
-        void createApiKey() {
-            Response r =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {"tenantId": "%s", "subject": "cache-inv-key",
-                     "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]}
-                    """
-                                            .formatted(TENANT_ID))
-                            .post("/api/v1/platform/api-keys");
-            assertThat(r.statusCode()).isEqualTo(201);
-            apiKey = r.jsonPath().getString("rawKey");
-        }
-
-        @Test
-        @Order(3)
         @DisplayName("Init support")
         void initSupport() {
             support = new IntegrationTestSupport(config, TENANT_ID);
@@ -112,7 +98,7 @@ public class CacheInvalidationIT {
         }
 
         @Test
-        @Order(4)
+        @Order(3)
         @DisplayName("Start Pub/Sub subscriber")
         void startSubscriber() throws Exception {
             receivedMessages = new ConcurrentLinkedQueue<>();
@@ -162,7 +148,7 @@ public class CacheInvalidationIT {
     class CatalogueInvalidations {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -234,7 +220,7 @@ public class CacheInvalidationIT {
     class GovernanceInvalidations {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -287,7 +273,7 @@ public class CacheInvalidationIT {
     class ConsentInvalidations {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -413,7 +399,7 @@ public class CacheInvalidationIT {
             // SSE endpoint returns 200 with text/event-stream content type
             // RestAssured may not fully support SSE, so just verify it doesn't reject
             int status =
-                    given().header("Authorization", "Bearer " + apiKey)
+                    given().header("Authorization", "Bearer " + accessToken)
                             .when()
                             .get("/api/v1/events/invalidations")
                             .statusCode();
@@ -432,7 +418,7 @@ public class CacheInvalidationIT {
     class SseStreamDelivery {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
