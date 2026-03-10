@@ -28,19 +28,4 @@ public interface CoreCommandService<T> extends Plugin<T> {
 
     /** Soft-delete a tenant. */
     void deleteTenant(String tenantId);
-
-    /**
-     * Mark a tenant as fully provisioned after infrastructure setup completes.
-     *
-     * <p>Typically called by the tenant-manager projection handler once Postgres schemas, Redis
-     * ACLs, and Flyway migrations have succeeded.
-     */
-    void provisionTenant(String tenantId, String schemaPrefix, String redisAclUser);
-
-    /**
-     * Emit a {@code TenantProvisioningStarted} event to signal that async infrastructure
-     * provisioning should begin. Called after tenant, billing, and subscription records have been
-     * created.
-     */
-    void emitProvisioningStarted(String tenantId, String displayName, String plan);
 }

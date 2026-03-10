@@ -64,6 +64,11 @@ public class KeycloakIamDispatcher
     /** Set the query service for email/username → UUID resolution. */
     public void setQueryService(IamQueryService<?> queryService) {
         this.queryService = queryService;
+        // Also wire the query service into the orchestrator
+        var orchestrator = actuators.get(RegisterUserOrchestrator.RegisterUserWithOrgCommand.class);
+        if (orchestrator instanceof RegisterUserOrchestrator ruo) {
+            ruo.setQueryService(queryService);
+        }
     }
 
     @Override
@@ -111,6 +116,36 @@ public class KeycloakIamDispatcher
         actuators.put(
                 RemoveRoleCommandActuator.RemoveRoleCommand.class,
                 new RemoveRoleCommandActuator(eventService, kc));
+
+        // Organization actuators (Keycloak Organizations API)
+        var orgService = config.orgService();
+        if (orgService != null) {
+            actuators.put(
+                    CreateOrganizationCommandActuator.CreateOrganizationCommand.class,
+                    new CreateOrganizationCommandActuator(eventService, orgService));
+            actuators.put(
+                    AddOrgMemberCommandActuator.AddOrgMemberCommand.class,
+                    new AddOrgMemberCommandActuator(eventService, orgService));
+            actuators.put(
+                    RemoveOrgMemberCommandActuator.RemoveOrgMemberCommand.class,
+                    new RemoveOrgMemberCommandActuator(eventService, orgService));
+            actuators.put(
+                    DeleteOrganizationCommandActuator.DeleteOrganizationCommand.class,
+                    new DeleteOrganizationCommandActuator(eventService, orgService));
+        }
+
+        // Redis provisioning actuator
+        var jedis = config.jedis();
+        if (jedis != null) {
+            actuators.put(
+                    ProvisionRedisCommandActuator.ProvisionRedisCommand.class,
+                    new ProvisionRedisCommandActuator(eventService, jedis));
+        }
+
+        // User registration orchestrator (chains sub-commands)
+        actuators.put(
+                RegisterUserOrchestrator.RegisterUserWithOrgCommand.class,
+                new RegisterUserOrchestrator(this, eventService));
 
         LOG.info("KeycloakIamDispatcher configured with {} actuators", actuators.size());
     }
@@ -192,6 +227,32 @@ public class KeycloakIamDispatcher
         dispatch(new RemoveRoleCommandActuator.RemoveRoleCommand(realmId, emailOrUsername, role));
     }
 
+    // -- Organization operations (single realm + Keycloak Organizations) -------
+
+    @Override
+    public CreateOrganizationResult createOrganization(String orgName, String displayName) {
+        CreateOrganizationCommandActuator.CreateOrganizationResult result =
+                dispatch(
+                        new CreateOrganizationCommandActuator.CreateOrganizationCommand(
+                                orgName, displayName));
+        return new CreateOrganizationResult(result.orgId(), result.orgName());
+    }
+
+    @Override
+    public void addOrganizationMember(String orgId, String userId) {
+        dispatch(new AddOrgMemberCommandActuator.AddOrgMemberCommand(orgId, null, userId, null));
+    }
+
+    @Override
+    public void removeOrganizationMember(String orgId, String userId) {
+        dispatch(new RemoveOrgMemberCommandActuator.RemoveOrgMemberCommand(orgId, null, userId));
+    }
+
+    @Override
+    public void deleteOrganization(String orgId) {
+        dispatch(new DeleteOrganizationCommandActuator.DeleteOrganizationCommand(orgId, null));
+    }
+
     // -- Legacy API key compat ------------------------------------------------
 
     @SuppressWarnings("deprecation")
@@ -219,8 +280,8 @@ public class KeycloakIamDispatcher
 
             String sql =
                     "INSERT INTO platform_iam.api_key (key_hash, key_prefix, key_id, name,"
-                        + " tenant_id, platform_user_id, subject, roles, environment, status)"
-                        + " VALUES (?, ?, ?, ?, ?, 'system', ?, ?, ?, 'active')";
+                            + " tenant_id, platform_user_id, subject, roles, environment, status)"
+                            + " VALUES (?, ?, ?, ?, ?, 'system', ?, ?, ?, 'active')";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, keyHash);
                 ps.setString(2, keyPrefix);
@@ -241,7 +302,13 @@ public class KeycloakIamDispatcher
             try {
                 var event =
                         new com.koostack.operio.core.platform.events.ApiKeyGeneratedEvent(
-                                tenantId, keyId, keyPrefix, keyHash, name, environment, roles,
+                                tenantId,
+                                keyId,
+                                keyPrefix,
+                                keyHash,
+                                name,
+                                environment,
+                                roles,
                                 null);
                 var aggregateId =
                         java.util.UUID.nameUUIDFromBytes(
@@ -260,7 +327,9 @@ public class KeycloakIamDispatcher
                                 key,
                                 event));
             } catch (Exception e) {
-                LOG.warn("Failed to emit ApiKeyGenerated event for tenant {}: {}", tenantId,
+                LOG.warn(
+                        "Failed to emit ApiKeyGenerated event for tenant {}: {}",
+                        tenantId,
                         e.getMessage());
             }
         }

@@ -2,7 +2,6 @@ package com.koostack.operio.platform.tenant.jooq;
 
 import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.platform.core.TenantManagerService;
-import com.koostack.operio.plugin.jooq.common.TenantAwareExecuteListener;
 import com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
@@ -148,7 +147,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
 
     public ProvisionResult provisionTenant(String tenantId) {
         String sanitized = sanitizeTenantId(tenantId);
-        String schemaName = TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+        String schemaName = "t_" + sanitized;
 
         log.info("Provisioning tenant '{}': schema={}", tenantId, schemaName);
 
@@ -193,7 +192,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
         }
 
         // 2. Per-tenant event store schema (t_{tenantId}_event)
-        String eventSchemaName = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+        String eventSchemaName = schemaName + "_event";
         if (eventMigrationLocation != null) {
             try {
                 executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + eventSchemaName);
@@ -229,7 +228,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
         String redisAclPassHash = null;
         if (redisConfig != null) {
             try {
-                redisAclUser = TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+                redisAclUser = "t_" + sanitized;
                 String password = generateSecurePassword();
                 redisAclPassHash = sha256Hex(password);
 
@@ -351,7 +350,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
         }
 
         String sanitized = sanitizeTenantId(tenantId);
-        String redisAclUser = TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+        String redisAclUser = "t_" + sanitized;
         String password = generateSecurePassword();
         String passHash = sha256Hex(password);
         String keyPattern = tenantId + ":*";
@@ -475,7 +474,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
 
     public void dropTenant(String tenantId) {
         String sanitized = sanitizeTenantId(tenantId);
-        String schemaName = TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+        String schemaName = "t_" + sanitized;
 
         log.info("Dropping tenant '{}': schema={}", tenantId, schemaName);
 
@@ -493,7 +492,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
         }
 
         // Drop per-tenant event store schema
-        String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+        String eventSchema = schemaName + "_event";
         try {
             executeTenantDdl("DROP SCHEMA IF EXISTS " + eventSchema + " CASCADE");
             log.debug("Dropped event schema '{}'", eventSchema);
@@ -507,7 +506,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
 
         if (redisConfig != null) {
             try {
-                String redisAclUser = TenantAwareExecuteListener.SCHEMA_PREFIX + sanitized;
+                String redisAclUser = "t_" + sanitized;
                 try (Jedis jedis = createJedisConnection()) {
                     jedis.aclDelUser(redisAclUser);
                 }
@@ -594,7 +593,7 @@ public class JooqTenantManagerService implements TenantManagerService<JooqTenant
 
             // Migrate per-tenant event store schema
             if (eventMigrationLocation != null) {
-                String eventSchema = schemaName + TenantAwareExecuteListener.EVENT_SCHEMA_SUFFIX;
+                String eventSchema = schemaName + "_event";
                 try {
                     executeTenantDdl("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
                     Flyway.configure()

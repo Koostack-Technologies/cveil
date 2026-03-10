@@ -152,14 +152,7 @@ class BootstrapKeyLifecycleServiceTest {
 
     private static TenantInfo tenantInfo(String tenantId) {
         return new TenantInfo(
-                tenantId,
-                "Tenant " + tenantId,
-                "STANDARD",
-                "ACTIVE",
-                "t_" + tenantId,
-                null,
-                Instant.now(),
-                Instant.now());
+                tenantId, "Tenant " + tenantId, "STANDARD", "ACTIVE", Instant.now(), Instant.now());
     }
 
     private static IamQueryService.ApiKeyInfo activeApiKey(String tenantId) {

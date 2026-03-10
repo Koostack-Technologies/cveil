@@ -3,6 +3,7 @@ package com.koostack.operio.plugin.event.jooq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.PlatformEventService;
+import com.koostack.operio.core.event.Shreddable;
 import com.koostack.operio.core.event.models.AggregateSnapshotTrigger;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.event.models.PublishDomainEventInput;
@@ -10,7 +11,9 @@ import com.koostack.operio.core.exception.OperioServiceException;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.consent.SubjectDsarService;
 import com.koostack.operio.plugin.jooq.common.JooqContextFactory;
+import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
@@ -24,12 +27,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * jOOQ-backed {@link PlatformEventService} implementation — durable event store for platform-level
- * domain events.
+ * Unified jOOQ-backed event service — durable event store for all domain events (platform +
+ * tenant).
  *
- * <p>Events are appended to an append-only {@code platform_event} table with optimistic concurrency
- * control via per-aggregate versioning. A unique constraint on {@code (aggregate_type,
- * aggregate_id, version)} prevents duplicate writes.
+ * <p>Events are appended to a single {@code event} table with optimistic concurrency control via
+ * per-aggregate versioning. A unique constraint on {@code (tenant_id, aggregate_type, aggregate_id,
+ * version)} prevents duplicate writes.
+ *
+ * <p>Supports the digital shredder pattern: events implementing {@link Shreddable} are encrypted
+ * with per-subject DSAR keys before persistence.
  */
 public class JooqPlatformEventService implements PlatformEventService<PlatformEventJooqConfig> {
 
@@ -42,6 +48,8 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
     private EventRepository eventRepository;
     private RedisEventPublisher redisPublisher;
     private OutboxPoller outboxPoller;
+    private volatile SubjectDsarService<?> subjectDsarService;
+    private volatile String encryptionKey;
 
     private final LinkedBlockingQueue<AggregateSnapshotTrigger> snapshotQueue =
             new LinkedBlockingQueue<>();
@@ -80,7 +88,6 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
                         RedisContextFactory.createProvider(
                                 config.redis(), config.tenantCredentialLookup());
             } else {
-                // Platform-only mode: no per-tenant Redis ACL needed
                 jedisProvider =
                         JedisProvider.shared(
                                 RedisClientFactory.createClient(
@@ -127,8 +134,21 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
         }
     }
 
+    /**
+     * Injects the DSAR key repository and the admin encryption key used to decrypt per-subject DSAR
+     * keys at publish time (digital shredder). Forwards the same references to the OutboxPoller for
+     * decryption at relay time.
+     */
+    public void setSubjectDsarService(SubjectDsarService<?> service, String encryptionKey) {
+        this.subjectDsarService = service;
+        this.encryptionKey = encryptionKey;
+        if (this.outboxPoller != null) {
+            this.outboxPoller.setSubjectDsarService(service, encryptionKey);
+        }
+    }
+
     // -----------------------------------------------------------------------
-    // PlatformEventService
+    // EventService
     // -----------------------------------------------------------------------
 
     @Override
@@ -143,6 +163,44 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
                         String aggregateType = input.key().aggregateType();
                         String aggregateId = input.key().aggregateId().toString();
                         String serializedPayload = objectMapper.writeValueAsString(input.payload());
+
+                        boolean shreddable = false;
+                        UUID dsarId = null;
+                        if (input.payload() instanceof Shreddable s
+                                && subjectDsarService != null
+                                && encryptionKey != null) {
+                            String subjectId = s.subjectIdentifier();
+                            if (subjectId == null || subjectId.isBlank()) {
+                                throw new OperioServiceException(
+                                        "Shreddable event "
+                                                + input.eventType()
+                                                + " returned null/blank subjectIdentifier() —"
+                                                + " cannot encrypt");
+                            }
+                            dsarId = SubjectDsarService.deriveDsarId(subjectId);
+                            final UUID lookupId = dsarId;
+                            String encryptedDsarKey =
+                                    subjectDsarService
+                                            .findKeyByDsarId(dsarId)
+                                            .orElseThrow(
+                                                    () ->
+                                                            new OperioServiceException(
+                                                                    "No DSAR key found for dsar_id="
+                                                                            + lookupId
+                                                                            + " — cannot encrypt"
+                                                                            + " shreddable event "
+                                                                            + input.eventType()));
+                            String rawDsarKey =
+                                    FieldEncryptor.decrypt(encryptedDsarKey, this.encryptionKey);
+                            serializedPayload =
+                                    objectMapper.writeValueAsString(
+                                            FieldEncryptor.encrypt(serializedPayload, rawDsarKey));
+                            shreddable = true;
+                        }
+
+                        final boolean isShreddable = shreddable;
+                        final UUID eventDsarId = dsarId;
+                        final String payload = serializedPayload;
 
                         dslContext.transaction(
                                 txConfig -> {
@@ -160,14 +218,15 @@ public class JooqPlatformEventService implements PlatformEventService<PlatformEv
                                                     input.eventType(),
                                                     java.time.Instant.now(),
                                                     version,
-                                                    serializedPayload);
+                                                    payload);
 
-                                    long eventId = txRepo.insert(event);
+                                    long eventId = txRepo.insert(event, isShreddable, eventDsarId);
                                     log.debug(
-                                            "Published event {} for {}/{}",
+                                            "Published event {} for {}/{} (shreddable={})",
                                             eventId,
                                             aggregateType,
-                                            aggregateId);
+                                            aggregateId,
+                                            isShreddable);
 
                                     if (version % SNAPSHOT_DEPTH_THRESHOLD == 0) {
                                         triggerSnapshot(aggregateType, aggregateId, version);

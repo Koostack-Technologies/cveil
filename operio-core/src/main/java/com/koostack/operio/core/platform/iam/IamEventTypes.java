@@ -28,6 +28,15 @@ public final class IamEventTypes {
     public static final String ROLE_ASSIGNED = "iam.role.assigned";
     public static final String ROLE_REMOVED = "iam.role.removed";
 
+    // -- Organization lifecycle -----------------------------------------------
+    public static final String ORGANIZATION_CREATED = "iam.organization.created";
+    public static final String ORGANIZATION_MEMBER_ADDED = "iam.organization.member-added";
+    public static final String ORGANIZATION_MEMBER_REMOVED = "iam.organization.member-removed";
+    public static final String ORGANIZATION_DELETED = "iam.organization.deleted";
+
+    // -- Infrastructure provisioning ------------------------------------------
+    public static final String REDIS_PROVISIONED = "iam.redis.provisioned";
+
     // -- Legacy (kept for backward compatibility with existing event streams) --
     /**
      * @deprecated Use {@link #SERVICE_ACCOUNT_CREATED} for new code.

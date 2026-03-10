@@ -29,8 +29,7 @@ class TenantRegistryEventHandlingTest {
     @Test
     void tenantProvisionedAddsToActiveSet() throws Exception {
         var registry = new TenantRegistry(Set.of(), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_PROVISIONED, payload("new_tenant"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_CREATED, payload("new_tenant"));
         assertTrue(registry.isActive("new_tenant"));
         assertEquals(1, registry.activeTenants().size());
     }
@@ -38,8 +37,7 @@ class TenantRegistryEventHandlingTest {
     @Test
     void tenantActivatedAddsToActiveSet() throws Exception {
         var registry = new TenantRegistry(Set.of(), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_ACTIVATED, payload("reactivated"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_ACTIVATED, payload("reactivated"));
         assertTrue(registry.isActive("reactivated"));
     }
 
@@ -47,8 +45,7 @@ class TenantRegistryEventHandlingTest {
     void tenantSuspendedRemovesFromActiveSet() throws Exception {
         var registry = new TenantRegistry(Set.of("victim"), null);
         assertTrue(registry.isActive("victim"));
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_SUSPENDED, payload("victim"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_SUSPENDED, payload("victim"));
         assertFalse(registry.isActive("victim"));
         assertTrue(registry.activeTenants().isEmpty());
     }
@@ -56,19 +53,16 @@ class TenantRegistryEventHandlingTest {
     @Test
     void tenantDeletedRemovesFromActiveSet() throws Exception {
         var registry = new TenantRegistry(Set.of("doomed"), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_DELETED, payload("doomed"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_DELETED, payload("doomed"));
         assertFalse(registry.isActive("doomed"));
     }
 
     @Test
     void suspendThenReactivate() throws Exception {
         var registry = new TenantRegistry(Set.of("flipflop"), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_SUSPENDED, payload("flipflop"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_SUSPENDED, payload("flipflop"));
         assertFalse(registry.isActive("flipflop"));
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_ACTIVATED, payload("flipflop"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_ACTIVATED, payload("flipflop"));
         assertTrue(registry.isActive("flipflop"));
     }
 
@@ -90,37 +84,35 @@ class TenantRegistryEventHandlingTest {
     @Test
     void nullPayloadDoesNotCrash() {
         var registry = new TenantRegistry(Set.of(), null);
-        registry.onPlatformEvent(CoreEventTypes.TENANT_PROVISIONED, null);
+        registry.onPlatformEvent(CoreEventTypes.TENANT_CREATED, null);
         assertTrue(registry.activeTenants().isEmpty());
     }
 
     @Test
     void malformedPayloadDoesNotCrash() {
         var registry = new TenantRegistry(Set.of(), null);
-        registry.onPlatformEvent(CoreEventTypes.TENANT_PROVISIONED, "not json");
+        registry.onPlatformEvent(CoreEventTypes.TENANT_CREATED, "not json");
         assertTrue(registry.activeTenants().isEmpty());
     }
 
     @Test
     void payloadMissingTenantIdFieldIsIgnored() {
         var registry = new TenantRegistry(Set.of(), null);
-        registry.onPlatformEvent(CoreEventTypes.TENANT_PROVISIONED, "{\"other\": \"value\"}");
+        registry.onPlatformEvent(CoreEventTypes.TENANT_CREATED, "{\"other\": \"value\"}");
         assertTrue(registry.activeTenants().isEmpty());
     }
 
     @Test
     void suspendingUnknownTenantIsNoOp() throws Exception {
         var registry = new TenantRegistry(Set.of("only_one"), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_SUSPENDED, payload("nonexistent"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_SUSPENDED, payload("nonexistent"));
         assertEquals(Set.of("only_one"), registry.activeTenants());
     }
 
     @Test
     void duplicateProvisioningIsIdempotent() throws Exception {
         var registry = new TenantRegistry(Set.of("existing"), null);
-        registry.onPlatformEvent(
-                CoreEventTypes.TENANT_PROVISIONED, payload("existing"));
+        registry.onPlatformEvent(CoreEventTypes.TENANT_CREATED, payload("existing"));
         assertEquals(1, registry.activeTenants().size());
         assertTrue(registry.isActive("existing"));
     }
@@ -138,14 +130,17 @@ class TenantRegistryEventHandlingTest {
         var threads = new Thread[10];
         for (int i = 0; i < threads.length; i++) {
             final int idx = i;
-            threads[i] = new Thread(() -> {
-                try {
-                    registry.onPlatformEvent(
-                            CoreEventTypes.TENANT_PROVISIONED, payload("tenant_" + idx));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            threads[i] =
+                    new Thread(
+                            () -> {
+                                try {
+                                    registry.onPlatformEvent(
+                                            CoreEventTypes.TENANT_CREATED,
+                                            payload("tenant_" + idx));
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
         }
         for (Thread t : threads) t.start();
         for (Thread t : threads) t.join();

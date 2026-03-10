@@ -7,6 +7,7 @@ import static org.jooq.impl.DSL.max;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.models.PlatformEvent;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.event.jooq.generated.tables.records.EventRecord;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -17,7 +18,13 @@ import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Repository for persisting and querying platform events via jOOQ. */
+/**
+ * Unified repository for persisting and querying events via jOOQ.
+ *
+ * <p>Handles both platform and tenant events in a single {@code event} table. The {@code tenant_id}
+ * column is set from {@link TenantContext} on every insert. Row-Level Security (RLS) filters reads
+ * automatically.
+ */
 public class EventRepository {
 
     private static final Logger log = LoggerFactory.getLogger(EventRepository.class);
@@ -30,9 +37,19 @@ public class EventRepository {
         this.dsl = dsl;
     }
 
-    /** Inserts a new event into the event store and returns its generated id. */
+    /** Inserts a new event (non-shreddable) and returns its generated id. */
     public long insert(PlatformEvent event) {
+        return insert(event, false, null);
+    }
+
+    /** Inserts a new event with optional shreddable/DSAR metadata and returns its generated id. */
+    public long insert(PlatformEvent event, boolean shreddable, UUID dsarId) {
+        String tenantId = TenantContext.get();
+        if (tenantId == null) {
+            tenantId = "platform";
+        }
         return dsl.insertInto(EVENT)
+                .set(EVENT.TENANT_ID, tenantId)
                 .set(
                         EVENT.AGGREGATE_ID,
                         event.aggregateId() != null ? event.aggregateId().toString() : "")
@@ -45,6 +62,8 @@ public class EventRepository {
                                 : LocalDateTime.now(ZoneOffset.UTC))
                 .set(EVENT.VERSION, event.version())
                 .set(EVENT.PAYLOAD, event.payload())
+                .set(EVENT.SHREDDABLE, shreddable)
+                .set(EVENT.DSAR_ID, dsarId)
                 .returningResult(EVENT.EVENT_ID)
                 .fetchOne()
                 .get(EVENT.EVENT_ID);
@@ -84,7 +103,12 @@ public class EventRepository {
     /** Persists an aggregate snapshot (upsert — replaces existing snapshot at same key). */
     public void insertSnapshot(
             String aggregateType, String aggregateId, Long version, String serializedSnapshot) {
+        String tenantId = TenantContext.get();
+        if (tenantId == null) {
+            tenantId = "platform";
+        }
         dsl.insertInto(AGGREGATE_SNAPSHOT)
+                .set(AGGREGATE_SNAPSHOT.TENANT_ID, tenantId)
                 .set(AGGREGATE_SNAPSHOT.AGGREGATE_TYPE, aggregateType)
                 .set(AGGREGATE_SNAPSHOT.AGGREGATE_ID, aggregateId)
                 .set(AGGREGATE_SNAPSHOT.VERSION, version)
@@ -94,8 +118,8 @@ public class EventRepository {
     }
 
     /**
-     * Fetches the latest snapshot for an aggregate, returning the version and serialized state.
-     * Empty if no snapshot exists.
+     * Fetches the latest snapshot for an aggregate. Empty if no snapshot exists. RLS filters by
+     * tenant automatically.
      */
     public Optional<SnapshotRecord> fetchLatestSnapshot(String aggregateType, String aggregateId) {
         return dsl.select(AGGREGATE_SNAPSHOT.VERSION, AGGREGATE_SNAPSHOT.SNAPSHOT)

@@ -26,12 +26,10 @@ public class JooqCoreQueryService implements CoreQueryService<JooqCoreQueryConfi
             field(name("display_name"), String.class);
     private static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    private static final org.jooq.Field<String> SCHEMA_NAME =
-            field(name("schema_prefix"), String.class);
-    private static final org.jooq.Field<String> REDIS_ACL_USER =
-            field(name("redis_acl_user"), String.class);
     private static final org.jooq.Field<String> REDIS_ACL_PASSWORD =
             field(name("redis_acl_password"), String.class);
+    private static final org.jooq.Field<String> REDIS_ACL_USER =
+            field(name("redis_acl_user"), String.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT =
             field(name("created_at"), OffsetDateTime.class);
     private static final org.jooq.Field<OffsetDateTime> UPDATED_AT =
@@ -135,8 +133,6 @@ public class JooqCoreQueryService implements CoreQueryService<JooqCoreQueryConfi
                 r.get(DISPLAY_NAME),
                 r.get(PLAN),
                 r.get(STATUS),
-                r.get(SCHEMA_NAME),
-                r.get(REDIS_ACL_USER),
                 toInstant(r.get(CREATED_AT)),
                 toInstant(r.get(UPDATED_AT)));
     }

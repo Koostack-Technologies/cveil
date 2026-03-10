@@ -1448,14 +1448,7 @@ class RbacTest {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 var tenantInfo =
                         new com.koostack.operio.core.platform.core.models.TenantInfo(
-                                "t1",
-                                "Tenant",
-                                "free",
-                                "active",
-                                "t_t1",
-                                null,
-                                Instant.now(),
-                                null);
+                                "t1", "Tenant", "free", "active", Instant.now(), null);
                 when(coreQueryService.getTenant("t1")).thenReturn(tenantInfo);
                 Response response = resource.getTenant(ctx, "t1");
                 assertEquals(200, response.getStatus());

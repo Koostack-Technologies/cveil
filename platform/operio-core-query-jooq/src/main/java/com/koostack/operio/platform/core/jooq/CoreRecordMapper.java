@@ -17,7 +17,6 @@ public final class CoreRecordMapper {
     static final org.jooq.Field<String> DISPLAY_NAME = field(name("display_name"), String.class);
     static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);
     static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    static final org.jooq.Field<String> SCHEMA_NAME = field(name("schema_prefix"), String.class);
     static final org.jooq.Field<String> REDIS_ACL_USER =
             field(name("redis_acl_user"), String.class);
     static final org.jooq.Field<String> REDIS_ACL_PASSWORD =
@@ -39,8 +38,6 @@ public final class CoreRecordMapper {
                 r.get(DISPLAY_NAME),
                 r.get(PLAN),
                 r.get(STATUS),
-                r.get(SCHEMA_NAME),
-                r.get(REDIS_ACL_USER),
                 toInstant(r.get(CREATED_AT)),
                 toInstant(r.get(UPDATED_AT)));
     }

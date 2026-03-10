@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.bundle.core.CoreConsentBundle;
 import com.koostack.operio.core.Operio;
-import com.koostack.operio.core.PlatformConstants;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
@@ -26,9 +25,7 @@ import com.koostack.operio.platform.core.jooq.CoreQueryDispatcher;
 import com.koostack.operio.platform.core.jooq.JooqCoreCommandConfig;
 import com.koostack.operio.platform.core.jooq.JooqCoreDispatcher;
 import com.koostack.operio.platform.core.jooq.JooqCoreQueryConfig;
-import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerConfig;
-import com.koostack.operio.platform.tenant.jooq.JooqTenantManagerService;
-import com.koostack.operio.platform.tenant.jooq.TenantManagerProjectionHandler;
+// TenantManager imports removed — provisioning pipeline eliminated (Phase 8)
 import com.koostack.operio.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.operio.plugin.consent.jooq.CountSubjectCacheKeysQueryActuator;
 import com.koostack.operio.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
@@ -51,12 +48,9 @@ import com.koostack.operio.plugin.redis.common.stream.StreamHandler;
 import com.koostack.operio.tenant.consent.projection.admin.ConsentAdminProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphProjectionHandler;
 import com.koostack.operio.tenant.consent.projection.decision.ConsentGraphRedisRepository;
-import com.koostack.operio.tenant.event.jooq.JooqTenantEventService;
-import com.koostack.operio.tenant.event.jooq.OutboxPoller;
-import com.koostack.operio.tenant.event.jooq.RedisEventPublisher;
-import com.koostack.operio.tenant.event.jooq.TenantEventJooqConfig;
+// Tenant event service imports removed — unified event store handles all events (Phase 8)
 import com.koostack.operio.tenant.event.jooq.TenantStreamConsumer;
-import com.koostack.operio.common.registry.TenantRegistry;
+// TenantRegistry import removed — no async tenant discovery needed (Phase 8)
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -148,6 +142,9 @@ public class OperioProducers {
 
     private com.koostack.operio.core.tenant.iam.TenantIamCommandService tenantIamCommandService;
     private com.koostack.operio.core.tenant.iam.TenantIamQueryService tenantIamQueryService;
+
+    /** Platform event service — unified event store for all events. */
+    private JooqPlatformEventService platformEventService;
 
     /** Keycloak admin client built during CQRS wiring — shared across projections. */
     private org.keycloak.admin.client.Keycloak keycloakAdminClient;
@@ -257,41 +254,17 @@ public class OperioProducers {
         com.koostack.operio.core.tenant.consent.ConsentAdminQueryService<?> effectiveQueryService =
                 queryService;
 
-        // DSAR service and key encryptor are wired into the command config above;
-        // no additional wiring needed.
+        // DSAR service and key encryptor are wired into the command config below;
+        // declared here so they're available after wirePlatformCqrsServices().
+        com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService dsarService = null;
+        java.util.function.UnaryOperator<String> keyEncryptor = null;
 
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)
                 && consentBundle instanceof CoreConsentBundle coreBundle) {
-            // Event service for the command service (publishes to event store + Redis streams)
+            // Consent query service wired from the bundle's jOOQ config.
             JooqConsentAdminServiceConfig jooqConfig = coreBundle.jooqConfig();
-            TenantEventJooqConfig eventConfig =
-                    new TenantEventJooqConfig(
-                            jooqConfig.connectionString(),
-                            jooqConfig.dialect(),
-                            jooqConfig.username(),
-                            jooqConfig.password(),
-                            null,
-                            null,
-                            null);
-            // Per-tenant event schemas (t_{tenantId}_event) are created by
-            // JooqTenantManagerService during provisioning and startup
-            // reconciliation — no public-schema migration needed.
-
-            JooqTenantEventService eventService = new JooqTenantEventService();
-            eventService.configure(eventConfig);
-            this.tenantEventService = eventService;
-
-            // Store the tenant-aware DSLContext so the outbox poller (created
-            // later in tenantStreamConsumer()) can read from per-tenant event
-            // tables and relay events to Redis streams.
-            this.consentEventDsl =
-                    com.koostack.operio.plugin.jooq.common.JooqContextFactory
-                            .createTenantAwareContext(eventConfig, "operio-tenant-outbox");
 
             // -- SubjectDsarService + key encryptor (used by command actuators) --
-            com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService dsarService = null;
-            java.util.function.UnaryOperator<String> keyEncryptor = null;
-
             dsarService = new com.koostack.operio.plugin.consent.jooq.JooqSubjectDsarService();
             dsarService.configure(jooqConfig);
 
@@ -311,18 +284,26 @@ public class OperioProducers {
                 }
             }
 
-            commandService.configure(
-                    new ConsentAdminCommandConfig(eventService, dsarService, keyEncryptor));
             queryService.configure(jooqConfig);
 
-            LOG.info(
-                    "Operio REST API: command service (event-sourced) and query service (jOOQ)"
-                            + " wired");
+            LOG.info("Operio REST API: consent query service (jOOQ) wired");
         }
 
         // -- Platform CQRS services (production only) -------------------------
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
             wirePlatformCqrsServices(builder);
+        }
+
+        // -- Configure consent commands with unified platform event service ---
+        // Deferred until after wirePlatformCqrsServices() because consent commands
+        // write events to the unified operio_event.event table via platformEventService.
+        if (this.platformEventService != null) {
+            commandService.configure(
+                    new ConsentAdminCommandConfig(
+                            this.platformEventService, dsarService, keyEncryptor));
+            LOG.info(
+                    "Operio REST API: consent command service configured with unified event"
+                            + " service");
         }
 
         // Propagate appName to consent service (was previously done inside Operio constructor)
@@ -664,19 +645,13 @@ public class OperioProducers {
     private SubscriptionManager adminSubscriptionManager;
     private com.koostack.operio.tenant.consent.projection.decision.ExpiredConsentReaper
             expiredConsentReaper;
-    private OutboxPoller tenantOutboxPoller;
-    private TenantRegistry tenantRegistry;
     private java.util.concurrent.ScheduledExecutorService tenantReconciler;
 
-    /** Consent-DB DSLContext set during tenantService() — reused by the outbox poller. */
-    private DSLContext consentEventDsl;
+    /** Platform DataSource for RLS-aware DSLContext creation. */
+    private DataSource platformDataSource;
 
     /** Platform DSLContext set during wirePlatformCqrsServices() — used for tenant hydration. */
     private DSLContext platformDsl;
-
-    /** Tenant event service set during consent bundle creation — reused for tenant IAM commands. */
-    @SuppressWarnings("rawtypes")
-    private com.koostack.operio.core.event.EventService tenantEventService;
 
     /**
      * Produces the {@link TenantStreamConsumer} that runs both the consent decision projection and
@@ -743,22 +718,23 @@ public class OperioProducers {
                             + " unavailable");
         }
 
-        // Admin projection handler — uses the consent DB config to create a
-        // tenant-aware DSLContext that routes to per-tenant schemas via
-        // TenantContext + TenantAwareExecuteListener.
-        OperioConfig.DbConfig db = config.db().orElse(null);
-        DSLContext tenantDsl = null;
-        if (db != null) {
-            String dbUrl = appendSslParameters(db.url(), db);
-            JooqConsentAdminServiceConfig consentDbConfig =
-                    new JooqConsentAdminServiceConfig(
-                            dbUrl,
-                            db.dialect(),
-                            db.username().orElse(null),
-                            db.password().orElse(null));
-            tenantDsl =
-                    com.koostack.operio.plugin.jooq.common.JooqContextFactory
-                            .createTenantAwareContext(consentDbConfig, "operio-admin-projection");
+        // Admin projection handler — uses an RLS-aware DSLContext from the
+        // platform datasource. TenantAwareExecuteListener sets app.tenant_id
+        // for RLS filtering on each SQL statement.
+        DSLContext rlsAwareDsl = null;
+        if (this.platformDataSource != null) {
+            org.jooq.impl.DefaultConfiguration rlsConfig = new org.jooq.impl.DefaultConfiguration();
+            rlsConfig.set(this.platformDataSource);
+            rlsConfig.set(SQLDialect.POSTGRES);
+            rlsConfig.set(
+                    new org.jooq.conf.Settings()
+                            .withRenderNameCase(org.jooq.conf.RenderNameCase.LOWER)
+                            .withRenderSchema(false));
+            rlsConfig.set(
+                    new org.jooq.impl.DefaultExecuteListenerProvider(
+                            new com.koostack.operio.plugin.jooq.common
+                                    .TenantAwareExecuteListener()));
+            rlsAwareDsl = DSL.using(rlsConfig);
         }
 
         // Build consumer with handlers.
@@ -769,15 +745,15 @@ public class OperioProducers {
                 new TenantStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100);
         consumer.registerHandler("graph-projection", graphHandler);
 
-        if (tenantDsl != null) {
+        if (rlsAwareDsl != null) {
             ConsentAdminProjectionHandler adminHandler =
-                    new ConsentAdminProjectionHandler(tenantDsl);
+                    new ConsentAdminProjectionHandler(rlsAwareDsl);
             consumer.registerHandler("admin-projection", adminHandler);
             LOG.info("Operio REST API: admin projection handler wired (group=admin-projection)");
         } else {
             LOG.warn(
-                    "Operio REST API: admin projection handler NOT wired — consent DB config"
-                            + " missing");
+                    "Operio REST API: admin projection handler NOT wired — platform datasource"
+                            + " not available");
         }
 
         // SSE publisher: reads from Redis Pub/Sub and publishes to SSE clients.
@@ -794,58 +770,21 @@ public class OperioProducers {
             LOG.warn("Operio REST API: SSE publisher NOT wired — Redis Pub/Sub init failed", e);
         }
 
-        // Tenant IAM projection — materializes tenant IAM events into Keycloak
-        if (this.keycloakAdminClient != null) {
-            String operioClientId =
-                    config.keycloak().map(kc -> kc.clientId()).orElse("operio-backend");
-            com.koostack.operio.tenant.iam.kc.TenantIamProjectionHandler tenantIamProjection =
-                    new com.koostack.operio.tenant.iam.kc.TenantIamProjectionHandler(
-                            this.keycloakAdminClient, operioClientId);
-            consumer.registerHandler(
-                    "tenant-iam-projection",
-                    (com.koostack.operio.tenant.event.jooq.StreamEventHandler)
-                            tenantIamProjection::onEvent);
-            LOG.info(
-                    "Operio REST API: tenant IAM projection handler wired"
-                            + " (group=tenant-iam-projection)");
-        } else {
-            LOG.warn(
-                    "Operio REST API: tenant IAM projection NOT wired — Keycloak admin client not"
-                            + " available");
-        }
+        // TenantIamProjectionHandler removed — single Keycloak realm with
+        // Organizations eliminates per-realm event materialization.
 
         this.tenantStreamConsumer = consumer;
 
-        // -- TenantRegistry + Outbox poller + Stream consumer reconciliation ---
-        // The TenantRegistry is the single source of truth for active tenants.
-        // It is hydrated at startup from the platform event log and kept
-        // current by subscribing to the platform Redis stream.
-        if (consentEventDsl != null && platformDsl != null) {
-            // Hydrate initial active tenants from the platform event log.
-            // Replays tenant lifecycle events to determine which tenants are
-            // currently active (provisioned/activated minus suspended/deleted).
+        // -- Tenant stream consumer registration ---
+        // Hydrate active tenants from event log and register with stream consumer.
+        // The platform event service's outbox poller handles event publishing.
+        if (platformDsl != null) {
             java.util.Set<String> initialTenants = hydrateTenantSetFromEventLog(platformDsl);
             LOG.info(
                     "Operio REST API: hydrated {} active tenants from event log: {}",
                     initialTenants.size(),
                     initialTenants);
 
-            this.tenantRegistry =
-                    new TenantRegistry(initialTenants, JedisProvider.shared(adminRedisPool));
-            this.tenantRegistry.start();
-
-            // Outbox poller: reads from registry on each poll cycle
-            RedisEventPublisher outboxPublisher =
-                    new RedisEventPublisher(JedisProvider.shared(adminRedisPool));
-            this.tenantOutboxPoller =
-                    new OutboxPoller(
-                            consentEventDsl,
-                            outboxPublisher,
-                            () -> java.util.List.copyOf(tenantRegistry.activeTenants()));
-            this.tenantOutboxPoller.start(2);
-            LOG.info("Operio REST API: tenant outbox poller started (2 workers, registry-backed)");
-
-            // Register known tenants with the stream consumer immediately
             for (String tid : initialTenants) {
                 consumer.addTenant(tid);
             }
@@ -856,45 +795,50 @@ public class OperioProducers {
             }
 
             // Reconciliation loop: periodically syncs the stream consumer's
-            // tenant set with the registry. addTenant/removeTenant are
+            // tenant set with the tenant table. addTenant/removeTenant are
             // idempotent so repeated calls are no-ops.
+            final DSLContext reconcilerDsl = platformDsl;
             this.tenantReconciler =
-                    java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-                        Thread t = new Thread(r, "tenant-reconciler");
-                        t.setDaemon(true);
-                        return t;
-                    });
+                    java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                            r -> {
+                                Thread t = new Thread(r, "tenant-reconciler");
+                                t.setDaemon(true);
+                                return t;
+                            });
             this.tenantReconciler.scheduleWithFixedDelay(
                     () -> {
                         try {
                             java.util.Set<String> registered = consumer.activeTenants();
-                            java.util.Set<String> desired = tenantRegistry.activeTenants();
-                            // Add new tenants
+                            java.util.Set<String> desired =
+                                    hydrateTenantSetFromEventLog(reconcilerDsl);
                             for (String tid : desired) {
                                 if (!registered.contains(tid)) {
                                     consumer.addTenant(tid);
-                                    LOG.info("Reconciler: added tenant '{}' to stream consumer", tid);
+                                    LOG.info(
+                                            "Reconciler: added tenant '{}' to stream consumer",
+                                            tid);
                                 }
                             }
-                            // Remove departed tenants
                             for (String tid : registered) {
                                 if (!desired.contains(tid)) {
                                     consumer.removeTenant(tid);
-                                    LOG.info("Reconciler: removed tenant '{}' from stream consumer", tid);
+                                    LOG.info(
+                                            "Reconciler: removed tenant '{}' from stream consumer",
+                                            tid);
                                 }
                             }
                         } catch (Exception e) {
                             LOG.warn("Tenant reconciliation cycle failed", e);
                         }
                     },
-                    2, 2, java.util.concurrent.TimeUnit.SECONDS);
-            LOG.info("Operio REST API: tenant reconciler started (2s interval)");
+                    5,
+                    5,
+                    java.util.concurrent.TimeUnit.SECONDS);
+            LOG.info("Operio REST API: tenant reconciler started (5s interval)");
         } else {
             LOG.warn(
-                    "Operio REST API: tenant outbox poller NOT started — consentEventDsl={},"
-                            + " platformDsl={}",
-                    consentEventDsl != null,
-                    platformDsl != null);
+                    "Operio REST API: tenant stream consumer NOT populated — platformDsl not"
+                            + " available");
         }
 
         LOG.info(
@@ -919,13 +863,13 @@ public class OperioProducers {
             @jakarta.enterprise.event.Observes
                     @jakarta.enterprise.context.BeforeDestroyed(ApplicationScoped.class)
                     Object event) {
-        if (tenantOutboxPoller != null) {
-            LOG.info("Operio REST API: stopping tenant outbox poller");
-            tenantOutboxPoller.stop();
-        }
         if (tenantStreamConsumer != null) {
             LOG.info("Operio REST API: stopping tenant stream consumer");
             tenantStreamConsumer.close();
+        }
+        if (tenantReconciler != null) {
+            LOG.info("Operio REST API: stopping tenant reconciler");
+            tenantReconciler.shutdownNow();
         }
         if (adminSubscriptionManager != null) {
             LOG.info("Operio REST API: stopping admin subscription manager");
@@ -1007,34 +951,72 @@ public class OperioProducers {
                         .orElse(null);
 
         // -- Platform event service -------------------------------------------
+        // Lazy tenant discovery for the outbox poller — reads active tenants
+        // from the platform_core.tenant table. On early calls (before platformDsl
+        // is created), falls back to "platform" only.
+        java.util.function.Supplier<java.util.List<String>> outboxTenantDiscovery =
+                () -> {
+                    DSLContext dsl = this.platformDsl;
+                    if (dsl == null) return java.util.List.of("platform");
+                    try {
+                        var tenantIds =
+                                dsl.select(DSL.field("tenant_id", String.class))
+                                        .from(DSL.table("tenant"))
+                                        .where(DSL.field("status").in("created", "active"))
+                                        .fetch(DSL.field("tenant_id", String.class));
+                        var result = new java.util.ArrayList<String>();
+                        result.add("platform");
+                        result.addAll(tenantIds);
+                        return result;
+                    } catch (Exception e) {
+                        LOG.warn("Outbox tenant discovery failed", e);
+                        return java.util.List.of("platform");
+                    }
+                };
         PlatformEventJooqConfig eventConfig =
                 new PlatformEventJooqConfig(
                         platformDbUrl,
                         platformDb.dialect(),
                         platformDb.username().orElse(null),
                         platformDb.password().orElse(null),
-                        redisPluginConfig);
+                        redisPluginConfig,
+                        null,
+                        outboxTenantDiscovery);
 
         // Run CQRS schema migrations (event store + domain schemas).
         // The event-sourced CQRS modules need their own migrations.
         DataSource migrationDs =
                 JooqDataSourceFactory.createDataSource(eventConfig, "operio-cqrs-migrations");
 
-        // Platform event store lives in t_platform schema (TenantAwareExecuteListener
-        // sets search_path to t_platform for platform events).
+        // Unified event store lives in operio_event schema. All consent tables
+        // live in operio_consent. Metrics in operio_metrics.
+        // -- Unified schema migrations (all schemas created at startup) -----
         try (var conn = migrationDs.getConnection()) {
-            conn.createStatement().execute("CREATE SCHEMA IF NOT EXISTS t_platform");
+            var stmt = conn.createStatement();
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_event");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_consent");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_metrics");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create t_platform schema", e);
+            throw new RuntimeException("Failed to create unified schemas", e);
         }
+
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-event-postgresql",
-                "flyway_schema_history_platform_event",
-                "t_platform");
+                "flyway_schema_history_event",
+                "operio_event");
+        runFlywayInSchema(
+                migrationDs,
+                "classpath:db/migration/consent",
+                "flyway_schema_history_consent",
+                "operio_consent");
+        runFlywayInSchema(
+                migrationDs,
+                "classpath:db/migration/platform-metrics",
+                "flyway_schema_history_metrics",
+                "operio_metrics");
 
         // Domain projection schemas (self-contained — each V1 creates its own schema).
-        // History tables live in their respective schemas to keep public clean.
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-core",
@@ -1045,17 +1027,20 @@ public class OperioProducers {
                 "classpath:db/migration/platform-billing",
                 "flyway_schema_history",
                 "platform_billing");
-        // @deprecated — platform_iam Postgres schema is vestigial; all IAM data now lives in
-        // Keycloak. This migration is kept for backward compatibility with existing deployments
-        // that still have the schema. Remove in a future release.
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-iam",
                 "flyway_schema_history",
                 "platform_iam");
 
+        // RLS policies — must run AFTER all schema migrations complete.
+        // Uses 'public' schema for the flyway history table since RLS
+        // policies span multiple schemas.
+        runFlyway(migrationDs, "classpath:db/migration/rls-policies", "flyway_schema_history_rls");
+
         JooqPlatformEventService platformEventService = new JooqPlatformEventService();
         platformEventService.configure(eventConfig);
+        this.platformEventService = platformEventService;
 
         // -- Command services -------------------------------------------------
         JooqCoreDispatcher coreCmdSvc = new JooqCoreDispatcher();
@@ -1089,9 +1074,10 @@ public class OperioProducers {
         if (eventConfig.username() != null) hikariCfg.setUsername(eventConfig.username());
         if (eventConfig.password() != null) hikariCfg.setPassword(eventConfig.password());
         hikariCfg.setConnectionInitSql(
-                "SET search_path TO platform_core, platform_billing, platform_iam, t_platform,"
-                        + " public");
+                "SET search_path TO platform_core, platform_billing, platform_iam, operio_event,"
+                        + " operio_consent, operio_metrics, public");
         DataSource platformDataSource = new com.zaxxer.hikari.HikariDataSource(hikariCfg);
+        this.platformDataSource = platformDataSource;
         DSLContext platformDsl =
                 DSL.using(
                         platformDataSource,
@@ -1149,7 +1135,11 @@ public class OperioProducers {
                                 kc.clientSecret().orElse(null));
             }
         }
+        // Build KeycloakOrganizationService for org management in IAM actuators
+        com.koostack.operio.plugin.platform.keycloak.KeycloakOrganizationService orgService = null;
+
         if (kcIamConfig != null) {
+            // Wire IAM query with org service (created after Keycloak admin client below)
             iamQuerySvc.configure(
                     new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(
                             kcIamConfig, platformDataSource));
@@ -1171,32 +1161,11 @@ public class OperioProducers {
             LOG.info("Operio REST API: ApiKeyTokenVerifier wired to IamQueryService");
         }
 
-        // -- Tenant IAM command + query services (Keycloak-backed) ----------------
-        if (kcIamConfig != null && this.tenantEventService != null) {
-            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamDispatcher tenantIamCmdSvc =
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamDispatcher();
-            // Keycloak admin client will be wired later — configure with eventService only for now
-            tenantIamCmdSvc.configure(
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandConfig(
-                            this.tenantEventService));
-            this.tenantIamCommandService = tenantIamCmdSvc;
-
-            com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryDispatcher tenantIamQrySvc =
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryDispatcher();
-            tenantIamQrySvc.configure(
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamQueryConfig(
-                            kcIamConfig));
-            this.tenantIamQueryService = tenantIamQrySvc;
-
-            // Wire query service into tenant command service for email/username → UUID resolution
-            tenantIamCmdSvc.setQueryService(tenantIamQrySvc);
-
-            LOG.info("Operio REST API: tenant IAM command + query services wired (Keycloak)");
-        } else {
-            LOG.warn(
-                    "Operio REST API: tenant IAM command + query NOT wired — Keycloak not"
-                            + " configured");
-        }
+        // -- Tenant IAM services deprecated — unified IAM handles everything ---
+        // TenantIamCommandService and TenantIamQueryService are deprecated
+        // (forRemoval = true) and will be deleted in Phase 10. For now,
+        // tenantIamHolder produces null services (TenantIamResource disabled).
+        LOG.info("Operio REST API: tenant IAM services NOT wired — deprecated, use unified IAM");
 
         builder.withCoreQueryService(coreQuerySvc);
         builder.withBillingQueryService(billingQuerySvc);
@@ -1220,8 +1189,20 @@ public class OperioProducers {
         }
         this.keycloakAdminClient = iamKeycloakAdmin;
 
-        // Configure IAM command service now that keycloakAdminClient + platformDataSource are
-        // available
+        // -- KeycloakOrganizationService (org = tenant in new architecture) ----
+        if (iamKeycloakAdmin != null && kcIamConfig != null) {
+            String realmName =
+                    kcIamConfig.operioRealmName() != null
+                            ? kcIamConfig.operioRealmName()
+                            : "operio";
+            orgService =
+                    new com.koostack.operio.plugin.platform.keycloak.KeycloakOrganizationService(
+                            iamKeycloakAdmin, realmName);
+            LOG.info("Operio REST API: KeycloakOrganizationService wired (realm={})", realmName);
+        }
+
+        // Configure IAM command service now that keycloakAdminClient + platformDataSource +
+        // orgService are available
         org.keycloak.admin.client.Keycloak iamCmdKeycloak =
                 iamKeycloakAdmin != null
                         ? iamKeycloakAdmin
@@ -1234,33 +1215,24 @@ public class OperioProducers {
                                 .build();
         iamCmdSvc.configure(
                 new com.koostack.operio.platform.iam.jooq.JooqIamCommandConfig(
-                        platformEventService, platformDataSource, iamCmdKeycloak, kcIamConfig));
+                        platformEventService,
+                        platformDataSource,
+                        iamCmdKeycloak,
+                        kcIamConfig,
+                        orgService,
+                        adminRedisPool));
         iamCmdSvc.registerAuthActuators();
+        LOG.info(
+                "Operio REST API: IAM command service configured (orgService={}, redis={})",
+                orgService != null,
+                adminRedisPool != null);
 
-        // Reconfigure tenant IAM dispatcher now that the Keycloak admin client is available
-        if (this.tenantIamCommandService
-                        instanceof
-                        com.koostack.operio.tenant.iam.kc.KeycloakTenantIamDispatcher
-                        tenantDispatcher
-                && this.tenantEventService != null) {
-            // Tenant realms have per-realm client secrets — force dynamic Admin API resolution
-            // by omitting the static operioClientSecret (which belongs to the platform realm).
-            var tenantKcConfig =
-                    new com.koostack.operio.plugin.platform.keycloak.KeycloakConfig(
-                            kcIamConfig.serverUrl(),
-                            kcIamConfig.adminRealm(),
-                            kcIamConfig.adminClientId(),
-                            kcIamConfig.adminUsername(),
-                            kcIamConfig.adminPassword(),
-                            kcIamConfig.operioClientId(),
-                            null);
-            tenantDispatcher.configure(
-                    new com.koostack.operio.tenant.iam.kc.KeycloakTenantIamCommandConfig(
-                            this.tenantEventService, iamCmdKeycloak, tenantKcConfig));
-            tenantDispatcher.registerAuthActuators();
-            LOG.info(
-                    "Operio REST API: KeycloakTenantIamDispatcher reconfigured with Keycloak admin"
-                            + " client");
+        // Reconfigure IAM query service with org service now that it's available
+        if (kcIamConfig != null && orgService != null) {
+            iamQuerySvc.configure(
+                    new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(
+                            kcIamConfig, platformDataSource, orgService));
+            LOG.info("Operio REST API: IAM query service reconfigured with orgService");
         }
 
         // -- Projection handlers + stream consumer (requires Redis) -----------
@@ -1275,78 +1247,14 @@ public class OperioProducers {
         com.koostack.operio.platform.iam.jooq.IamProjectionHandler iamProjection =
                 new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(iamCmdKeycloak);
 
-        // Tenant manager projection handler — provisions infra on TenantProvisioningStarted.
-        // The tenant datasource targets OPERIO_DB_URL (the tenant database) so that
-        // per-tenant schemas (t_{tenantId}, t_{tenantId}_event) are created there,
-        // not in the platform database.
-        OperioConfig.DbConfig tenantDb = config.db().orElse(null);
-        DataSource tenantMgrDataSource;
-        if (tenantDb != null) {
-            String tenantDbUrl = appendSslParameters(tenantDb.url(), tenantDb);
-            com.zaxxer.hikari.HikariConfig tenantMgrHikari = new com.zaxxer.hikari.HikariConfig();
-            if (tenantDbUrl != null && tenantDbUrl.startsWith("jdbc:postgresql")) {
-                String sep = tenantDbUrl.contains("?") ? "&" : "?";
-                tenantDbUrl = tenantDbUrl + sep + "stringtype=unspecified";
-            }
-            tenantMgrHikari.setJdbcUrl(tenantDbUrl);
-            tenantMgrHikari.setPoolName("operio-tenant-manager");
-            tenantMgrHikari.setMaximumPoolSize(3);
-            tenantDb.username().ifPresent(tenantMgrHikari::setUsername);
-            tenantDb.password().ifPresent(tenantMgrHikari::setPassword);
-            tenantMgrDataSource = new com.zaxxer.hikari.HikariDataSource(tenantMgrHikari);
-        } else {
-            // Fallback: use platform datasource (single-DB deployments)
-            tenantMgrDataSource =
-                    JooqDataSourceFactory.createDataSource(eventConfig, "operio-tenant-manager");
-            LOG.warn(
-                    "Operio REST API: operio.db not configured — tenant manager using platform DB"
-                            + " for tenant schemas");
-        }
-        JooqTenantManagerService tenantManagerSvc = new JooqTenantManagerService();
-
-        // Build Keycloak realm provisioner if Keycloak is configured
-        com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner kcProvisioner = null;
-        if (iamKeycloakAdmin != null && config.keycloak().isPresent()) {
-            kcProvisioner =
-                    new com.koostack.operio.plugin.platform.keycloak.KeycloakRealmProvisioner(
-                            iamKeycloakAdmin, config.keycloak().get().clientId());
-        }
-
-        tenantManagerSvc.configure(
-                new JooqTenantManagerConfig(
-                        platformDsl,
-                        tenantMgrDataSource,
-                        new com.koostack.operio.platform.tenant.jooq.JooqTenantRepository(
-                                platformDsl),
-                        redisPluginConfig,
-                        appName,
-                        "classpath:db/migration/consent",
-                        "classpath:db/migration/tenant-event-postgresql",
-                        null,
-                        kcProvisioner,
-                        null));
-
-        TenantManagerProjectionHandler tenantMgrProjection =
-                new TenantManagerProjectionHandler(
-                        tenantManagerSvc, coreCmdSvc, iamCmdSvc,
-                        JedisProvider.shared(adminRedisPool));
-
-        // No callback needed — the TenantRegistry (created in tenantStreamConsumer())
-        // subscribes to the platform stream and discovers new tenants via
-        // TENANT_PROVISIONED events. The reconciler loop syncs the consumer.
-
-        // Startup reconciliation — run Flyway migrations for all existing
-        // active tenants via the new CQRS TenantManagerService.
-        tenantManagerSvc.migrateAllTenants();
-        LOG.info("Operio REST API: startup reconciliation complete — tenant schemas migrated");
+        // TenantManagerService and provisioning pipeline eliminated (Phase 8).
+        // Tenant creation is now synchronous via RegisterUserOrchestrator.
 
         // -- Platform stream consumer -----------------------------------------
         AbstractStreamConsumer consumer =
                 new AbstractStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100) {
                     @Override
                     protected String streamKeyForTenant(String tenantId) {
-                        // Must match the hardcoded "operio" prefix in
-                        // JooqPlatformEventService → RedisEventPublisher
                         return "operio:platform-events";
                     }
                 };
@@ -1354,14 +1262,12 @@ public class OperioProducers {
         consumer.registerHandler("core-projection", (StreamHandler) coreProjection::onEvent);
         consumer.registerHandler("billing-projection", (StreamHandler) billingProjection::onEvent);
         consumer.registerHandler("iam-projection", (StreamHandler) iamProjection::onEvent);
-        consumer.registerHandler(
-                "tenant-manager-projection", (StreamHandler) tenantMgrProjection::onEvent);
         consumer.addTenant("platform");
 
         this.platformStreamConsumer = consumer;
         LOG.info(
-                "Operio REST API: platform stream consumer started "
-                    + "(groups=core-projection,billing-projection,iam-projection,tenant-manager-projection)");
+                "Operio REST API: platform stream consumer started"
+                        + " (groups=core-projection,billing-projection,iam-projection)");
     }
 
     // -----------------------------------------------------------------------
@@ -1372,25 +1278,27 @@ public class OperioProducers {
      * Replays tenant lifecycle events from the platform event log to determine the current set of
      * active tenants. This is the write-side source of truth — no projection dependency.
      *
-     * <p>Active = has {@code TENANT_PROVISIONED} or {@code TENANT_ACTIVATED} as its most recent
+     * <p>Active = has {@code TENANT_CREATED} or {@code TENANT_ACTIVATED} as its most recent
      * lifecycle event (not {@code TENANT_SUSPENDED} or {@code TENANT_DELETED}).
      */
     private static java.util.Set<String> hydrateTenantSetFromEventLog(DSLContext dsl) {
         // Query all tenant lifecycle events from the platform event store,
         // ordered by version ascending so we can replay them sequentially.
-        var lifecycleTypes = java.util.Set.of(
-                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_PROVISIONED,
-                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED,
-                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_SUSPENDED,
-                com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_DELETED);
+        var lifecycleTypes =
+                java.util.Set.of(
+                        com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_CREATED,
+                        com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED,
+                        com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_SUSPENDED,
+                        com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_DELETED);
 
-        var records = dsl.select(
-                        org.jooq.impl.DSL.field("event_type", String.class),
-                        org.jooq.impl.DSL.field("payload", String.class))
-                .from(org.jooq.impl.DSL.table("event"))
-                .where(org.jooq.impl.DSL.field("event_type").in(lifecycleTypes))
-                .orderBy(org.jooq.impl.DSL.field("event_id").asc())
-                .fetch();
+        var records =
+                dsl.select(
+                                org.jooq.impl.DSL.field("event_type", String.class),
+                                org.jooq.impl.DSL.field("payload", String.class))
+                        .from(org.jooq.impl.DSL.table("event"))
+                        .where(org.jooq.impl.DSL.field("event_type").in(lifecycleTypes))
+                        .orderBy(org.jooq.impl.DSL.field("event_id").asc())
+                        .fetch();
 
         var activeTenants = new java.util.HashSet<String>();
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -1409,8 +1317,10 @@ public class OperioProducers {
             }
             if (tenantId == null) continue;
 
-            if (com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_PROVISIONED.equals(eventType)
-                    || com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED.equals(eventType)) {
+            if (com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_CREATED.equals(
+                            eventType)
+                    || com.koostack.operio.core.platform.core.CoreEventTypes.TENANT_ACTIVATED
+                            .equals(eventType)) {
                 activeTenants.add(tenantId);
             } else {
                 activeTenants.remove(tenantId);

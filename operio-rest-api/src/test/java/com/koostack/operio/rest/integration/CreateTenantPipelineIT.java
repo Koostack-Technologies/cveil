@@ -28,8 +28,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 /**
  * End-to-end integration test for the full create-tenant pipeline.
  *
- * <p>Validates the entire flow from HTTP POST through event sourcing, projections, schema
- * provisioning, Redis ACL, and API key generation.
+ * <p>Validates the entire flow from HTTP POST through event sourcing, projections, and API key
+ * generation under the unified schema architecture (RLS-based isolation, single event store).
  *
  * <h2>What this test verifies</h2>
  *
@@ -37,10 +37,10 @@ import org.junit.jupiter.api.TestMethodOrder;
  *   <li>POST /api/v1/platform/tenants returns 201
  *   <li>Tenant row materializes in platform_core.tenant
  *   <li>Billing profile and subscription rows exist
- *   <li>TenantProvisioningStarted event present in event store
- *   <li>Tenant Postgres schema created with migrations applied
+ *   <li>TenantCreated event present in unified event store (operio_event.event)
+ *   <li>Billing events present in unified event store
  *   <li>3 API keys (DEV, TEST, PROD) in platform_iam.api_key
- *   <li>TenantProvisioned event present in event store
+ *   <li>Tenant status reflects creation
  * </ol>
  *
  * <p>Keycloak is not required — the test runs without an IdpProvider. Authentication uses the
@@ -50,7 +50,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  */
 @QuarkusTest
 @QuarkusTestResource(OperioTestResourceManager.class)
-@DisplayName("Create Tenant Pipeline E2E (Postgres + Redis)")
+@DisplayName("Create Tenant Pipeline E2E (Unified Schema + RLS)")
 @TestClassOrder(ClassOrderer.OrderAnnotation.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CreateTenantPipelineIT {
@@ -159,7 +159,7 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 2. Event Store Validation
+    // 2. Event Store Validation (unified operio_event.event table)
     // =======================================================================
 
     @Nested
@@ -176,7 +176,7 @@ class CreateTenantPipelineIT {
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT COUNT(*) FROM t_platform.event "
+                                "SELECT COUNT(*) FROM operio_event.event "
                                         + "WHERE event_type = 'core.tenant.created' "
                                         + "AND payload::text LIKE '%"
                                         + TENANT_ID
@@ -190,33 +190,13 @@ class CreateTenantPipelineIT {
 
         @Test
         @Order(2)
-        @DisplayName("TenantProvisioningStarted event exists in event store")
-        void provisioningStartedEventExists() throws SQLException {
-            try (Connection conn = getDbConnection();
-                    Statement stmt = conn.createStatement()) {
-                ResultSet rs =
-                        stmt.executeQuery(
-                                "SELECT COUNT(*) FROM t_platform.event "
-                                        + "WHERE event_type = 'core.tenant.provisioning-started' "
-                                        + "AND payload::text LIKE '%"
-                                        + TENANT_ID
-                                        + "%'");
-                rs.next();
-                assertThat(rs.getInt(1))
-                        .as("TenantProvisioningStarted event for %s", TENANT_ID)
-                        .isGreaterThanOrEqualTo(1);
-            }
-        }
-
-        @Test
-        @Order(3)
         @DisplayName("Billing events exist in event store")
         void billingEventsExist() throws SQLException {
             try (Connection conn = getDbConnection();
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT COUNT(*) FROM t_platform.event "
+                                "SELECT COUNT(*) FROM operio_event.event "
                                         + "WHERE event_type LIKE 'billing.%' "
                                         + "AND payload::text LIKE '%"
                                         + TENANT_ID
@@ -312,8 +292,6 @@ class CreateTenantPipelineIT {
                                             .as("Subscription exists for %s", TENANT_ID)
                                             .isTrue();
                                     assertThat(rs.getString("plan_tier")).isEqualTo(TENANT_PLAN);
-                                    // Pro plan: eval_limit=50000, subject_limit=5000,
-                                    // burst_limit=100
                                     assertThat(rs.getLong("eval_limit_monthly")).isGreaterThan(0);
                                     assertThat(rs.getLong("subject_limit")).isGreaterThan(0);
                                     assertThat(rs.getInt("burst_limit_per_min")).isGreaterThan(0);
@@ -348,153 +326,80 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 4. Infrastructure Provisioning (async)
+    // 4. Unified Schema Validation (RLS-based, no per-tenant schemas)
     // =======================================================================
 
     @Nested
     @Order(4)
-    @DisplayName("4 — Tenant infrastructure provisioned")
+    @DisplayName("4 — Unified consent tables exist in operio_consent schema")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class InfrastructureProvisioning {
+    class UnifiedSchemaValidation {
 
         @Test
         @Order(1)
-        @DisplayName("Tenant Postgres schema created (t_{tenantId})")
-        void tenantSchemaCreated() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT COUNT(*) FROM"
-                                                            + " information_schema.schemata WHERE"
-                                                            + " schema_name = 't_"
-                                                            + TENANT_ID
-                                                            + "'");
-                                    rs.next();
-                                    assertThat(rs.getInt(1))
-                                            .as("Tenant schema t_%s exists", TENANT_ID)
-                                            .isEqualTo(1);
-                                }
-                            });
+        @DisplayName("All consent tables exist in operio_consent schema")
+        void consentTablesExist() throws SQLException {
+            try (Connection conn = getDbConnection();
+                    Statement stmt = conn.createStatement()) {
+                ResultSet rs =
+                        stmt.executeQuery(
+                                "SELECT table_name FROM information_schema.tables "
+                                        + "WHERE table_schema = 'operio_consent' "
+                                        + "AND table_name NOT LIKE 'flyway%' "
+                                        + "ORDER BY table_name");
+                List<String> tables = new ArrayList<>();
+                while (rs.next()) {
+                    tables.add(rs.getString("table_name"));
+                }
+                assertThat(tables)
+                        .as("Unified consent schema should contain all consent tables")
+                        .contains(
+                                "category",
+                                "consent_ledger",
+                                "entity",
+                                "field",
+                                "field_category",
+                                "jurisdiction",
+                                "policy",
+                                "purpose",
+                                "purpose_regulation",
+                                "regulation",
+                                "regulation_jurisdiction",
+                                "subject");
+            }
         }
 
         @Test
         @Order(2)
-        @DisplayName("Flyway migrations applied to tenant schema")
-        void flywayMigrationsApplied() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    // Check that flyway_schema_history exists in tenant schema
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT COUNT(*) FROM information_schema.tables"
-                                                            + " WHERE table_schema = 't_"
-                                                            + TENANT_ID
-                                                            + "' AND table_name ="
-                                                            + " 'flyway_schema_history'");
-                                    rs.next();
-                                    assertThat(rs.getInt(1))
-                                            .as("Flyway history table in t_%s", TENANT_ID)
-                                            .isEqualTo(1);
-                                }
-                            });
-        }
-
-        @Test
-        @Order(3)
-        @DisplayName("Redis ACL credentials populated in tenant row")
-        void redisAclProvisioned() {
-            // The CQRS projection stores redis_acl_user (from the
-            // TenantProvisioned event).  The plaintext password is NOT
-            // propagated through events for security reasons.
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT redis_acl_user "
-                                                            + "FROM platform_core.tenant "
-                                                            + "WHERE tenant_id = '"
-                                                            + TENANT_ID
-                                                            + "'");
-                                    assertThat(rs.next()).isTrue();
-                                    assertThat(rs.getString("redis_acl_user"))
-                                            .as("Redis ACL user")
-                                            .isNotNull()
-                                            .isNotEmpty();
-                                }
-                            });
-        }
-
-        @Test
-        @Order(4)
-        @DisplayName("All expected consent tables exist in tenant schema")
-        void consentTablesExist() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT table_name FROM"
-                                                            + " information_schema.tables WHERE"
-                                                            + " table_schema = 't_"
-                                                            + TENANT_ID
-                                                            + "' "
-                                                            + "AND table_name NOT LIKE 'flyway%' "
-                                                            + "ORDER BY table_name");
-                                    java.util.List<String> tables = new java.util.ArrayList<>();
-                                    while (rs.next()) {
-                                        tables.add(rs.getString("table_name"));
-                                    }
-                                    // Core consent tables provisioned by V1 migration
-                                    assertThat(tables)
-                                            .as("Tenant schema should contain all consent tables")
-                                            .contains(
-                                                    "category",
-                                                    "consent_ledger",
-                                                    "entity",
-                                                    "field",
-                                                    "field_category",
-                                                    "jurisdiction",
-                                                    "policy",
-                                                    "purpose",
-                                                    "purpose_regulation",
-                                                    "regulation",
-                                                    "regulation_jurisdiction",
-                                                    "subject");
-                                }
-                            });
+        @DisplayName("Unified event table exists in operio_event schema")
+        void unifiedEventTableExists() throws SQLException {
+            try (Connection conn = getDbConnection();
+                    Statement stmt = conn.createStatement()) {
+                ResultSet rs =
+                        stmt.executeQuery(
+                                "SELECT COUNT(*) FROM information_schema.tables "
+                                        + "WHERE table_schema = 'operio_event' "
+                                        + "AND table_name = 'event'");
+                rs.next();
+                assertThat(rs.getInt(1)).as("operio_event.event table exists").isEqualTo(1);
+            }
         }
     }
 
     // =======================================================================
-    // 5. API Key Provisioning (async)
+    // 5. API Key Generation (async)
     // =======================================================================
 
     @Nested
     @Order(5)
-    @DisplayName("5 — API keys provisioned (DEV, TEST, PROD)")
+    @DisplayName("5 — API keys generated (DEV, TEST, PROD)")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class ApiKeyProvisioning {
+    class ApiKeyGeneration {
 
         @Test
         @Order(1)
         @DisplayName("3 API keys exist in platform_iam.api_key")
-        void threeApiKeysProvisioned() {
+        void threeApiKeysGenerated() {
             await().atMost(ASYNC_TIMEOUT)
                     .pollInterval(POLL_INTERVAL)
                     .untilAsserted(
@@ -581,7 +486,7 @@ class CreateTenantPipelineIT {
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT COUNT(*) FROM t_platform.event "
+                                "SELECT COUNT(*) FROM operio_event.event "
                                         + "WHERE event_type = 'iam.api-key.generated' "
                                         + "AND payload::text LIKE '%"
                                         + TENANT_ID
@@ -595,44 +500,19 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 6. TenantProvisioned Event
+    // 6. Tenant Status Validation
     // =======================================================================
 
     @Nested
     @Order(6)
-    @DisplayName("6 — TenantProvisioned event completes pipeline")
+    @DisplayName("6 — Tenant status reflects creation")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class ProvisioningComplete {
+    class TenantStatusValidation {
 
         @Test
         @Order(1)
-        @DisplayName("TenantProvisioned event exists in event store")
-        void tenantProvisionedEventExists() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT COUNT(*) FROM t_platform.event WHERE"
-                                                        + " event_type = 'core.tenant.provisioned'"
-                                                        + " AND payload::text LIKE '%"
-                                                            + TENANT_ID
-                                                            + "%'");
-                                    rs.next();
-                                    assertThat(rs.getInt(1))
-                                            .as("TenantProvisioned event for %s", TENANT_ID)
-                                            .isGreaterThanOrEqualTo(1);
-                                }
-                            });
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("Tenant status is active after provisioning")
-        void tenantStatusActive() {
+        @DisplayName("Tenant status is 'created' (activation happens via separate command)")
+        void tenantStatusCreated() {
             await().atMost(ASYNC_TIMEOUT)
                     .pollInterval(POLL_INTERVAL)
                     .untilAsserted(
@@ -646,7 +526,9 @@ class CreateTenantPipelineIT {
                                                             + TENANT_ID
                                                             + "'");
                                     assertThat(rs.next()).isTrue();
-                                    assertThat(rs.getString("status")).isIn("active", "ACTIVE");
+                                    assertThat(rs.getString("status"))
+                                            .as("Tenant status should be 'created'")
+                                            .isEqualTo("created");
                                 }
                             });
         }

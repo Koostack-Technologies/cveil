@@ -145,15 +145,7 @@ class RateLimitServiceTest {
     // -----------------------------------------------------------------------
 
     private static TenantInfo coreTenantInfo(String tenantId, String displayName, String plan) {
-        return new TenantInfo(
-                tenantId,
-                displayName,
-                plan,
-                "ACTIVE",
-                "schema_" + tenantId,
-                tenantId + "_acl",
-                Instant.now(),
-                Instant.now());
+        return new TenantInfo(tenantId, displayName, plan, "ACTIVE", Instant.now(), Instant.now());
     }
 
     private static PlanQueryService.PlanInfo planInfo(

@@ -86,13 +86,18 @@ public class TenantRegistry implements Closeable {
         for (String tid : initialActiveTenants) {
             this.activeTenants.put(tid, Boolean.TRUE);
         }
-        this.executor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "tenant-registry-consumer");
-            t.setDaemon(true);
-            return t;
-        });
-        LOG.info("TenantRegistry created with {} initial tenants: {} (group={})",
-                initialActiveTenants.size(), initialActiveTenants, consumerGroup);
+        this.executor =
+                Executors.newSingleThreadExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "tenant-registry-consumer");
+                            t.setDaemon(true);
+                            return t;
+                        });
+        LOG.info(
+                "TenantRegistry created with {} initial tenants: {} (group={})",
+                initialActiveTenants.size(),
+                initialActiveTenants,
+                consumerGroup);
     }
 
     /**
@@ -155,7 +160,7 @@ public class TenantRegistry implements Closeable {
         if (eventType == null) return;
 
         switch (eventType) {
-            case CoreEventTypes.TENANT_PROVISIONED, CoreEventTypes.TENANT_ACTIVATED -> {
+            case CoreEventTypes.TENANT_CREATED, CoreEventTypes.TENANT_ACTIVATED -> {
                 String tenantId = extractTenantId(payload);
                 if (tenantId != null) {
                     activeTenants.put(tenantId, Boolean.TRUE);
@@ -181,13 +186,13 @@ public class TenantRegistry implements Closeable {
         while (running.get()) {
             try {
                 JedisPooled jedis = jedisProvider.get();
-                XReadGroupParams params =
-                        new XReadGroupParams().count(10).block(BLOCK_MS);
-                var results = jedis.xreadGroup(
-                        consumerGroup,
-                        consumerName,
-                        params,
-                        Map.of(PLATFORM_STREAM_KEY, StreamEntryID.UNRECEIVED_ENTRY));
+                XReadGroupParams params = new XReadGroupParams().count(10).block(BLOCK_MS);
+                var results =
+                        jedis.xreadGroup(
+                                consumerGroup,
+                                consumerName,
+                                params,
+                                Map.of(PLATFORM_STREAM_KEY, StreamEntryID.UNRECEIVED_ENTRY));
 
                 if (results == null || results.isEmpty()) continue;
 
@@ -198,8 +203,10 @@ public class TenantRegistry implements Closeable {
                             String payload = entry.getFields().get("payload");
                             onPlatformEvent(eventType, payload);
                         } catch (Exception e) {
-                            LOG.warn("TenantRegistry: failed to process event {}: {}",
-                                    entry.getID(), e.getMessage());
+                            LOG.warn(
+                                    "TenantRegistry: failed to process event {}: {}",
+                                    entry.getID(),
+                                    e.getMessage());
                         }
                         // Always ACK to prevent redelivery
                         jedis.xack(PLATFORM_STREAM_KEY, consumerGroup, entry.getID());
@@ -225,23 +232,28 @@ public class TenantRegistry implements Closeable {
             try {
                 JedisPooled jedis = jedisProvider.get();
                 jedis.xgroupCreate(
-                        PLATFORM_STREAM_KEY,
+                        PLATFORM_STREAM_KEY, consumerGroup, new StreamEntryID(), true); // MKSTREAM
+                LOG.info(
+                        "TenantRegistry: created consumer group '{}' on '{}'",
                         consumerGroup,
-                        new StreamEntryID(),
-                        true); // MKSTREAM
-                LOG.info("TenantRegistry: created consumer group '{}' on '{}'",
-                        consumerGroup, PLATFORM_STREAM_KEY);
+                        PLATFORM_STREAM_KEY);
                 return;
             } catch (JedisDataException e) {
                 if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
                     LOG.debug("TenantRegistry: consumer group '{}' already exists", consumerGroup);
                     return;
                 }
-                LOG.warn("TenantRegistry: failed to create consumer group (attempt {}/{})",
-                        attempt, MAX_RETRIES, e);
+                LOG.warn(
+                        "TenantRegistry: failed to create consumer group (attempt {}/{})",
+                        attempt,
+                        MAX_RETRIES,
+                        e);
             } catch (Exception e) {
-                LOG.warn("TenantRegistry: failed to create consumer group (attempt {}/{})",
-                        attempt, MAX_RETRIES, e);
+                LOG.warn(
+                        "TenantRegistry: failed to create consumer group (attempt {}/{})",
+                        attempt,
+                        MAX_RETRIES,
+                        e);
             }
             if (attempt < MAX_RETRIES) {
                 try {
@@ -253,7 +265,9 @@ public class TenantRegistry implements Closeable {
             }
         }
         throw new RuntimeException(
-                "TenantRegistry: failed to create consumer group after " + MAX_RETRIES + " attempts");
+                "TenantRegistry: failed to create consumer group after "
+                        + MAX_RETRIES
+                        + " attempts");
     }
 
     private static String extractTenantId(String payload) {

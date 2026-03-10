@@ -14,26 +14,19 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.concurrent.ConcurrentHashMap;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Shared OIDC helper for Keycloak-backed IAM auth operations.
+ * Shared OIDC helper for Keycloak-backed IAM auth operations against a single realm.
  *
  * <p>Encapsulates client-secret resolution, ROPC token exchange, refresh-token grant, token
  * revocation (logout), and token-response parsing.
  *
- * <p>The {@link RealmResolver} strategy decouples realm-naming conventions from the OIDC protocol
- * logic:
- *
- * <ul>
- *   <li>Platform callers pass {@link RealmResolver#identity()} — the input IS the realm.
- *   <li>Tenant callers pass {@link RealmResolver#tenantPrefix()} — {@code tenantId →
- *       t_&lt;tenantId&gt;}.
- * </ul>
+ * <p>All operations target the single {@code operio} realm (configured via {@link
+ * KeycloakConfig#operioRealmName()}).
  */
 public final class KeycloakAuthSupport {
 
@@ -43,23 +36,24 @@ public final class KeycloakAuthSupport {
 
     private final KeycloakConfig config;
     private final Keycloak adminClient;
-    private final RealmResolver realmResolver;
     private final JwksTokenVerifier jwksVerifier;
     private final HttpClient httpClient;
-    private final ConcurrentHashMap<String, String> clientSecretCache = new ConcurrentHashMap<>();
+    private volatile String cachedClientSecret;
 
-    public KeycloakAuthSupport(
-            KeycloakConfig config, Keycloak adminClient, RealmResolver realmResolver) {
+    public KeycloakAuthSupport(KeycloakConfig config, Keycloak adminClient) {
         this.config = config;
         this.adminClient = adminClient;
-        this.realmResolver = realmResolver;
         this.jwksVerifier = new JwksTokenVerifier();
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     }
 
-    /** Convenience constructor that defaults to {@link RealmResolver#identity()}. */
-    public KeycloakAuthSupport(KeycloakConfig config, Keycloak adminClient) {
-        this(config, adminClient, RealmResolver.identity());
+    /**
+     * @deprecated Use the two-arg constructor. RealmResolver is no longer needed.
+     */
+    @Deprecated(forRemoval = true)
+    public KeycloakAuthSupport(
+            KeycloakConfig config, Keycloak adminClient, RealmResolver realmResolver) {
+        this(config, adminClient);
     }
 
     // -- Public operations ----------------------------------------------------
@@ -67,14 +61,14 @@ public final class KeycloakAuthSupport {
     /**
      * ROPC (Resource Owner Password Credentials) grant.
      *
-     * @param id identifier passed to the {@link RealmResolver} (realm ID or tenant ID)
+     * @param id ignored — all auth targets the single realm
      * @param email the user's email
      * @param password the user's password
      */
     public AuthResult authenticate(String id, String email, String password) {
-        String realmId = realmResolver.toRealmId(id);
+        String realmId = config.operioRealmName();
         try {
-            String clientSecret = resolveClientSecret(realmId);
+            String clientSecret = resolveClientSecret();
             String tokenUrl = tokenUrl(realmId);
 
             String formBody =
@@ -100,7 +94,7 @@ public final class KeycloakAuthSupport {
                 LOG.warn("ROPC failed: status={}, body={}", response.statusCode(), response.body());
                 throw new OperioAuthException("Invalid email or password");
             }
-            return parseTokenResponse(response.body(), realmId);
+            return parseTokenResponse(response.body(), id);
         } catch (OperioAuthException e) {
             throw e;
         } catch (Exception e) {
@@ -111,13 +105,13 @@ public final class KeycloakAuthSupport {
     /**
      * Refresh-token grant.
      *
-     * @param id identifier passed to the {@link RealmResolver}
+     * @param id tenant context identifier (passed through to IdentityContext)
      * @param refreshToken the refresh token
      */
     public AuthResult refreshToken(String id, String refreshToken) {
-        String realmId = realmResolver.toRealmId(id);
+        String realmId = config.operioRealmName();
         try {
-            String clientSecret = resolveClientSecret(realmId);
+            String clientSecret = resolveClientSecret();
             String tokenUrl = tokenUrl(realmId);
 
             String formBody =
@@ -134,7 +128,7 @@ public final class KeycloakAuthSupport {
             if (response.statusCode() != 200) {
                 throw new OperioAuthException("Invalid or expired refresh token");
             }
-            return parseTokenResponse(response.body(), realmId);
+            return parseTokenResponse(response.body(), id);
         } catch (OperioAuthException e) {
             throw e;
         } catch (Exception e) {
@@ -145,13 +139,13 @@ public final class KeycloakAuthSupport {
     /**
      * Revoke a refresh token (OIDC logout).
      *
-     * @param id identifier passed to the {@link RealmResolver}
+     * @param id ignored — targets single realm
      * @param refreshToken the refresh token to revoke
      */
     public void logout(String id, String refreshToken) {
-        String realmId = realmResolver.toRealmId(id);
+        String realmId = config.operioRealmName();
         try {
-            String clientSecret = resolveClientSecret(realmId);
+            String clientSecret = resolveClientSecret();
             String logoutUrl =
                     config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/logout";
 
@@ -165,7 +159,7 @@ public final class KeycloakAuthSupport {
 
             post(logoutUrl, formBody);
         } catch (Exception e) {
-            LOG.warn("Logout failed for id '{}' (realm '{}'): {}", id, realmId, e.getMessage());
+            LOG.warn("Logout failed: {}", e.getMessage());
         }
     }
 
@@ -186,23 +180,17 @@ public final class KeycloakAuthSupport {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    /**
-     * Resolve the client secret for a realm.
-     *
-     * <p>First checks the cache, then falls back to the static config value (if set), and finally
-     * resolves dynamically via the Keycloak Admin API.
-     */
-    private String resolveClientSecret(String realmId) {
-        String cached = clientSecretCache.get(realmId);
-        if (cached != null) return cached;
+    /** Resolve the client secret (single realm — cached after first resolution). */
+    private String resolveClientSecret() {
+        if (cachedClientSecret != null) return cachedClientSecret;
 
-        // Static secret from config (useful for platform single-realm setups)
         if (config.operioClientSecret() != null) {
-            clientSecretCache.put(realmId, config.operioClientSecret());
-            return config.operioClientSecret();
+            cachedClientSecret = config.operioClientSecret();
+            return cachedClientSecret;
         }
 
-        // Dynamic resolution via Admin API (required for per-tenant realms)
+        // Dynamic resolution via Admin API
+        String realmId = config.operioRealmName();
         try {
             RealmResource realm = adminClient.realm(realmId);
             var clients = realm.clients().findByClientId(config.operioClientId());
@@ -210,7 +198,7 @@ public final class KeycloakAuthSupport {
                 String internalId = clients.get(0).getId();
                 String secret = realm.clients().get(internalId).getSecret().getValue();
                 if (secret != null && !secret.isBlank()) {
-                    clientSecretCache.put(realmId, secret);
+                    cachedClientSecret = secret;
                     return secret;
                 }
             }
@@ -220,7 +208,7 @@ public final class KeycloakAuthSupport {
         throw new OperioAuthException("No client secret available for realm '" + realmId + "'");
     }
 
-    private AuthResult parseTokenResponse(String json, String realmId) {
+    private AuthResult parseTokenResponse(String json, String tenantId) {
         try {
             JsonNode root = MAPPER.readTree(json);
             String accessToken =
@@ -233,9 +221,10 @@ public final class KeycloakAuthSupport {
                 throw new OperioAuthException("Keycloak returned no access_token");
             }
 
+            String realmId = config.operioRealmName();
             String jwksUrl =
                     config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/certs";
-            IdentityContext identity = jwksVerifier.verify(jwksUrl, accessToken, realmId);
+            IdentityContext identity = jwksVerifier.verify(jwksUrl, accessToken, tenantId);
             return AuthResult.bearer(accessToken, refreshTokenVal, expiresIn, identity);
         } catch (OperioAuthException e) {
             throw e;

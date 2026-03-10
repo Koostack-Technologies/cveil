@@ -27,10 +27,6 @@ public class CoreProjectionHandler {
             field(name("display_name"), String.class);
     private static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
-    private static final org.jooq.Field<String> SCHEMA_NAME =
-            field(name("schema_prefix"), String.class);
-    private static final org.jooq.Field<String> REDIS_ACL_USER =
-            field(name("redis_acl_user"), String.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT =
             field(name("created_at"), OffsetDateTime.class);
     private static final org.jooq.Field<OffsetDateTime> UPDATED_AT =
@@ -65,7 +61,6 @@ public class CoreProjectionHandler {
                 case CoreEventTypes.TENANT_SUSPENDED -> handleSuspended(payload);
                 case CoreEventTypes.TENANT_ACTIVATED -> handleActivated(payload);
                 case CoreEventTypes.TENANT_DELETED -> handleDeleted(payload);
-                case CoreEventTypes.TENANT_PROVISIONED -> handleProvisioned(payload);
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
         } catch (Exception e) {
@@ -148,21 +143,6 @@ public class CoreProjectionHandler {
 
         dsl.update(TENANT)
                 .set(STATUS, "deleted")
-                .set(UPDATED_AT, OffsetDateTime.now())
-                .where(TENANT_ID.eq(id))
-                .execute();
-    }
-
-    private void handleProvisioned(String payload) throws Exception {
-        var node = mapper.readTree(payload);
-        String id = node.get("tenantId").asText();
-        String schemaPrefix = node.get("schemaPrefix").asText();
-        String redisAclUser = node.has("redisAclUser") ? node.get("redisAclUser").asText() : null;
-
-        dsl.update(TENANT)
-                .set(STATUS, "active")
-                .set(SCHEMA_NAME, schemaPrefix)
-                .set(REDIS_ACL_USER, redisAclUser)
                 .set(UPDATED_AT, OffsetDateTime.now())
                 .where(TENANT_ID.eq(id))
                 .execute();

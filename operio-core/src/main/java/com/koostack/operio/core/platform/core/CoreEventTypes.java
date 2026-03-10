@@ -17,6 +17,4 @@ public final class CoreEventTypes {
     public static final String TENANT_SUSPENDED = "core.tenant.suspended";
     public static final String TENANT_ACTIVATED = "core.tenant.activated";
     public static final String TENANT_DELETED = "core.tenant.deleted";
-    public static final String TENANT_PROVISIONING_STARTED = "core.tenant.provisioning-started";
-    public static final String TENANT_PROVISIONED = "core.tenant.provisioned";
 }

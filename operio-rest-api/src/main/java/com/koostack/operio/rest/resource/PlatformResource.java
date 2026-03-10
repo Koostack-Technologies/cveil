@@ -8,7 +8,6 @@ import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuat
 import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
-import com.koostack.operio.platform.core.jooq.EmitProvisioningStartedCommandActuator;
 import com.koostack.operio.platform.core.jooq.GetTenantQueryActuator;
 import com.koostack.operio.platform.core.jooq.ListTenantsQueryActuator;
 import com.koostack.operio.rest.auth.Roles;
@@ -117,8 +116,8 @@ public class PlatformResource {
             operationId = "createTenant",
             summary = "Create a new tenant",
             description =
-                    "Provisions a new tenant on the platform: creates a dedicated "
-                            + "Postgres schema, Redis ACL user, and inserts the tenant row. "
+                    "Creates a new tenant on the platform with the specified plan. "
+                            + "Uses unified schema with row-level security (RLS) for isolation. "
                             + "Requires the super-admin role.")
     @APIResponses({
         @APIResponse(
@@ -202,11 +201,6 @@ public class PlatformResource {
                                             + request.tenantId()))
                     .build();
         }
-
-        // 4. Emit provisioning started
-        coreDispatcher.dispatch(
-                new EmitProvisioningStartedCommandActuator.EmitProvisioningStartedCommand(
-                        request.tenantId(), request.displayName(), request.plan()));
 
         // Return the accepted data directly — the projection materializes
         // asynchronously so a DB read-back would return null or stale data.

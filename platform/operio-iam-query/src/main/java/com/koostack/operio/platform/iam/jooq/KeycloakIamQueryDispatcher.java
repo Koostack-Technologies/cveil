@@ -124,6 +124,20 @@ public class KeycloakIamQueryDispatcher
                         FindByKeyHashQueryActuator.FindByKeyHashQuery.class,
                         new FindByKeyHashQueryActuator(platformDataSource));
 
+        // Organization query actuators
+        var orgService = cfg.orgService();
+        if (orgService != null) {
+            actuators.put(
+                    ListOrganizationsQueryActuator.ListOrganizationsQuery.class,
+                    new ListOrganizationsQueryActuator(orgService));
+            actuators.put(
+                    GetOrganizationQueryActuator.GetOrganizationQuery.class,
+                    new GetOrganizationQueryActuator(orgService));
+            actuators.put(
+                    ListOrgMembersQueryActuator.ListOrgMembersQuery.class,
+                    new ListOrgMembersQueryActuator(orgService));
+        }
+
         LOG.info("KeycloakIamQueryDispatcher configured with {} actuators", actuators.size());
     }
 
@@ -222,5 +236,23 @@ public class KeycloakIamQueryDispatcher
     @Override
     public ApiKeyInfo findByKeyHash(String keyHash) {
         return dispatch(new FindByKeyHashQueryActuator.FindByKeyHashQuery(keyHash));
+    }
+
+    // -- Organization query delegation ----------------------------------------
+
+    @Override
+    public java.util.List<OrganizationInfo> listOrganizations(int offset, int limit) {
+        return dispatch(new ListOrganizationsQueryActuator.ListOrganizationsQuery(offset, limit));
+    }
+
+    @Override
+    public OrganizationInfo getOrganization(String orgId) {
+        return dispatch(new GetOrganizationQueryActuator.GetOrganizationQuery(orgId));
+    }
+
+    @Override
+    public java.util.List<OrgMemberInfo> listOrganizationMembers(
+            String orgId, int offset, int limit) {
+        return dispatch(new ListOrgMembersQueryActuator.ListOrgMembersQuery(orgId, offset, limit));
     }
 }

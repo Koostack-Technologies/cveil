@@ -19,8 +19,9 @@ import com.koostack.operio.core.spi.Plugin;
  * <h2>Known implementations</h2>
  *
  * <ul>
- *   <li>{@code KeycloakIdpProvider} (operio-platform-keycloak) — manages one Keycloak realm per
- *       tenant, delegates auth via the Keycloak Admin REST API and token endpoint.
+ *   <li>{@code KeycloakIdpProvider} (operio-platform-keycloak) — manages a single shared Keycloak
+ *       realm with Organizations for tenant isolation. Delegates auth via the Keycloak Admin REST
+ *       API and token endpoint.
  * </ul>
  *
  * <h2>Threading</h2>
@@ -140,27 +141,24 @@ public interface IdpProvider<T> extends Plugin<T> {
     IdentityContext verifyToken(String tenantId, String accessToken);
 
     // -------------------------------------------------------------------
-    // Realm / Tenant Lifecycle
+    // Realm / Tenant Lifecycle (deprecated — single realm with organizations)
     // -------------------------------------------------------------------
 
     /**
-     * Provision a new tenant in the identity provider.
-     *
-     * <p>For Keycloak, this creates a new realm with a confidential client, default roles, and the
-     * configured token lifetimes.
-     *
-     * @param tenantId the tenant identifier (used as the realm name)
-     * @param displayName human-readable tenant name
+     * @deprecated Per-tenant realms eliminated. Use Keycloak Organizations instead. This method is
+     *     a no-op in the single-realm architecture.
      */
-    void provisionTenant(String tenantId, String displayName);
+    @Deprecated(forRemoval = true)
+    default void provisionTenant(String tenantId, String displayName) {
+        // no-op — organizations replace per-tenant realms
+    }
 
     /**
-     * Deprovision a tenant — remove all IdP resources (realm, users, clients, roles).
-     *
-     * <p>This is a destructive operation. All users and sessions in the tenant's realm will be
-     * permanently deleted.
-     *
-     * @param tenantId the tenant identifier
+     * @deprecated Per-tenant realms eliminated. Use Keycloak Organizations instead. This method is
+     *     a no-op in the single-realm architecture.
      */
-    void deprovisionTenant(String tenantId);
+    @Deprecated(forRemoval = true)
+    default void deprovisionTenant(String tenantId) {
+        // no-op — organizations replace per-tenant realms
+    }
 }

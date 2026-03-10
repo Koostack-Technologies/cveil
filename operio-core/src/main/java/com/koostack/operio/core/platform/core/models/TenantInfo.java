@@ -8,7 +8,5 @@ public record TenantInfo(
         String displayName,
         String plan,
         String status,
-        String schemaPrefix,
-        String redisAclUser,
         Instant createdAt,
         Instant updatedAt) {}

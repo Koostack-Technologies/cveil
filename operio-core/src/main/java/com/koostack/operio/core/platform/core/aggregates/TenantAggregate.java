@@ -23,8 +23,6 @@ public record TenantAggregate(
         String displayName,
         String plan,
         String status,
-        String schemaPrefix,
-        String redisAclUser,
         Long version)
         implements AggregateRoot {
 
@@ -57,8 +55,6 @@ public record TenantAggregate(
                             e.displayName(),
                             e.plan(),
                             "created",
-                            null,
-                            null,
                             1L);
                 }
                 case CoreEventTypes.TENANT_DISPLAY_NAME_UPDATED -> {
@@ -70,8 +66,6 @@ public record TenantAggregate(
                             e.displayName(),
                             current.plan(),
                             current.status(),
-                            current.schemaPrefix(),
-                            current.redisAclUser(),
                             current.version() + 1);
                 }
                 case CoreEventTypes.TENANT_PLAN_CHANGED -> {
@@ -83,8 +77,6 @@ public record TenantAggregate(
                             current.displayName(),
                             e.newPlan(),
                             current.status(),
-                            current.schemaPrefix(),
-                            current.redisAclUser(),
                             current.version() + 1);
                 }
                 case CoreEventTypes.TENANT_SUSPENDED -> {
@@ -95,8 +87,6 @@ public record TenantAggregate(
                             current.displayName(),
                             current.plan(),
                             "suspended",
-                            current.schemaPrefix(),
-                            current.redisAclUser(),
                             current.version() + 1);
                 }
                 case CoreEventTypes.TENANT_ACTIVATED -> {
@@ -107,8 +97,6 @@ public record TenantAggregate(
                             current.displayName(),
                             current.plan(),
                             "active",
-                            current.schemaPrefix(),
-                            current.redisAclUser(),
                             current.version() + 1);
                 }
                 case CoreEventTypes.TENANT_DELETED -> {
@@ -119,21 +107,6 @@ public record TenantAggregate(
                             current.displayName(),
                             current.plan(),
                             "deleted",
-                            current.schemaPrefix(),
-                            current.redisAclUser(),
-                            current.version() + 1);
-                }
-                case CoreEventTypes.TENANT_PROVISIONED -> {
-                    var e = mapper.treeToValue(payloadNode, TenantProvisionedEvent.class);
-                    yield new TenantAggregate(
-                            current.tenantId(),
-                            current.aggregateId(),
-                            current.id(),
-                            current.displayName(),
-                            current.plan(),
-                            "active",
-                            e.schemaPrefix(),
-                            e.redisAclUser(),
                             current.version() + 1);
                 }
                 default -> current;

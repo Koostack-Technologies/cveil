@@ -7,14 +7,12 @@ import java.util.Set;
  * Tenant-scoped IAM command service — registers users, manages service accounts, and assigns roles
  * within a single tenant's Keycloak realm.
  *
- * <p>Each command publishes a domain event to the tenant event store ({@code t_{tenantId}_event}).
- * The tenant IAM projection handler translates these events into Keycloak Admin API calls.
- *
- * <p>All operations are implicitly scoped to the current tenant via the realm ID derived from
- * {@link com.koostack.operio.core.models.TenantContext}.
- *
+ * @deprecated Use {@link com.koostack.operio.core.platform.iam.IamCommandService} with the single
+ *     realm and Keycloak Organizations. Tenant-scoped operations are now handled by the unified IAM
+ *     service with organization membership. Will be removed in the module cleanup phase.
  * @param <T> the configuration type for the backing implementation
  */
+@Deprecated(forRemoval = true)
 public interface TenantIamCommandService<T> extends Plugin<T> {
 
     /** Result of registering a tenant user. */

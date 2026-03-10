@@ -104,6 +104,51 @@ public interface IamCommandService<T> extends Plugin<T> {
      */
     void removeRole(String realmId, String emailOrUsername, String role);
 
+    // -- Organization management (single realm + Keycloak Organizations) -------
+
+    /** Result of creating an organization. */
+    record CreateOrganizationResult(String orgId, String orgName) {}
+
+    /**
+     * Create a Keycloak Organization (tenant).
+     *
+     * @param orgName unique organization name (used as tenant identifier)
+     * @param displayName human-readable display name
+     * @return the created organization's metadata
+     */
+    default CreateOrganizationResult createOrganization(String orgName, String displayName) {
+        throw new UnsupportedOperationException("createOrganization not implemented");
+    }
+
+    /**
+     * Add a user to a Keycloak Organization.
+     *
+     * @param orgId the Keycloak organization ID
+     * @param userId the Keycloak user ID
+     */
+    default void addOrganizationMember(String orgId, String userId) {
+        throw new UnsupportedOperationException("addOrganizationMember not implemented");
+    }
+
+    /**
+     * Remove a user from a Keycloak Organization.
+     *
+     * @param orgId the Keycloak organization ID
+     * @param userId the Keycloak user ID
+     */
+    default void removeOrganizationMember(String orgId, String userId) {
+        throw new UnsupportedOperationException("removeOrganizationMember not implemented");
+    }
+
+    /**
+     * Delete a Keycloak Organization (tenant).
+     *
+     * @param orgId the Keycloak organization ID
+     */
+    default void deleteOrganization(String orgId) {
+        throw new UnsupportedOperationException("deleteOrganization not implemented");
+    }
+
     // -- Legacy API key methods (kept for backward compatibility) --------------
 
     /**

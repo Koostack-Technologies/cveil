@@ -80,12 +80,6 @@ public class JooqCoreDispatcher
         actuators.put(
                 DeleteTenantCommandActuator.DeleteTenantCommand.class,
                 new DeleteTenantCommandActuator(eventService));
-        actuators.put(
-                ProvisionTenantCommandActuator.ProvisionTenantCommand.class,
-                new ProvisionTenantCommandActuator(eventService));
-        actuators.put(
-                EmitProvisioningStartedCommandActuator.EmitProvisioningStartedCommand.class,
-                new EmitProvisioningStartedCommandActuator(eventService));
 
         LOG.info("JooqCoreDispatcher configured with {} actuators", actuators.size());
     }
@@ -122,19 +116,5 @@ public class JooqCoreDispatcher
     @Override
     public void deleteTenant(String tenantId) {
         dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
-    }
-
-    @Override
-    public void provisionTenant(String tenantId, String schemaPrefix, String redisAclUser) {
-        dispatch(
-                new ProvisionTenantCommandActuator.ProvisionTenantCommand(
-                        tenantId, schemaPrefix, redisAclUser));
-    }
-
-    @Override
-    public void emitProvisioningStarted(String tenantId, String displayName, String plan) {
-        dispatch(
-                new EmitProvisioningStartedCommandActuator.EmitProvisioningStartedCommand(
-                        tenantId, displayName, plan));
     }
 }

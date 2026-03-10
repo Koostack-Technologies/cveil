@@ -57,8 +57,8 @@ public class IntegrationTestSupport implements AutoCloseable {
     /**
      * Shared TenantRegistry that subscribes to the platform event stream with its own consumer
      * group. All IntegrationTestSupport instances share this single registry, which tracks tenant
-     * lifecycle events (TENANT_PROVISIONED, TENANT_SUSPENDED, etc.) in real time. Used by
-     * {@link #awaitTenantReady(String, Duration)} to verify that provisioning is complete.
+     * lifecycle events (TENANT_CREATED, TENANT_SUSPENDED, etc.) in real time. Used by {@link
+     * #awaitTenantReady(String, Duration)} to verify that the tenant is active.
      */
     private static volatile TenantRegistry sharedRegistry;
 
@@ -574,22 +574,19 @@ public class IntegrationTestSupport implements AutoCloseable {
     // -- Polling helpers ------------------------------------------------------
 
     /**
-     * Waits until a tenant is fully provisioned by checking the shared {@link TenantRegistry}.
-     * The registry subscribes to the platform Redis stream and marks a tenant as active only after
-     * the {@code TENANT_PROVISIONED} event has been delivered. This event is emitted <em>after</em>
-     * all provisioning infrastructure is ready (Flyway migrations, Redis streams, API keys), so
-     * this single gate replaces the need for separate {@code awaitEventTableReady},
-     * {@code awaitTenantDiscoverable}, and SQL-based provisioned checks.
+     * Waits until a tenant is active by checking the shared {@link TenantRegistry}. The registry
+     * subscribes to the platform Redis stream and marks a tenant as active after the {@code
+     * TENANT_CREATED} event has been delivered and processed.
      *
-     * <p>The shared registry uses a dedicated consumer group ({@code "test-tenant-registry"}) so
-     * it does not interfere with the production registry's consumer group.
+     * <p>The shared registry uses a dedicated consumer group ({@code "test-tenant-registry"}) so it
+     * does not interfere with the production registry's consumer group.
      *
      * @param tenantId the tenant to wait for
-     * @param timeout  maximum wait time
+     * @param timeout maximum wait time
      */
     public void awaitTenantReady(String tenantId, Duration timeout) {
         TenantRegistry registry = ensureSharedRegistry();
-        // Phase 1: wait for TENANT_PROVISIONED in the registry
+        // Phase 1: wait for TENANT_CREATED in the registry
         Awaitility.await()
                 .atMost(timeout)
                 .pollInterval(Duration.ofMillis(200))
@@ -603,15 +600,16 @@ public class IntegrationTestSupport implements AutoCloseable {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
-                .until(() -> {
-                    try {
-                        var groups = jedis.xinfoGroups(streamKey);
-                        return groups.stream()
-                                .anyMatch(g -> "admin-projection".equals(g.getName()));
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
+                .until(
+                        () -> {
+                            try {
+                                var groups = jedis.xinfoGroups(streamKey);
+                                return groups.stream()
+                                        .anyMatch(g -> "admin-projection".equals(g.getName()));
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        });
     }
 
     /**
@@ -648,7 +646,9 @@ public class IntegrationTestSupport implements AutoCloseable {
             JedisPooled jedisForRegistry = new JedisPooled(redisHost, redisPort);
             sharedRegistry =
                     new TenantRegistry(
-                            Set.of(), JedisProvider.shared(jedisForRegistry), "test-tenant-registry");
+                            Set.of(),
+                            JedisProvider.shared(jedisForRegistry),
+                            "test-tenant-registry");
             sharedRegistry.start();
             return sharedRegistry;
         }

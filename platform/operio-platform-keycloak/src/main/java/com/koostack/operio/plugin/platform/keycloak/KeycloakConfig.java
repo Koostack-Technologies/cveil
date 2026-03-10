@@ -8,10 +8,10 @@ package com.koostack.operio.plugin.platform.keycloak;
  * @param adminClientId admin client ID for the admin REST API
  * @param adminUsername admin username
  * @param adminPassword admin password
- * @param operioClientId the client ID Operio uses within each tenant realm (e.g. {@code
+ * @param operioClientId the client ID Operio uses within the operio realm (e.g. {@code
  *     operio-backend})
- * @param operioClientSecret the client secret for the Operio client in each tenant realm
- *     (auto-generated during realm provisioning if null)
+ * @param operioClientSecret the client secret for the Operio client (auto-resolved if null)
+ * @param operioRealmName the single Keycloak realm name (default: {@code operio})
  */
 public record KeycloakConfig(
         String serverUrl,
@@ -20,11 +20,35 @@ public record KeycloakConfig(
         String adminUsername,
         String adminPassword,
         String operioClientId,
-        String operioClientSecret) {
+        String operioClientSecret,
+        String operioRealmName) {
     public KeycloakConfig {
         if (serverUrl == null || serverUrl.isBlank()) {
             throw new IllegalArgumentException("serverUrl must not be blank");
         }
+        if (operioRealmName == null || operioRealmName.isBlank()) {
+            operioRealmName = "operio";
+        }
+    }
+
+    /** Backward-compatible 7-arg constructor — defaults operioRealmName to "operio". */
+    public KeycloakConfig(
+            String serverUrl,
+            String adminRealm,
+            String adminClientId,
+            String adminUsername,
+            String adminPassword,
+            String operioClientId,
+            String operioClientSecret) {
+        this(
+                serverUrl,
+                adminRealm,
+                adminClientId,
+                adminUsername,
+                adminPassword,
+                operioClientId,
+                operioClientSecret,
+                "operio");
     }
 
     public static KeycloakConfig of(String serverUrl, String adminUsername, String adminPassword) {
@@ -35,6 +59,7 @@ public record KeycloakConfig(
                 adminUsername,
                 adminPassword,
                 "operio-backend",
-                null);
+                null,
+                "operio");
     }
 }

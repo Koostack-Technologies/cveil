@@ -11,8 +11,13 @@ import java.util.Set;
  * Tenant-scoped IAM query service — reads users, service accounts, and roles from the tenant's
  * Keycloak realm. Also provides authentication and token verification.
  *
+ * @deprecated Use {@link com.koostack.operio.core.platform.iam.IamQueryService} with the single
+ *     realm and Keycloak Organizations. Tenant-scoped queries are now handled by the unified IAM
+ *     query service with organization-scoped filtering. Will be removed in the module cleanup
+ *     phase.
  * @param <T> the configuration type for the backing implementation
  */
+@Deprecated(forRemoval = true)
 public interface TenantIamQueryService<T> extends Plugin<T> {
 
     /** Projected service account metadata for a tenant. */

@@ -2,11 +2,17 @@ package com.koostack.operio.plugin.event.jooq;
 
 import static com.koostack.operio.plugin.event.jooq.generated.tables.Event.EVENT;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.operio.core.event.models.PlatformEvent;
 import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.core.tenant.consent.SubjectDsarService;
+import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -23,13 +29,19 @@ import org.slf4j.LoggerFactory;
  * poller asynchronously relays events to Redis in the background.
  *
  * <p>Each poll cycle discovers active tenants via the provided {@code tenantDiscovery} supplier,
- * then processes each tenant's outbox within a {@link TenantContext} scope so that the tenant-aware
- * {@link DSLContext} routes queries to the correct per-tenant schema and the tenant-aware Redis
- * provider authenticates as the correct ACL user.
+ * then processes each tenant's outbox within a {@link TenantContext} scope so that RLS filters
+ * queries to the correct tenant's events, and the tenant-aware Redis provider authenticates as the
+ * correct ACL user.
+ *
+ * <p>Supports the digital shredder pattern: shreddable events are decrypted with their per-subject
+ * DSAR key before publishing to Redis. If the DSAR key has been deleted (subject exercised right to
+ * be forgotten), the event is skipped but marked as published.
  */
 public class OutboxPoller {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxPoller.class);
+    private static final ObjectMapper objectMapper =
+            new ObjectMapper().registerModule(new JavaTimeModule());
 
     private static final int DEFAULT_BATCH_SIZE = 50;
     private static final long DEFAULT_POLL_INTERVAL_MS = 500;
@@ -39,6 +51,9 @@ public class OutboxPoller {
     private final Supplier<List<String>> tenantDiscovery;
     private final int batchSize;
     private final long pollIntervalMs;
+
+    private volatile SubjectDsarService<?> subjectDsarService;
+    private volatile String encryptionKey;
 
     private ScheduledExecutorService scheduler;
     private ExecutorService workers;
@@ -62,6 +77,16 @@ public class OutboxPoller {
         this.tenantDiscovery = tenantDiscovery;
         this.batchSize = batchSize;
         this.pollIntervalMs = pollIntervalMs;
+    }
+
+    /**
+     * Injects the DSAR key repository and encryption key for digital shredder support. When set,
+     * shreddable events are decrypted before Redis publish; if the key is deleted (subject
+     * shredded), the event is skipped.
+     */
+    public void setSubjectDsarService(SubjectDsarService<?> service, String encryptionKey) {
+        this.subjectDsarService = service;
+        this.encryptionKey = encryptionKey;
     }
 
     /** Starts the outbox poller with the given number of worker threads. */
@@ -126,10 +151,17 @@ public class OutboxPoller {
 
     /**
      * Claims and publishes a batch of unpublished events. Uses {@code FOR UPDATE SKIP LOCKED} so
-     * concurrent workers (across nodes) do not block each other.
+     * concurrent workers (across nodes) do not block each other. Routes each event to the correct
+     * Redis stream based on the tenant_id from TenantContext.
      */
     private void publishBatch() {
         try {
+            String tenantId = TenantContext.get();
+            String streamKey =
+                    "platform".equals(tenantId)
+                            ? redisPublisher.platformStreamKey()
+                            : redisPublisher.tenantStreamKey(tenantId);
+
             dsl.transaction(
                     txConfig -> {
                         DSLContext txDsl = txConfig.dsl();
@@ -147,7 +179,35 @@ public class OutboxPoller {
                             return;
                         }
 
+                        List<Long> publishedIds = new ArrayList<>();
+
                         for (var record : batch) {
+                            String payload = record.getPayload();
+
+                            // Digital shredder: decrypt shreddable payloads before Redis publish
+                            if (Boolean.TRUE.equals(record.getShreddable())
+                                    && subjectDsarService != null
+                                    && encryptionKey != null) {
+                                UUID dsarId = record.getDsarId();
+                                var encryptedKey =
+                                        dsarId != null
+                                                ? subjectDsarService.findKeyByDsarId(dsarId)
+                                                : java.util.Optional.<String>empty();
+                                if (encryptedKey.isEmpty()) {
+                                    log.info(
+                                            "Skipping shredded event {} (dsar_id={})",
+                                            record.getEventId(),
+                                            dsarId);
+                                    publishedIds.add(record.getEventId());
+                                    continue;
+                                }
+                                String rawKey =
+                                        FieldEncryptor.decrypt(
+                                                encryptedKey.get(), this.encryptionKey);
+                                String ciphertext = objectMapper.readValue(payload, String.class);
+                                payload = FieldEncryptor.decrypt(ciphertext, rawKey);
+                            }
+
                             Map<String, String> fields = new HashMap<>();
                             fields.put(
                                     PlatformEvent.FIELD_EVENT_ID,
@@ -159,20 +219,27 @@ public class OutboxPoller {
                             fields.put(
                                     PlatformEvent.FIELD_VERSION,
                                     String.valueOf(record.getVersion()));
-                            if (record.getPayload() != null) {
-                                fields.put(PlatformEvent.FIELD_PAYLOAD, record.getPayload());
+                            if (payload != null) {
+                                fields.put(PlatformEvent.FIELD_PAYLOAD, payload);
                             }
-                            redisPublisher.publishRaw(fields);
+                            if (record.getTenantId() != null) {
+                                fields.put("tenantId", record.getTenantId());
+                            }
+                            redisPublisher.publishRaw(streamKey, fields);
+                            publishedIds.add(record.getEventId());
                         }
 
-                        List<Long> ids = batch.stream().map(r -> r.getEventId()).toList();
+                        if (!publishedIds.isEmpty()) {
+                            txDsl.update(EVENT)
+                                    .set(EVENT.PUBLISHED, true)
+                                    .where(EVENT.EVENT_ID.in(publishedIds))
+                                    .execute();
+                        }
 
-                        txDsl.update(EVENT)
-                                .set(EVENT.PUBLISHED, true)
-                                .where(EVENT.EVENT_ID.in(ids))
-                                .execute();
-
-                        log.debug("Outbox relayed {} events to Redis", ids.size());
+                        log.debug(
+                                "Outbox relayed {} events to Redis stream {}",
+                                publishedIds.size(),
+                                streamKey);
                     });
         } catch (Exception e) {
             log.warn("Outbox publish failed — will retry", e);

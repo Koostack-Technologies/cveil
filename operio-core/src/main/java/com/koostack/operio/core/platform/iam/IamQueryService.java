@@ -119,6 +119,48 @@ public interface IamQueryService<T> extends Plugin<T> {
      */
     ServiceAccountInfo getServiceAccount(String realmId, String clientId);
 
+    // -- Organization queries (single realm + Keycloak Organizations) ----------
+
+    /** Organization metadata returned by queries. */
+    record OrganizationInfo(String orgId, String orgName, String displayName, boolean enabled) {}
+
+    /** Member metadata returned by org member queries. */
+    record OrgMemberInfo(String userId, String username, String email) {}
+
+    /**
+     * List all organizations (tenants).
+     *
+     * @param offset pagination offset
+     * @param limit maximum results
+     * @return list of organizations
+     */
+    default java.util.List<OrganizationInfo> listOrganizations(int offset, int limit) {
+        throw new UnsupportedOperationException("listOrganizations not implemented");
+    }
+
+    /**
+     * Get a single organization by ID.
+     *
+     * @param orgId the Keycloak organization ID
+     * @return the organization, or {@code null} if not found
+     */
+    default OrganizationInfo getOrganization(String orgId) {
+        throw new UnsupportedOperationException("getOrganization not implemented");
+    }
+
+    /**
+     * List members of an organization.
+     *
+     * @param orgId the Keycloak organization ID
+     * @param offset pagination offset
+     * @param limit maximum results
+     * @return list of members
+     */
+    default java.util.List<OrgMemberInfo> listOrganizationMembers(
+            String orgId, int offset, int limit) {
+        throw new UnsupportedOperationException("listOrganizationMembers not implemented");
+    }
+
     // -- Authentication -------------------------------------------------------
 
     /**
