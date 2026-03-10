@@ -18,6 +18,25 @@ package com.koostack.operio.core.platform.iam;
 public interface IdpTenantResolver {
 
     /**
+     * Returns a sentinel resolver that throws on every operation. Used as a null-safe placeholder
+     * for CDI {@code @ApplicationScoped} producers.
+     */
+    static IdpTenantResolver unavailable() {
+        IdpProvider<?> sentinel = IdpProvider.unavailable();
+        return new IdpTenantResolver() {
+            @Override
+            public IdpProvider<?> resolve(String tenantId) {
+                return sentinel;
+            }
+
+            @Override
+            public IdpProvider<?> defaultProvider() {
+                return sentinel;
+            }
+        };
+    }
+
+    /**
      * Resolve the {@link IdpProvider} for the given tenant.
      *
      * @param tenantId the tenant identifier

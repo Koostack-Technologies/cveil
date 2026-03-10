@@ -46,6 +46,9 @@ public record RegulationAggregate(
         return switch (eventType) {
             case ConsentEventTypes.REGULATION_REGISTERED -> {
                 var e = mapper.convertValue(payloadNode, RegulationRegisteredEvent.class);
+                if (current == null) {
+                    yield RegulationAggregate.create(null, e.regulationName(), e.description());
+                }
                 yield current.withDescription(e.description());
             }
             case ConsentEventTypes.REGULATION_UPDATED -> {

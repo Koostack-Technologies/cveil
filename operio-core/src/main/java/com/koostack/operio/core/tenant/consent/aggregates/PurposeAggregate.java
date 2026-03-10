@@ -52,6 +52,9 @@ public record PurposeAggregate(
         return switch (eventType) {
             case ConsentEventTypes.PURPOSE_REGISTERED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegisteredEvent.class);
+                if (current == null) {
+                    yield PurposeAggregate.create(null, e.purposeName(), e.description());
+                }
                 yield current.withDescription(e.description());
             }
             case ConsentEventTypes.PURPOSE_UPDATED -> {

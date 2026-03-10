@@ -73,16 +73,16 @@ public class CacheInvalidationIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            Response r =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {"tenantId": "%s", "displayName": "Cache Invalidation IT", "plan": "pro"}
-                    """
-                                            .formatted(TENANT_ID))
-                            .post("/api/v1/platform/tenants");
-            assertThat(r.statusCode()).isIn(201, 200, 409);
+            try {
+                String result =
+                        IntegrationTestSupport.provisionTenantViaOrchestrator(
+                                BOOTSTRAP_KEY, TENANT_ID, "Cache Invalidation IT", "pro");
+                assertThat(result).isEqualTo(TENANT_ID);
+            } catch (Exception e) {
+                if (!e.getMessage().contains("already exists")) {
+                    throw e;
+                }
+            }
         }
 
         @Test
@@ -94,7 +94,7 @@ public class CacheInvalidationIT {
                             .contentType(ContentType.JSON)
                             .body(
                                     """
-                    {"tenantId": "%s", "keyName": "cache-inv-key", "environment": "TEST",
+                    {"tenantId": "%s", "subject": "cache-inv-key",
                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]}
                     """
                                             .formatted(TENANT_ID))
@@ -326,6 +326,23 @@ public class CacheInvalidationIT {
                     .post("/api/v1/governance/purposes/policies")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
+
+            // Wait for the policy projection to materialize before consent tests use it
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var rows =
+                                        support.query(
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy WHERE tenant_id = '"
+                                                        + TENANT_ID
+                                                        + "'");
+                                int cnt = ((Number) rows.get(0).get("cnt")).intValue();
+                                assertThat(cnt)
+                                        .as("Policy must be projected before consent grant")
+                                        .isGreaterThanOrEqualTo(1);
+                            });
         }
 
         @Test
@@ -545,6 +562,23 @@ public class CacheInvalidationIT {
                     .post("/api/v1/governance/purposes/policies")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
+
+            // Wait for the policy projection to materialize
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var rows =
+                                        support.query(
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy WHERE tenant_id = '"
+                                                        + TENANT_ID
+                                                        + "'");
+                                int cnt = ((Number) rows.get(0).get("cnt")).intValue();
+                                assertThat(cnt)
+                                        .as("SSE policy must be projected before consent grant")
+                                        .isGreaterThanOrEqualTo(2);
+                            });
 
             sseEvents.clear();
 

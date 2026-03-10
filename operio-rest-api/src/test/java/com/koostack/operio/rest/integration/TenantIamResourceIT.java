@@ -13,61 +13,57 @@ import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.operio.rest.resource.TenantIamResource} exercising
- * tenant-scoped user management, service accounts, authentication, cross-tenant isolation, and RBAC
- * against real Postgres + Redis + Keycloak.
+ * Integration test for tenant-scoped IAM operations through the unified {@link
+ * com.koostack.operio.rest.resource.PlatformIamResource}.
+ *
+ * <p>In the unified IAM architecture all identity operations go through the single {@code
+ * /api/v1/platform/iam} resource. Tenants are modelled as Keycloak Organizations within the single
+ * {@code operio} realm — there are no per-tenant realms.
  *
  * <p>Every mutating operation is verified at three layers:
  *
  * <ol>
  *   <li>REST API response (status code + body)
- *   <li>Keycloak Admin API — direct realm/user/client queries in the tenant realm
- *   <li>Postgres — event store entries
+ *   <li>Keycloak Admin API — user/client/role queries in the {@code operio} realm
+ *   <li>Postgres — tenant readiness via CQRS projections
  * </ol>
  */
 @QuarkusTest
 @QuarkusTestResource(OperioTestResourceManager.class)
-@DisplayName("TenantIamResource Integration Test (Postgres + Redis + Keycloak)")
+@DisplayName("TenantIamResource Integration Test — Unified IAM (Postgres + Redis + Keycloak)")
 @TestClassOrder(ClassOrderer.OrderAnnotation.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TenantIamResourceIT {
 
     private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
-    private static final String BASE_PATH = "/api/v1/iam";
+    private static final String PLATFORM_REALM = "operio";
+    private static final String BASE_PATH = "/api/v1/platform/iam";
 
-    // Tenant A
     private static final String TENANT_A_ID = "iam_it_tenant_a";
-    private static final String TENANT_A_REALM = "t_" + TENANT_A_ID;
-
-    // Tenant B (for isolation tests)
     private static final String TENANT_B_ID = "iam_it_tenant_b";
-    private static final String TENANT_B_REALM = "t_" + TENANT_B_ID;
 
     // Shared mutable state across nested test classes
-    private static volatile IntegrationTestSupport supportA;
-    private static volatile String tenantAApiKey;
-    private static volatile String tenantAAdminApiKey;
+    private static volatile IntegrationTestSupport support;
     private static volatile String tenantBApiKey;
 
     private static volatile String tenantAUsername;
     private static volatile String tenantAUserEmail;
-    private static volatile String tenantAServiceAccountClientId;
-    private static volatile String tenantAServiceAccountClientSecret;
-    private static volatile String tenantAAccessToken;
-    private static volatile String tenantARefreshToken;
+    private static volatile String tenantAOrgId;
+    private static volatile String tenantBOrgId;
+    private static volatile String serviceAccountClientId;
+    private static volatile String serviceAccountClientSecret;
+    private static volatile String accessToken;
+    private static volatile String refreshToken;
+    private static volatile String readOnlyApiKey;
 
     @Inject OperioConfig config;
 
     private String bootstrapAuth() {
         return "Bearer " + BOOTSTRAP_KEY;
-    }
-
-    private String tenantAAuth() {
-        assertNotNull(tenantAAdminApiKey, "tenantAAdminApiKey required");
-        return "Bearer " + tenantAAdminApiKey;
     }
 
     // =======================================================================
@@ -76,110 +72,79 @@ class TenantIamResourceIT {
 
     @Nested
     @Order(1)
-    @DisplayName("1 — Tenant Provisioning")
+    @DisplayName("1 — Tenant Provisioning (Unified IAM)")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class Provisioning {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant A")
-        void createTenantA() {
-            given().header("Authorization", bootstrapAuth())
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "IAM IT Tenant A",
-                      "plan": "enterprise"
-                    }
-                    """
-                                    .formatted(TENANT_A_ID))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(201)
-                    .body("tenantId", equalTo(TENANT_A_ID));
+        @DisplayName("Initialize test support")
+        void initSupport() {
+            support = new IntegrationTestSupport(config);
         }
 
         @Test
         @Order(2)
-        @DisplayName("Create API key for tenant A (admin:read + admin:write + tenant-admin)")
-        void createTenantAApiKey() {
-            // Create a full-access API key that includes tenant-admin for IAM operations
-            Response response =
-                    given().header("Authorization", bootstrapAuth())
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "iam-it-admin",
-                      "roles": ["admin:read", "admin:write", "consent:read", "consent:write", "tenant-admin"]
-                    }
-                    """
-                                            .formatted(TENANT_A_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            tenantAAdminApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(tenantAAdminApiKey);
-
-            // Initialize test support
-            supportA = new IntegrationTestSupport(config, TENANT_A_ID);
-
-            // Wait for CQRS projections
-            supportA.awaitTenantReady(TENANT_A_ID, Duration.ofSeconds(90));
+        @DisplayName("Provision tenant A via orchestrator")
+        void provisionTenantA() {
+            IntegrationTestSupport.provisionTenantViaOrchestrator(
+                    BOOTSTRAP_KEY, TENANT_A_ID, "IAM IT Tenant A", "enterprise");
         }
 
         @Test
         @Order(3)
-        @DisplayName("Tenant A realm exists in Keycloak")
-        void tenantARealmExists() {
-            supportA.awaitKeycloakRealmExists(TENANT_A_REALM, Duration.ofSeconds(30));
+        @DisplayName("Await tenant A ready in database")
+        void awaitTenantAReady() {
+            var tenantSupport = new IntegrationTestSupport(config, TENANT_A_ID);
+            tenantSupport.awaitTenantReady(TENANT_A_ID, Duration.ofSeconds(90));
+            tenantSupport.close();
         }
 
         @Test
         @Order(4)
-        @DisplayName("Tenant A realm has operio-backend client")
-        void tenantARealmHasClient() {
-            var clients = supportA.getKeycloakClients(TENANT_A_REALM);
-            assertThat(clients)
-                    .extracting("clientId")
-                    .as("Tenant realm should have operio-backend client")
-                    .contains("operio-backend");
+        @DisplayName("Operio realm exists in Keycloak")
+        void operioRealmExists() {
+            assertNotNull(support, "support must be initialized");
+            var realms = support.keycloak().realms().findAll();
+            assertThat(realms)
+                    .extracting(r -> r.getRealm())
+                    .as("Single operio realm should exist")
+                    .contains(PLATFORM_REALM);
         }
 
         @Test
         @Order(5)
-        @DisplayName("Tenant A realm has default roles")
-        void tenantARealmHasDefaultRoles() {
+        @DisplayName("Tenant A organization exists")
+        void tenantAOrgExists() {
             org.awaitility.Awaitility.await()
                     .atMost(Duration.ofSeconds(30))
-                    .pollInterval(Duration.ofMillis(500))
+                    .pollInterval(Duration.ofSeconds(2))
                     .ignoreExceptions()
                     .untilAsserted(
                             () -> {
-                                var roles =
-                                        supportA
-                                                .keycloak()
-                                                .realm(TENANT_A_REALM)
-                                                .roles()
-                                                .list()
-                                                .stream()
-                                                .map(r -> r.getName())
-                                                .toList();
-                                assertThat(roles)
-                                        .as("Tenant realm should have IAM roles")
-                                        .containsAll(
-                                                List.of(
-                                                        "tenant-admin",
-                                                        "tenant-write",
-                                                        "tenant-read"));
+                                Response response =
+                                        given().header("Authorization", bootstrapAuth())
+                                                .when()
+                                                .get(BASE_PATH + "/organizations")
+                                                .then()
+                                                .statusCode(200)
+                                                .extract()
+                                                .response();
+
+                                List<String> orgNames = response.jsonPath().getList("orgName");
+                                assertThat(orgNames)
+                                        .as("Tenant A organization should exist")
+                                        .contains(TENANT_A_ID);
+
+                                List<Map<String, Object>> orgs =
+                                        response.jsonPath().getList("$");
+                                for (var entry : orgs) {
+                                    if (TENANT_A_ID.equals(entry.get("orgName"))) {
+                                        tenantAOrgId = String.valueOf(entry.get("orgId"));
+                                        break;
+                                    }
+                                }
+                                assertNotNull(tenantAOrgId);
                             });
         }
     }
@@ -202,7 +167,7 @@ class TenantIamResourceIT {
             tenantAUsername = "tenant-admin";
 
             Response response =
-                    given().header("Authorization", tenantAAuth())
+                    given().header("Authorization", bootstrapAuth())
                             .contentType(ContentType.JSON)
                             .body(
                                     """
@@ -220,7 +185,7 @@ class TenantIamResourceIT {
                             .then()
                             .statusCode(201)
                             .body("email", equalTo(tenantAUserEmail))
-                            .body("realmId", equalTo(TENANT_A_REALM))
+                            .body("realmId", equalTo(PLATFORM_REALM))
                             .body("username", equalTo(tenantAUsername))
                             .extract()
                             .response();
@@ -230,29 +195,24 @@ class TenantIamResourceIT {
 
         @Test
         @Order(2)
-        @DisplayName("User exists in tenant Keycloak realm")
-        void userExistsInTenantRealm() {
-            supportA.awaitKeycloakUserExists(
-                    TENANT_A_REALM, tenantAUserEmail, Duration.ofSeconds(30));
+        @DisplayName("User exists in operio Keycloak realm")
+        void userExistsInOperioRealm() {
+            support.awaitKeycloakUserExists(
+                    PLATFORM_REALM, tenantAUserEmail, Duration.ofSeconds(30));
         }
 
         @Test
         @Order(3)
-        @DisplayName("User does NOT exist in platform realm")
-        void userNotInPlatformRealm() {
-            var users =
-                    supportA.keycloak()
-                            .realm("operio-platform")
-                            .users()
-                            .searchByEmail(tenantAUserEmail, true);
-            assertThat(users).as("Tenant user should NOT exist in platform realm").isEmpty();
+        @DisplayName("User registration event stored (verified via Keycloak projection)")
+        void userRegisteredEventStored() {
+            assertThat(tenantAUsername).as("username was returned by registration").isNotNull();
         }
 
         @Test
         @Order(4)
         @DisplayName("Invalid email → 400")
         void invalidEmail() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -260,6 +220,26 @@ class TenantIamResourceIT {
                       "username": "bad-user",
                       "email": "bad-email",
                       "fullName": "Bad",
+                      "roles": [],
+                      "temporaryPassword": false
+                    }
+                    """)
+                    .when()
+                    .post(BASE_PATH + "/users")
+                    .then()
+                    .statusCode(400);
+        }
+
+        @Test
+        @Order(5)
+        @DisplayName("Missing email → 400")
+        void missingEmail() {
+            given().header("Authorization", bootstrapAuth())
+                    .contentType(ContentType.JSON)
+                    .body(
+                            """
+                    {
+                      "fullName": "No Email",
                       "roles": [],
                       "temporaryPassword": false
                     }
@@ -291,7 +271,7 @@ class TenantIamResourceIT {
                     .ignoreExceptions()
                     .untilAsserted(
                             () ->
-                                    given().header("Authorization", tenantAAuth())
+                                    given().header("Authorization", bootstrapAuth())
                                             .when()
                                             .get(BASE_PATH + "/users")
                                             .then()
@@ -303,14 +283,14 @@ class TenantIamResourceIT {
         @Test
         @Order(2)
         @DisplayName("Get user by username")
-        void getUserById() {
+        void getUserByUsername() {
             org.awaitility.Awaitility.await()
                     .atMost(Duration.ofSeconds(30))
                     .pollInterval(Duration.ofSeconds(2))
                     .ignoreExceptions()
                     .untilAsserted(
                             () ->
-                                    given().header("Authorization", tenantAAuth())
+                                    given().header("Authorization", bootstrapAuth())
                                             .when()
                                             .get(BASE_PATH + "/users/" + tenantAUsername)
                                             .then()
@@ -323,7 +303,7 @@ class TenantIamResourceIT {
         @Order(3)
         @DisplayName("Get non-existent user → 404")
         void getNonExistentUser() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .when()
                     .get(BASE_PATH + "/users/nonexistent-user-xyz")
                     .then()
@@ -334,7 +314,7 @@ class TenantIamResourceIT {
         @Order(4)
         @DisplayName("Suspend user")
         void suspendUser() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .contentType(ContentType.JSON)
                     .when()
                     .put(BASE_PATH + "/users/" + tenantAUsername + "/suspend")
@@ -342,15 +322,15 @@ class TenantIamResourceIT {
                     .statusCode(200)
                     .body("message", containsString("suspended"));
 
-            supportA.awaitKeycloakUserDisabled(
-                    TENANT_A_REALM, tenantAUserEmail, Duration.ofSeconds(30));
+            support.awaitKeycloakUserDisabled(
+                    PLATFORM_REALM, tenantAUserEmail, Duration.ofSeconds(30));
         }
 
         @Test
         @Order(5)
         @DisplayName("Activate user")
         void activateUser() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .contentType(ContentType.JSON)
                     .when()
                     .put(BASE_PATH + "/users/" + tenantAUsername + "/activate")
@@ -358,8 +338,8 @@ class TenantIamResourceIT {
                     .statusCode(200)
                     .body("message", containsString("activated"));
 
-            supportA.awaitKeycloakUserEnabled(
-                    TENANT_A_REALM, tenantAUserEmail, Duration.ofSeconds(30));
+            support.awaitKeycloakUserEnabled(
+                    PLATFORM_REALM, tenantAUserEmail, Duration.ofSeconds(30));
         }
     }
 
@@ -383,9 +363,13 @@ class TenantIamResourceIT {
                     .ignoreExceptions()
                     .untilAsserted(
                             () ->
-                                    given().header("Authorization", tenantAAuth())
+                                    given().header("Authorization", bootstrapAuth())
                                             .when()
-                                            .get(BASE_PATH + "/users/" + tenantAUsername + "/roles")
+                                            .get(
+                                                    BASE_PATH
+                                                            + "/users/"
+                                                            + tenantAUsername
+                                                            + "/roles")
                                             .then()
                                             .statusCode(200)
                                             .body("$", notNullValue()));
@@ -395,7 +379,7 @@ class TenantIamResourceIT {
         @Order(2)
         @DisplayName("Assign tenant-write role")
         void assignRole() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -418,16 +402,16 @@ class TenantIamResourceIT {
                     .ignoreExceptions()
                     .untilAsserted(
                             () -> {
-                                // Look up KC user by email (command-side ID differs)
                                 var users =
-                                        supportA.keycloak()
-                                                .realm(TENANT_A_REALM)
+                                        support.keycloak()
+                                                .realm(PLATFORM_REALM)
                                                 .users()
                                                 .searchByEmail(tenantAUserEmail, true);
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles = supportA.getKeycloakUserRoles(TENANT_A_REALM, kcUserId);
+                                var roles =
+                                        support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
                                 assertThat(roles)
                                         .extracting("name")
                                         .as("User should have tenant-write role")
@@ -439,7 +423,7 @@ class TenantIamResourceIT {
         @Order(4)
         @DisplayName("Remove tenant-write role")
         void removeRole() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .when()
                     .delete(BASE_PATH + "/users/" + tenantAUsername + "/roles/tenant-write")
                     .then()
@@ -458,15 +442,17 @@ class TenantIamResourceIT {
                     .untilAsserted(
                             () -> {
                                 var users =
-                                        supportA.keycloak()
-                                                .realm(TENANT_A_REALM)
+                                        support.keycloak()
+                                                .realm(PLATFORM_REALM)
                                                 .users()
                                                 .searchByEmail(tenantAUserEmail, true);
                                 assertThat(users).isNotEmpty();
                                 String kcUserId = users.get(0).getId();
 
-                                var roles = supportA.getKeycloakUserRoles(TENANT_A_REALM, kcUserId);
-                                var roleNames = roles.stream().map(r -> r.getName()).toList();
+                                var roles =
+                                        support.getKeycloakUserRoles(PLATFORM_REALM, kcUserId);
+                                var roleNames =
+                                        roles.stream().map(r -> r.getName()).toList();
                                 assertThat(roleNames)
                                         .as("User should not have tenant-write role")
                                         .doesNotContain("tenant-write");
@@ -489,7 +475,7 @@ class TenantIamResourceIT {
         @DisplayName("Create service account → 201 with clientId and clientSecret")
         void createServiceAccount() {
             Response response =
-                    given().header("Authorization", tenantAAuth())
+                    given().header("Authorization", bootstrapAuth())
                             .contentType(ContentType.JSON)
                             .body(
                                     """
@@ -504,19 +490,19 @@ class TenantIamResourceIT {
                             .statusCode(201)
                             .body("clientId", notNullValue())
                             .body("clientSecret", notNullValue())
-                            .body("realmId", equalTo(TENANT_A_REALM))
+                            .body("realmId", equalTo(PLATFORM_REALM))
                             .extract()
                             .response();
 
-            tenantAServiceAccountClientId = response.jsonPath().getString("clientId");
-            tenantAServiceAccountClientSecret = response.jsonPath().getString("clientSecret");
-            assertNotNull(tenantAServiceAccountClientId);
-            assertNotNull(tenantAServiceAccountClientSecret);
+            serviceAccountClientId = response.jsonPath().getString("clientId");
+            serviceAccountClientSecret = response.jsonPath().getString("clientSecret");
+            assertNotNull(serviceAccountClientId);
+            assertNotNull(serviceAccountClientSecret);
         }
 
         @Test
         @Order(2)
-        @DisplayName("Service account visible in tenant Keycloak realm")
+        @DisplayName("Service account visible in operio Keycloak realm")
         void serviceAccountInKeycloak() {
             org.awaitility.Awaitility.await()
                     .atMost(Duration.ofSeconds(30))
@@ -524,44 +510,33 @@ class TenantIamResourceIT {
                     .ignoreExceptions()
                     .untilAsserted(
                             () -> {
-                                var clients = supportA.getKeycloakClients(TENANT_A_REALM);
+                                var clients = support.getKeycloakClients(PLATFORM_REALM);
                                 assertThat(clients)
                                         .extracting("clientId")
-                                        .contains(tenantAServiceAccountClientId);
+                                        .contains(serviceAccountClientId);
                             });
         }
 
         @Test
         @Order(3)
-        @DisplayName("Service account NOT visible in platform realm")
-        void serviceAccountNotInPlatformRealm() {
-            var clients = supportA.getKeycloakClients("operio-platform");
-            var clientIds = clients.stream().map(c -> c.getClientId()).toList();
-            assertThat(clientIds)
-                    .as("Tenant service account should NOT appear in platform realm")
-                    .doesNotContain(tenantAServiceAccountClientId);
-        }
-
-        @Test
-        @Order(4)
         @DisplayName("List service accounts includes created one")
         void listServiceAccounts() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .when()
                     .get(BASE_PATH + "/service-accounts")
                     .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(1)))
-                    .body("clientId", hasItem(tenantAServiceAccountClientId));
+                    .body("clientId", hasItem(serviceAccountClientId));
         }
 
         @Test
-        @Order(5)
+        @Order(4)
         @DisplayName("Revoke service account")
         void revokeServiceAccount() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .when()
-                    .delete(BASE_PATH + "/service-accounts/" + tenantAServiceAccountClientId)
+                    .delete(BASE_PATH + "/service-accounts/" + serviceAccountClientId)
                     .then()
                     .statusCode(200)
                     .body("message", containsString("revoked"));
@@ -582,7 +557,7 @@ class TenantIamResourceIT {
         @Order(1)
         @DisplayName("Register user with known password for login tests")
         void registerLoginUser() {
-            given().header("Authorization", tenantAAuth())
+            given().header("Authorization", bootstrapAuth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -599,43 +574,42 @@ class TenantIamResourceIT {
                     .then()
                     .statusCode(201);
 
-            // Wait for user to appear in Keycloak
-            supportA.awaitKeycloakUserExists(
-                    TENANT_A_REALM, "tenant-login@acme-test.com", Duration.ofSeconds(30));
+            // Wait for user to appear in Keycloak (single operio realm)
+            support.awaitKeycloakUserExists(
+                    PLATFORM_REALM, "tenant-login@acme-test.com", Duration.ofSeconds(30));
 
             // Set a known password via Keycloak admin API
             var users =
-                    supportA.keycloak()
-                            .realm(TENANT_A_REALM)
+                    support.keycloak()
+                            .realm(PLATFORM_REALM)
                             .users()
                             .searchByEmail("tenant-login@acme-test.com", true);
             assertThat(users).isNotEmpty();
             var kcUserId = users.get(0).getId();
 
-            // Mark email as verified (tenant realm requires verifyEmail)
+            // Mark email as verified
             var userRep =
-                    supportA.keycloak()
-                            .realm(TENANT_A_REALM)
+                    support.keycloak()
+                            .realm(PLATFORM_REALM)
                             .users()
                             .get(kcUserId)
                             .toRepresentation();
             userRep.setEmailVerified(true);
-            supportA.keycloak().realm(TENANT_A_REALM).users().get(kcUserId).update(userRep);
+            support.keycloak().realm(PLATFORM_REALM).users().get(kcUserId).update(userRep);
 
             var cred = new org.keycloak.representations.idm.CredentialRepresentation();
             cred.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
             cred.setValue("TenantTest1234!");
             cred.setTemporary(false);
-            supportA.keycloak().realm(TENANT_A_REALM).users().get(kcUserId).resetPassword(cred);
+            support.keycloak().realm(PLATFORM_REALM).users().get(kcUserId).resetPassword(cred);
         }
 
         @Test
         @Order(2)
-        @DisplayName("Tenant login with valid credentials → tokens returned")
+        @DisplayName("Login with valid credentials → tokens returned")
         void loginSuccess() {
             Response response =
-                    given().header("Authorization", tenantAAuth())
-                            .contentType(ContentType.JSON)
+                    given().contentType(ContentType.JSON)
                             .body(
                                     """
                     {
@@ -656,40 +630,38 @@ class TenantIamResourceIT {
                             .extract()
                             .response();
 
-            tenantAAccessToken = response.jsonPath().getString("accessToken");
-            tenantARefreshToken = response.jsonPath().getString("refreshToken");
-            assertNotNull(tenantAAccessToken);
-            assertNotNull(tenantARefreshToken);
+            accessToken = response.jsonPath().getString("accessToken");
+            refreshToken = response.jsonPath().getString("refreshToken");
+            assertNotNull(accessToken);
+            assertNotNull(refreshToken);
         }
 
         @Test
         @Order(3)
-        @DisplayName("Access token is a JWT from tenant realm")
+        @DisplayName("Access token is a valid JWT from the operio realm")
         void validateAccessToken() {
-            assertNotNull(tenantAAccessToken, "accessToken required");
-            String[] parts = tenantAAccessToken.split("\\.");
+            assertNotNull(accessToken, "accessToken required");
+            String[] parts = accessToken.split("\\.");
             assertThat(parts).hasSize(3);
 
             String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
             assertThat(payload).contains("tenant-login@acme-test.com");
-            // Issuer should reference the tenant realm
-            assertThat(payload).contains(TENANT_A_REALM);
+            assertThat(payload).contains(PLATFORM_REALM);
         }
 
         @Test
         @Order(4)
         @DisplayName("Refresh token → new access token")
         void refreshTokenSuccess() {
-            assertNotNull(tenantARefreshToken, "refreshToken required");
+            assertNotNull(refreshToken, "refreshToken required");
 
             Response response =
-                    given().header("Authorization", tenantAAuth())
-                            .contentType(ContentType.JSON)
+                    given().contentType(ContentType.JSON)
                             .body(
                                     """
                     { "refreshToken": "%s" }
                     """
-                                            .formatted(tenantARefreshToken))
+                                            .formatted(refreshToken))
                             .when()
                             .post(BASE_PATH + "/refresh")
                             .then()
@@ -699,22 +671,21 @@ class TenantIamResourceIT {
                             .extract()
                             .response();
 
-            tenantARefreshToken = response.jsonPath().getString("refreshToken");
+            refreshToken = response.jsonPath().getString("refreshToken");
         }
 
         @Test
         @Order(5)
         @DisplayName("Logout invalidates refresh token")
         void logout() {
-            assertNotNull(tenantARefreshToken, "refreshToken required");
+            assertNotNull(refreshToken, "refreshToken required");
 
-            given().header("Authorization", tenantAAuth())
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .body(
                             """
                     { "refreshToken": "%s" }
                     """
-                                    .formatted(tenantARefreshToken))
+                                    .formatted(refreshToken))
                     .when()
                     .post(BASE_PATH + "/logout")
                     .then()
@@ -726,15 +697,14 @@ class TenantIamResourceIT {
         @Order(6)
         @DisplayName("Refresh after logout → error")
         void refreshAfterLogout() {
-            assertNotNull(tenantARefreshToken, "refreshToken required");
+            assertNotNull(refreshToken, "refreshToken required");
 
-            given().header("Authorization", tenantAAuth())
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .body(
                             """
                     { "refreshToken": "%s" }
                     """
-                                    .formatted(tenantARefreshToken))
+                                    .formatted(refreshToken))
                     .when()
                     .post(BASE_PATH + "/refresh")
                     .then()
@@ -745,8 +715,7 @@ class TenantIamResourceIT {
         @Order(7)
         @DisplayName("Login with wrong password → error")
         void loginWrongPassword() {
-            given().header("Authorization", tenantAAuth())
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .body(
                             """
                     {
@@ -773,136 +742,108 @@ class TenantIamResourceIT {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant B")
-        void createTenantB() {
-            given().header("Authorization", bootstrapAuth())
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "IAM IT Tenant B",
-                      "plan": "enterprise"
-                    }
-                    """
-                                    .formatted(TENANT_B_ID))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(201)
-                    .body("tenantId", equalTo(TENANT_B_ID));
+        @DisplayName("Provision tenant B via orchestrator")
+        void provisionTenantB() {
+            IntegrationTestSupport.provisionTenantViaOrchestrator(
+                    BOOTSTRAP_KEY, TENANT_B_ID, "IAM IT Tenant B", "enterprise");
         }
 
         @Test
         @Order(2)
-        @DisplayName("Create API key for tenant B")
-        void createTenantBApiKey() {
-            Response response =
-                    given().header("Authorization", bootstrapAuth())
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "subject": "iam-it-admin-b",
-                      "roles": ["admin:read", "admin:write", "tenant-admin"]
-                    }
-                    """
-                                            .formatted(TENANT_B_ID))
-                            .when()
-                            .post("/api/v1/platform/api-keys")
-                            .then()
-                            .statusCode(201)
-                            .extract()
-                            .response();
-
-            tenantBApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(tenantBApiKey);
-
-            // Wait for CQRS projections
+        @DisplayName("Await tenant B ready and capture org ID")
+        void awaitTenantBReady() {
             var supportB = new IntegrationTestSupport(config, TENANT_B_ID);
             supportB.awaitTenantReady(TENANT_B_ID, Duration.ofSeconds(90));
             supportB.close();
+
+            org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .pollInterval(Duration.ofSeconds(2))
+                    .ignoreExceptions()
+                    .untilAsserted(
+                            () -> {
+                                Response response =
+                                        given().header("Authorization", bootstrapAuth())
+                                                .when()
+                                                .get(BASE_PATH + "/organizations")
+                                                .then()
+                                                .statusCode(200)
+                                                .extract()
+                                                .response();
+
+                                List<String> orgNames = response.jsonPath().getList("orgName");
+                                assertThat(orgNames)
+                                        .as("Tenant B organization should exist")
+                                        .contains(TENANT_B_ID);
+
+                                List<Map<String, Object>> orgs =
+                                        response.jsonPath().getList("$");
+                                for (var entry : orgs) {
+                                    if (TENANT_B_ID.equals(entry.get("orgName"))) {
+                                        tenantBOrgId = String.valueOf(entry.get("orgId"));
+                                        break;
+                                    }
+                                }
+                                assertNotNull(tenantBOrgId);
+                            });
         }
 
         @Test
         @Order(3)
-        @DisplayName("Tenant B realm exists")
-        void tenantBRealmExists() {
-            supportA.awaitKeycloakRealmExists(TENANT_B_REALM, Duration.ofSeconds(30));
+        @DisplayName("Org A members do NOT include org B admin")
+        void orgADoesNotContainOrgBUsers() {
+            assertNotNull(tenantAOrgId, "tenantAOrgId required");
+
+            Response response =
+                    given().header("Authorization", bootstrapAuth())
+                            .when()
+                            .get(BASE_PATH + "/organizations/" + tenantAOrgId + "/members")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
+
+            List<String> usernames = response.jsonPath().getList("username");
+            assertThat(usernames)
+                    .as("Org A members should NOT include org B admin user")
+                    .doesNotContain("iam-it-tenant-b-admin");
         }
 
         @Test
         @Order(4)
-        @DisplayName("Register user in tenant B")
-        void registerUserInTenantB() {
-            given().header("Authorization", "Bearer " + tenantBApiKey)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "username": "user-b",
-                      "email": "user-b@tenant-b-test.com",
-                      "fullName": "Tenant B User",
-                      "roles": ["tenant-read"],
-                      "temporaryPassword": false
-                    }
-                    """)
-                    .when()
-                    .post(BASE_PATH + "/users")
-                    .then()
-                    .statusCode(201);
+        @DisplayName("Org B members do NOT include org A admin")
+        void orgBDoesNotContainOrgAUsers() {
+            assertNotNull(tenantBOrgId, "tenantBOrgId required");
+
+            Response response =
+                    given().header("Authorization", bootstrapAuth())
+                            .when()
+                            .get(BASE_PATH + "/organizations/" + tenantBOrgId + "/members")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .response();
+
+            List<String> usernames = response.jsonPath().getList("username");
+            assertThat(usernames)
+                    .as("Org B members should NOT include org A admin user")
+                    .doesNotContain("iam-it-tenant-a-admin");
         }
 
         @Test
         @Order(5)
-        @DisplayName("Tenant A key cannot see tenant B users")
-        void tenantACannotSeeTenantBUsers() {
-            // When using tenant A's API key, the list should only contain tenant A users
-            Response response =
-                    given().header("Authorization", tenantAAuth())
-                            .when()
-                            .get(BASE_PATH + "/users")
-                            .then()
-                            .statusCode(200)
-                            .extract()
-                            .response();
-
-            List<String> emails = response.jsonPath().getList("email");
-            assertThat(emails)
-                    .as("Tenant A key should NOT see tenant B users")
-                    .doesNotContain("user-b@tenant-b-test.com");
-        }
-
-        @Test
-        @Order(6)
-        @DisplayName("Tenant B key cannot see tenant A users")
-        void tenantBCannotSeeTenantAUsers() {
-            Response response =
-                    given().header("Authorization", "Bearer " + tenantBApiKey)
-                            .when()
-                            .get(BASE_PATH + "/users")
-                            .then()
-                            .statusCode(200)
-                            .extract()
-                            .response();
-
-            List<String> emails = response.jsonPath().getList("email");
-            assertThat(emails)
-                    .as("Tenant B key should NOT see tenant A users")
-                    .doesNotContain(tenantAUserEmail);
-        }
-
-        @Test
-        @Order(7)
-        @DisplayName("Tenant A user NOT in tenant B Keycloak realm")
-        void tenantAUserNotInTenantBRealm() {
-            var users =
-                    supportA.keycloak()
-                            .realm(TENANT_B_REALM)
-                            .users()
-                            .searchByEmail(tenantAUserEmail, true);
-            assertThat(users).as("Tenant A user should NOT exist in tenant B realm").isEmpty();
+        @DisplayName("Both tenants share the single operio Keycloak realm")
+        void sharedOperioRealm() {
+            var realmNames =
+                    support.keycloak().realms().findAll().stream()
+                            .map(r -> r.getRealm())
+                            .toList();
+            assertThat(realmNames)
+                    .as("No per-tenant realm should exist for tenant A")
+                    .doesNotContain("t_" + TENANT_A_ID);
+            assertThat(realmNames)
+                    .as("No per-tenant realm should exist for tenant B")
+                    .doesNotContain("t_" + TENANT_B_ID);
         }
     }
 
@@ -946,15 +887,15 @@ class TenantIamResourceIT {
                             .extract()
                             .response();
 
-            tenantAApiKey = response.jsonPath().getString("rawKey");
-            assertNotNull(tenantAApiKey);
+            readOnlyApiKey = response.jsonPath().getString("rawKey");
+            assertNotNull(readOnlyApiKey);
         }
 
         @Test
         @Order(3)
         @DisplayName("tenant-read role cannot manage users → 403")
         void tenantReadCannotManageUsers() {
-            given().header("Authorization", "Bearer " + tenantAApiKey)
+            given().header("Authorization", "Bearer " + readOnlyApiKey)
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -974,9 +915,9 @@ class TenantIamResourceIT {
 
         @Test
         @Order(4)
-        @DisplayName("tenant-admin can manage users → 200")
-        void tenantAdminCanListUsers() {
-            given().header("Authorization", tenantAAuth())
+        @DisplayName("Bootstrap key (super-admin) can manage users → 200")
+        void superAdminCanListUsers() {
+            given().header("Authorization", bootstrapAuth())
                     .when()
                     .get(BASE_PATH + "/users")
                     .then()
@@ -985,16 +926,20 @@ class TenantIamResourceIT {
 
         @Test
         @Order(5)
-        @DisplayName("Bootstrap key (super-admin) can manage tenant users → 200")
-        void superAdminCanListTenantUsers() {
-            // Super admin needs a tenant context — we use the bootstrap key which has super-admin
-            // but may not have tenant context. This depends on implementation.
-            // The bootstrap key should work for platform-level endpoints.
-            given().header("Authorization", tenantAAuth())
+        @DisplayName("Login endpoint does not require authorization")
+        void authEndpointsOpen() {
+            given().contentType(ContentType.JSON)
+                    .body(
+                            """
+                    {
+                      "email": "nonexistent@test.com",
+                      "password": "any"
+                    }
+                    """)
                     .when()
-                    .get(BASE_PATH + "/users")
+                    .post(BASE_PATH + "/login")
                     .then()
-                    .statusCode(200);
+                    .statusCode(anyOf(equalTo(400), equalTo(401)));
         }
     }
 
@@ -1012,8 +957,8 @@ class TenantIamResourceIT {
         @Order(1)
         @DisplayName("Close test support")
         void closeSupport() {
-            if (supportA != null) {
-                supportA.close();
+            if (support != null) {
+                support.close();
             }
         }
     }

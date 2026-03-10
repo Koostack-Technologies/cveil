@@ -8,6 +8,7 @@ import org.keycloak.admin.client.resource.OrganizationResource;
 import org.keycloak.admin.client.resource.OrganizationsResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.MemberRepresentation;
+import org.keycloak.representations.idm.OrganizationDomainRepresentation;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,10 +49,12 @@ public class KeycloakOrganizationService {
      */
     public String createOrganization(String orgName, String displayName) {
         OrganizationRepresentation org = new OrganizationRepresentation();
-        org.setName(orgName);
-        org.setAlias(displayName != null ? displayName : orgName);
+        org.setName(displayName != null ? displayName : orgName);
+        org.setAlias(orgName);
         org.setEnabled(true);
         org.setDescription("Operio tenant: " + orgName);
+        org.addDomain(new OrganizationDomainRepresentation(
+                orgName.replace('_', '-') + ".operio.local"));
 
         Response response = orgs().create(org);
         try {
@@ -73,11 +76,23 @@ public class KeycloakOrganizationService {
                 throw new OperioServiceException(
                         "Organization '" + orgName + "' conflicts but cannot be found");
             } else {
+                String body = "";
+                try {
+                    body = response.readEntity(String.class);
+                } catch (Exception ignored) {
+                }
+                LOG.error(
+                        "Create organization '{}' failed: HTTP {} — {}",
+                        orgName,
+                        response.getStatus(),
+                        body);
                 throw new OperioServiceException(
                         "Failed to create organization '"
                                 + orgName
                                 + "': HTTP "
-                                + response.getStatus());
+                                + response.getStatus()
+                                + " — "
+                                + body);
             }
         } finally {
             response.close();

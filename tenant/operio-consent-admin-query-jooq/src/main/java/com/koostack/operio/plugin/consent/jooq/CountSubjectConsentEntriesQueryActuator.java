@@ -4,6 +4,7 @@ import static com.koostack.operio.plugin.consent.jooq.generated.Tables.CONSENT_L
 
 import com.koostack.operio.core.cqrs.QueryActuator;
 import com.koostack.operio.core.metrics.MetricPublisherService;
+import com.koostack.operio.core.models.TenantContext;
 import org.jooq.DSLContext;
 
 /** Query actuator that counts consent ledger entries for a subject. */
@@ -29,6 +30,7 @@ public class CountSubjectConsentEntriesQueryActuator
         return dsl.selectCount()
                 .from(CONSENT_LEDGER)
                 .where(CONSENT_LEDGER.SUBJECT_ID.eq(query.subjectId()))
+                .and(CONSENT_LEDGER.TENANT_ID.eq(TenantContext.require()))
                 .fetchOneInto(int.class);
     }
 

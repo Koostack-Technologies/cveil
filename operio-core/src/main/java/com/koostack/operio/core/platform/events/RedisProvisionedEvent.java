@@ -11,7 +11,19 @@ import com.koostack.operio.core.event.DomainEvent;
  * @param pubSubChannel the pub/sub channel created (e.g., {@code
  *     consent-cache-invalidation:{tenantId}})
  * @param aclUser the Redis ACL user created for the tenant (nullable if ACLs are disabled)
+ * @param aclPassword the Redis ACL password (nullable if ACLs are disabled)
  */
 public record RedisProvisionedEvent(
-        String tenantId, String streamKey, String pubSubChannel, String aclUser)
-        implements DomainEvent {}
+        String tenantId,
+        String streamKey,
+        String pubSubChannel,
+        String aclUser,
+        String aclPassword)
+        implements DomainEvent {
+
+    /** Backward-compatible constructor without password. */
+    public RedisProvisionedEvent(
+            String tenantId, String streamKey, String pubSubChannel, String aclUser) {
+        this(tenantId, streamKey, pubSubChannel, aclUser, null);
+    }
+}

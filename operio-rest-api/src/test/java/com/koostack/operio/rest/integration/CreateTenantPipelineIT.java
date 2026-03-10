@@ -26,21 +26,24 @@ import org.junit.jupiter.api.TestClassOrder;
 import org.junit.jupiter.api.TestMethodOrder;
 
 /**
- * End-to-end integration test for the full create-tenant pipeline.
+ * End-to-end integration test for the full create-tenant pipeline via user registration.
  *
- * <p>Validates the entire flow from HTTP POST through event sourcing, projections, and API key
- * generation under the unified schema architecture (RLS-based isolation, single event store).
+ * <p>Validates the entire flow from {@code POST /api/v1/platform/iam/users} (with
+ * {@code organizationName}) through the 7-step orchestrator saga, event sourcing, and projections
+ * under the unified schema architecture (RLS-based isolation, single event store).
  *
  * <h2>What this test verifies</h2>
  *
  * <ol>
- *   <li>POST /api/v1/platform/tenants returns 201
+ *   <li>POST /api/v1/platform/iam/users with organizationName returns 201 with tenantId
+ *   <li>Duplicate registration with same username/email is rejected
+ *   <li>core.tenant.created and billing events present in unified event store
  *   <li>Tenant row materializes in platform_core.tenant
  *   <li>Billing profile and subscription rows exist
- *   <li>TenantCreated event present in unified event store (operio_event.event)
- *   <li>Billing events present in unified event store
- *   <li>3 API keys (DEV, TEST, PROD) in platform_iam.api_key
+ *   <li>Unified consent tables and event table exist
+ *   <li>API keys can be generated via POST /api/v1/platform/api-keys
  *   <li>Tenant status reflects creation
+ *   <li>Pre-seeded plans exist in plan table
  * </ol>
  *
  * <p>Keycloak is not required — the test runs without an IdpProvider. Authentication uses the
@@ -59,8 +62,6 @@ class CreateTenantPipelineIT {
 
     private static final String TENANT_ID = "pipeline_test_tenant";
     private static final String TENANT_DISPLAY = "Pipeline Test Tenant";
-    private static final String TENANT_PLAN = "pro";
-    private static final String BILLING_EMAIL = "billing@pipeline-test.com";
 
     // Async operations timeout
     private static final Duration ASYNC_TIMEOUT = Duration.ofSeconds(30);
@@ -79,46 +80,47 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 1. Create Tenant via REST API
+    // 1. User Registration (triggers 7-step saga including tenant creation)
     // =======================================================================
 
     @Nested
     @Order(1)
-    @DisplayName("1 — POST /api/v1/platform/tenants returns 201")
+    @DisplayName("1 — POST /api/v1/platform/iam/users returns 201")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class CreateTenantHttp {
+    class UserRegistrationHttp {
 
         @Test
         @Order(1)
-        @DisplayName("Create tenant returns 201 with correct body")
-        void createTenantReturns201() {
+        @DisplayName("Register user with organization returns 201 with tenantId")
+        void registerUserReturns201() {
             given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
                     .contentType(ContentType.JSON)
                     .body(
                             String.format(
                                     """
                     {
-                      "tenantId": "%s",
-                      "displayName": "%s",
-                      "plan": "%s",
-                      "billingEmail": "%s"
+                      "username": "pipeline-test-admin",
+                      "email": "pipeline-test@operio-test.com",
+                      "fullName": "Pipeline Test Admin",
+                      "roles": ["super-admin"],
+                      "temporaryPassword": false,
+                      "organizationName": "%s",
+                      "organizationDisplayName": "%s"
                     }
                     """,
-                                    TENANT_ID, TENANT_DISPLAY, TENANT_PLAN, BILLING_EMAIL))
+                                    TENANT_ID, TENANT_DISPLAY))
                     .when()
-                    .post("/api/v1/platform/tenants")
+                    .post("/api/v1/platform/iam/users")
                     .then()
                     .statusCode(201)
                     .contentType(ContentType.JSON)
-                    .body("tenantId", equalTo(TENANT_ID))
-                    .body("displayName", equalTo(TENANT_DISPLAY))
-                    .body("plan", equalTo(TENANT_PLAN));
+                    .body("tenantId", equalTo(TENANT_ID));
         }
 
         @Test
         @Order(2)
-        @DisplayName("Duplicate tenant creation is rejected")
-        void duplicateTenantRejected() {
+        @DisplayName("Duplicate registration with same username/email is rejected")
+        void duplicateRegistrationRejected() {
             // Wait for the projection to catch up before attempting duplicate
             await().atMost(ASYNC_TIMEOUT)
                     .pollInterval(POLL_INTERVAL)
@@ -144,15 +146,18 @@ class CreateTenantPipelineIT {
                             String.format(
                                     """
                     {
-                      "tenantId": "%s",
-                      "displayName": "Dup",
-                      "plan": "%s",
-                      "billingEmail": "dup@test.com"
+                      "username": "pipeline-test-admin",
+                      "email": "pipeline-test@operio-test.com",
+                      "fullName": "Duplicate User",
+                      "roles": ["super-admin"],
+                      "temporaryPassword": false,
+                      "organizationName": "%s",
+                      "organizationDisplayName": "Duplicate Org"
                     }
                     """,
-                                    TENANT_ID, TENANT_PLAN))
+                                    TENANT_ID))
                     .when()
-                    .post("/api/v1/platform/tenants")
+                    .post("/api/v1/platform/iam/users")
                     .then()
                     .statusCode(anyOf(is(409), is(400), is(500), is(503)));
         }
@@ -239,7 +244,7 @@ class CreateTenantPipelineIT {
                                     assertThat(rs.next())
                                             .as("Tenant row exists for %s", TENANT_ID)
                                             .isTrue();
-                                    assertThat(rs.getString("plan")).isEqualTo(TENANT_PLAN);
+                                    assertThat(rs.getString("plan")).isEqualTo("free");
                                 }
                             });
         }
@@ -256,7 +261,7 @@ class CreateTenantPipelineIT {
                                         Statement stmt = conn.createStatement()) {
                                     ResultSet rs =
                                             stmt.executeQuery(
-                                                    "SELECT tenant_id, billing_email FROM"
+                                                    "SELECT tenant_id FROM"
                                                         + " platform_billing.billing_profile WHERE"
                                                         + " tenant_id = '"
                                                             + TENANT_ID
@@ -264,8 +269,6 @@ class CreateTenantPipelineIT {
                                     assertThat(rs.next())
                                             .as("Billing profile exists for %s", TENANT_ID)
                                             .isTrue();
-                                    assertThat(rs.getString("billing_email"))
-                                            .isEqualTo(BILLING_EMAIL);
                                 }
                             });
         }
@@ -291,7 +294,7 @@ class CreateTenantPipelineIT {
                                     assertThat(rs.next())
                                             .as("Subscription exists for %s", TENANT_ID)
                                             .isTrue();
-                                    assertThat(rs.getString("plan_tier")).isEqualTo(TENANT_PLAN);
+                                    assertThat(rs.getString("plan_tier")).isEqualTo("free");
                                     assertThat(rs.getLong("eval_limit_monthly")).isGreaterThan(0);
                                     assertThat(rs.getLong("subject_limit")).isGreaterThan(0);
                                     assertThat(rs.getInt("burst_limit_per_min")).isGreaterThan(0);
@@ -319,7 +322,7 @@ class CreateTenantPipelineIT {
                                                             + TENANT_ID
                                                             + "'");
                                     assertThat(rs.next()).as("Tenant + billing join").isTrue();
-                                    assertThat(rs.getString("plan")).isEqualTo(TENANT_PLAN);
+                                    assertThat(rs.getString("plan")).isEqualTo("free");
                                 }
                             });
         }
@@ -387,115 +390,39 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 5. API Key Generation (async)
+    // 5. API Key Generation (on-demand via IAM endpoint)
     // =======================================================================
 
     @Nested
     @Order(5)
-    @DisplayName("5 — API keys generated (DEV, TEST, PROD)")
+    @DisplayName("5 — API key can be generated via POST /api/v1/platform/api-keys")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class ApiKeyGeneration {
 
         @Test
         @Order(1)
-        @DisplayName("3 API keys exist in platform_iam.api_key")
-        void threeApiKeysGenerated() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT COUNT(*) FROM platform_iam.api_key "
-                                                            + "WHERE tenant_id = '"
-                                                            + TENANT_ID
-                                                            + "'");
-                                    rs.next();
-                                    assertThat(rs.getInt(1))
-                                            .as("API key count for %s", TENANT_ID)
-                                            .isEqualTo(3);
-                                }
-                            });
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("API keys cover all environments (DEV, TEST, PROD)")
-        void apiKeysHaveCorrectEnvironments() {
-            await().atMost(ASYNC_TIMEOUT)
-                    .pollInterval(POLL_INTERVAL)
-                    .untilAsserted(
-                            () -> {
-                                try (Connection conn = getDbConnection();
-                                        Statement stmt = conn.createStatement()) {
-                                    ResultSet rs =
-                                            stmt.executeQuery(
-                                                    "SELECT environment FROM platform_iam.api_key "
-                                                            + "WHERE tenant_id = '"
-                                                            + TENANT_ID
-                                                            + "' "
-                                                            + "ORDER BY environment");
-                                    List<String> envs = new ArrayList<>();
-                                    while (rs.next()) {
-                                        envs.add(rs.getString("environment"));
-                                    }
-                                    assertThat(envs)
-                                            .containsExactlyInAnyOrder("DEV", "TEST", "PROD");
-                                }
-                            });
-        }
-
-        @Test
-        @Order(3)
-        @DisplayName("API keys have key_hash and key_prefix populated")
-        void apiKeysHaveHashAndPrefix() throws SQLException {
-            try (Connection conn = getDbConnection();
-                    Statement stmt = conn.createStatement()) {
-                ResultSet rs =
-                        stmt.executeQuery(
-                                "SELECT key_hash, key_prefix, status FROM platform_iam.api_key "
-                                        + "WHERE tenant_id = '"
-                                        + TENANT_ID
-                                        + "'");
-                int count = 0;
-                while (rs.next()) {
-                    count++;
-                    assertThat(rs.getString("key_hash"))
-                            .as("key_hash for API key %d", count)
-                            .isNotNull()
-                            .isNotEmpty();
-                    assertThat(rs.getString("key_prefix"))
-                            .as("key_prefix for API key %d", count)
-                            .isNotNull()
-                            .startsWith("opr_");
-                    assertThat(rs.getString("status"))
-                            .as("status for API key %d", count)
-                            .isEqualTo("active");
-                }
-                assertThat(count).isEqualTo(3);
-            }
-        }
-
-        @Test
-        @Order(4)
-        @DisplayName("ApiKeyGenerated events exist in event store")
-        void apiKeyEventsExist() throws SQLException {
-            try (Connection conn = getDbConnection();
-                    Statement stmt = conn.createStatement()) {
-                ResultSet rs =
-                        stmt.executeQuery(
-                                "SELECT COUNT(*) FROM operio_event.event "
-                                        + "WHERE event_type = 'iam.api-key.generated' "
-                                        + "AND payload::text LIKE '%"
-                                        + TENANT_ID
-                                        + "%'");
-                rs.next();
-                assertThat(rs.getInt(1))
-                        .as("ApiKeyGenerated events for %s", TENANT_ID)
-                        .isEqualTo(3);
-            }
+        @DisplayName("API key can be created for the registered tenant")
+        void apiKeyCanBeCreated() {
+            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(
+                            String.format(
+                                    """
+                    {
+                      "tenantId": "%s",
+                      "subject": "pipeline-test-admin",
+                      "roles": ["super-admin"]
+                    }
+                    """,
+                                    TENANT_ID))
+                    .when()
+                    .post("/api/v1/platform/api-keys")
+                    .then()
+                    .statusCode(201)
+                    .contentType(ContentType.JSON)
+                    .body("tenantId", equalTo(TENANT_ID))
+                    .body("rawKey", notNullValue())
+                    .body("keyPrefix", notNullValue());
         }
     }
 
@@ -546,27 +473,6 @@ class CreateTenantPipelineIT {
 
         @Test
         @Order(1)
-        @DisplayName("Invalid plan is rejected")
-        void invalidPlanRejected() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "tenantId": "plan_test_tenant",
-                      "displayName": "Plan Test",
-                      "plan": "nonexistent_plan",
-                      "billingEmail": "test@test.com"
-                    }
-                    """)
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(anyOf(is(400), is(500), is(503)));
-        }
-
-        @Test
-        @Order(2)
         @DisplayName("Pre-seeded plans exist in plan table")
         void preSeededPlansExist() throws SQLException {
             try (Connection conn = getDbConnection();

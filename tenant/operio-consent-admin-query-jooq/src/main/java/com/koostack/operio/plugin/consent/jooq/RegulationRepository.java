@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.RegulationDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Regulation;
 
@@ -31,11 +32,13 @@ public class RegulationRepository {
     public Optional<Regulation> findByName(String regulationName) {
         return dsl.selectFrom(REGULATION)
                   .where(REGULATION.REGULATION_NAME.eq(regulationName))
+                  .and(REGULATION.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Regulation.class);
     }
 
     public List<Regulation> findAll() {
         return dsl.selectFrom(REGULATION)
+                  .where(REGULATION.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(REGULATION.REGULATION_NAME)
                   .fetchInto(Regulation.class);
     }
@@ -43,6 +46,7 @@ public class RegulationRepository {
     public Optional<Regulation> findById(Long regulationId) {
         return dsl.selectFrom(REGULATION)
                   .where(REGULATION.REGULATION_ID.eq(regulationId))
+                  .and(REGULATION.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Regulation.class);
     }
 }

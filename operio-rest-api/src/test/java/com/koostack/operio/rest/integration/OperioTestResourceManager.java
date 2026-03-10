@@ -93,7 +93,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
     // -- Keycloak defaults ----------------------------------------------------
 
     private static final int KEYCLOAK_PORT = 8080;
-    private static final String PLATFORM_REALM = "operio-platform";
+    private static final String PLATFORM_REALM = "operio";
     private static final String OPERIO_CLIENT_ID = "operio-backend";
     private static final List<String> DEFAULT_ROLES =
             List.of(
@@ -203,7 +203,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
                 "http://" + keycloak.getHost() + ":" + keycloak.getMappedPort(KEYCLOAK_PORT);
         LOG.info("Keycloak started: url={}", keycloakUrl);
 
-        // Bootstrap the operio-platform realm so the CQRS projection handler can
+        // Bootstrap the operio realm so the CQRS projection handler can
         // materialise events into a pre-existing realm (the app does not auto-create it).
         String clientSecret = bootstrapPlatformRealm(keycloakUrl);
 
@@ -287,7 +287,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
     // -----------------------------------------------------------------------
 
     /**
-     * Creates the {@code operio-platform} realm in Keycloak with the {@code operio-backend}
+     * Creates the {@code operio} realm in Keycloak with the {@code operio-backend}
      * confidential client and all default Operio roles.
      *
      * @return the auto-generated client secret for {@code operio-backend}
@@ -311,6 +311,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
             realm.setEnabled(true);
             realm.setAccessTokenLifespan(900);
             realm.setSsoSessionMaxLifespan(604800);
+            realm.setOrganizationsEnabled(true);
             kc.realms().create(realm);
 
             var realmResource = kc.realm(PLATFORM_REALM);
@@ -325,12 +326,32 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
             client.setServiceAccountsEnabled(true);
             client.setDirectAccessGrantsEnabled(true);
             client.setStandardFlowEnabled(false);
+
             realmResource.clients().create(client);
 
             // Retrieve auto-generated client secret
             var clients = realmResource.clients().findByClientId(OPERIO_CLIENT_ID);
             String internalId = clients.get(0).getId();
             String secret = realmResource.clients().get(internalId).getSecret().getValue();
+
+            // Promote the 'organization' client scope from optional → default so
+            // every token issued for this client contains the "organizations" claim
+            // (Keycloak 26 creates this scope automatically when orgs are enabled).
+            realmResource.clientScopes().findAll().stream()
+                    .filter(s -> "organization".equals(s.getName()))
+                    .findFirst()
+                    .ifPresent(orgScope -> {
+                        // Remove from optional first (Keycloak may reject adding as
+                        // default if it's already registered as optional).
+                        try {
+                            realmResource.clients().get(internalId)
+                                    .removeOptionalClientScope(orgScope.getId());
+                        } catch (Exception ignored) { }
+                        realmResource.clients().get(internalId)
+                                .addDefaultClientScope(orgScope.getId());
+                        LOG.info("Added 'organization' as default client scope for '{}'",
+                                OPERIO_CLIENT_ID);
+                    });
 
             // Create default roles
             for (String roleName : DEFAULT_ROLES) {

@@ -71,33 +71,45 @@ public class EventRepository {
 
     /** Returns the current maximum version for a given aggregate, or 0 if none exists. */
     public Long getAggregateVersion(String aggregateType, String aggregateId) {
-        Long version =
+        String tenantId = TenantContext.get();
+        var query =
                 dsl.select(max(EVENT.VERSION))
                         .from(EVENT)
                         .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
-                        .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-                        .fetchOneInto(Long.class);
+                        .and(EVENT.AGGREGATE_ID.eq(aggregateId));
+        if (tenantId != null) {
+            query = query.and(EVENT.TENANT_ID.eq(tenantId));
+        }
+        Long version = query.fetchOneInto(Long.class);
         return version != null ? version : 0L;
     }
 
     /** Fetches all events for an aggregate, ordered by version. */
     public List<PlatformEvent> fetchChangesForAggregate(String aggregateType, String aggregateId) {
-        return dsl.selectFrom(EVENT)
-                .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
-                .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-                .orderBy(EVENT.VERSION.asc())
-                .fetch(this::toPlatformEvent);
+        String tenantId = TenantContext.get();
+        var query =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
+                        .and(EVENT.AGGREGATE_ID.eq(aggregateId));
+        if (tenantId != null) {
+            query = query.and(EVENT.TENANT_ID.eq(tenantId));
+        }
+        return query.orderBy(EVENT.VERSION.asc()).fetch(this::toPlatformEvent);
     }
 
     /** Fetches events for an aggregate up to and including the given version. */
     public List<PlatformEvent> fetchChangesUpToVersion(
             String aggregateType, String aggregateId, Long version) {
-        return dsl.selectFrom(EVENT)
-                .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
-                .and(EVENT.AGGREGATE_ID.eq(aggregateId))
-                .and(EVENT.VERSION.le(version))
-                .orderBy(EVENT.VERSION.asc())
-                .fetch(this::toPlatformEvent);
+        String tenantId = TenantContext.get();
+        var query =
+                dsl.selectFrom(EVENT)
+                        .where(EVENT.AGGREGATE_TYPE.eq(aggregateType))
+                        .and(EVENT.AGGREGATE_ID.eq(aggregateId))
+                        .and(EVENT.VERSION.le(version));
+        if (tenantId != null) {
+            query = query.and(EVENT.TENANT_ID.eq(tenantId));
+        }
+        return query.orderBy(EVENT.VERSION.asc()).fetch(this::toPlatformEvent);
     }
 
     /** Persists an aggregate snapshot (upsert — replaces existing snapshot at same key). */

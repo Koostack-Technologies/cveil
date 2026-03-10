@@ -157,7 +157,8 @@ public class OperioProducers {
 
     @Inject OperioConfig config;
 
-    @Inject Instance<IdpProvider<?>> idpProviderInstance;
+    @SuppressWarnings("rawtypes")
+    @Inject Instance<IdpProvider> idpProviderInstance;
 
     @Inject Instance<AuthzProvider<?>> authzProviderInstance;
 
@@ -225,7 +226,7 @@ public class OperioProducers {
         // -- IdP provider (production only, when Keycloak is configured) ------
         if (idpProviderInstance.isResolvable()) {
             IdpProvider<?> idp = idpProviderInstance.get();
-            if (idp != null) {
+            if (idp != null && idp.isAvailable()) {
                 builder.withIdpProvider(idp);
                 LOG.info("Operio REST API: IdpProvider wired into builder");
             }
@@ -493,11 +494,11 @@ public class OperioProducers {
     @Produces
     @ApplicationScoped
     @Unremovable
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public IdpProvider idpProvider() {
         if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
             LOG.debug("Operio REST API: IdpProvider not available (embedded mode)");
-            return null;
+            return IdpProvider.unavailable();
         }
 
         return config.keycloak()
@@ -527,7 +528,7 @@ public class OperioProducers {
                             LOG.info(
                                     "Operio REST API: No Keycloak configuration — IdpProvider not"
                                             + " available");
-                            return null;
+                            return IdpProvider.unavailable();
                         });
     }
 
@@ -588,16 +589,17 @@ public class OperioProducers {
      */
     @Produces
     @ApplicationScoped
+    @SuppressWarnings("rawtypes")
     public IdpTenantResolver idpTenantResolver(
-            Instance<IdpProvider<?>> defaultIdpProviderInstance) {
+            Instance<IdpProvider> defaultIdpProviderInstance) {
         if (!defaultIdpProviderInstance.isResolvable()) {
-            LOG.debug("Operio REST API: IdpTenantResolver not available (no default IdP)");
-            return null;
+            LOG.debug("Operio REST API: IdpTenantResolver — no IdpProvider bean found");
+            return IdpTenantResolver.unavailable();
         }
         IdpProvider<?> defaultIdpProvider = defaultIdpProviderInstance.get();
-        if (defaultIdpProvider == null) {
-            LOG.debug("Operio REST API: IdpTenantResolver not available (IdP returned null)");
-            return null;
+        if (defaultIdpProvider == null || !defaultIdpProvider.isAvailable()) {
+            LOG.debug("Operio REST API: IdpTenantResolver — IdP not available");
+            return IdpTenantResolver.unavailable();
         }
 
         // TODO: Wire per-tenant IdP config lookup from the CQRS query layer
@@ -953,9 +955,17 @@ public class OperioProducers {
                         return java.util.List.of("platform");
                     }
                 };
+        // Include operio_event in the search_path for the event service's DSLContext.
+        // The JooqDataSourceFactory creates its own HikariCP pool without a
+        // connectionInitSql, so we use the JDBC currentSchema parameter instead.
+        String eventDbUrl = platformDbUrl;
+        if (eventDbUrl != null && eventDbUrl.startsWith("jdbc:postgresql")) {
+            String sep = eventDbUrl.contains("?") ? "&" : "?";
+            eventDbUrl = eventDbUrl + sep + "currentSchema=operio_event,public";
+        }
         PlatformEventJooqConfig eventConfig =
                 new PlatformEventJooqConfig(
-                        platformDbUrl,
+                        eventDbUrl,
                         platformDb.dialect(),
                         platformDb.username().orElse(null),
                         platformDb.password().orElse(null),
@@ -1373,6 +1383,18 @@ public class OperioProducers {
 
         // Append SSL parameters to JDBC URL if needed
         String dbUrl = appendSslParameters(db.url(), db);
+
+        // Consent tables live in operio_consent; event table in operio_event.
+        // Append currentSchema so jOOQ's renderSchema(false) resolves unqualified
+        // table names to the correct schemas.
+        if (dbUrl != null && dbUrl.startsWith("jdbc:postgresql")) {
+            String sep = dbUrl.contains("?") ? "&" : "?";
+            dbUrl =
+                    dbUrl
+                            + sep
+                            + "currentSchema=operio_consent,operio_event,platform_core,"
+                            + "platform_iam,platform_billing,public";
+        }
 
         JooqConsentAdminServiceConfig jooqConfig =
                 new JooqConsentAdminServiceConfig(

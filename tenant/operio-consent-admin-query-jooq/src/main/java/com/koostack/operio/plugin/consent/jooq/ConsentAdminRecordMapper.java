@@ -3,6 +3,7 @@ package com.koostack.operio.plugin.consent.jooq;
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 
 import com.koostack.operio.core.models.*;
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Regulation;
@@ -52,6 +53,7 @@ public class ConsentAdminRecordMapper {
                         .join(CATEGORY)
                         .on(FIELD_CATEGORY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
                         .where(FIELD_CATEGORY.FIELD_ID.eq(f.getFieldId()))
+                        .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
         List<FieldView.CategoryView> categories =
@@ -80,6 +82,7 @@ public class ConsentAdminRecordMapper {
                         .join(REGULATION)
                         .on(PURPOSE_REGULATION.REGULATION_ID.eq(REGULATION.REGULATION_ID))
                         .where(PURPOSE_REGULATION.PURPOSE_ID.eq(p.getPurposeId()))
+                        .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
         List<PurposeView.RegulationLinkView> regs =
@@ -147,6 +150,7 @@ public class ConsentAdminRecordMapper {
                                 REGULATION_JURISDICTION.JURISDICTION_ID.eq(
                                         JURISDICTION.JURISDICTION_ID))
                         .where(REGULATION_JURISDICTION.REGULATION_ID.eq(r.getRegulationId()))
+                        .and(REGULATION_JURISDICTION.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
         List<RegulationView.JurisdictionView> juris =

@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.slf4j.Logger;
@@ -51,6 +52,7 @@ public class RegisterUserCommandActuator
      * @param fullName the user's display name (nullable)
      * @param roles initial roles to assign (nullable — defaults to empty)
      * @param temporaryPassword if true, user must change password on first login
+     * @param password the user's initial password (nullable — if null, no credentials are set)
      */
     public record RegisterUserCommand(
             String realmId,
@@ -58,7 +60,20 @@ public class RegisterUserCommandActuator
             String email,
             String fullName,
             Set<String> roles,
-            boolean temporaryPassword) {}
+            boolean temporaryPassword,
+            String password) {
+
+        /** Backward-compatible constructor without password. */
+        public RegisterUserCommand(
+                String realmId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                boolean temporaryPassword) {
+            this(realmId, username, email, fullName, roles, temporaryPassword, null);
+        }
+    }
 
     /**
      * Result of registering a user.
@@ -67,7 +82,12 @@ public class RegisterUserCommandActuator
      * @param email the user's email
      * @param realmId the realm the user was registered in
      */
-    public record RegisterUserResult(String username, String email, String realmId) {}
+    public record RegisterUserResult(String username, String email, String realmId, String keycloakUserId) {
+        /** Backward-compatible constructor (no KC user ID). */
+        public RegisterUserResult(String username, String email, String realmId) {
+            this(username, email, realmId, null);
+        }
+    }
 
     @Override
     public RegisterUserResult execute(RegisterUserCommand command) {
@@ -118,7 +138,7 @@ public class RegisterUserCommandActuator
                 command.email(),
                 keycloakUserId);
 
-        return new RegisterUserResult(command.username(), command.email(), command.realmId());
+        return new RegisterUserResult(command.username(), command.email(), command.realmId(), keycloakUserId);
     }
 
     // -- Keycloak operations --------------------------------------------------
@@ -156,6 +176,15 @@ public class RegisterUserCommandActuator
 
         if (command.temporaryPassword()) {
             user.setRequiredActions(List.of("UPDATE_PASSWORD"));
+        }
+
+        // Set password credentials if provided
+        if (command.password() != null && !command.password().isBlank()) {
+            CredentialRepresentation cred = new CredentialRepresentation();
+            cred.setType(CredentialRepresentation.PASSWORD);
+            cred.setValue(command.password());
+            cred.setTemporary(command.temporaryPassword());
+            user.setCredentials(List.of(cred));
         }
 
         var response = realm.users().create(user);

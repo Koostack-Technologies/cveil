@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.JURISDICTION;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.JurisdictionDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Jurisdiction;
 import java.util.List;
@@ -27,11 +28,13 @@ public class JurisdictionRepository {
     public Optional<Jurisdiction> findByName(String jurisdictionName) {
         return dsl.selectFrom(JURISDICTION)
                 .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
+                .and(JURISDICTION.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptionalInto(Jurisdiction.class);
     }
 
     public List<Jurisdiction> findAll() {
         return dsl.selectFrom(JURISDICTION)
+                .where(JURISDICTION.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(JURISDICTION.JURISDICTION_NAME)
                 .fetchInto(Jurisdiction.class);
     }

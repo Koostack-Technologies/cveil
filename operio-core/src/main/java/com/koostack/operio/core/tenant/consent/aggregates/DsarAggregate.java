@@ -38,7 +38,9 @@ public record DsarAggregate(
         return switch (eventType) {
             case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> {
                 var e = mapper.convertValue(payloadNode, SubjectAuditDeletedEvent.class);
-                yield current.withDeletionRequest(e.deletionRequestId());
+                var base = current != null ? current
+                        : DsarAggregate.create(null, e.subjectId());
+                yield base.withDeletionRequest(e.deletionRequestId());
             }
             default -> throw new IllegalArgumentException(
                     "Unknown event type for DsarAggregate: " + eventType);

@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.SUBJECT;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.SubjectDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Subject;
 import java.util.List;
@@ -26,10 +27,11 @@ public class SubjectRepository {
     public Optional<Subject> findByName(String subjectName) {
         return dsl.selectFrom(SUBJECT)
                 .where(SUBJECT.SUBJECT_NAME.eq(subjectName))
+                .and(SUBJECT.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptionalInto(Subject.class);
     }
 
     public List<Subject> findAll() {
-        return dsl.selectFrom(SUBJECT).orderBy(SUBJECT.SUBJECT_NAME).fetchInto(Subject.class);
+        return dsl.selectFrom(SUBJECT).where(SUBJECT.TENANT_ID.eq(TenantContext.require())).orderBy(SUBJECT.SUBJECT_NAME).fetchInto(Subject.class);
     }
 }

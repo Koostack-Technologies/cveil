@@ -36,7 +36,7 @@ import org.junit.jupiter.api.*;
 class PlatformIamResourceIT {
 
     private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
-    private static final String PLATFORM_REALM = "operio-platform";
+    private static final String PLATFORM_REALM = "operio";
     private static final String BASE_PATH = "/api/v1/platform/iam";
 
     // Shared mutable state across nested test classes

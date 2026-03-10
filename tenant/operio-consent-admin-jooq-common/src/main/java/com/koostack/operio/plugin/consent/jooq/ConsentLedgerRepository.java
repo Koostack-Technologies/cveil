@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 
+import com.koostack.operio.core.models.TenantContext;
 import java.util.List;
 import org.jooq.DSLContext;
 import org.jooq.Record;
@@ -39,6 +40,7 @@ public class ConsentLedgerRepository {
                 dsl.select(CONSENT_LEDGER.fields())
                         .select(rn)
                         .from(CONSENT_LEDGER)
+                        .where(CONSENT_LEDGER.TENANT_ID.eq(TenantContext.require()))
                         .asTable("ranked");
 
         return dsl.select(latest.fields(CONSENT_LEDGER.fields()))
@@ -79,6 +81,7 @@ public class ConsentLedgerRepository {
                         .select(rn)
                         .from(CONSENT_LEDGER)
                         .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
+                        .and(CONSENT_LEDGER.TENANT_ID.eq(TenantContext.require()))
                         .asTable("ranked");
 
         return dsl.select(latest.fields(CONSENT_LEDGER.fields()))
@@ -121,6 +124,7 @@ public class ConsentLedgerRepository {
                 dsl.select(CONSENT_LEDGER.fields())
                         .select(rn)
                         .from(CONSENT_LEDGER)
+                        .where(CONSENT_LEDGER.TENANT_ID.eq(TenantContext.require()))
                         .asTable("ranked");
 
         return dsl.select(latest.fields(CONSENT_LEDGER.fields()))

@@ -49,7 +49,7 @@ public class SubjectLifecycleIT {
 
     @Inject OperioConfig config;
 
-    private static volatile String apiKey;
+    private static volatile String accessToken;
     private static volatile IntegrationTestSupport support;
 
     // -------------------------------------------------------------------
@@ -66,35 +66,20 @@ public class SubjectLifecycleIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            Response r =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {"tenantId": "%s", "displayName": "Subject Lifecycle IT", "plan": "pro"}
-                    """
-                                            .formatted(TENANT_ID))
-                            .post("/api/v1/platform/tenants");
-            assertThat(r.statusCode()).as("Tenant creation").isIn(201, 200, 409);
+            String result =
+                    IntegrationTestSupport.provisionTenantViaOrchestrator(
+                            BOOTSTRAP_KEY, TENANT_ID, "Subject Lifecycle IT", "pro",
+                            "Test1234!");
+            assertThat(result).isEqualTo(TENANT_ID);
         }
 
         @Test
         @Order(2)
-        @DisplayName("Create API key")
-        void createApiKey() {
-            Response r =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {"tenantId": "%s", "subject": "sl-it-key",
-                     "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]}
-                    """
-                                            .formatted(TENANT_ID))
-                            .post("/api/v1/platform/api-keys");
-            assertThat(r.statusCode()).isEqualTo(201);
-            apiKey = r.jsonPath().getString("rawKey");
-            assertThat(apiKey).isNotBlank();
+        @DisplayName("Login as tenant admin")
+        void loginAsTenantAdmin() {
+            String email = TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
+            accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
+            assertThat(accessToken).isNotBlank();
         }
 
         @Test
@@ -118,7 +103,7 @@ public class SubjectLifecycleIT {
     class Prerequisites {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -272,7 +257,7 @@ public class SubjectLifecycleIT {
     class RemoveSubject {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -419,7 +404,7 @@ public class SubjectLifecycleIT {
     class ShredDsarKey {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test
@@ -535,7 +520,7 @@ public class SubjectLifecycleIT {
     class DsarDeepVerification {
 
         private String auth() {
-            return "Bearer " + apiKey;
+            return "Bearer " + accessToken;
         }
 
         @Test

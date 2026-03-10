@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.FIELD_CATEGORY;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.FieldCategoryDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.FieldCategory;
 import java.time.LocalDateTime;
@@ -44,6 +45,7 @@ public class FieldCategoryRepository {
     public List<FieldCategory> findByField(Long fieldId) {
         return dsl.selectFrom(FIELD_CATEGORY)
                 .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(FieldCategory.class);
     }
 
@@ -56,6 +58,7 @@ public class FieldCategoryRepository {
     public List<FieldCategory> findByCategory(Long categoryId) {
         return dsl.selectFrom(FIELD_CATEGORY)
                 .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(FieldCategory.class);
     }
 
@@ -70,6 +73,7 @@ public class FieldCategoryRepository {
         return dsl.selectFrom(FIELD_CATEGORY)
                 .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
                 .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptionalInto(FieldCategory.class);
     }
 
@@ -80,6 +84,7 @@ public class FieldCategoryRepository {
      */
     public List<FieldCategory> findAll() {
         return dsl.selectFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
                 .fetchInto(FieldCategory.class);
     }

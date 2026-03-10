@@ -63,26 +63,20 @@ class DsarTenantIsolationIT {
     @Order(0)
     @DisplayName("Provision tenant A")
     void provisionTenantA() {
-        given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body(Map.of("tenantId", TENANT_A, "displayName", TENANT_A, "plan", "free"))
-                .when()
-                .post("/api/v1/platform/tenants")
-                .then()
-                .statusCode(201);
+        String result =
+                IntegrationTestSupport.provisionTenantViaOrchestrator(
+                        BOOTSTRAP_KEY, TENANT_A, TENANT_A, "free");
+        assertThat(result).isEqualTo(TENANT_A);
     }
 
     @Test
     @Order(1)
     @DisplayName("Provision tenant B")
     void provisionTenantB() {
-        given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                .contentType(ContentType.JSON)
-                .body(Map.of("tenantId", TENANT_B, "displayName", TENANT_B, "plan", "free"))
-                .when()
-                .post("/api/v1/platform/tenants")
-                .then()
-                .statusCode(201);
+        String result =
+                IntegrationTestSupport.provisionTenantViaOrchestrator(
+                        BOOTSTRAP_KEY, TENANT_B, TENANT_B, "free");
+        assertThat(result).isEqualTo(TENANT_B);
     }
 
     @Test

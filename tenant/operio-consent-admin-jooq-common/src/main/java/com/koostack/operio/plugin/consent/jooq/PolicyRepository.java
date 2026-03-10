@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.*;
 
+import com.koostack.operio.core.models.TenantContext;
 import java.util.List;
 import java.util.Optional;
 import org.jooq.DSLContext;
@@ -43,6 +44,7 @@ public class PolicyRepository {
                 .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
                 .and(FIELD.FIELD_NAME.eq(fieldName))
                 .and(ENTITY.ENTITY_NAME.eq(entityName))
+                .and(POLICY.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptional();
     }
 
@@ -62,6 +64,7 @@ public class PolicyRepository {
                 .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
                 .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
                 .and(CATEGORY.CATEGORY_NAME.eq(categoryName))
+                .and(POLICY.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptional();
     }
 
@@ -79,6 +82,7 @@ public class PolicyRepository {
                 .leftJoin(CATEGORY)
                 .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
                 .where(POLICY.PURPOSE_ID.eq(purposeId))
+                .and(POLICY.TENANT_ID.eq(TenantContext.require()))
                 .fetch();
     }
 }

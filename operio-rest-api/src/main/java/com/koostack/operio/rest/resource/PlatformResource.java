@@ -1,12 +1,8 @@
 package com.koostack.operio.rest.resource;
 
-import com.koostack.operio.core.cqrs.CommandDispatcher;
 import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
-import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
-import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuator;
 import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
-import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.GetTenantQueryActuator;
 import com.koostack.operio.platform.core.jooq.ListTenantsQueryActuator;
@@ -25,7 +21,6 @@ import com.koostack.operio.rest.interceptor.TenantScoped;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.operio.rest.ratelimit.RateLimitService;
 import jakarta.inject.Inject;
-import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -70,14 +65,6 @@ public class PlatformResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
-    @Inject
-    @Named("coreDispatcher")
-    CommandDispatcher coreDispatcher;
-
-    @Inject
-    @Named("billingDispatcher")
-    CommandDispatcher billingDispatcher;
-
     @Inject BootstrapKeyLifecycleService bootstrapLifecycle;
 
     @Inject RateLimitService rateLimitService;
@@ -99,7 +86,7 @@ public class PlatformResource {
     }
 
     private void requireDispatchers() {
-        if (coreDispatcher == null || billingDispatcher == null) {
+        if (cqrs.coreCommandService() == null || cqrs.billingCommandService() == null) {
             throw new IllegalStateException(
                     "Platform dispatchers are not available in embedded mode. "
                             + "Set operio.mode=production to enable tenant management.");
@@ -114,36 +101,16 @@ public class PlatformResource {
     @Path("/tenants")
     @Operation(
             operationId = "createTenant",
-            summary = "Create a new tenant",
+            summary = "Create a new tenant (deprecated — use POST /api/v1/platform/iam/users)",
             description =
-                    "Creates a new tenant on the platform with the specified plan. "
-                            + "Uses unified schema with row-level security (RLS) for isolation. "
-                            + "Requires the super-admin role.")
+                    "This endpoint is no longer supported. Tenant creation is now part of the "
+                            + "unified user registration flow via POST /api/v1/platform/iam/users, "
+                            + "which orchestrates user registration, organization creation, tenant "
+                            + "provisioning, and billing setup in a single saga.")
     @APIResponses({
         @APIResponse(
-                responseCode = "201",
-                description = "Tenant created successfully",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = TenantResponse.class))),
-        @APIResponse(
-                responseCode = "400",
-                description = "Validation error (invalid tenantId, plan, etc.)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-        @APIResponse(
-                responseCode = "403",
-                description = "Missing required role (super-admin)",
-                content =
-                        @Content(
-                                mediaType = MediaType.APPLICATION_JSON,
-                                schema = @Schema(implementation = ErrorResponse.class))),
-        @APIResponse(
-                responseCode = "500",
-                description = "Platform admin not available (embedded mode)",
+                responseCode = "501",
+                description = "Operation not supported",
                 content =
                         @Content(
                                 mediaType = MediaType.APPLICATION_JSON,
@@ -152,63 +119,19 @@ public class PlatformResource {
     public Response createTenant(
             @Context SecurityContext securityContext, @Valid CreateTenantRequest request) {
         requireSuperAdmin(securityContext);
-        requireDispatchers();
 
         LOG.info(
-                "POST /platform/tenants - creating tenant={}, plan={}",
+                "POST /platform/tenants — unsupported, tenant={}, plan={}",
                 request.tenantId(),
                 request.plan());
 
-        String billingEmail =
-                request.billingEmail() != null
-                        ? request.billingEmail()
-                        : request.tenantId() + "@billing.operio.local";
-
-        // Multi-dispatch saga: sequential commands across bounded contexts.
-        // Each step is independently atomic (event-sourced), but the sequence
-        // as a whole is NOT transactional. If a later step fails, earlier
-        // events remain published. This is acceptable because:
-        //   - downstream projections are idempotent
-        //   - retry of the full request is safe (aggregate hydration detects duplicates)
-        //   - partial state is logged for manual remediation
-
-        // 1. Create tenant (uniqueness enforced via aggregate hydration)
-        coreDispatcher.dispatch(
-                new CreateTenantCommandActuator.CreateTenantCommand(
-                        request.tenantId(), request.displayName(), request.plan()));
-
-        try {
-            // 2. Create billing profile
-            billingDispatcher.dispatch(
-                    new CreateBillingProfileCommandActuator.CreateBillingProfileCommand(
-                            request.tenantId(), billingEmail));
-
-            // 3. Create subscription (plan validation + duplicate check via aggregate hydration)
-            billingDispatcher.dispatch(
-                    new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
-                            request.tenantId(), request.plan()));
-        } catch (Exception e) {
-            LOG.error(
-                    "Tenant {} created but billing setup failed — manual remediation required: {}",
-                    request.tenantId(),
-                    e.getMessage(),
-                    e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(
-                            ErrorResponse.internal(
-                                    "Tenant created but billing setup failed. "
-                                            + "Contact support with tenant ID: "
-                                            + request.tenantId()))
-                    .build();
-        }
-
-        // Return the accepted data directly — the projection materializes
-        // asynchronously so a DB read-back would return null or stale data.
-        TenantResponse response =
-                new TenantResponse(
-                        request.tenantId(), request.displayName(), request.plan(), "created", null);
-
-        return Response.status(Response.Status.CREATED).entity(response).build();
+        return Response.status(501)
+                .entity(
+                        ErrorResponse.of(
+                                "unsupported_operation",
+                                "Tenant creation via this endpoint is no longer supported. "
+                                        + "Use POST /api/v1/platform/iam/users instead."))
+                .build();
     }
 
     @GET
@@ -355,7 +278,7 @@ public class PlatformResource {
 
         LOG.info("DELETE /platform/tenants/{}", tenantId);
 
-        coreDispatcher.dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
+        cqrs.coreDispatcher().dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
 
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
@@ -602,7 +525,7 @@ public class PlatformResource {
 
         LOG.info("PUT /platform/tenants/{}/plan - newPlan={}", tenantId, request.plan());
 
-        coreDispatcher.dispatch(
+        cqrs.coreDispatcher().dispatch(
                 new ChangeTenantPlanCommandActuator.ChangeTenantPlanCommand(
                         tenantId, request.plan()));
 

@@ -4,6 +4,7 @@ import static org.jooq.impl.DSL.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.operio.core.platform.core.CoreEventTypes;
+import com.koostack.operio.core.platform.iam.IamEventTypes;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.jooq.DSLContext;
@@ -31,6 +32,10 @@ public class CoreProjectionHandler {
             field(name("created_at"), OffsetDateTime.class);
     private static final org.jooq.Field<OffsetDateTime> UPDATED_AT =
             field(name("updated_at"), OffsetDateTime.class);
+    private static final org.jooq.Field<String> REDIS_ACL_USER =
+            field(name("redis_acl_user"), String.class);
+    private static final org.jooq.Field<String> REDIS_ACL_PASSWORD =
+            field(name("redis_acl_password"), String.class);
 
     private final DSLContext dsl;
     private final ObjectMapper mapper;
@@ -61,6 +66,7 @@ public class CoreProjectionHandler {
                 case CoreEventTypes.TENANT_SUSPENDED -> handleSuspended(payload);
                 case CoreEventTypes.TENANT_ACTIVATED -> handleActivated(payload);
                 case CoreEventTypes.TENANT_DELETED -> handleDeleted(payload);
+                case IamEventTypes.REDIS_PROVISIONED -> handleRedisProvisioned(payload);
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
         } catch (Exception e) {
@@ -146,5 +152,42 @@ public class CoreProjectionHandler {
                 .set(UPDATED_AT, OffsetDateTime.now())
                 .where(TENANT_ID.eq(id))
                 .execute();
+    }
+
+    private void handleRedisProvisioned(String payload) throws Exception {
+        var node = mapper.readTree(payload);
+        String id = node.get("tenantId").asText();
+        String aclUser = node.has("aclUser") && !node.get("aclUser").isNull()
+                ? node.get("aclUser").asText() : null;
+        String aclPassword = node.has("aclPassword") && !node.get("aclPassword").isNull()
+                ? node.get("aclPassword").asText() : null;
+
+        if (aclUser == null || aclPassword == null) {
+            LOG.info("Redis provisioned for tenant {} without ACL credentials", id);
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // UPSERT: create a minimal tenant row if it doesn't exist yet (the
+        // redis-provisioned event may arrive before tenant-created in the stream).
+        // handleTenantCreated will update display_name/plan if it runs later.
+        dsl.insertInto(TENANT)
+                .set(TENANT_ID, id)
+                .set(REDIS_ACL_USER, aclUser)
+                .set(REDIS_ACL_PASSWORD, aclPassword)
+                .set(DISPLAY_NAME, id)
+                .set(PLAN, "free")
+                .set(STATUS, "created")
+                .set(CREATED_AT, now)
+                .set(UPDATED_AT, now)
+                .onConflict(TENANT_ID)
+                .doUpdate()
+                .set(REDIS_ACL_USER, aclUser)
+                .set(REDIS_ACL_PASSWORD, aclPassword)
+                .set(UPDATED_AT, now)
+                .execute();
+
+        LOG.info("Redis ACL credentials stored for tenant {}: aclUser={}", id, aclUser);
     }
 }

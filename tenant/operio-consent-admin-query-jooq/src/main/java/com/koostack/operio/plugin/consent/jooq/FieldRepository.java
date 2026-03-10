@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.FieldDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
 
@@ -31,6 +32,7 @@ public class FieldRepository {
     public List<Field> findByName(String fieldName) {
         return dsl.selectFrom(FIELD)
                   .where(FIELD.FIELD_NAME.eq(fieldName))
+                  .and(FIELD.TENANT_ID.eq(TenantContext.require()))
                   .fetchInto(Field.class);
     }
 
@@ -43,6 +45,8 @@ public class FieldRepository {
             condition = condition.and(FIELD.ENTITY_ID.isNull());
         }
 
+        condition = condition.and(FIELD.TENANT_ID.eq(TenantContext.require()));
+
         return dsl.selectFrom(FIELD)
                   .where(condition)
                   .fetchOptionalInto(Field.class);
@@ -51,12 +55,14 @@ public class FieldRepository {
     public List<Field> findByEntity(Long entityId) {
         return dsl.selectFrom(FIELD)
                   .where(FIELD.ENTITY_ID.eq(entityId))
+                  .and(FIELD.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(FIELD.FIELD_NAME)
                   .fetchInto(Field.class);
     }
 
     public List<Field> findAll() {
         return dsl.selectFrom(FIELD)
+                  .where(FIELD.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(FIELD.FIELD_NAME)
                   .fetchInto(Field.class);
     }

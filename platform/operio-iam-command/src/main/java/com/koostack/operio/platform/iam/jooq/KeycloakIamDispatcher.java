@@ -64,11 +64,6 @@ public class KeycloakIamDispatcher
     /** Set the query service for email/username → UUID resolution. */
     public void setQueryService(IamQueryService<?> queryService) {
         this.queryService = queryService;
-        // Also wire the query service into the orchestrator
-        var orchestrator = actuators.get(RegisterUserOrchestrator.RegisterUserWithOrgCommand.class);
-        if (orchestrator instanceof RegisterUserOrchestrator ruo) {
-            ruo.setQueryService(queryService);
-        }
     }
 
     @Override
@@ -142,10 +137,6 @@ public class KeycloakIamDispatcher
                     new ProvisionRedisCommandActuator(eventService, jedis));
         }
 
-        // User registration orchestrator (chains sub-commands)
-        actuators.put(
-                RegisterUserOrchestrator.RegisterUserWithOrgCommand.class,
-                new RegisterUserOrchestrator(this, eventService));
 
         LOG.info("KeycloakIamDispatcher configured with {} actuators", actuators.size());
     }

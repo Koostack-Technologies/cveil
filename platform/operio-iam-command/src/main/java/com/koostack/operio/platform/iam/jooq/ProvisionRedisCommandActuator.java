@@ -56,6 +56,13 @@ public class ProvisionRedisCommandActuator
         String streamKey = "operio:stream:tenant:" + tenantId;
         String pubSubChannel = "consent-cache-invalidation:" + tenantId;
 
+        // Auto-generate ACL credentials when not explicitly provided
+        String aclUser = command.aclUser() != null ? command.aclUser() : "t_" + tenantId;
+        String aclPassword =
+                command.aclPassword() != null
+                        ? command.aclPassword()
+                        : UUID.randomUUID().toString();
+
         // Create the tenant event stream with an initial system message
         try {
             var params = new java.util.HashMap<String, String>();
@@ -67,37 +74,29 @@ public class ProvisionRedisCommandActuator
             LOG.warn("Redis stream creation (may already exist): {}", e.getMessage());
         }
 
-        // Create ACL user if requested
-        if (command.aclUser() != null && command.aclPassword() != null) {
-            try {
-                String aclRule =
-                        String.format(
-                                "ACL SETUSER %s on >%s ~%s:* ~%s &%s +@all",
-                                command.aclUser(),
-                                command.aclPassword(),
-                                "operio:stream:tenant:" + tenantId,
-                                pubSubChannel,
-                                pubSubChannel);
-                jedis.sendCommand(
-                        () -> "ACL".getBytes(StandardCharsets.UTF_8),
-                        "SETUSER".getBytes(StandardCharsets.UTF_8),
-                        command.aclUser().getBytes(StandardCharsets.UTF_8),
-                        "on".getBytes(StandardCharsets.UTF_8),
-                        (">" + command.aclPassword()).getBytes(StandardCharsets.UTF_8),
-                        ("~operio:stream:tenant:" + tenantId + ":*")
-                                .getBytes(StandardCharsets.UTF_8),
-                        ("~" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
-                        ("&" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
-                        "+@all".getBytes(StandardCharsets.UTF_8));
-                LOG.info("Redis ACL user created: {}", command.aclUser());
-            } catch (Exception e) {
-                LOG.warn("Redis ACL setup failed (non-fatal): {}", e.getMessage());
-            }
+        // Create ACL user in Redis
+        try {
+            jedis.sendCommand(
+                    () -> "ACL".getBytes(StandardCharsets.UTF_8),
+                    "SETUSER".getBytes(StandardCharsets.UTF_8),
+                    aclUser.getBytes(StandardCharsets.UTF_8),
+                    "on".getBytes(StandardCharsets.UTF_8),
+                    (">" + aclPassword).getBytes(StandardCharsets.UTF_8),
+                    ("~operio:stream:tenant:" + tenantId + ":*")
+                            .getBytes(StandardCharsets.UTF_8),
+                    ("~" + tenantId + ":*").getBytes(StandardCharsets.UTF_8),
+                    ("~" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
+                    ("&" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
+                    "+@all".getBytes(StandardCharsets.UTF_8));
+            LOG.info("Redis ACL user created: {}", aclUser);
+        } catch (Exception e) {
+            LOG.warn("Redis ACL setup failed (non-fatal): {}", e.getMessage());
         }
 
-        // Publish domain event
+        // Publish domain event (includes credentials for projection to store)
         var payload =
-                new RedisProvisionedEvent(tenantId, streamKey, pubSubChannel, command.aclUser());
+                new RedisProvisionedEvent(
+                        tenantId, streamKey, pubSubChannel, aclUser, aclPassword);
 
         UUID aggregateId =
                 UUID.nameUUIDFromBytes(("redis:" + tenantId).getBytes(StandardCharsets.UTF_8));
@@ -114,11 +113,12 @@ public class ProvisionRedisCommandActuator
                                 payload));
 
         LOG.info(
-                "Redis provisioned for tenant {}: stream={}, pubsub={}",
+                "Redis provisioned for tenant {}: stream={}, pubsub={}, aclUser={}",
                 tenantId,
                 streamKey,
-                pubSubChannel);
-        return new ProvisionRedisResult(streamKey, pubSubChannel, command.aclUser());
+                pubSubChannel,
+                aclUser);
+        return new ProvisionRedisResult(streamKey, pubSubChannel, aclUser);
     }
 
     @Override

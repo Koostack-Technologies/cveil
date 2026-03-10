@@ -27,7 +27,7 @@ public class GetOrganizationQueryActuator
     public OrganizationInfo execute(GetOrganizationQuery query) {
         LOG.debug("Getting organization: orgId={}", query.orgId());
         OrganizationRepresentation org = orgService.getOrganization(query.orgId());
-        return new OrganizationInfo(org.getId(), org.getName(), org.getAlias(), org.isEnabled());
+        return new OrganizationInfo(org.getId(), org.getAlias(), org.getName(), org.isEnabled());
     }
 
     @Override

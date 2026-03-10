@@ -34,6 +34,23 @@ import com.koostack.operio.core.spi.Plugin;
  */
 public interface IdpProvider<T> extends Plugin<T> {
 
+    /**
+     * Returns a sentinel {@code IdpProvider} that throws on every operation.
+     *
+     * <p>Used as a null-safe placeholder when no IdP is configured (e.g. embedded mode). CDI
+     * {@code @ApplicationScoped} producers must not return {@code null} — this sentinel avoids
+     * that while producing clear errors if any code path accidentally attempts authentication.
+     */
+    @SuppressWarnings("unchecked")
+    static <T> IdpProvider<T> unavailable() {
+        return (IdpProvider<T>) UnavailableIdpProvider.INSTANCE;
+    }
+
+    /** Returns {@code true} if this is a real (configured) identity provider. */
+    default boolean isAvailable() {
+        return true;
+    }
+
     // -------------------------------------------------------------------
     // Authentication
     // -------------------------------------------------------------------

@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.EntityDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Entity;
 
@@ -31,11 +32,13 @@ public class EntityRepository {
     public Optional<Entity> findByName(String entityName) {
         return dsl.selectFrom(ENTITY)
                   .where(ENTITY.ENTITY_NAME.eq(entityName))
+                  .and(ENTITY.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Entity.class);
     }
 
     public List<Entity> findAll() {
         return dsl.selectFrom(ENTITY)
+                  .where(ENTITY.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(ENTITY.ENTITY_NAME)
                   .fetchInto(Entity.class);
     }

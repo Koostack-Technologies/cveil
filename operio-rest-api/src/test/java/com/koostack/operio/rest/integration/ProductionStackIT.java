@@ -1,6 +1,7 @@
 package com.koostack.operio.rest.integration;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -88,7 +89,7 @@ class ProductionStackIT {
     // -- Test tenant ----------------------------------------------------------
     private static final String TENANT_ID = "integration_test_tenant";
     private static final String TENANT_DISPLAY = "Integration Test Tenant";
-    private static final String TENANT_PLAN = "enterprise";
+    private static final String TENANT_PLAN = "free";
 
     // -- Shared state populated by ordered tests ------------------------------
     // These are static because @Nested inner classes get fresh outer instances
@@ -372,22 +373,16 @@ class ProductionStackIT {
         @Order(2)
         @DisplayName("Create tenant via bootstrap key")
         void createTenant() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            String.format(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "%s",
-                      "plan": "%s"
-                    }
-                    """,
-                                    TENANT_ID, TENANT_DISPLAY, TENANT_PLAN))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(anyOf(is(201), is(409)));
+            try {
+                String result =
+                        IntegrationTestSupport.provisionTenantViaOrchestrator(
+                                BOOTSTRAP_KEY, TENANT_ID, TENANT_DISPLAY, TENANT_PLAN);
+                assertThat(result).isEqualTo(TENANT_ID);
+            } catch (Exception e) {
+                if (!e.getMessage().contains("already exists")) {
+                    throw e;
+                }
+            }
         }
 
         @Test

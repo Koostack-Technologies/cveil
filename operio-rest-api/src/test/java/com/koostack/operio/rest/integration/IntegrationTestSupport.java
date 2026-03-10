@@ -66,7 +66,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String dbPassword;
     private final String redisHost;
     private final int redisPort;
-    private final String tenantSchema; // null → no search_path override
+    private final String tenantSchema; // consent/tenant schema name for search_path
     private final String keycloakUrl; // null → Keycloak helpers disabled
     private Keycloak keycloakAdmin; // lazy-initialized
 
@@ -77,7 +77,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /**
      * Creates support with tenant schema routing. JDBC queries will execute with {@code SET
-     * search_path TO t_{tenantId}, public}.
+     * search_path TO operio_consent, operio_event, platform_core, public}.
      */
     public IntegrationTestSupport(OperioConfig config, String tenantId) {
         var redis =
@@ -99,7 +99,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.jdbcUrl = db.url();
         this.dbUsername = db.username().orElse("operio_test");
         this.dbPassword = db.password().orElse("operio_test_password");
-        this.tenantSchema = tenantId != null ? "t_" + tenantId : null;
+        this.tenantSchema = tenantId != null ? "operio_consent" : null;
 
         this.keycloakUrl =
                 config.keycloak().flatMap(kc -> kc.url()).filter(u -> !u.isBlank()).orElse(null);
@@ -289,14 +289,14 @@ public class IntegrationTestSupport implements AutoCloseable {
     // JDBC helpers
     // -----------------------------------------------------------------------
 
-    /** Opens a fresh JDBC connection with tenant search_path if configured. */
+    /** Opens a fresh JDBC connection with unified schema search_path if configured. */
     public Connection openConnection() throws SQLException {
         Connection conn = DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword);
         if (tenantSchema != null) {
             try (var stmt = conn.createStatement()) {
-                String eventSchema = tenantSchema + "_event";
                 stmt.execute(
-                        "SET search_path TO " + tenantSchema + ", " + eventSchema + ", public");
+                        "SET search_path TO operio_consent, operio_event, platform_core,"
+                                + " platform_iam, platform_billing, public");
             }
         }
         return conn;
@@ -578,7 +578,7 @@ public class IntegrationTestSupport implements AutoCloseable {
      * @param timeout maximum wait time
      */
     public void awaitTenantReady(String tenantId, Duration timeout) {
-        // Wait for the tenant row to exist in the database
+        // Wait for the tenant row with Redis ACL credentials populated
         Awaitility.await()
                 .atMost(timeout)
                 .pollInterval(Duration.ofMillis(200))
@@ -592,7 +592,11 @@ public class IntegrationTestSupport implements AutoCloseable {
                                                         "SELECT 1 FROM platform_core.tenant WHERE"
                                                                 + " tenant_id = '"
                                                                 + tenantId
-                                                                + "' AND status = 'ACTIVE'");
+                                                                + "' AND status IN ('created',"
+                                                                + " 'active', 'ACTIVE')"
+                                                                + " AND redis_acl_user IS NOT NULL"
+                                                                + " AND redis_acl_password IS NOT"
+                                                                + " NULL");
                                 return rs.next();
                             } catch (Exception e) {
                                 return false;
@@ -658,6 +662,148 @@ public class IntegrationTestSupport implements AutoCloseable {
                             return predicate.test(ref.value);
                         });
         return ref.value;
+    }
+
+    // -----------------------------------------------------------------------
+    // Tenant provisioning via orchestrator
+    // -----------------------------------------------------------------------
+
+    /**
+     * Creates a tenant by registering a user with an organization through the unified orchestrator
+     * flow ({@code POST /api/v1/platform/iam/users}). This replaces the old {@code POST
+     * /api/v1/platform/tenants} endpoint which is now deprecated (501).
+     *
+     * <p>The orchestrator creates the user in Keycloak, creates a Keycloak organization, adds the
+     * user as a member, provisions Redis, creates the tenant aggregate, billing profile, and
+     * subscription — all in a single saga.
+     *
+     * @param bootstrapKey the super-admin bootstrap key for auth
+     * @param tenantId used as the organization name (= tenant ID in new architecture)
+     * @param displayName display name for the organization
+     * @param plan ignored (orchestrator defaults to "free")
+     * @return the tenant ID from the orchestrator response
+     */
+    public static String provisionTenantViaOrchestrator(
+            String bootstrapKey, String tenantId, String displayName, String plan) {
+        return provisionTenantViaOrchestrator(bootstrapKey, tenantId, displayName, plan, null);
+    }
+
+    /**
+     * Creates a tenant by registering a user with an organization and optionally sets a password so
+     * the user can log in via {@code POST /api/v1/platform/iam/login}.
+     *
+     * @param bootstrapKey the super-admin bootstrap key for auth
+     * @param tenantId used as the organization name (= tenant ID in new architecture)
+     * @param displayName display name for the organization
+     * @param plan ignored (orchestrator defaults to "free")
+     * @param password if non-null, the user's password for Keycloak login
+     * @return the tenant ID from the orchestrator response
+     */
+    public static String provisionTenantViaOrchestrator(
+            String bootstrapKey,
+            String tenantId,
+            String displayName,
+            String plan,
+            String password) {
+        String username = tenantId.replace("_", "-") + "-admin";
+        String email = username + "@operio-test.com";
+
+        String passwordField = "";
+        if (password != null) {
+            passwordField = """
+                    , "password": "%s"
+                    """.formatted(password);
+        }
+
+        io.restassured.response.Response response =
+                io.restassured.RestAssured.given()
+                        .header("Authorization", "Bearer " + bootstrapKey)
+                        .contentType("application/json")
+                        .body(
+                                """
+                        {
+                          "username": "%s",
+                          "email": "%s",
+                          "fullName": "%s Admin",
+                          "roles": ["super-admin"],
+                          "temporaryPassword": false%s,
+                          "organizationName": "%s",
+                          "organizationDisplayName": "%s"
+                        }
+                        """
+                                        .formatted(
+                                                username, email, displayName, passwordField,
+                                                tenantId, displayName))
+                        .when()
+                        .post("/api/v1/platform/iam/users");
+
+        if (response.statusCode() == 201) {
+            return response.jsonPath().getString("tenantId");
+        }
+        throw new AssertionError(
+                "Tenant provisioning failed: HTTP "
+                        + response.statusCode()
+                        + " — "
+                        + response.body().asString());
+    }
+
+    // -----------------------------------------------------------------------
+    // Keycloak JWT authentication helpers
+    // -----------------------------------------------------------------------
+
+    /** Auth info returned by login/provision helpers. */
+    public record AuthInfo(String accessToken, String refreshToken, String tenantId, String email) {}
+
+    /**
+     * Logs in a user via {@code POST /api/v1/platform/iam/login} and returns the JWT access token.
+     *
+     * @param email the user's email
+     * @param password the user's password
+     * @return the raw JWT access token
+     */
+    public static String loginUser(String email, String password) {
+        io.restassured.response.Response response =
+                io.restassured.RestAssured.given()
+                        .contentType("application/json")
+                        .body(
+                                """
+                        {"email": "%s", "password": "%s"}
+                        """
+                                        .formatted(email, password))
+                        .when()
+                        .post("/api/v1/platform/iam/login");
+
+        if (response.statusCode() == 200) {
+            return response.jsonPath().getString("accessToken");
+        }
+        throw new AssertionError(
+                "Login failed for "
+                        + email
+                        + ": HTTP "
+                        + response.statusCode()
+                        + " — "
+                        + response.body().asString());
+    }
+
+    /**
+     * Provisions a tenant via the orchestrator and logs in the created user, returning both the JWT
+     * and tenant metadata. This is the primary helper for tests that need a tenant-scoped JWT.
+     *
+     * @param bootstrapKey the super-admin bootstrap key
+     * @param tenantId organization name / tenant ID
+     * @param displayName human-readable display name
+     * @return AuthInfo with access token, refresh token, tenant ID, and email
+     */
+    public static AuthInfo provisionTenantAndLogin(
+            String bootstrapKey, String tenantId, String displayName) {
+        String password = "Test1234!";
+        String username = tenantId.replace("_", "-") + "-admin";
+        String email = username + "@operio-test.com";
+
+        provisionTenantViaOrchestrator(bootstrapKey, tenantId, displayName, "free", password);
+
+        String accessToken = loginUser(email, password);
+        return new AuthInfo(accessToken, null, tenantId, email);
     }
 
     // -----------------------------------------------------------------------

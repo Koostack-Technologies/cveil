@@ -65,6 +65,14 @@ public record FieldAggregate(
         return switch (eventType) {
             case ConsentEventTypes.FIELD_REGISTERED -> {
                 var e = mapper.convertValue(payloadNode, FieldRegisteredEvent.class);
+                if (current == null) {
+                    yield create(
+                            null,
+                            e.entityName(),
+                            e.fieldName(),
+                            e.description(),
+                            e.entityDescription());
+                }
                 yield current.withDetails(e.description(), e.entityDescription());
             }
             case ConsentEventTypes.FIELD_UPDATED -> {

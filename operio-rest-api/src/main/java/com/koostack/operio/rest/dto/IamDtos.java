@@ -32,31 +32,35 @@ public final class IamDtos {
             @Size(max = 255) String fullName,
             Set<String> roles,
             boolean temporaryPassword,
+            @Size(max = 255) String password,
             @Size(max = 255) String organizationName,
             @Size(max = 255) String organizationDisplayName) {}
 
-    /** Response after user registration (with optional org). */
+    /** Response after user registration (with optional org + tenant). */
     public record UserRegisteredResponse(
             String username,
             String email,
             String realmId,
             String keycloakUserId,
             String orgId,
-            String orgName) {
+            String orgName,
+            String tenantId,
+            String plan,
+            String tenantStatus) {
         public static UserRegisteredResponse from(IamCommandService.RegisterUserResult r) {
             return new UserRegisteredResponse(
-                    r.username(), r.email(), r.realmId(), null, null, null);
+                    r.username(), r.email(), r.realmId(), null, null, null, null, null, null);
         }
 
         public static UserRegisteredResponse from(
                 com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
                         r) {
             return new UserRegisteredResponse(
-                    r.username(), r.email(), r.realmId(), null, null, null);
+                    r.username(), r.email(), r.realmId(), null, null, null, null, null, null);
         }
 
         public static UserRegisteredResponse from(
-                com.koostack.operio.platform.iam.jooq.RegisterUserOrchestrator
+                com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator
                                 .RegisterUserWithOrgResult
                         r) {
             return new UserRegisteredResponse(
@@ -65,7 +69,10 @@ public final class IamDtos {
                     r.realmId(),
                     r.keycloakUserId(),
                     r.orgId(),
-                    r.orgName());
+                    r.orgName(),
+                    r.tenantId(),
+                    r.plan(),
+                    r.tenantStatus());
         }
     }
 

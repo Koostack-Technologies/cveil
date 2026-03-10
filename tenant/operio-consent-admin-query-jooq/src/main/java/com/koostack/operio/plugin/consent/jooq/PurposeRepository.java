@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.PurposeDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
 
@@ -31,11 +32,13 @@ public class PurposeRepository {
     public Optional<Purpose> findByName(String purposeName) {
         return dsl.selectFrom(PURPOSE)
                   .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
+                  .and(PURPOSE.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Purpose.class);
     }
 
     public List<Purpose> findAll() {
         return dsl.selectFrom(PURPOSE)
+                  .where(PURPOSE.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(PURPOSE.PURPOSE_NAME)
                   .fetchInto(Purpose.class);
     }
@@ -43,6 +46,7 @@ public class PurposeRepository {
     public Optional<Purpose> findById(Long purposeId) {
         return dsl.selectFrom(PURPOSE)
                   .where(PURPOSE.PURPOSE_ID.eq(purposeId))
+                  .and(PURPOSE.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Purpose.class);
     }
 }

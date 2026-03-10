@@ -1,5 +1,6 @@
 package com.koostack.operio.plugin.consent.jooq;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.CategoryDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Category;
 
@@ -31,11 +32,13 @@ public class CategoryRepository {
     public Optional<Category> findByName(String categoryName) {
         return dsl.selectFrom(CATEGORY)
                   .where(CATEGORY.CATEGORY_NAME.eq(categoryName))
+                  .and(CATEGORY.TENANT_ID.eq(TenantContext.require()))
                   .fetchOptionalInto(Category.class);
     }
 
     public List<Category> findAll() {
         return dsl.selectFrom(CATEGORY)
+                  .where(CATEGORY.TENANT_ID.eq(TenantContext.require()))
                   .orderBy(CATEGORY.CATEGORY_NAME)
                   .fetchInto(Category.class);
     }

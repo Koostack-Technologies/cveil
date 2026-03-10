@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.tables.SubjectDsar.SUBJECT_DSAR;
 
+import com.koostack.operio.core.models.TenantContext;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -31,8 +32,10 @@ public class SubjectDsarRepository {
     }
 
     public void saveKey(UUID dsarId, String encryptedKey) {
+        String tenantId = TenantContext.require();
         dsl.insertInto(SUBJECT_DSAR)
                 .set(SUBJECT_DSAR.DSAR_ID, dsarId)
+                .set(SUBJECT_DSAR.TENANT_ID, tenantId)
                 .set(SUBJECT_DSAR.DSAR_KEY, encryptedKey)
                 .set(SUBJECT_DSAR.CREATED_AT, LocalDateTime.now(ZoneOffset.UTC))
                 .onConflict(SUBJECT_DSAR.DSAR_ID)

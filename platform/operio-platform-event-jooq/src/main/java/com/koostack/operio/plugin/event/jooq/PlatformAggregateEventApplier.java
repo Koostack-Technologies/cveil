@@ -8,6 +8,11 @@ import com.koostack.operio.core.models.AggregateRoot;
 import com.koostack.operio.core.platform.billing.aggregates.BillingProfileAggregate;
 import com.koostack.operio.core.platform.core.aggregates.TenantAggregate;
 import com.koostack.operio.core.platform.plan.aggregates.PlanAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.DsarAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.FieldAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.PurposeAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.RegulationAggregate;
+import com.koostack.operio.core.tenant.consent.aggregates.SubjectConsentAggregate;
 import java.util.List;
 
 /**
@@ -50,8 +55,18 @@ public final class PlatformAggregateEventApplier {
                     (BillingProfileAggregate) current, eventType, payloadNode, objectMapper);
             case PlanAggregate.AGGREGATE_TYPE -> PlanAggregate.apply(
                     (PlanAggregate) current, eventType, payloadNode, objectMapper);
+            case FieldAggregate.AGGREGATE_TYPE -> FieldAggregate.apply(
+                    (FieldAggregate) current, eventType, payloadNode, objectMapper);
+            case PurposeAggregate.AGGREGATE_TYPE -> PurposeAggregate.apply(
+                    (PurposeAggregate) current, eventType, payloadNode, objectMapper);
+            case RegulationAggregate.AGGREGATE_TYPE -> RegulationAggregate.apply(
+                    (RegulationAggregate) current, eventType, payloadNode, objectMapper);
+            case SubjectConsentAggregate.AGGREGATE_TYPE -> SubjectConsentAggregate.apply(
+                    (SubjectConsentAggregate) current, eventType, payloadNode, objectMapper);
+            case DsarAggregate.AGGREGATE_TYPE -> DsarAggregate.apply(
+                    (DsarAggregate) current, eventType, payloadNode, objectMapper);
             default -> throw new IllegalArgumentException(
-                    "Unknown platform aggregate type: " + aggregateType);
+                    "Unknown aggregate type: " + aggregateType);
         };
     }
 

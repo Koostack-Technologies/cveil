@@ -168,7 +168,10 @@ public class OutboxPoller {
 
                         var batch =
                                 txDsl.selectFrom(EVENT)
-                                        .where(EVENT.PUBLISHED.eq(false))
+                                        .where(
+                                                EVENT.PUBLISHED
+                                                        .eq(false)
+                                                        .and(EVENT.TENANT_ID.eq(tenantId)))
                                         .orderBy(EVENT.EVENT_ID.asc())
                                         .limit(batchSize)
                                         .forUpdate()

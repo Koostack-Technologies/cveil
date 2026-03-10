@@ -81,22 +81,10 @@ class ConsentGraphProjectionIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "Graph Projection IT Tenant",
-                      "plan": "enterprise"
-                    }
-                    """
-                                    .formatted(TENANT_ID))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(201)
-                    .body("tenantId", equalTo(TENANT_ID));
+            String result =
+                    IntegrationTestSupport.provisionTenantViaOrchestrator(
+                            BOOTSTRAP_KEY, TENANT_ID, "Graph Projection IT Tenant", "enterprise");
+            assertThat(result).isEqualTo(TENANT_ID);
         }
 
         @Test

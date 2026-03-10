@@ -132,6 +132,7 @@ public class DsarAuditLogRepository {
     public List<DsarAuditLog> findBySubject(String subjectId) {
         return dsl.selectFrom(DSAR_AUDIT_LOG)
                 .where(DSAR_AUDIT_LOG.SUBJECT_ID.eq(subjectId))
+                .and(DSAR_AUDIT_LOG.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(DSAR_AUDIT_LOG.CREATED_AT.desc())
                 .fetchInto(DsarAuditLog.class);
     }
@@ -151,6 +152,7 @@ public class DsarAuditLogRepository {
     public List<DsarAuditLog> findByDeletionRequestId(String deletionRequestId) {
         return dsl.selectFrom(DSAR_AUDIT_LOG)
                 .where(DSAR_AUDIT_LOG.DELETION_REQUEST_ID.eq(deletionRequestId))
+                .and(DSAR_AUDIT_LOG.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(DsarAuditLog.class);
     }
 
@@ -170,6 +172,7 @@ public class DsarAuditLogRepository {
                 .from(DSAR_AUDIT_LOG)
                 .where(DSAR_AUDIT_LOG.SUBJECT_ID.eq(subjectId))
                 .and(DSAR_AUDIT_LOG.STATUS.eq("SUCCESS"))
+                .and(DSAR_AUDIT_LOG.TENANT_ID.eq(TenantContext.require()))
                 .fetchOne(0, Long.class);
     }
 }

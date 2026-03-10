@@ -1,5 +1,6 @@
 package com.koostack.operio.rest.resource;
 
+import com.koostack.operio.core.cqrs.AbstractOrchestrator.OrchestratorException;
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.iam.jooq.*;
@@ -10,6 +11,7 @@ import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.IamDtos.*;
 import com.koostack.operio.rest.interceptor.TenantScoped;
+import com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -73,6 +75,11 @@ public class PlatformIamResource {
                 request.email(),
                 request.organizationName());
 
+        var orchestrator =
+                new RegisterUserOrchestrator(
+                        cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+        orchestrator.setQueryService(cqrs.iamQueryService());
+
         var command =
                 new RegisterUserOrchestrator.RegisterUserWithOrgCommand(
                         REALM,
@@ -81,13 +88,33 @@ public class PlatformIamResource {
                         request.fullName(),
                         request.roles(),
                         request.temporaryPassword(),
+                        request.password(),
                         request.organizationName(),
                         request.organizationDisplayName());
-        RegisterUserOrchestrator.RegisterUserWithOrgResult result =
-                cqrs.iamDispatcher().dispatch(command);
-        return Response.status(Response.Status.CREATED)
-                .entity(UserRegisteredResponse.from(result))
-                .build();
+
+        try {
+            RegisterUserOrchestrator.RegisterUserWithOrgResult result =
+                    orchestrator.execute(command);
+            return Response.status(Response.Status.CREATED)
+                    .entity(UserRegisteredResponse.from(result))
+                    .build();
+        } catch (OrchestratorException e) {
+            LOG.error(
+                    "User registration saga failed at step '{}' ({}/{} completed): {}",
+                    e.failedStep(),
+                    e.completedSteps(),
+                    e.totalSteps(),
+                    e.getMessage(),
+                    e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "registration_failed",
+                                    "Registration failed at step '"
+                                            + e.failedStep()
+                                            + "'. Contact support."))
+                    .build();
+        }
     }
 
     @GET

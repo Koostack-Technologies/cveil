@@ -61,23 +61,16 @@ public class GraphResourceIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            Response response =
-                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "Graph Query IT Tenant",
-                      "plan": "pro"
-                    }
-                    """
-                                            .formatted(TENANT_ID))
-                            .when()
-                            .post("/api/v1/platform/tenants");
-            assertThat(response.statusCode())
-                    .as("Tenant creation should succeed")
-                    .isIn(201, 200, 409);
+            try {
+                String result =
+                        IntegrationTestSupport.provisionTenantViaOrchestrator(
+                                BOOTSTRAP_KEY, TENANT_ID, "Graph Query IT Tenant", "pro");
+                assertThat(result).isEqualTo(TENANT_ID);
+            } catch (Exception e) {
+                if (!e.getMessage().contains("already exists")) {
+                    throw e;
+                }
+            }
         }
 
         @Test
@@ -91,8 +84,7 @@ public class GraphResourceIT {
                                     """
                     {
                       "tenantId": "%s",
-                      "keyName": "graph-query-it-key",
-                      "environment": "TEST",
+                      "subject": "graph-query-it-key",
                       "roles": ["admin:read", "admin:write", "consent:read", "consent:write"]
                     }
                     """
@@ -115,8 +107,7 @@ public class GraphResourceIT {
                                     """
                     {
                       "tenantId": "%s",
-                      "keyName": "graph-query-it-readonly",
-                      "environment": "TEST",
+                      "subject": "graph-query-it-readonly",
                       "roles": ["consent:read"]
                     }
                     """
@@ -290,6 +281,23 @@ public class GraphResourceIT {
         @Order(9)
         @DisplayName("Grant consent")
         void grantConsent() {
+            // Wait for policy projection to materialize
+            org.awaitility.Awaitility.await()
+                    .atMost(java.time.Duration.ofSeconds(30))
+                    .pollInterval(java.time.Duration.ofMillis(500))
+                    .untilAsserted(
+                            () -> {
+                                var rows =
+                                        support.query(
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy WHERE tenant_id = '"
+                                                        + TENANT_ID
+                                                        + "'");
+                                int cnt = ((Number) rows.get(0).get("cnt")).intValue();
+                                org.assertj.core.api.Assertions.assertThat(cnt)
+                                        .as("Policy must be projected before consent grant")
+                                        .isGreaterThanOrEqualTo(1);
+                            });
+
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(

@@ -98,21 +98,10 @@ class ConsentResourceIT {
         @Order(1)
         @DisplayName("Create tenant")
         void createTenant() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
-                    .body(
-                            """
-                    {
-                      "tenantId": "%s",
-                      "displayName": "Consent IT Tenant",
-                      "plan": "enterprise"
-                    }
-                    """
-                                    .formatted(TENANT_ID))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(201);
+            String result =
+                    IntegrationTestSupport.provisionTenantViaOrchestrator(
+                            BOOTSTRAP_KEY, TENANT_ID, "Consent IT Tenant", "enterprise");
+            assertThat(result).isEqualTo(TENANT_ID);
         }
 
         @Test

@@ -1,6 +1,7 @@
 package com.koostack.operio.rest.integration;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -142,34 +143,32 @@ class RedisTenantAclIsolationIT {
         @Order(2)
         @DisplayName("create tenant A")
         void createTenantA() {
-            given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .body(
-                            Map.of(
-                                    "tenantId", TENANT_A,
-                                    "displayName", "ACL Test Tenant A",
-                                    "plan", "pro"))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(anyOf(is(201), is(200)));
+            try {
+                String result =
+                        IntegrationTestSupport.provisionTenantViaOrchestrator(
+                                BOOTSTRAP_KEY, TENANT_A, "ACL Test Tenant A", "pro");
+                assertThat(result).isEqualTo(TENANT_A);
+            } catch (Exception e) {
+                if (!e.getMessage().contains("already exists")) {
+                    throw e;
+                }
+            }
         }
 
         @Test
         @Order(3)
         @DisplayName("create tenant B")
         void createTenantB() {
-            given().contentType(ContentType.JSON)
-                    .header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .body(
-                            Map.of(
-                                    "tenantId", TENANT_B,
-                                    "displayName", "ACL Test Tenant B",
-                                    "plan", "pro"))
-                    .when()
-                    .post("/api/v1/platform/tenants")
-                    .then()
-                    .statusCode(anyOf(is(201), is(200)));
+            try {
+                String result =
+                        IntegrationTestSupport.provisionTenantViaOrchestrator(
+                                BOOTSTRAP_KEY, TENANT_B, "ACL Test Tenant B", "pro");
+                assertThat(result).isEqualTo(TENANT_B);
+            } catch (Exception e) {
+                if (!e.getMessage().contains("already exists")) {
+                    throw e;
+                }
+            }
         }
 
         @Test

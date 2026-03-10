@@ -31,8 +31,8 @@ public class ListOrganizationsQueryActuator
                         org ->
                                 new OrganizationInfo(
                                         org.getId(),
-                                        org.getName(),
                                         org.getAlias(),
+                                        org.getName(),
                                         org.isEnabled()))
                 .toList();
     }

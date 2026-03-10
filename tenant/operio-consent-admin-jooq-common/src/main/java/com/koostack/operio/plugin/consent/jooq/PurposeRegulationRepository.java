@@ -2,6 +2,7 @@ package com.koostack.operio.plugin.consent.jooq;
 
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.PURPOSE_REGULATION;
 
+import com.koostack.operio.core.models.TenantContext;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.PurposeRegulationDao;
 import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.PurposeRegulation;
 import java.time.LocalDateTime;
@@ -45,6 +46,7 @@ public class PurposeRegulationRepository {
     public List<PurposeRegulation> findByPurpose(Long purposeId) {
         return dsl.selectFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(PurposeRegulation.class);
     }
 
@@ -57,6 +59,7 @@ public class PurposeRegulationRepository {
     public List<PurposeRegulation> findByRegulation(Long regulationId) {
         return dsl.selectFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.REGULATION_ID.eq(regulationId))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(PurposeRegulation.class);
     }
 
@@ -72,6 +75,7 @@ public class PurposeRegulationRepository {
         return dsl.selectFrom(PURPOSE_REGULATION)
                 .where(PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId))
                 .and(PURPOSE_REGULATION.REGULATION_ID.eq(regulationId))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptionalInto(PurposeRegulation.class);
     }
 
@@ -82,6 +86,7 @@ public class PurposeRegulationRepository {
      */
     public List<PurposeRegulation> findAll() {
         return dsl.selectFrom(PURPOSE_REGULATION)
+                .where(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(PURPOSE_REGULATION.PURPOSE_ID, PURPOSE_REGULATION.REGULATION_ID)
                 .fetchInto(PurposeRegulation.class);
     }

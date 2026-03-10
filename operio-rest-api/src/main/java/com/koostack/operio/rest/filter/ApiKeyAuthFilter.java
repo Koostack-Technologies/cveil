@@ -366,6 +366,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 tenantId = extractJsonStringValue(payload, "tenantId");
             }
 
+            // Keycloak 26+ Organizations: the "organization" claim is an array
+            // of org aliases, e.g. ["my-org"]. Use the first entry as tenant ID.
+            if (tenantId == null) {
+                tenantId = extractFirstOrganizationAlias(payload);
+            }
+
             if (tenantId == null) {
                 // For Keycloak JWTs: iss = http://host/realms/{realmName}
                 String issuer = extractJsonStringValue(payload, "iss");
@@ -379,6 +385,56 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Extracts the first organization alias from the Keycloak {@code organization} claim.
+     *
+     * <p>Keycloak 26+ with Organizations enabled adds: {@code "organization":["org-alias"]}
+     * This method finds the first element in that JSON array.
+     */
+    private static String extractFirstOrganizationAlias(String json) {
+        // Try singular "organization" (Keycloak 26 default)
+        String marker = "\"organization\"";
+        int idx = json.indexOf(marker);
+        if (idx < 0) {
+            // Fallback: plural "organizations" (some mappers use this)
+            marker = "\"organizations\"";
+            idx = json.indexOf(marker);
+        }
+        if (idx < 0) return null;
+
+        int afterColon = json.indexOf(':', idx + marker.length());
+        if (afterColon < 0) return null;
+
+        // Skip whitespace after colon
+        int pos = afterColon + 1;
+        while (pos < json.length() && Character.isWhitespace(json.charAt(pos))) pos++;
+        if (pos >= json.length()) return null;
+
+        char ch = json.charAt(pos);
+        if (ch == '[') {
+            // Array format: ["org-alias", ...]
+            int quoteStart = json.indexOf('"', pos + 1);
+            if (quoteStart < 0) return null;
+            int quoteEnd = json.indexOf('"', quoteStart + 1);
+            if (quoteEnd <= quoteStart) return null;
+            return json.substring(quoteStart + 1, quoteEnd);
+        } else if (ch == '{') {
+            // Object format: {"org-alias": {}, ...}
+            int quoteStart = json.indexOf('"', pos + 1);
+            if (quoteStart < 0) return null;
+            int quoteEnd = json.indexOf('"', quoteStart + 1);
+            if (quoteEnd <= quoteStart) return null;
+            return json.substring(quoteStart + 1, quoteEnd);
+        } else if (ch == '"') {
+            // String format: "org-alias"
+            int quoteEnd = json.indexOf('"', pos + 1);
+            if (quoteEnd <= pos + 1) return null;
+            return json.substring(pos + 1, quoteEnd);
+        }
+
+        return null;
     }
 
     /**
@@ -422,6 +478,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         if (idpResolver == null) {
             LOG.error("JWT received but no IdpTenantResolver configured");
             abortUnauthorized(ctx, "JWT authentication not available — server configuration error");
+            return;
+        }
+
+        IdpProvider<?> defaultProvider = idpResolver.defaultProvider();
+        if (defaultProvider == null || !defaultProvider.isAvailable()) {
+            LOG.error("JWT received but no IdpProvider available");
+            abortUnauthorized(ctx, "JWT authentication not available — no identity provider");
             return;
         }
 
