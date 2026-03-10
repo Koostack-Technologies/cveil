@@ -733,9 +733,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String subjectName = node.get("subjectName").asText();
 
         // Delete consent_ledger entries first (FK references subject.subject_name)
-        dsl.deleteFrom(CONSENT_LEDGER)
-                .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectName))
-                .execute();
+        dsl.deleteFrom(CONSENT_LEDGER).where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectName)).execute();
         dsl.deleteFrom(SUBJECT).where(SUBJECT.SUBJECT_NAME.eq(subjectName)).execute();
     }
 

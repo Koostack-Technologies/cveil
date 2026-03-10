@@ -171,8 +171,8 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
 
             String sql =
                     "INSERT INTO platform_iam.api_key (key_hash, key_prefix, key_id, name,"
-                        + " tenant_id, platform_user_id, subject, roles, environment, status)"
-                        + " VALUES (?, ?, ?, ?, ?, 'system', ?, ?, ?, 'active')";
+                            + " tenant_id, platform_user_id, subject, roles, environment, status)"
+                            + " VALUES (?, ?, ?, ?, ?, 'system', ?, ?, ?, 'active')";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, keyHash);
                 ps.setString(2, keyPrefix);
@@ -193,7 +193,13 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
             try {
                 var event =
                         new com.koostack.operio.core.platform.events.ApiKeyGeneratedEvent(
-                                tenantId, keyId, keyPrefix, keyHash, name, environment, roles,
+                                tenantId,
+                                keyId,
+                                keyPrefix,
+                                keyHash,
+                                name,
+                                environment,
+                                roles,
                                 null);
                 var aggregateId =
                         java.util.UUID.nameUUIDFromBytes(
@@ -212,7 +218,9 @@ public class JooqIamCommandService implements IamCommandService<JooqIamCommandCo
                                 key,
                                 event));
             } catch (Exception e) {
-                LOG.warn("Failed to emit ApiKeyGenerated event for tenant {}: {}", tenantId,
+                LOG.warn(
+                        "Failed to emit ApiKeyGenerated event for tenant {}: {}",
+                        tenantId,
                         e.getMessage());
             }
         }

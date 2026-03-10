@@ -108,36 +108,37 @@ class ProductionStackIT {
     TokenValidationService tokenValidationService;
 
     /** Polls a GET endpoint until the JSON path matches the expected matcher. */
-    private static void awaitGet(String path, String authToken, String jsonPath, Matcher<?> matcher) {
+    private static void awaitGet(
+            String path, String authToken, String jsonPath, Matcher<?> matcher) {
         Awaitility.await()
                 .atMost(30, TimeUnit.SECONDS)
                 .pollInterval(500, TimeUnit.MILLISECONDS)
                 .untilAsserted(
-                        () -> given().header("Authorization", "Bearer " + authToken)
-                                .when()
-                                .get(path)
-                                .then()
-                                .statusCode(200)
-                                .body(jsonPath, matcher));
+                        () ->
+                                given().header("Authorization", "Bearer " + authToken)
+                                        .when()
+                                        .get(path)
+                                        .then()
+                                        .statusCode(200)
+                                        .body(jsonPath, matcher));
     }
 
-    /**
-     * Polls a POST endpoint (e.g. evaluate) until the JSON path matches.
-     */
+    /** Polls a POST endpoint (e.g. evaluate) until the JSON path matches. */
     private static void awaitPost(
             String path, String authToken, String body, String jsonPath, Matcher<?> matcher) {
         Awaitility.await()
                 .atMost(30, TimeUnit.SECONDS)
                 .pollInterval(500, TimeUnit.MILLISECONDS)
                 .untilAsserted(
-                        () -> given().header("Authorization", "Bearer " + authToken)
-                                .contentType(ContentType.JSON)
-                                .body(body)
-                                .when()
-                                .post(path)
-                                .then()
-                                .statusCode(200)
-                                .body(jsonPath, matcher));
+                        () ->
+                                given().header("Authorization", "Bearer " + authToken)
+                                        .contentType(ContentType.JSON)
+                                        .body(body)
+                                        .when()
+                                        .post(path)
+                                        .then()
+                                        .statusCode(200)
+                                        .body(jsonPath, matcher));
     }
 
     // =======================================================================
@@ -397,12 +398,13 @@ class ProductionStackIT {
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                                    .when()
-                                    .get("/api/v1/platform/tenants")
-                                    .then()
-                                    .statusCode(200)
-                                    .body("tenantId", hasItem(TENANT_ID)));
+                            () ->
+                                    given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
+                                            .when()
+                                            .get("/api/v1/platform/tenants")
+                                            .then()
+                                            .statusCode(200)
+                                            .body("tenantId", hasItem(TENANT_ID)));
         }
 
         @Test
@@ -580,11 +582,7 @@ class ProductionStackIT {
         @Order(4)
         @DisplayName("List fields returns registered fields")
         void listFields() {
-            awaitGet(
-                    "/api/v1/catalogue/fields",
-                    apiKey,
-                    "$",
-                    hasSize(greaterThanOrEqualTo(3)));
+            awaitGet("/api/v1/catalogue/fields", apiKey, "$", hasSize(greaterThanOrEqualTo(3)));
         }
 
         // -- Categories -------------------------------------------------------
@@ -631,11 +629,7 @@ class ProductionStackIT {
         @Order(12)
         @DisplayName("List categories returns registered categories")
         void listCategories() {
-            awaitGet(
-                    "/api/v1/catalogue/categories",
-                    apiKey,
-                    "$",
-                    hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/catalogue/categories", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Purposes ---------------------------------------------------------
@@ -682,11 +676,7 @@ class ProductionStackIT {
         @Order(22)
         @DisplayName("List purposes returns registered purposes")
         void listPurposes() {
-            awaitGet(
-                    "/api/v1/governance/purposes",
-                    apiKey,
-                    "$",
-                    hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/governance/purposes", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Regulations ------------------------------------------------------
@@ -900,11 +890,7 @@ class ProductionStackIT {
         @Order(50)
         @DisplayName("List entities returns implicitly created entities")
         void listEntities() {
-            awaitGet(
-                    "/api/v1/catalogue/entities",
-                    apiKey,
-                    "$",
-                    hasSize(greaterThanOrEqualTo(2)));
+            awaitGet("/api/v1/catalogue/entities", apiKey, "$", hasSize(greaterThanOrEqualTo(2)));
         }
 
         @Test
@@ -960,7 +946,8 @@ class ProductionStackIT {
         void registerSubject() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                     { "subjectName": "user-1", "description": "Test subject" }
                     """)
                     .when()
@@ -977,10 +964,11 @@ class ProductionStackIT {
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", auth())
-                                    .contentType(ContentType.JSON)
-                                    .body(
-                                            """
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                                     {
                                       "subject": "user-1",
                                       "scope": {
@@ -991,11 +979,13 @@ class ProductionStackIT {
                                       }
                                     }
                                     """)
-                                    .when()
-                                    .post("/api/v1/subjects/consent/grant")
-                                    .then()
-                                    .statusCode(200)
-                                    .body("message", containsStringIgnoringCase("granted")));
+                                            .when()
+                                            .post("/api/v1/subjects/consent/grant")
+                                            .then()
+                                            .statusCode(200)
+                                            .body(
+                                                    "message",
+                                                    containsStringIgnoringCase("granted")));
         }
 
         @Test
@@ -1006,10 +996,11 @@ class ProductionStackIT {
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", auth())
-                                    .contentType(ContentType.JSON)
-                                    .body(
-                                            """
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                                     {
                                       "subject": "user-1",
                                       "scope": {
@@ -1020,10 +1011,10 @@ class ProductionStackIT {
                                       }
                                     }
                                     """)
-                                    .when()
-                                    .post("/api/v1/subjects/consent/grant")
-                                    .then()
-                                    .statusCode(200));
+                                            .when()
+                                            .post("/api/v1/subjects/consent/grant")
+                                            .then()
+                                            .statusCode(200));
         }
 
         @Test
@@ -1043,12 +1034,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost(
-                    "/api/v1/subjects/user-1/evaluate",
-                    apiKey,
-                    body,
-                    "granted",
-                    hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "granted", hasSize(1));
         }
 
         @Test
@@ -1103,12 +1089,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost(
-                    "/api/v1/subjects/user-1/evaluate",
-                    apiKey,
-                    body,
-                    "granted",
-                    hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "granted", hasSize(1));
         }
 
         @Test
@@ -1153,12 +1134,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost(
-                    "/api/v1/subjects/user-1/evaluate",
-                    apiKey,
-                    body,
-                    "denied",
-                    hasSize(1));
+            awaitPost("/api/v1/subjects/user-1/evaluate", apiKey, body, "denied", hasSize(1));
         }
 
         @Test
@@ -1210,7 +1186,8 @@ class ProductionStackIT {
         void registerBatchSubject() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                     { "subjectName": "user-batch", "description": "Batch test subject" }
                     """)
                     .when()
@@ -1227,10 +1204,11 @@ class ProductionStackIT {
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", auth())
-                                    .contentType(ContentType.JSON)
-                                    .body(
-                                            """
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                                     {
                                       "subject": "user-batch",
                                       "grants": [
@@ -1261,13 +1239,13 @@ class ProductionStackIT {
                                       ]
                                     }
                                     """)
-                                    .when()
-                                    .post("/api/v1/subjects/consent/grant-all")
-                                    .then()
-                                    .statusCode(200)
-                                    .contentType(ContentType.JSON)
-                                    .body("succeeded", equalTo(3))
-                                    .body("failed", equalTo(0)));
+                                            .when()
+                                            .post("/api/v1/subjects/consent/grant-all")
+                                            .then()
+                                            .statusCode(200)
+                                            .contentType(ContentType.JSON)
+                                            .body("succeeded", equalTo(3))
+                                            .body("failed", equalTo(0)));
         }
 
         @Test
@@ -1299,12 +1277,7 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost(
-                    "/api/v1/subjects/user-batch/evaluate",
-                    apiKey,
-                    body,
-                    "granted",
-                    hasSize(3));
+            awaitPost("/api/v1/subjects/user-batch/evaluate", apiKey, body, "granted", hasSize(3));
         }
 
         @Test
@@ -1375,12 +1348,7 @@ class ProductionStackIT {
                     }
                     """;
             // After revoke, only ssn/analytics should remain granted
-            awaitPost(
-                    "/api/v1/subjects/user-batch/evaluate",
-                    apiKey,
-                    body,
-                    "denied",
-                    hasSize(2));
+            awaitPost("/api/v1/subjects/user-batch/evaluate", apiKey, body, "denied", hasSize(2));
         }
     }
 
@@ -1408,13 +1376,14 @@ class ProductionStackIT {
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", auth())
-                                    .when()
-                                    .get("/api/v1/subjects/user-batch/summary")
-                                    .then()
-                                    .statusCode(200)
-                                    .contentType(ContentType.JSON)
-                                    .body("entries", hasSize(greaterThanOrEqualTo(1))));
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .when()
+                                            .get("/api/v1/subjects/user-batch/summary")
+                                            .then()
+                                            .statusCode(200)
+                                            .contentType(ContentType.JSON)
+                                            .body("entries", hasSize(greaterThanOrEqualTo(1))));
         }
 
         @Test
@@ -1704,15 +1673,17 @@ class ProductionStackIT {
         @Order(1)
         @DisplayName("Different subjects have independent consent state")
         void subjectIsolation() {
-            // Grant consent for subject-A only (retry in case governance projection still catching up)
+            // Grant consent for subject-A only (retry in case governance projection still catching
+            // up)
             Awaitility.await()
                     .atMost(30, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(
-                            () -> given().header("Authorization", auth())
-                                    .contentType(ContentType.JSON)
-                                    .body(
-                                            """
+                            () ->
+                                    given().header("Authorization", auth())
+                                            .contentType(ContentType.JSON)
+                                            .body(
+                                                    """
                                     {
                                       "subject": "subject-A",
                                       "scope": {
@@ -1723,10 +1694,10 @@ class ProductionStackIT {
                                       }
                                     }
                                     """)
-                                    .when()
-                                    .post("/api/v1/subjects/consent/grant")
-                                    .then()
-                                    .statusCode(200));
+                                            .when()
+                                            .post("/api/v1/subjects/consent/grant")
+                                            .then()
+                                            .statusCode(200));
 
             // subject-A should have consent granted (await projection)
             String evalBody =
@@ -1741,11 +1712,7 @@ class ProductionStackIT {
                     }
                     """;
             awaitPost(
-                    "/api/v1/subjects/subject-A/evaluate",
-                    apiKey,
-                    evalBody,
-                    "granted",
-                    hasSize(1));
+                    "/api/v1/subjects/subject-A/evaluate", apiKey, evalBody, "granted", hasSize(1));
 
             // subject-B should NOT have consent (never granted)
             given().header("Authorization", auth())

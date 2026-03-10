@@ -639,7 +639,8 @@ public class SubjectLifecycleIT {
                                 var auditRows = support.queryDsarAuditLog(SUBJECT_DSAR);
                                 assertThat(auditRows)
                                         .as(
-                                                "DSAR audit log should have at least one entry for subject")
+                                                "DSAR audit log should have at least one entry for"
+                                                        + " subject")
                                         .isNotEmpty();
                                 assertThat(auditRows.get(0).get("subject_id").toString())
                                         .isEqualTo(SUBJECT_DSAR);

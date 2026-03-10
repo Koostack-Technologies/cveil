@@ -212,15 +212,9 @@ class DsarTenantIsolationIT {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(
                         () -> {
-                            assertThat(
-                                            exportSubject(keyTenantA, subject)
-                                                    .consent()
-                                                    .entries())
+                            assertThat(exportSubject(keyTenantA, subject).consent().entries())
                                     .isNotEmpty();
-                            assertThat(
-                                            exportSubject(keyTenantB, subject)
-                                                    .consent()
-                                                    .entries())
+                            assertThat(exportSubject(keyTenantB, subject).consent().entries())
                                     .isNotEmpty();
                         });
 
@@ -279,9 +273,12 @@ class DsarTenantIsolationIT {
                     .contentType(ContentType.JSON)
                     .body(
                             Map.of(
-                                    "fieldName", fieldName,
-                                    "entityName", "User",
-                                    "description", fieldName + " field"))
+                                    "fieldName",
+                                    fieldName,
+                                    "entityName",
+                                    "User",
+                                    "description",
+                                    fieldName + " field"))
                     .post("/api/v1/catalogue/fields")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
@@ -290,7 +287,14 @@ class DsarTenantIsolationIT {
         for (String fieldName : new String[] {"email", "phone"}) {
             given().header("Authorization", auth)
                     .contentType(ContentType.JSON)
-                    .body(Map.of("fieldName", fieldName, "entityName", "User", "categoryName", "PII"))
+                    .body(
+                            Map.of(
+                                    "fieldName",
+                                    fieldName,
+                                    "entityName",
+                                    "User",
+                                    "categoryName",
+                                    "PII"))
                     .post("/api/v1/catalogue/fields/categories")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
@@ -354,7 +358,11 @@ class DsarTenantIsolationIT {
     }
 
     private void grantConsent(
-            String apiKey, String subject, String fieldName, String entityName, String purposeName) {
+            String apiKey,
+            String subject,
+            String fieldName,
+            String entityName,
+            String purposeName) {
         registerSubject(apiKey, subject);
 
         // Wait for subject projection before granting consent
@@ -401,8 +409,7 @@ class DsarTenantIsolationIT {
         String body = raw.body().asString();
         int status = raw.statusCode();
         if (status != 200) {
-            throw new AssertionError(
-                    "Expected 200 but got " + status + ": " + body);
+            throw new AssertionError("Expected 200 but got " + status + ": " + body);
         }
         return raw.as(DsarDeletionReceipt.class);
     }
