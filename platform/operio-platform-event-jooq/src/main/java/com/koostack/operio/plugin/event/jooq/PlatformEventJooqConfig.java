@@ -3,8 +3,6 @@ package com.koostack.operio.plugin.event.jooq;
 import com.koostack.operio.plugin.jooq.common.JooqPluginConfig;
 import com.koostack.operio.plugin.redis.common.RedisPluginConfig;
 import com.koostack.operio.plugin.redis.common.TenantAwareJedisProvider;
-import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Configuration record for the {@code operio-platform-event-jooq} module.
@@ -25,8 +23,7 @@ import java.util.function.Supplier;
  *     notifications
  * @param tenantCredentialLookup callback to resolve per-tenant Redis ACL credentials, or {@code
  *     null} to use a shared connection
- * @param tenantDiscovery supplier that returns the current list of active tenant IDs for outbox
- *     polling, or {@code null} if Redis is disabled
+ * @param shardCount number of shard streams for tenant event distribution (default 8)
  */
 public record PlatformEventJooqConfig(
         String connectionString,
@@ -35,16 +32,16 @@ public record PlatformEventJooqConfig(
         String password,
         RedisPluginConfig redis,
         TenantAwareJedisProvider.TenantCredentialLookup tenantCredentialLookup,
-        Supplier<List<String>> tenantDiscovery)
+        int shardCount)
         implements JooqPluginConfig {
 
     public PlatformEventJooqConfig(String connectionString, String dialect) {
-        this(connectionString, dialect, null, null, null, null, null);
+        this(connectionString, dialect, null, null, null, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
             String connectionString, String dialect, RedisPluginConfig redis) {
-        this(connectionString, dialect, null, null, redis, null, null);
+        this(connectionString, dialect, null, null, redis, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
@@ -53,7 +50,7 @@ public record PlatformEventJooqConfig(
             String username,
             String password,
             RedisPluginConfig redis) {
-        this(connectionString, dialect, username, password, redis, null, null);
+        this(connectionString, dialect, username, password, redis, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
@@ -63,6 +60,6 @@ public record PlatformEventJooqConfig(
             String password,
             RedisPluginConfig redis,
             TenantAwareJedisProvider.TenantCredentialLookup tenantCredentialLookup) {
-        this(connectionString, dialect, username, password, redis, tenantCredentialLookup, null);
+        this(connectionString, dialect, username, password, redis, tenantCredentialLookup, RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 }

@@ -27,7 +27,8 @@ import org.mockito.ArgumentCaptor;
 class ConsentDecisionProjectionHandlerTest {
 
     private static final String TENANT = "tenant-1";
-    private static final String STREAM_KEY = "operio:stream:tenant:tenant-1";
+    private static final String STREAM_KEY = "operio:stream:shard:"
+            + Math.floorMod("tenant-1".hashCode(), 8);
     private static final String MSG_ID = "1-0";
 
     private ConsentPolicyRedisRepository consentRepo;

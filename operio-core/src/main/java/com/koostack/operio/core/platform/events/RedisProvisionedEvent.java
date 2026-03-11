@@ -7,7 +7,7 @@ import com.koostack.operio.core.event.DomainEvent;
  * tenant/organization.
  *
  * @param tenantId the tenant identifier
- * @param streamKey the Redis stream key created (e.g., {@code operio:stream:tenant:{tenantId}})
+ * @param streamKey the Redis shard stream key for this tenant (e.g., {@code operio:stream:shard:3})
  * @param pubSubChannel the pub/sub channel created (e.g., {@code
  *     consent-cache-invalidation:{tenantId}})
  * @param aclUser the Redis ACL user created for the tenant (nullable if ACLs are disabled)

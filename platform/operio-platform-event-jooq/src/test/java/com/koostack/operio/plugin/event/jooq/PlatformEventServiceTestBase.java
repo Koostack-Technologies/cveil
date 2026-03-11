@@ -52,8 +52,7 @@ abstract class PlatformEventServiceTestBase {
                         postgres.getUsername(),
                         postgres.getPassword(),
                         new TestRedisConfig(redis.getHost(), redis.getMappedPort(6379), null),
-                        noopLookup,
-                        List::of);
+                        noopLookup);
 
         service = new JooqPlatformEventService();
         service.configure(config);

@@ -492,6 +492,43 @@ public interface OperioConfig {
         boolean enabled();
     }
 
+    /**
+     * Redis stream sharding configuration.
+     *
+     * <p>Controls how tenant events are distributed across fixed shard streams. Instead of one
+     * stream per tenant (O(N) connections), events are routed to {@code shard-count} fixed streams
+     * using {@code hash(tenantId) % shardCount}.
+     *
+     * <h2>Configuration Example</h2>
+     *
+     * <pre>{@code
+     * operio:
+     *   stream:
+     *     shard-count: 8  # Number of shard streams (default 8)
+     * }</pre>
+     */
+    interface StreamConfig {
+        /**
+         * Number of shard streams for tenant event distribution.
+         *
+         * <p>Events are routed to {@code operio:stream:shard:{hash(tenantId) % shardCount}}. The
+         * publisher and consumer must use the same value. Changing this value requires draining
+         * existing shard streams.
+         *
+         * @return the shard count (default 8)
+         */
+        @WithName("shard-count")
+        @WithDefault("8")
+        int shardCount();
+    }
+
+    /**
+     * Stream sharding configuration.
+     *
+     * @return the stream config, or empty to use defaults
+     */
+    Optional<StreamConfig> stream();
+
     // -------------------------------------------------------------------
     // Convenience methods
     // -------------------------------------------------------------------

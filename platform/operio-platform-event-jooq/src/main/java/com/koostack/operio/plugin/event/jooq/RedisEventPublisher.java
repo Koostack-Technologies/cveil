@@ -16,19 +16,37 @@ import redis.clients.jedis.Pipeline;
  *
  * <ul>
  *   <li>Platform events → {@code {appName}:platform-events}
- *   <li>Tenant events → {@code {appName}:stream:tenant:{tenantId}}
+ *   <li>Tenant events → {@code {appName}:stream:shard:{N}} where N = hash(tenantId) % shardCount
  * </ul>
+ *
+ * <p>Tenant events are distributed across a fixed number of shard streams (default 8) so that the
+ * number of Redis connections is O(1) regardless of tenant count.
  */
 public class RedisEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(RedisEventPublisher.class);
+    public static final int DEFAULT_SHARD_COUNT = 8;
 
     private final JedisProvider jedisProvider;
     private final String appName;
+    private final int shardCount;
 
     public RedisEventPublisher(JedisProvider jedisProvider, String appName) {
+        this(jedisProvider, appName, DEFAULT_SHARD_COUNT);
+    }
+
+    public RedisEventPublisher(JedisProvider jedisProvider, String appName, int shardCount) {
+        if (shardCount < 1) {
+            throw new IllegalArgumentException("shardCount must be >= 1, got " + shardCount);
+        }
         this.jedisProvider = jedisProvider;
         this.appName = appName;
+        this.shardCount = shardCount;
+    }
+
+    /** Returns the number of shard streams. */
+    public int shardCount() {
+        return shardCount;
     }
 
     /** Returns the platform events stream key. */
@@ -36,7 +54,31 @@ public class RedisEventPublisher {
         return appName + ":platform-events";
     }
 
-    /** Returns the tenant events stream key for the given tenant. */
+    /**
+     * Returns the shard stream key for the given tenant. Uses a deterministic hash so the same
+     * tenant always routes to the same shard.
+     */
+    public String shardStreamKey(String tenantId) {
+        int shard = Math.floorMod(tenantId.hashCode(), shardCount);
+        return appName + ":stream:shard:" + shard;
+    }
+
+    /**
+     * Returns the shard stream key for a given shard index.
+     *
+     * @param shard the shard index (0-based)
+     */
+    public String shardStreamKeyByIndex(int shard) {
+        return appName + ":stream:shard:" + shard;
+    }
+
+    /**
+     * Returns the tenant events stream key for the given tenant.
+     *
+     * @deprecated Use {@link #shardStreamKey(String)} instead. Per-tenant streams are replaced by
+     *     shard streams.
+     */
+    @Deprecated(forRemoval = true)
     public String tenantStreamKey(String tenantId) {
         return appName + ":stream:tenant:" + tenantId;
     }
@@ -70,11 +112,12 @@ public class RedisEventPublisher {
         }
         try {
             JedisPooled jedis = jedisProvider.get();
-            Pipeline pipeline = jedis.pipelined();
-            for (Map<String, String> fields : batch) {
-                pipeline.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
+            try (Pipeline pipeline = jedis.pipelined()) {
+                for (Map<String, String> fields : batch) {
+                    pipeline.xadd(streamKey, fields, new redis.clients.jedis.params.XAddParams());
+                }
+                pipeline.sync();
             }
-            pipeline.sync();
             log.debug("Pipelined {} events to Redis stream {}", batch.size(), streamKey);
         } catch (Exception e) {
             throw new RuntimeException(

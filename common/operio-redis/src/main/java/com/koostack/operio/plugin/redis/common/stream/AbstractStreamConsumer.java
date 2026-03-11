@@ -228,6 +228,12 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
         return jedisProvider;
     }
 
+    private static boolean isNoGroupError(Exception e) {
+        return e instanceof redis.clients.jedis.exceptions.JedisDataException
+                && e.getMessage() != null
+                && e.getMessage().contains("NOGROUP");
+    }
+
     private void ensureConsumerGroup(String streamKey, String groupName) {
         int maxRetries = 5;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -331,6 +337,20 @@ public abstract class AbstractStreamConsumer implements AutoCloseable {
             } catch (Exception e) {
                 if (!running || Thread.currentThread().isInterrupted()) {
                     break;
+                }
+                // NOGROUP means the stream or consumer group was deleted (e.g. by
+                // FLUSHDB during test runs).  Re-create the group and retry
+                // immediately instead of entering exponential backoff.
+                if (isNoGroupError(e)) {
+                    log.info(
+                            "Recreating consumer group '{}' on stream '{}' (tenant='{}') after"
+                                    + " NOGROUP error",
+                            reg.groupName(),
+                            streamKey,
+                            tenantId);
+                    ensureConsumerGroup(streamKey, reg.groupName());
+                    backoffMs = MIN_BACKOFF_MS;
+                    continue;
                 }
                 log.warn(
                         "Error in consumer for tenant '{}', group '{}' — retrying after {}ms",

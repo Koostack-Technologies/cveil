@@ -20,7 +20,6 @@ import com.koostack.operio.plugin.redis.common.RedisContextFactory;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.function.Supplier;
 import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
 import org.slf4j.Logger;
@@ -96,13 +95,9 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
                                         config.redis().password(),
                                         config.redis().tlsConfig()));
             }
-            this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio");
+            this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio", config.shardCount());
 
-            Supplier<List<String>> discovery =
-                    config.tenantDiscovery() != null
-                            ? config.tenantDiscovery()
-                            : () -> List.of("platform");
-            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher, discovery);
+            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher);
             this.outboxPoller.start();
         }
 

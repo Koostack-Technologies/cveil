@@ -39,7 +39,8 @@ abstract class ConsentAdminCommandTestBase {
     static final String TEST_TENANT = "test_tenant";
 
     /** Stream key for the test tenant, derived from the shard function. */
-    static final String STREAM_KEY = "operio:stream:tenant:" + TEST_TENANT;
+    static final String STREAM_KEY = "operio:stream:shard:"
+            + Math.floorMod(TEST_TENANT.hashCode(), 8);
 
     private static final String TENANT_ACL_USER = "t_" + TEST_TENANT;
     private static final String TENANT_ACL_PASS = "testpass";
@@ -99,8 +100,7 @@ abstract class ConsentAdminCommandTestBase {
                         postgres.getUsername(),
                         postgres.getPassword(),
                         new TestRedisConfig(redis.getHost(), redis.getMappedPort(6379), null),
-                        credentialLookup,
-                        () -> List.of(TEST_TENANT));
+                        credentialLookup);
 
         eventService = new JooqPlatformEventService();
         eventService.configure(eventConfig);

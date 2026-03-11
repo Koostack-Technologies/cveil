@@ -43,6 +43,13 @@ public class TenantAwareExecuteListener implements ExecuteListener {
         // SET (session-scoped) rather than SET LOCAL (transaction-scoped) so it
         // works regardless of whether an explicit transaction is open. The value
         // is overwritten on every jOOQ operation via this listener.
+        //
+        // IMPORTANT: Do NOT use try-with-resources here.  Closing the
+        // temporary Statement can invalidate jOOQ's already-prepared
+        // PreparedStatement on the same JDBC connection (observed with
+        // the PostgreSQL JDBC driver + HikariCP).  The Statement is
+        // lightweight and will be cleaned up when the connection is
+        // returned to the pool.
         try {
             Statement stmt = ctx.connection().createStatement();
             stmt.execute("SET app.tenant_id = '" + sanitized + "'");

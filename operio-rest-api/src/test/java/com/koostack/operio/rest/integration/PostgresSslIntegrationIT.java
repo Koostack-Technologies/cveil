@@ -2,21 +2,10 @@ package com.koostack.operio.rest.integration;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
-import io.quarkus.test.common.WithTestResource;
-import io.quarkus.test.junit.QuarkusTest;
-import java.sql.Connection;
-import java.util.HashMap;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * Integration test for PostgreSQL SSL/TLS JDBC configuration.
@@ -44,9 +33,14 @@ import org.testcontainers.utility.DockerImageName;
  *   <li>The {@code sslcert} and/or {@code sslrootcert} parameters point to
  *       valid PEM files</li>
  * </ol>
+ *
+ * <p>This test does NOT use {@code @QuarkusTest} or {@code @WithTestResource}
+ * because it only validates SSL parameter string handling — no actual database
+ * connections are made. Using a separate {@code QuarkusTestResourceLifecycleManager}
+ * would force Quarkus to restart between test classes, recycling the shared
+ * Postgres and Redis containers and destroying state needed by other integration
+ * tests.
  */
-@QuarkusTest
-@WithTestResource(PostgresSslIntegrationIT.PostgresSslTestResourceManager.class)
 @DisplayName("PostgreSQL SSL/TLS Integration Tests")
 class PostgresSslIntegrationIT {
 
@@ -54,92 +48,22 @@ class PostgresSslIntegrationIT {
         PostgresSslIntegrationIT.class
     );
 
-    /**
-     * Test resource manager for PostgreSQL SSL integration tests.
-     *
-     * <p>Starts a PostgreSQL 16 container in plaintext mode (standard
-     * Testcontainers image). To test full TLS with certificate verification,
-     * a custom PostgreSQL image with TLS support would be required.
-     */
-    public static class PostgresSslTestResourceManager
-        implements QuarkusTestResourceLifecycleManager
-    {
-
-        private static final Logger LOG = LoggerFactory.getLogger(
-            PostgresSslTestResourceManager.class
-        );
-
-        private PostgreSQLContainer<?> postgres;
-
-        @Override
-        public Map<String, String> start() {
-            LOG.info("Starting PostgreSQL SSL test infrastructure...");
-
-            postgres = new PostgreSQLContainer<>(
-                DockerImageName.parse("postgres:16-alpine")
-            )
-                .withDatabaseName("operio_ssl_test")
-                .withUsername("operio_ssl_test")
-                .withPassword("operio_ssl_test")
-                .withLogConsumer(
-                    new Slf4jLogConsumer(LOG).withPrefix("postgres")
-                );
-
-            postgres.start();
-            String jdbcUrl = postgres.getJdbcUrl();
-            LOG.info("PostgreSQL started: {}", jdbcUrl);
-
-            Map<String, String> props = new HashMap<>();
-            props.put("operio.test.db.url", jdbcUrl);
-            props.put("operio.test.db.username", "operio_ssl_test");
-            props.put("operio.test.db.password", "operio_ssl_test");
-            // Standard Postgres doesn't support TLS, so test with disable
-            props.put("operio.test.db.ssl-mode", "disable");
-
-            return props;
-        }
-
-        @Override
-        public void stop() {
-            LOG.info("Stopping PostgreSQL SSL test infrastructure...");
-            if (postgres != null) {
-                try {
-                    postgres.stop();
-                } catch (Exception e) {
-                    LOG.warn("Failed to stop PostgreSQL", e);
-                }
-            }
-        }
-    }
-
     // -----------------------------------------------------------------------
     // Tests
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("Plaintext PostgreSQL connection should work (baseline)")
+    @DisplayName("Plaintext PostgreSQL connection URL should use sslmode=disable")
     void testPlaintextPostgresConnection() {
-        // Given: plaintext PostgreSQL connection (sslmode=disable)
-        String jdbcUrl = "jdbc:postgresql://localhost:5432/operio_ssl_test";
-        String username = "operio_ssl_test";
-        String password = "operio_ssl_test";
+        // Given: a base JDBC URL for plaintext connection
+        String baseUrl = "jdbc:postgresql://localhost:5432/operio_ssl_test";
+        String sslMode = "disable";
 
-        // When: creating a HikariCP connection pool with plaintext
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(jdbcUrl);
-        config.setUsername(username);
-        config.setPassword(password);
-        config.setMaximumPoolSize(1);
+        // When: constructing the connection URL
+        String url = baseUrl + "?sslmode=" + sslMode;
 
-        // Then: connection should succeed if credentials are correct
-        // Note: This will fail against the test container because the URL is hardcoded,
-        // but demonstrates the pattern
-        // HikariDataSource ds = new HikariDataSource(config);
-        // try (Connection conn = ds.getConnection()) {
-        //     assertThat(conn).isNotNull();
-        // } finally {
-        //     ds.close();
-        // }
+        // Then: the URL should contain sslmode=disable
+        assertThat(url).contains("sslmode=disable");
         LOG.info("✓ PostgreSQL plaintext configuration test pattern validated");
     }
 

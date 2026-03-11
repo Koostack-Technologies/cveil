@@ -36,7 +36,8 @@ import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
-import com.koostack.operio.plugin.event.jooq.TenantStreamConsumer;
+import com.koostack.operio.plugin.event.jooq.ShardedStreamConsumer;
+import com.koostack.operio.plugin.event.jooq.RedisEventPublisher;
 // TenantRegistry import removed — no async tenant discovery needed (Phase 8)
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
@@ -601,12 +602,11 @@ public class OperioProducers {
     // Per-tenant stream consumer (production only)
     // -----------------------------------------------------------------------
 
-    private TenantStreamConsumer tenantStreamConsumer;
+    private ShardedStreamConsumer tenantStreamConsumer;
     private AbstractStreamConsumer platformStreamConsumer;
     private SubscriptionManager adminSubscriptionManager;
     private com.koostack.operio.tenant.consent.projection.decision.ExpiredConsentReaper
             expiredConsentReaper;
-    private java.util.concurrent.ScheduledExecutorService tenantReconciler;
 
     /** Platform DataSource for RLS-aware DSLContext creation. */
     private DataSource platformDataSource;
@@ -615,7 +615,7 @@ public class OperioProducers {
     private DSLContext platformDsl;
 
     /**
-     * Produces the {@link TenantStreamConsumer} that runs both the consent decision projection and
+     * Produces the {@link ShardedStreamConsumer} that runs both the consent decision projection and
      * admin projection — materializing domain events into the Redis decision cache and SQL admin
      * tables respectively.
      *
@@ -623,17 +623,16 @@ public class OperioProducers {
      * tenantAwareJedisProvider} are available). In embedded mode this returns {@code null} (no
      * stream consumer needed).
      *
-     * <p>The consumer is NOT started here — tenants are added dynamically by {@link TenantManager}
-     * during provisioning and startup reconciliation. Shutdown is handled by the {@link
-     * #onShutdown} CDI lifecycle callback.
+     * <p>Uses fixed shard streams ({@code operio:stream:shard:{0..N-1}}) instead of per-tenant
+     * streams. The shard count is configurable via {@code operio.stream.shard-count} (default 8).
      *
      * @param operio the built {@link Operio} instance (triggers bundle initialization first)
-     * @return the tenant stream consumer, or {@code null} in embedded mode
+     * @return the sharded stream consumer, or {@code null} in embedded mode
      */
     @Produces
     @ApplicationScoped
     @io.quarkus.runtime.Startup
-    public TenantStreamConsumer tenantStreamConsumer(Operio operio) {
+    public ShardedStreamConsumer tenantStreamConsumer(Operio operio) {
         // Force CDI proxy resolution so operioInit() completes before we
         // inspect the infrastructure fields it populates (adminRedisPool, etc.).
         operio.appName();
@@ -698,12 +697,17 @@ public class OperioProducers {
             rlsAwareDsl = DSL.using(rlsConfig);
         }
 
-        // Build consumer with handlers.
+        // Build sharded consumer with handlers.
+        // Uses fixed shard streams instead of per-tenant streams.
         // Block timeout of 500ms balances responsiveness with CPU usage —
         // virtual threads unmount during the blocking XREADGROUP so the cost
-        // is negligible even with many tenants.
-        TenantStreamConsumer consumer =
-                new TenantStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100);
+        // is negligible.
+        int shardCount = config.stream()
+                .map(OperioConfig.StreamConfig::shardCount)
+                .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        ShardedStreamConsumer consumer =
+                new ShardedStreamConsumer(
+                        JedisProvider.shared(adminRedisPool), shardCount, 200L, 100);
         consumer.registerHandler("graph-projection", graphHandler);
 
         if (rlsAwareDsl != null) {
@@ -736,75 +740,14 @@ public class OperioProducers {
 
         this.tenantStreamConsumer = consumer;
 
-        // -- Tenant stream consumer registration ---
-        // Hydrate active tenants from event log and register with stream consumer.
-        // The platform event service's outbox poller handles event publishing.
-        if (platformDsl != null) {
-            java.util.Set<String> initialTenants = hydrateTenantSetFromEventLog(platformDsl);
-            LOG.info(
-                    "Operio REST API: hydrated {} active tenants from event log: {}",
-                    initialTenants.size(),
-                    initialTenants);
-
-            for (String tid : initialTenants) {
-                consumer.addTenant(tid);
-            }
-            if (!initialTenants.isEmpty()) {
-                LOG.info(
-                        "Operio REST API: registered {} known tenants with stream consumer",
-                        initialTenants.size());
-            }
-
-            // Reconciliation loop: periodically syncs the stream consumer's
-            // tenant set with the tenant table. addTenant/removeTenant are
-            // idempotent so repeated calls are no-ops.
-            final DSLContext reconcilerDsl = platformDsl;
-            this.tenantReconciler =
-                    java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
-                            r -> {
-                                Thread t = new Thread(r, "tenant-reconciler");
-                                t.setDaemon(true);
-                                return t;
-                            });
-            this.tenantReconciler.scheduleWithFixedDelay(
-                    () -> {
-                        try {
-                            java.util.Set<String> registered = consumer.activeTenants();
-                            java.util.Set<String> desired =
-                                    hydrateTenantSetFromEventLog(reconcilerDsl);
-                            for (String tid : desired) {
-                                if (!registered.contains(tid)) {
-                                    consumer.addTenant(tid);
-                                    LOG.info(
-                                            "Reconciler: added tenant '{}' to stream consumer",
-                                            tid);
-                                }
-                            }
-                            for (String tid : registered) {
-                                if (!desired.contains(tid)) {
-                                    consumer.removeTenant(tid);
-                                    LOG.info(
-                                            "Reconciler: removed tenant '{}' from stream consumer",
-                                            tid);
-                                }
-                            }
-                        } catch (Exception e) {
-                            LOG.warn("Tenant reconciliation cycle failed", e);
-                        }
-                    },
-                    5,
-                    5,
-                    java.util.concurrent.TimeUnit.SECONDS);
-            LOG.info("Operio REST API: tenant reconciler started (5s interval)");
-        } else {
-            LOG.warn(
-                    "Operio REST API: tenant stream consumer NOT populated — platformDsl not"
-                            + " available");
-        }
+        // Start the sharded consumer — no per-tenant registration needed.
+        // Shard streams are fixed and created at startup.
+        consumer.start();
 
         LOG.info(
-                "Operio REST API: tenant stream consumer created"
-                        + " (groups=graph-projection,admin-projection)");
+                "Operio REST API: sharded stream consumer started"
+                        + " ({} shards, groups=graph-projection,admin-projection)",
+                shardCount);
         return consumer;
     }
 
@@ -825,12 +768,8 @@ public class OperioProducers {
                     @jakarta.enterprise.context.BeforeDestroyed(ApplicationScoped.class)
                     Object event) {
         if (tenantStreamConsumer != null) {
-            LOG.info("Operio REST API: stopping tenant stream consumer");
+            LOG.info("Operio REST API: stopping sharded stream consumer");
             tenantStreamConsumer.close();
-        }
-        if (tenantReconciler != null) {
-            LOG.info("Operio REST API: stopping tenant reconciler");
-            tenantReconciler.shutdownNow();
         }
         if (adminSubscriptionManager != null) {
             LOG.info("Operio REST API: stopping admin subscription manager");
@@ -912,28 +851,6 @@ public class OperioProducers {
                         .orElse(null);
 
         // -- Platform event service -------------------------------------------
-        // Lazy tenant discovery for the outbox poller — reads active tenants
-        // from the platform_core.tenant table. On early calls (before platformDsl
-        // is created), falls back to "platform" only.
-        java.util.function.Supplier<java.util.List<String>> outboxTenantDiscovery =
-                () -> {
-                    DSLContext dsl = this.platformDsl;
-                    if (dsl == null) return java.util.List.of("platform");
-                    try {
-                        var tenantIds =
-                                dsl.select(DSL.field("tenant_id", String.class))
-                                        .from(DSL.table("tenant"))
-                                        .where(DSL.field("status").in("created", "active"))
-                                        .fetch(DSL.field("tenant_id", String.class));
-                        var result = new java.util.ArrayList<String>();
-                        result.add("platform");
-                        result.addAll(tenantIds);
-                        return result;
-                    } catch (Exception e) {
-                        LOG.warn("Outbox tenant discovery failed", e);
-                        return java.util.List.of("platform");
-                    }
-                };
         // Include operio_event in the search_path for the event service's DSLContext.
         // The JooqDataSourceFactory creates its own HikariCP pool without a
         // connectionInitSql, so we use the JDBC currentSchema parameter instead.
@@ -942,6 +859,9 @@ public class OperioProducers {
             String sep = eventDbUrl.contains("?") ? "&" : "?";
             eventDbUrl = eventDbUrl + sep + "currentSchema=operio_event,public";
         }
+        int eventShardCount = config.stream()
+                .map(OperioConfig.StreamConfig::shardCount)
+                .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
         PlatformEventJooqConfig eventConfig =
                 new PlatformEventJooqConfig(
                         eventDbUrl,
@@ -950,7 +870,7 @@ public class OperioProducers {
                         platformDb.password().orElse(null),
                         redisPluginConfig,
                         null,
-                        outboxTenantDiscovery);
+                        eventShardCount);
 
         // Run CQRS schema migrations (event store + domain schemas).
         // The event-sourced CQRS modules need their own migrations.
@@ -960,8 +880,8 @@ public class OperioProducers {
         // Unified event store lives in operio_event schema. All consent tables
         // live in operio_consent. Metrics in operio_metrics.
         // -- Unified schema migrations (all schemas created at startup) -----
-        try (var conn = migrationDs.getConnection()) {
-            var stmt = conn.createStatement();
+        try (var conn = migrationDs.getConnection();
+             var stmt = conn.createStatement()) {
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_event");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_consent");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_metrics");
@@ -1214,7 +1134,7 @@ public class OperioProducers {
 
         // -- Platform stream consumer -----------------------------------------
         AbstractStreamConsumer consumer =
-                new AbstractStreamConsumer(JedisProvider.shared(adminRedisPool), 500L, 100) {
+                new AbstractStreamConsumer(JedisProvider.shared(adminRedisPool), 200L, 100) {
                     @Override
                     protected String streamKeyForTenant(String tenantId) {
                         return "operio:platform-events";

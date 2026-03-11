@@ -53,7 +53,10 @@ public class ProvisionRedisCommandActuator
     @Override
     public ProvisionRedisResult execute(ProvisionRedisCommand command) {
         String tenantId = command.tenantId();
-        String streamKey = "operio:stream:tenant:" + tenantId;
+        // Shard streams are created at startup by ShardedStreamConsumer —
+        // no per-tenant stream creation needed.
+        int shard = Math.floorMod(tenantId.hashCode(), 8);
+        String streamKey = "operio:stream:shard:" + shard;
         String pubSubChannel = "consent-cache-invalidation:" + tenantId;
 
         // Auto-generate ACL credentials when not explicitly provided
@@ -63,30 +66,25 @@ public class ProvisionRedisCommandActuator
                         ? command.aclPassword()
                         : UUID.randomUUID().toString();
 
-        // Create the tenant event stream with an initial system message
-        try {
-            var params = new java.util.HashMap<String, String>();
-            params.put("type", "stream-created");
-            params.put("tenant", tenantId);
-            jedis.xadd(streamKey, params, new redis.clients.jedis.params.XAddParams());
-            LOG.info("Redis stream created: {}", streamKey);
-        } catch (Exception e) {
-            LOG.warn("Redis stream creation (may already exist): {}", e.getMessage());
-        }
-
-        // Create ACL user in Redis
+        // Create ACL user for tenant data keys (graph nodes, consent cache).
+        // Streams use the admin connection — no per-tenant ACL needed for streams.
+        // Grant all command categories except admin (@admin: ACL, CONFIG, CLIENT, etc.)
+        // and dangerous (@dangerous: FLUSHDB, FLUSHALL, DEBUG, KEYS, etc.).
         try {
             jedis.sendCommand(
                     () -> "ACL".getBytes(StandardCharsets.UTF_8),
                     "SETUSER".getBytes(StandardCharsets.UTF_8),
                     aclUser.getBytes(StandardCharsets.UTF_8),
                     "on".getBytes(StandardCharsets.UTF_8),
+                    "resetkeys".getBytes(StandardCharsets.UTF_8),
+                    "resetchannels".getBytes(StandardCharsets.UTF_8),
                     (">" + aclPassword).getBytes(StandardCharsets.UTF_8),
-                    ("~operio:stream:tenant:" + tenantId + ":*").getBytes(StandardCharsets.UTF_8),
                     ("~" + tenantId + ":*").getBytes(StandardCharsets.UTF_8),
                     ("~" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
                     ("&" + pubSubChannel).getBytes(StandardCharsets.UTF_8),
-                    "+@all".getBytes(StandardCharsets.UTF_8));
+                    "+@all".getBytes(StandardCharsets.UTF_8),
+                    "-@admin".getBytes(StandardCharsets.UTF_8),
+                    "-@dangerous".getBytes(StandardCharsets.UTF_8));
             LOG.info("Redis ACL user created: {}", aclUser);
         } catch (Exception e) {
             LOG.warn("Redis ACL setup failed (non-fatal): {}", e.getMessage());

@@ -309,7 +309,7 @@ public class OperioTestResourceManager implements QuarkusTestResourceLifecycleMa
             realm.setRealm(PLATFORM_REALM);
             realm.setDisplayName("Operio Platform");
             realm.setEnabled(true);
-            realm.setAccessTokenLifespan(900);
+            realm.setAccessTokenLifespan(3600);
             realm.setSsoSessionMaxLifespan(604800);
             realm.setOrganizationsEnabled(true);
             kc.realms().create(realm);
