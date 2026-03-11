@@ -340,7 +340,11 @@ public class IntegrationTestSupport implements AutoCloseable {
     /** Counts rows with both a column filter and tenant_id isolation. */
     public long countRowsWithTenant(String table, String whereColumn, Object whereValue) {
         var sql =
-                "SELECT COUNT(*) FROM " + table + " WHERE " + whereColumn + " = ? AND tenant_id = ?";
+                "SELECT COUNT(*) FROM "
+                        + table
+                        + " WHERE "
+                        + whereColumn
+                        + " = ? AND tenant_id = ?";
         try (var conn = openConnection();
                 var ps = conn.prepareStatement(sql)) {
             ps.setObject(1, whereValue);
@@ -744,7 +748,6 @@ public class IntegrationTestSupport implements AutoCloseable {
 
         io.restassured.response.Response response =
                 io.restassured.RestAssured.given()
-                        .header("Authorization", "Bearer " + bootstrapKey)
                         .contentType("application/json")
                         .body(
                                 """
@@ -753,18 +756,10 @@ public class IntegrationTestSupport implements AutoCloseable {
                           "email": "%s",
                           "fullName": "%s Admin",
                           "roles": ["super-admin"],
-                          "temporaryPassword": false%s,
-                          "organizationName": "%s",
-                          "organizationDisplayName": "%s"
+                          "temporaryPassword": false%s
                         }
                         """
-                                        .formatted(
-                                                username,
-                                                email,
-                                                displayName,
-                                                passwordField,
-                                                tenantId,
-                                                displayName))
+                                        .formatted(username, email, displayName, passwordField))
                         .when()
                         .post("/api/v1/platform/iam/users");
 
@@ -779,16 +774,17 @@ public class IntegrationTestSupport implements AutoCloseable {
                 || (body != null && body.toLowerCase().contains("already exists"))
                 || (body != null && body.toLowerCase().contains("conflict"))) {
             System.out.println(
-                    "[IntegrationTestSupport] Tenant '" + tenantId + "' already exists — "
-                            + "treating as success (HTTP " + response.statusCode() + ")");
+                    "[IntegrationTestSupport] Tenant '"
+                            + tenantId
+                            + "' already exists — "
+                            + "treating as success (HTTP "
+                            + response.statusCode()
+                            + ")");
             return tenantId;
         }
 
         throw new AssertionError(
-                "Tenant provisioning failed: HTTP "
-                        + response.statusCode()
-                        + " — "
-                        + body);
+                "Tenant provisioning failed: HTTP " + response.statusCode() + " — " + body);
     }
 
     // -----------------------------------------------------------------------
@@ -851,7 +847,8 @@ public class IntegrationTestSupport implements AutoCloseable {
             // Tenant/user may already exist from a prior run — continue to login
             System.out.println(
                     "[IntegrationTestSupport] Tenant provisioning returned non-201 (likely already"
-                            + " exists): " + e.getMessage());
+                            + " exists): "
+                            + e.getMessage());
         }
 
         String accessToken = loginUser(email, password);

@@ -11,7 +11,6 @@ import com.koostack.operio.core.models.PurposeView;
 import com.koostack.operio.core.models.SubjectConsentView;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
-import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioConfig;
@@ -1305,7 +1304,7 @@ class RbacTest {
         private PlatformResource resource;
         private CoreCommandService<?> coreCommandService;
         private CoreQueryService<?> coreQueryService;
-        private IamCommandService<?> iamCommandService;
+        private CommandDispatcher iamDispatcherMock;
         private IamQueryService<?> iamQueryService;
         private BootstrapKeyLifecycleService bootstrapLifecycle;
         private CommandDispatcher coreDispatcherMock;
@@ -1317,7 +1316,7 @@ class RbacTest {
             resource = new PlatformResource();
             coreCommandService = mock(CoreCommandService.class);
             coreQueryService = mock(CoreQueryService.class);
-            iamCommandService = mock(IamCommandService.class);
+            iamDispatcherMock = mock(CommandDispatcher.class);
             iamQueryService = mock(IamQueryService.class);
             bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
             coreDispatcherMock = mock(CommandDispatcher.class);
@@ -1328,7 +1327,7 @@ class RbacTest {
             when(cqrsHolder.isCqrsAvailable()).thenReturn(true);
             doReturn(coreCommandService).when(cqrsHolder).coreCommandService();
             doReturn(coreQueryService).when(cqrsHolder).coreQueryService();
-            doReturn(iamCommandService).when(cqrsHolder).iamCommandService();
+            doReturn(iamDispatcherMock).when(cqrsHolder).iamDispatcher();
             doReturn(iamQueryService).when(cqrsHolder).iamQueryService();
 
             // Inject via reflection

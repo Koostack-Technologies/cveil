@@ -28,10 +28,15 @@ public final class IamEventTypes {
     public static final String ROLE_ASSIGNED = "iam.role.assigned";
     public static final String ROLE_REMOVED = "iam.role.removed";
 
+    // -- User deletion (compensation) -----------------------------------------
+    public static final String USER_DELETED = "iam.user.deleted";
+
     // -- Organization lifecycle -----------------------------------------------
     public static final String ORGANIZATION_CREATED = "iam.organization.created";
     public static final String ORGANIZATION_MEMBER_ADDED = "iam.organization.member-added";
     public static final String ORGANIZATION_MEMBER_REMOVED = "iam.organization.member-removed";
+    public static final String ORGANIZATION_MEMBER_INVITED = "iam.organization.member-invited";
+    public static final String ORGANIZATION_UPDATED = "iam.organization.updated";
     public static final String ORGANIZATION_DELETED = "iam.organization.deleted";
 
     // -- Infrastructure provisioning ------------------------------------------

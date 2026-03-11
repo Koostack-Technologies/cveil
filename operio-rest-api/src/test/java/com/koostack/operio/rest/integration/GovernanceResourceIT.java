@@ -196,14 +196,20 @@ class GovernanceResourceIT {
             Awaitility.await()
                     .atMost(Duration.ofSeconds(30))
                     .pollInterval(Duration.ofMillis(500))
-                    .untilAsserted(() -> {
-                        var rows = support.query(
-                                "SELECT * FROM purpose WHERE purpose_name = ? AND tenant_id = ?",
-                                PURPOSE_ANALYTICS, TENANT_ID);
-                        assertThat(rows)
-                                .as("Expected no rows in 'purpose' where purpose_name = 'analytics' for this tenant")
-                                .isEmpty();
-                    });
+                    .untilAsserted(
+                            () -> {
+                                var rows =
+                                        support.query(
+                                                "SELECT * FROM purpose WHERE purpose_name = ? AND"
+                                                        + " tenant_id = ?",
+                                                PURPOSE_ANALYTICS,
+                                                TENANT_ID);
+                                assertThat(rows)
+                                        .as(
+                                                "Expected no rows in 'purpose' where purpose_name ="
+                                                        + " 'analytics' for this tenant")
+                                        .isEmpty();
+                            });
         }
 
         @Test
@@ -778,8 +784,8 @@ class GovernanceResourceIT {
                                                     + " p.purpose_id = pu.purpose_id JOIN field f"
                                                     + " ON p.field_id = f.field_id WHERE"
                                                     + " pu.purpose_name = ? AND f.field_name = ?"
-                                                    + " AND p.policy_type::text = 'FIELD'"
-                                                    + " AND pu.tenant_id = ?",
+                                                    + " AND p.policy_type::text = 'FIELD' AND"
+                                                    + " pu.tenant_id = ?",
                                                 PURPOSE_MARKETING,
                                                 FIELD_EMAIL,
                                                 TENANT_ID);
@@ -923,8 +929,8 @@ class GovernanceResourceIT {
                                                     + " pu ON pr.purpose_id = pu.purpose_id JOIN"
                                                     + " regulation r ON pr.regulation_id ="
                                                     + " r.regulation_id WHERE pu.purpose_name = ?"
-                                                    + " AND r.regulation_name = ?"
-                                                    + " AND pu.tenant_id = ?",
+                                                    + " AND r.regulation_name = ? AND pu.tenant_id"
+                                                    + " = ?",
                                                 PURPOSE_MARKETING,
                                                 REGULATION_GDPR,
                                                 TENANT_ID);

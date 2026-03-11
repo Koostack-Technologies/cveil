@@ -10,7 +10,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -519,7 +518,8 @@ class ProductionStackIT {
         @Order(4)
         @DisplayName("List fields returns registered fields")
         void listFields() {
-            awaitGet("/api/v1/catalogue/fields", accessToken, "$", hasSize(greaterThanOrEqualTo(3)));
+            awaitGet(
+                    "/api/v1/catalogue/fields", accessToken, "$", hasSize(greaterThanOrEqualTo(3)));
         }
 
         // -- Categories -------------------------------------------------------
@@ -566,7 +566,11 @@ class ProductionStackIT {
         @Order(12)
         @DisplayName("List categories returns registered categories")
         void listCategories() {
-            awaitGet("/api/v1/catalogue/categories", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet(
+                    "/api/v1/catalogue/categories",
+                    accessToken,
+                    "$",
+                    hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Purposes ---------------------------------------------------------
@@ -613,7 +617,11 @@ class ProductionStackIT {
         @Order(22)
         @DisplayName("List purposes returns registered purposes")
         void listPurposes() {
-            awaitGet("/api/v1/governance/purposes", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet(
+                    "/api/v1/governance/purposes",
+                    accessToken,
+                    "$",
+                    hasSize(greaterThanOrEqualTo(2)));
         }
 
         // -- Regulations ------------------------------------------------------
@@ -827,7 +835,11 @@ class ProductionStackIT {
         @Order(50)
         @DisplayName("List entities returns implicitly created entities")
         void listEntities() {
-            awaitGet("/api/v1/catalogue/entities", accessToken, "$", hasSize(greaterThanOrEqualTo(2)));
+            awaitGet(
+                    "/api/v1/catalogue/entities",
+                    accessToken,
+                    "$",
+                    hasSize(greaterThanOrEqualTo(2)));
         }
 
         @Test
@@ -842,8 +854,8 @@ class ProductionStackIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM"
-                                                    + " operio_consent.policy WHERE tenant_id = ?",
+                                                "SELECT count(*) AS cnt FROM operio_consent.policy"
+                                                        + " WHERE tenant_id = ?",
                                                 TENANT_ID);
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();
                                 assertThat(cnt)
@@ -1225,7 +1237,12 @@ class ProductionStackIT {
                       ]
                     }
                     """;
-            awaitPost("/api/v1/subjects/user-batch/evaluate", accessToken, body, "granted", hasSize(3));
+            awaitPost(
+                    "/api/v1/subjects/user-batch/evaluate",
+                    accessToken,
+                    body,
+                    "granted",
+                    hasSize(3));
         }
 
         @Test
@@ -1296,7 +1313,12 @@ class ProductionStackIT {
                     }
                     """;
             // After revoke, only ssn/analytics should remain granted
-            awaitPost("/api/v1/subjects/user-batch/evaluate", accessToken, body, "denied", hasSize(2));
+            awaitPost(
+                    "/api/v1/subjects/user-batch/evaluate",
+                    accessToken,
+                    body,
+                    "denied",
+                    hasSize(2));
         }
     }
 
@@ -1389,7 +1411,8 @@ class ProductionStackIT {
         void authenticatedCanRead() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                     {
                       "scopes": [
                         {
@@ -1610,7 +1633,11 @@ class ProductionStackIT {
                     }
                     """;
             awaitPost(
-                    "/api/v1/subjects/subject-A/evaluate", accessToken, evalBody, "granted", hasSize(1));
+                    "/api/v1/subjects/subject-A/evaluate",
+                    accessToken,
+                    evalBody,
+                    "granted",
+                    hasSize(1));
 
             // subject-B should NOT have consent (never granted)
             given().header("Authorization", auth())

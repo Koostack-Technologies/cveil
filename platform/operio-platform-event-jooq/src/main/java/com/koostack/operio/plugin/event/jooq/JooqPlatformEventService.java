@@ -17,7 +17,6 @@ import com.koostack.operio.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
 import com.koostack.operio.plugin.redis.common.RedisContextFactory;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.jooq.DSLContext;
@@ -95,7 +94,8 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
                                         config.redis().password(),
                                         config.redis().tlsConfig()));
             }
-            this.redisPublisher = new RedisEventPublisher(jedisProvider, "operio", config.shardCount());
+            this.redisPublisher =
+                    new RedisEventPublisher(jedisProvider, "operio", config.shardCount());
 
             this.outboxPoller = new OutboxPoller(dslContext, redisPublisher);
             this.outboxPoller.start();

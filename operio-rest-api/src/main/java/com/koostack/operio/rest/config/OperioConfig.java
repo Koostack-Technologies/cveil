@@ -225,6 +225,14 @@ public interface OperioConfig {
         /** Optional global client secret (if all realms share one). */
         @WithName("client-secret")
         Optional<String> clientSecret();
+
+        /** Root admin email for the operio realm (used during bootstrap). */
+        @WithName("root-email")
+        Optional<String> rootEmail();
+
+        /** Root admin password for the operio realm (used during bootstrap). */
+        @WithName("root-password")
+        Optional<String> rootPassword();
     }
 
     /** Database configuration — JDBC URL and jOOQ SQL dialect. */

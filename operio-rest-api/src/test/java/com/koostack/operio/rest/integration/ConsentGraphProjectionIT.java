@@ -9,7 +9,6 @@ import com.koostack.operio.rest.config.OperioConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;

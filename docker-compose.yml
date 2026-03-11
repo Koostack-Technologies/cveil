@@ -74,6 +74,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./certs/local:/certs-src:ro
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U operio -d operio"]
       interval: 5s
@@ -139,13 +140,13 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '200'"]
+      test: ["CMD", "/bin/bash", "-c", "echo > /dev/tcp/127.0.0.1/8080"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -213,6 +214,8 @@ services:
       OPERIO_KEYCLOAK_ADMIN_USERNAME: "admin"
       OPERIO_KEYCLOAK_ADMIN_PASSWORD: "admin"
       OPERIO_KEYCLOAK_CLIENT_ID: "operio-backend"
+      OPERIO_KEYCLOAK_ROOT_EMAIL: "admin@operio.local"
+      OPERIO_KEYCLOAK_ROOT_PASSWORD: "admin"
 
       # -- JVM tuning (local dev — generous limits) ------------------------
       JAVA_OPTS: >-

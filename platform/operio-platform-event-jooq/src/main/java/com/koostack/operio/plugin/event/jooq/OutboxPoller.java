@@ -32,9 +32,8 @@ import org.slf4j.LoggerFactory;
  * outbox within a {@link TenantContext} scope so that RLS filters queries to the correct tenant's
  * events, and the tenant-aware Redis provider authenticates as the correct ACL user.
  *
- * <p>The discovery query uses a reserved sentinel tenant ID ({@code __discovery__}) that is
- * matched by a dedicated RLS policy, allowing cross-tenant visibility for the discovery SELECT
- * only.
+ * <p>The discovery query uses a reserved sentinel tenant ID ({@code __discovery__}) that is matched
+ * by a dedicated RLS policy, allowing cross-tenant visibility for the discovery SELECT only.
  *
  * <p>Supports the digital shredder pattern: shreddable events are decrypted with their per-subject
  * DSAR key before publishing to Redis. If the DSAR key has been deleted (subject exercised right to
@@ -67,9 +66,7 @@ public class OutboxPoller {
     private ExecutorService workers;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    public OutboxPoller(
-            DSLContext dsl,
-            RedisEventPublisher redisPublisher) {
+    public OutboxPoller(DSLContext dsl, RedisEventPublisher redisPublisher) {
         this(dsl, redisPublisher, DEFAULT_BATCH_SIZE, DEFAULT_POLL_INTERVAL_MS);
     }
 
@@ -151,8 +148,8 @@ public class OutboxPoller {
 
     /**
      * Queries the event table for distinct tenant IDs with unpublished events. Uses the {@link
-     * #DISCOVERY_TENANT} sentinel to activate the {@code outbox_discovery} RLS policy, which
-     * allows cross-tenant SELECT visibility for this query only.
+     * #DISCOVERY_TENANT} sentinel to activate the {@code outbox_discovery} RLS policy, which allows
+     * cross-tenant SELECT visibility for this query only.
      */
     private List<String> discoverTenantsWithPendingEvents() {
         try {
@@ -194,9 +191,16 @@ public class OutboxPoller {
 
             // Phase 1 — Claim: short transaction to SELECT + mark published.
             // Row locks are held only for the duration of this lambda.
-            record ClaimedEvent(Long eventId, String aggregateId, String aggregateType,
-                                String eventType, Long version, String payload,
-                                String eventTenantId, Boolean shreddable, UUID dsarId) {}
+            record ClaimedEvent(
+                    Long eventId,
+                    String aggregateId,
+                    String aggregateType,
+                    String eventType,
+                    Long version,
+                    String payload,
+                    String eventTenantId,
+                    Boolean shreddable,
+                    UUID dsarId) {}
 
             List<ClaimedEvent> claimed = new ArrayList<>();
 
@@ -223,16 +227,17 @@ public class OutboxPoller {
                         List<Long> ids = new ArrayList<>(batch.size());
                         for (var record : batch) {
                             ids.add(record.getEventId());
-                            claimed.add(new ClaimedEvent(
-                                    record.getEventId(),
-                                    record.getAggregateId(),
-                                    record.getAggregateType(),
-                                    record.getEventType(),
-                                    record.getVersion(),
-                                    record.getPayload(),
-                                    record.getTenantId(),
-                                    record.getShreddable(),
-                                    record.getDsarId()));
+                            claimed.add(
+                                    new ClaimedEvent(
+                                            record.getEventId(),
+                                            record.getAggregateId(),
+                                            record.getAggregateType(),
+                                            record.getEventType(),
+                                            record.getVersion(),
+                                            record.getPayload(),
+                                            record.getTenantId(),
+                                            record.getShreddable(),
+                                            record.getDsarId()));
                         }
 
                         txDsl.update(EVENT)
@@ -267,24 +272,17 @@ public class OutboxPoller {
                                 dsarId);
                         continue;
                     }
-                    String rawKey =
-                            FieldEncryptor.decrypt(
-                                    encryptedKey.get(), this.encryptionKey);
+                    String rawKey = FieldEncryptor.decrypt(encryptedKey.get(), this.encryptionKey);
                     String ciphertext = objectMapper.readValue(payload, String.class);
                     payload = FieldEncryptor.decrypt(ciphertext, rawKey);
                 }
 
                 Map<String, String> fields = new HashMap<>();
-                fields.put(
-                        PlatformEvent.FIELD_EVENT_ID,
-                        String.valueOf(record.eventId()));
+                fields.put(PlatformEvent.FIELD_EVENT_ID, String.valueOf(record.eventId()));
                 fields.put(PlatformEvent.FIELD_AGGREGATE_ID, record.aggregateId());
-                fields.put(
-                        PlatformEvent.FIELD_AGGREGATE_TYPE, record.aggregateType());
+                fields.put(PlatformEvent.FIELD_AGGREGATE_TYPE, record.aggregateType());
                 fields.put(PlatformEvent.FIELD_EVENT_TYPE, record.eventType());
-                fields.put(
-                        PlatformEvent.FIELD_VERSION,
-                        String.valueOf(record.version()));
+                fields.put(PlatformEvent.FIELD_VERSION, String.valueOf(record.version()));
                 if (payload != null) {
                     fields.put(PlatformEvent.FIELD_PAYLOAD, payload);
                 }
@@ -298,10 +296,7 @@ public class OutboxPoller {
                 redisPublisher.publishBatchPipelined(streamKey, fieldsBatch);
             }
 
-            log.debug(
-                    "Outbox relayed {} events to Redis stream {}",
-                    fieldsBatch.size(),
-                    streamKey);
+            log.debug("Outbox relayed {} events to Redis stream {}", fieldsBatch.size(), streamKey);
         } catch (Exception e) {
             log.warn("Outbox publish failed — will retry", e);
         }

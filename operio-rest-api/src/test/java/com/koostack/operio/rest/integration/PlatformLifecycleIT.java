@@ -21,8 +21,9 @@ import org.junit.jupiter.api.*;
  * </ul>
  *
  * <p>Tenants are created via the user-registration orchestrator ({@code POST
- * /api/v1/platform/iam/users} with {@code organizationName}), which provisions the user, org, Redis
- * streams, tenant row, billing profile, and free subscription. Auth uses Keycloak JWT.
+ * /api/v1/platform/iam/users}), which provisions the user, personal tenant, billing profile, and
+ * free subscription. Organizations are created separately via {@code POST
+ * /api/v1/platform/iam/organizations}. Auth uses Keycloak JWT.
  */
 @QuarkusTest
 @QuarkusTestResource(OperioTestResourceManager.class)
@@ -178,8 +179,6 @@ public class PlatformLifecycleIT {
                     .then()
                     .statusCode(200);
         }
-
-
     }
 
     // -------------------------------------------------------------------
@@ -213,8 +212,6 @@ public class PlatformLifecycleIT {
                     .then()
                     .statusCode(200);
         }
-
-
 
         @Test
         @Order(4)

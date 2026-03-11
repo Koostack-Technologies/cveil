@@ -155,7 +155,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     public void filter(ContainerRequestContext ctx) throws IOException {
         // 1. Skip public paths (health checks, Quarkus built-in endpoints)
         String path = ctx.getUriInfo().getPath();
-        if (isPublicPath(path)) {
+        if (isPublicPath(path, ctx.getMethod())) {
             LOG.trace("Skipping authentication for public path: {}", path);
             return;
         }
@@ -582,9 +582,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      * </ul>
      *
      * @param path the request URI path (without leading slash)
+     * @param method the HTTP method (GET, POST, etc.)
      * @return {@code true} if the path is public
      */
-    private static boolean isPublicPath(String path) {
+    private static boolean isPublicPath(String path, String method) {
         // Normalize: strip leading slash if present
         String normalized = path.startsWith("/") ? path.substring(1) : path;
         return (normalized.startsWith("q/health")
@@ -598,17 +599,24 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 normalized.equals("api/v1/platform/docs")
                 || normalized.equals("api/v1/platform/docs/")
                 ||
-                // IAM auth endpoints (login, refresh, logout) — unauthenticated by design
+                // IAM auth endpoints (login, refresh, logout) — unauthenticated by design.
+                // Self-service user registration (POST only) — GET /users requires super-admin.
                 normalized.equals("api/v1/platform/iam/login")
                 || normalized.equals("api/v1/platform/iam/refresh")
                 || normalized.equals("api/v1/platform/iam/logout")
+                || (normalized.equals("api/v1/platform/iam/users")
+                        && "POST".equalsIgnoreCase(method))
                 ||
                 // Site pages (public, unauthenticated)
                 normalized.isEmpty()
                 || normalized.equals("docs")
                 || normalized.equals("docs/")
                 || normalized.equals("plans")
-                || normalized.equals("plans/"));
+                || normalized.equals("plans/")
+                || normalized.equals("signup")
+                || normalized.equals("signup/")
+                || normalized.equals("signup/success")
+                || normalized.equals("signup/success/"));
     }
 
     /**

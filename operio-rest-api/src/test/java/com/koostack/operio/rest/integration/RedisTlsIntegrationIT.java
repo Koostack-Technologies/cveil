@@ -17,32 +17,29 @@ import redis.clients.jedis.JedisPooled;
  * Integration test for Redis TLS/SSL connections.
  *
  * <p>Tests that Redis connections can be established with:
+ *
  * <ul>
- *   <li>TLS enabled with certificate verification</li>
- *   <li>TLS enabled without certificate verification</li>
- *   <li>TLS disabled (plaintext fallback)</li>
+ *   <li>TLS enabled with certificate verification
+ *   <li>TLS enabled without certificate verification
+ *   <li>TLS disabled (plaintext fallback)
  * </ul>
  *
- * <p><strong>Note:</strong> This test currently does NOT validate the full TLS
- * handshake with certificate verification because Testcontainers Redis does
- * not support TLS out of the box (TLS support would require a custom Redis
- * Docker image with TLS compiled in). For production validation, use
- * {@code redis-tls} Docker images or cloud-managed Redis instances with TLS.
+ * <p><strong>Note:</strong> This test currently does NOT validate the full TLS handshake with
+ * certificate verification because Testcontainers Redis does not support TLS out of the box (TLS
+ * support would require a custom Redis Docker image with TLS compiled in). For production
+ * validation, use {@code redis-tls} Docker images or cloud-managed Redis instances with TLS.
  *
- * <p>This test does NOT use {@code @QuarkusTest} or {@code @WithTestResource}
- * because it only tests raw Redis connectivity and the {@code RedisClientFactory}
- * TLS configuration — it does not need the Quarkus application. Using a separate
- * {@code QuarkusTestResourceLifecycleManager} would force Quarkus to restart
- * between test classes, recycling the shared Redis container and destroying
+ * <p>This test does NOT use {@code @QuarkusTest} or {@code @WithTestResource} because it only tests
+ * raw Redis connectivity and the {@code RedisClientFactory} TLS configuration — it does not need
+ * the Quarkus application. Using a separate {@code QuarkusTestResourceLifecycleManager} would force
+ * Quarkus to restart between test classes, recycling the shared Redis container and destroying
  * streams and consumer groups needed by other integration tests.
  */
 @Testcontainers
 @DisplayName("Redis TLS Integration Tests")
 class RedisTlsIntegrationIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        RedisTlsIntegrationIT.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(RedisTlsIntegrationIT.class);
 
     @SuppressWarnings("resource") // managed by Testcontainers lifecycle
     @Container
@@ -76,9 +73,7 @@ class RedisTlsIntegrationIT {
     }
 
     @Test
-    @DisplayName(
-        "TLS configuration builder should not throw during construction"
-    )
+    @DisplayName("TLS configuration builder should not throw during construction")
     void testTlsConfigurationBuilder() {
         // Given: TLS configuration parameters
         boolean tlsEnabled = true;
@@ -87,11 +82,8 @@ class RedisTlsIntegrationIT {
 
         // When: building a TLS config
         com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig tlsConfig =
-            new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
-                tlsEnabled,
-                caCertPath,
-                verifyPeer
-            );
+                new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
+                        tlsEnabled, caCertPath, verifyPeer);
 
         // Then: config should be created successfully
         assertThat(tlsConfig).isNotNull();
@@ -107,20 +99,15 @@ class RedisTlsIntegrationIT {
         String host = REDIS.getHost();
         int port = REDIS.getMappedPort(6379);
         var tlsConfig =
-            new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
-                false, // Disabled for plaintext Redis
-                null,
-                true
-            );
+                new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
+                        false, // Disabled for plaintext Redis
+                        null, true);
 
         // When: creating a Jedis client with TLS config
         JedisPooled client =
-            com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
-                host,
-                port,
-                null, // no password
-                tlsConfig
-            );
+                com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
+                        host, port, null, // no password
+                        tlsConfig);
 
         // Then: plaintext connection should succeed (TLS disabled)
         try {
@@ -140,20 +127,13 @@ class RedisTlsIntegrationIT {
         int port = REDIS.getMappedPort(6379);
         String password = null; // No password on test Redis
         var tlsConfig =
-            new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
-                false,
-                null,
-                true
-            );
+                new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
+                        false, null, true);
 
         // When: creating a Jedis client with password and TLS config
         JedisPooled client =
-            com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
-                host,
-                port,
-                password,
-                tlsConfig
-            );
+                com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
+                        host, port, password, tlsConfig);
 
         // Then: connection should succeed
         try {
@@ -166,9 +146,7 @@ class RedisTlsIntegrationIT {
     }
 
     @Test
-    @DisplayName(
-        "RedisClientFactory should accept ACL username, password, and TLS config"
-    )
+    @DisplayName("RedisClientFactory should accept ACL username, password, and TLS config")
     void testRedisClientFactoryWithAclAndTls() {
         // Given: plaintext Redis with no ACL setup (test instance)
         String host = REDIS.getHost();
@@ -176,29 +154,19 @@ class RedisTlsIntegrationIT {
         String username = null; // Will fall back to default user
         String password = null;
         var tlsConfig =
-            new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
-                false,
-                null,
-                true
-            );
+                new com.koostack.operio.plugin.redis.common.RedisClientFactory.TlsConfig(
+                        false, null, true);
 
         // When: creating a Jedis client with ACL (null username) and TLS config
         JedisPooled client =
-            com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
-                host,
-                port,
-                username,
-                password,
-                tlsConfig
-            );
+                com.koostack.operio.plugin.redis.common.RedisClientFactory.createClient(
+                        host, port, username, password, tlsConfig);
 
         // Then: plaintext connection should succeed
         try {
             String pong = client.ping();
             assertThat(pong).isEqualTo("PONG");
-            LOG.info(
-                "✓ RedisClientFactory with ACL (null username) and TLS config works"
-            );
+            LOG.info("✓ RedisClientFactory with ACL (null username) and TLS config works");
         } finally {
             client.close();
         }

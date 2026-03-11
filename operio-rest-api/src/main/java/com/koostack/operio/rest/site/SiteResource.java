@@ -1,14 +1,23 @@
 package com.koostack.operio.rest.site;
 
+import com.koostack.operio.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.operio.rest.config.PlatformCqrsHolder;
+import com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator;
+import com.koostack.operio.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Serves the public-facing Operio website pages using Qute templates.
@@ -19,11 +28,20 @@ import java.util.Map;
 @Path("/")
 public class SiteResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SiteResource.class);
+    private static final String REALM = "operio";
+
     @Inject Template index;
 
     @Inject Template docs;
 
     @Inject Template plans;
+
+    @Inject Template signup;
+
+    @Inject Template signupSuccess;
+
+    @Inject PlatformCqrsHolder cqrs;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -43,6 +61,112 @@ public class SiteResource {
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance pricing() {
         return plans.data("tiers", pricingTiers());
+    }
+
+    @GET
+    @Path("signup")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance signupPage() {
+        return signup.data("error", null);
+    }
+
+    @POST
+    @Path("signup")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Object processSignup(
+            @FormParam("username") String username,
+            @FormParam("email") String email,
+            @FormParam("fullName") String fullName,
+            @FormParam("password") String password,
+            @FormParam("confirmPassword") String confirmPassword) {
+
+        LOG.debug("POST /signup username={}, email={}", username, email);
+
+        if (username == null
+                || username.isBlank()
+                || email == null
+                || email.isBlank()
+                || password == null
+                || password.isBlank()) {
+            return signup.data("error", "Username, email, and password are required.")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        }
+
+        if (!password.equals(confirmPassword)) {
+            return signup.data("error", "Passwords do not match.")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        }
+
+        if (!cqrs.isCqrsAvailable()) {
+            return signup.data(
+                            "error",
+                            "Registration is temporarily unavailable. Please try again later.")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        }
+
+        try {
+            String tenantId = TenantIdDeriver.derive(username);
+
+            var orchestrator =
+                    new RegisterUserOrchestrator(
+                            cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+
+            var command =
+                    new RegisterUserOrchestrator.RegisterUserCommand(
+                            REALM, username, email, fullName, Set.of(), false, password, tenantId);
+
+            RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
+            return Response.seeOther(
+                            URI.create(
+                                    "/signup/success?username="
+                                            + URLEncoder.encode(
+                                                    result.username(), StandardCharsets.UTF_8)
+                                            + "&tenant="
+                                            + URLEncoder.encode(
+                                                    result.tenantId(), StandardCharsets.UTF_8)))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            LOG.warn("Invalid username for tenant derivation: {}", e.getMessage());
+            return signup.data(
+                            "error",
+                            "Invalid username. Use letters and numbers only (e.g. janedoe).")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        } catch (OrchestratorException e) {
+            LOG.error(
+                    "User registration saga failed at step '{}' ({}/{} completed): {}",
+                    e.failedStep(),
+                    e.completedSteps(),
+                    e.totalSteps(),
+                    e.getMessage(),
+                    e);
+            return signup.data("error", "Registration failed. Please try again or contact support.")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        } catch (Exception e) {
+            LOG.error("Unexpected error during registration: {}", e.getMessage(), e);
+            return signup.data("error", "An unexpected error occurred. Please try again.")
+                    .data("username", username)
+                    .data("email", email)
+                    .data("fullName", fullName);
+        }
+    }
+
+    @GET
+    @Path("signup/success")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance signupSuccessPage(
+            @QueryParam("username") String username, @QueryParam("tenant") String tenantId) {
+        return signupSuccess.data("username", username).data("tenantId", tenantId);
     }
 
     private List<Map<String, Object>> pricingTiers() {

@@ -28,14 +28,14 @@ import org.junit.jupiter.api.TestMethodOrder;
 /**
  * End-to-end integration test for the full create-tenant pipeline via user registration.
  *
- * <p>Validates the entire flow from {@code POST /api/v1/platform/iam/users} (with {@code
- * organizationName}) through the 7-step orchestrator saga, event sourcing, and projections under
- * the unified schema architecture (RLS-based isolation, single event store).
+ * <p>Validates the entire flow from {@code POST /api/v1/platform/iam/users} (public self-service)
+ * through the 4-step orchestrator saga, event sourcing, and projections under the unified schema
+ * architecture (RLS-based isolation, single event store).
  *
  * <h2>What this test verifies</h2>
  *
  * <ol>
- *   <li>POST /api/v1/platform/iam/users with organizationName returns 201 with tenantId
+ *   <li>POST /api/v1/platform/iam/users returns 201 with tenantId (derived from username)
  *   <li>Duplicate registration with same username/email is rejected
  *   <li>core.tenant.created and billing events present in unified event store
  *   <li>Tenant row materializes in platform_core.tenant
@@ -46,8 +46,8 @@ import org.junit.jupiter.api.TestMethodOrder;
  *   <li>Pre-seeded plans exist in plan table
  * </ol>
  *
- * <p>Keycloak is required — the test provisions a tenant via user registration and then logs
- * in via {@code POST /api/v1/platform/iam/login} to obtain a JWT access token.
+ * <p>Keycloak is required — the test provisions a tenant via user registration and then logs in via
+ * {@code POST /api/v1/platform/iam/login} to obtain a JWT access token.
  *
  * @see OperioTestResourceManager
  */
@@ -60,7 +60,7 @@ class CreateTenantPipelineIT {
 
     private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
-    private static final String TENANT_ID = "pipeline_test_tenant";
+    private static final String TENANT_ID = "pipeline_test_tenant_admin";
     private static final String TENANT_DISPLAY = "Pipeline Test Tenant";
     private static final String ADMIN_EMAIL =
             TENANT_ID.replace("_", "-") + "-admin@operio-test.com";
@@ -84,7 +84,8 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 1. User Registration (triggers 7-step saga including tenant creation)
+    // 1. User Registration (triggers 4-step saga: register-user, create-tenant, billing,
+    // subscription)
     // =======================================================================
 
     @Nested
@@ -95,10 +96,9 @@ class CreateTenantPipelineIT {
 
         @Test
         @Order(1)
-        @DisplayName("Register user with organization returns 201 with tenantId")
+        @DisplayName("Register user returns 201 with tenantId derived from username")
         void registerUserReturns201() {
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .body(
                             String.format(
                                     """
@@ -108,12 +108,10 @@ class CreateTenantPipelineIT {
                       "fullName": "Pipeline Test Admin",
                       "password": "Test1234!",
                       "roles": ["super-admin"],
-                      "temporaryPassword": false,
-                      "organizationName": "%s",
-                      "organizationDisplayName": "%s"
+                      "temporaryPassword": false
                     }
                     """,
-                                    ADMIN_EMAIL, TENANT_ID, TENANT_DISPLAY))
+                                    ADMIN_EMAIL))
                     .when()
                     .post("/api/v1/platform/iam/users")
                     .then()
@@ -145,8 +143,7 @@ class CreateTenantPipelineIT {
                                 }
                             });
 
-            given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .body(
                             String.format(
                                     """
@@ -155,12 +152,10 @@ class CreateTenantPipelineIT {
                       "email": "%s",
                       "fullName": "Duplicate User",
                       "roles": ["super-admin"],
-                      "temporaryPassword": false,
-                      "organizationName": "%s",
-                      "organizationDisplayName": "Duplicate Org"
+                      "temporaryPassword": false
                     }
                     """,
-                                    ADMIN_EMAIL, TENANT_ID))
+                                    ADMIN_EMAIL))
                     .when()
                     .post("/api/v1/platform/iam/users")
                     .then()

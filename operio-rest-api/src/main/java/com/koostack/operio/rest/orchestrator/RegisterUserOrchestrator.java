@@ -2,62 +2,52 @@ package com.koostack.operio.rest.orchestrator;
 
 import com.koostack.operio.core.cqrs.AbstractOrchestrator;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
-import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
 import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuator;
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
-import com.koostack.operio.platform.iam.jooq.AddOrgMemberCommandActuator;
-import com.koostack.operio.platform.iam.jooq.CreateOrganizationCommandActuator;
-import com.koostack.operio.platform.iam.jooq.DeleteOrganizationCommandActuator;
-import com.koostack.operio.platform.iam.jooq.ProvisionRedisCommandActuator;
+import com.koostack.operio.platform.iam.jooq.DeleteUserCommandActuator;
 import com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator;
-import com.koostack.operio.platform.iam.jooq.RemoveOrgMemberCommandActuator;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
- * Unified orchestrator for the full user registration + tenant provisioning saga.
+ * Orchestrator for public self-service user registration.
  *
- * <p>Coordinates commands across three bounded contexts (IAM, Core, Billing) in a single
- * deterministic saga with compensation on failure.
+ * <p>Coordinates commands across three bounded contexts (IAM, Core, Billing) in a deterministic
+ * saga with best-effort compensation on failure.
  *
- * <p>Steps executed in order (when an organization name is provided):
+ * <p>{@code username} becomes the user's personal {@code tenant_id}. Every registration creates a
+ * personal tenant + billing profile + subscription on the free plan. No Keycloak Organization is
+ * created — use {@link RegisterOrganizationOrchestrator} for that.
+ *
+ * <p>Steps executed in order:
  *
  * <ol>
- *   <li><b>register-user</b> — creates the user in Keycloak via IAM dispatcher.
- *   <li><b>create-organization</b> — creates a Keycloak Organization via IAM dispatcher.
- *       Compensation: deletes the organization.
- *   <li><b>add-org-member</b> — adds the user as an org member via IAM dispatcher. Compensation:
- *       removes the member.
- *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub via IAM dispatcher. Non-fatal —
- *       failure is swallowed.
- *   <li><b>create-tenant</b> — creates the tenant aggregate via Core dispatcher. Compensation:
- *       soft-deletes the tenant.
- *   <li><b>create-billing-profile</b> — creates billing profile via Billing dispatcher.
- *   <li><b>create-subscription</b> — creates subscription via Billing dispatcher.
+ *   <li><b>register-user</b> — creates the user in Keycloak. Compensation: deletes the KC user.
+ *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes the tenant.
+ *   <li><b>create-billing-profile</b> — creates billing profile.
+ *   <li><b>create-subscription</b> — creates subscription on free plan.
  * </ol>
- *
- * <p>If no organization name is provided, only step 1 (register-user) is executed.
  */
 public class RegisterUserOrchestrator
         extends AbstractOrchestrator<
-                RegisterUserOrchestrator.RegisterUserWithOrgCommand,
-                RegisterUserOrchestrator.RegisterUserWithOrgResult> {
+                RegisterUserOrchestrator.RegisterUserCommand,
+                RegisterUserOrchestrator.RegisterUserResult> {
+
+    private static final Logger LOG = Logger.getLogger(RegisterUserOrchestrator.class.getName());
 
     public static final String DISPATCHER_IAM = "iam";
     public static final String DISPATCHER_CORE = "core";
     public static final String DISPATCHER_BILLING = "billing";
-
-    private IamQueryService<?> queryService;
 
     // -----------------------------------------------------------------------
     // Input / Output
     // -----------------------------------------------------------------------
 
     /**
-     * Command input for the full registration saga.
+     * Command input for the user registration saga.
      *
      * @param realmId the Keycloak realm
      * @param username the user's unique login name
@@ -66,10 +56,9 @@ public class RegisterUserOrchestrator
      * @param roles initial roles to assign (nullable)
      * @param temporaryPassword if true, user must change password on first login
      * @param password the user's initial password (nullable)
-     * @param organizationName the organization/tenant name (null to skip org + tenant steps)
-     * @param organizationDisplayName human-readable org display name (nullable)
+     * @param tenantId the derived tenant ID (from username)
      */
-    public record RegisterUserWithOrgCommand(
+    public record RegisterUserCommand(
             String realmId,
             String username,
             String email,
@@ -77,29 +66,13 @@ public class RegisterUserOrchestrator
             Set<String> roles,
             boolean temporaryPassword,
             String password,
-            String organizationName,
-            String organizationDisplayName) {
+            String tenantId) {}
 
-        /** Convenience constructor for registration without organization. */
-        public RegisterUserWithOrgCommand(
-                String realmId,
-                String username,
-                String email,
-                String fullName,
-                Set<String> roles,
-                boolean temporaryPassword) {
-            this(realmId, username, email, fullName, roles, temporaryPassword, null, null, null);
-        }
-    }
-
-    public record RegisterUserWithOrgResult(
+    public record RegisterUserResult(
             String username,
             String email,
             String realmId,
             String keycloakUserId,
-            String orgId,
-            String orgName,
-            String redisStreamKey,
             String tenantId,
             String plan,
             String tenantStatus) {}
@@ -108,13 +81,6 @@ public class RegisterUserOrchestrator
     // Construction
     // -----------------------------------------------------------------------
 
-    /**
-     * Creates the orchestrator with all three dispatchers.
-     *
-     * @param iamDispatcher dispatcher for IAM bounded context (Keycloak)
-     * @param coreDispatcher dispatcher for Core bounded context (tenants)
-     * @param billingDispatcher dispatcher for Billing bounded context (profiles, subscriptions)
-     */
     public RegisterUserOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
@@ -124,22 +90,14 @@ public class RegisterUserOrchestrator
         registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
     }
 
-    /** Set the query service for Keycloak user ID resolution. */
-    public void setQueryService(IamQueryService<?> queryService) {
-        this.queryService = queryService;
-    }
-
     // -----------------------------------------------------------------------
     // Saga definition
     // -----------------------------------------------------------------------
 
     @Override
-    protected List<SagaStep<RegisterUserWithOrgCommand>> buildSteps(
-            RegisterUserWithOrgCommand input) {
-        List<SagaStep<RegisterUserWithOrgCommand>> steps = new ArrayList<>();
-
-        // Step 1: Register user in Keycloak
-        steps.add(
+    protected List<SagaStep<RegisterUserCommand>> buildSteps(RegisterUserCommand input) {
+        return List.of(
+                // Step 1: Register user in Keycloak
                 SagaStep.of(
                         "register-user",
                         (in, ctx) -> {
@@ -155,189 +113,82 @@ public class RegisterUserOrchestrator
                             RegisterUserCommandActuator.RegisterUserResult result =
                                     dispatcher(DISPATCHER_IAM).dispatch(cmd);
                             ctx.put("userResult", result);
-
-                            // Use the Keycloak user ID directly from the result
-                            // (resolveKeycloakUserId is fragile — silently returns null
-                            // if the query service or lookup fails)
-                            String kcUserId = result.keycloakUserId();
-                            if (kcUserId == null) {
-                                kcUserId = resolveKeycloakUserId(in.realmId(), in.email());
+                            ctx.put("keycloakUserId", result.keycloakUserId());
+                        },
+                        (in, ctx) -> {
+                            try {
+                                String kcUserId = ctx.get("keycloakUserId");
+                                if (kcUserId != null) {
+                                    dispatcher(DISPATCHER_IAM)
+                                            .dispatch(
+                                                    new DeleteUserCommandActuator.DeleteUserCommand(
+                                                            in.realmId(), kcUserId));
+                                }
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Compensation failed for register-user: " + e.getMessage());
                             }
-                            ctx.put("keycloakUserId", kcUserId);
-                        }));
+                        }),
 
-        String orgName = input.organizationName();
-        boolean hasOrg = orgName != null && !orgName.isBlank();
-
-        if (hasOrg) {
-            // Step 2: Create organization (idempotent in Keycloak)
-            //   Compensation: delete the organization
-            steps.add(
-                    SagaStep.of(
-                            "create-organization",
-                            (in, ctx) -> {
-                                var cmd =
-                                        new CreateOrganizationCommandActuator
-                                                .CreateOrganizationCommand(
-                                                in.organizationName(),
-                                                in.organizationDisplayName());
-                                CreateOrganizationCommandActuator.CreateOrganizationResult result =
-                                        dispatcher(DISPATCHER_IAM).dispatch(cmd);
-                                ctx.put("orgId", result.orgId());
-                                ctx.put("orgName", result.orgName());
-                            },
-                            (in, ctx) -> {
-                                String orgId = ctx.get("orgId");
-                                if (orgId != null) {
-                                    dispatcher(DISPATCHER_IAM)
-                                            .dispatch(
-                                                    new DeleteOrganizationCommandActuator
-                                                            .DeleteOrganizationCommand(
-                                                            orgId, in.organizationName()));
-                                }
-                            }));
-
-            // Step 3: Add user as organization member
-            //   Compensation: remove the member
-            steps.add(
-                    SagaStep.of(
-                            "add-org-member",
-                            (in, ctx) -> {
-                                String kcUserId = ctx.get("keycloakUserId");
-                                String orgId = ctx.get("orgId");
-                                if (kcUserId != null && orgId != null) {
-                                    dispatcher(DISPATCHER_IAM)
-                                            .dispatch(
-                                                    new AddOrgMemberCommandActuator
-                                                            .AddOrgMemberCommand(
-                                                            orgId,
-                                                            in.organizationName(),
-                                                            kcUserId,
-                                                            in.username()));
-                                }
-                            },
-                            (in, ctx) -> {
-                                String kcUserId = ctx.get("keycloakUserId");
-                                String orgId = ctx.get("orgId");
-                                if (kcUserId != null && orgId != null) {
-                                    dispatcher(DISPATCHER_IAM)
-                                            .dispatch(
-                                                    new RemoveOrgMemberCommandActuator
-                                                            .RemoveOrgMemberCommand(
-                                                            orgId,
-                                                            in.organizationName(),
-                                                            kcUserId));
-                                }
-                            }));
-
-            // Step 4: Provision Redis infrastructure (non-fatal)
-            steps.add(
-                    SagaStep.of(
-                            "provision-redis",
-                            (in, ctx) -> {
-                                try {
-                                    var cmd =
-                                            new ProvisionRedisCommandActuator.ProvisionRedisCommand(
-                                                    in.organizationName());
-                                    ProvisionRedisCommandActuator.ProvisionRedisResult result =
-                                            dispatcher(DISPATCHER_IAM).dispatch(cmd);
-                                    ctx.put("redisStreamKey", result.streamKey());
-                                } catch (Exception e) {
-                                    // Redis provisioning failure is non-fatal
-                                    ctx.put("redisStreamKey", null);
-                                }
-                            }));
-
-            // Step 5: Create tenant aggregate (core context)
-            //   Compensation: soft-delete the tenant
-            steps.add(
-                    SagaStep.of(
-                            "create-tenant",
-                            (in, ctx) -> {
-                                String displayName =
-                                        in.organizationDisplayName() != null
-                                                ? in.organizationDisplayName()
-                                                : in.organizationName();
-                                dispatcher(DISPATCHER_CORE)
-                                        .dispatch(
-                                                new CreateTenantCommandActuator.CreateTenantCommand(
-                                                        in.organizationName(),
-                                                        displayName,
-                                                        "free"));
-                                ctx.put("tenantCreated", true);
-                            },
-                            (in, ctx) -> {
+                // Step 2: Create tenant aggregate
+                SagaStep.of(
+                        "create-tenant",
+                        (in, ctx) -> {
+                            dispatcher(DISPATCHER_CORE)
+                                    .dispatch(
+                                            new CreateTenantCommandActuator.CreateTenantCommand(
+                                                    in.tenantId(), in.username(), "free"));
+                            ctx.put("tenantCreated", true);
+                        },
+                        (in, ctx) -> {
+                            try {
                                 dispatcher(DISPATCHER_CORE)
                                         .dispatch(
                                                 new DeleteTenantCommandActuator.DeleteTenantCommand(
-                                                        in.organizationName()));
-                            }));
+                                                        in.tenantId()));
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Compensation failed for create-tenant: " + e.getMessage());
+                            }
+                        }),
 
-            // Step 6: Create billing profile (billing context)
-            steps.add(
-                    SagaStep.of(
-                            "create-billing-profile",
-                            (in, ctx) -> {
-                                String billingEmail =
-                                        in.organizationName() + "@billing.operio.local";
-                                dispatcher(DISPATCHER_BILLING)
-                                        .dispatch(
-                                                new CreateBillingProfileCommandActuator
-                                                        .CreateBillingProfileCommand(
-                                                        in.organizationName(), billingEmail));
-                                ctx.put("billingProfileCreated", true);
-                            }));
+                // Step 3: Create billing profile
+                SagaStep.of(
+                        "create-billing-profile",
+                        (in, ctx) -> {
+                            dispatcher(DISPATCHER_BILLING)
+                                    .dispatch(
+                                            new CreateBillingProfileCommandActuator
+                                                    .CreateBillingProfileCommand(
+                                                    in.tenantId(), in.email()));
+                            ctx.put("billingProfileCreated", true);
+                        }),
 
-            // Step 7: Create subscription (billing context)
-            steps.add(
-                    SagaStep.of(
-                            "create-subscription",
-                            (in, ctx) -> {
-                                dispatcher(DISPATCHER_BILLING)
-                                        .dispatch(
-                                                new CreateSubscriptionCommandActuator
-                                                        .CreateSubscriptionCommand(
-                                                        in.organizationName(), "free"));
-                                ctx.put("subscriptionCreated", true);
-                            }));
-        }
-
-        return steps;
+                // Step 4: Create subscription on free plan
+                SagaStep.of(
+                        "create-subscription",
+                        (in, ctx) -> {
+                            dispatcher(DISPATCHER_BILLING)
+                                    .dispatch(
+                                            new CreateSubscriptionCommandActuator
+                                                    .CreateSubscriptionCommand(
+                                                    in.tenantId(), "free"));
+                            ctx.put("subscriptionCreated", true);
+                        }));
     }
 
     @Override
-    protected RegisterUserWithOrgResult toResult(
-            RegisterUserWithOrgCommand input, SagaContext context) {
+    protected RegisterUserResult toResult(RegisterUserCommand input, SagaContext context) {
         RegisterUserCommandActuator.RegisterUserResult userResult = context.get("userResult");
-        boolean tenantCreated =
-                context.has("tenantCreated") && Boolean.TRUE.equals(context.get("tenantCreated"));
 
-        return new RegisterUserWithOrgResult(
+        return new RegisterUserResult(
                 userResult.username(),
                 userResult.email(),
                 userResult.realmId(),
                 context.get("keycloakUserId"),
-                context.get("orgId"),
-                context.get("orgName"),
-                context.get("redisStreamKey"),
-                tenantCreated ? input.organizationName() : null,
-                tenantCreated ? "free" : null,
-                tenantCreated ? "created" : null);
-    }
-
-    // -----------------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------------
-
-    private String resolveKeycloakUserId(String realmId, String email) {
-        if (queryService == null) {
-            return null;
-        }
-        try {
-            return queryService.resolveUserId(realmId, email);
-        } catch (Exception e) {
-            return null;
-        }
+                input.tenantId(),
+                "free",
+                "created");
     }
 
     @Override

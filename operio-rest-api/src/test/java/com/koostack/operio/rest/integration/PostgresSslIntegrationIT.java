@@ -10,43 +10,40 @@ import org.slf4j.LoggerFactory;
 /**
  * Integration test for PostgreSQL SSL/TLS JDBC configuration.
  *
- * <p>Tests that PostgreSQL JDBC connections properly handle SSL mode
- * configuration:
+ * <p>Tests that PostgreSQL JDBC connections properly handle SSL mode configuration:
+ *
  * <ul>
- *   <li>{@code disable} — plaintext TCP (baseline)</li>
- *   <li>{@code require} — TLS required but no peer verification</li>
- *   <li>{@code verify-ca} — TLS with CA certificate verification</li>
- *   <li>{@code verify-full} — TLS with hostname verification</li>
+ *   <li>{@code disable} — plaintext TCP (baseline)
+ *   <li>{@code require} — TLS required but no peer verification
+ *   <li>{@code verify-ca} — TLS with CA certificate verification
+ *   <li>{@code verify-full} — TLS with hostname verification
  * </ul>
  *
- * <p><strong>Note:</strong> This test validates that SSL mode parameters are
- * correctly appended to JDBC URLs and that connections work with the modes
- * supported by standard PostgreSQL Docker containers. Full certificate
- * verification tests require a custom PostgreSQL image with TLS enabled.
+ * <p><strong>Note:</strong> This test validates that SSL mode parameters are correctly appended to
+ * JDBC URLs and that connections work with the modes supported by standard PostgreSQL Docker
+ * containers. Full certificate verification tests require a custom PostgreSQL image with TLS
+ * enabled.
  *
- * <p>For production deployments with certificate verification, consult
- * PostgreSQL JDBC driver documentation and ensure:
+ * <p>For production deployments with certificate verification, consult PostgreSQL JDBC driver
+ * documentation and ensure:
+ *
  * <ol>
- *   <li>The database server has TLS certificates installed</li>
- *   <li>The client has the CA certificate or server certificate</li>
- *   <li>The JDBC URL includes {@code sslmode=verify-ca} or {@code verify-full}</li>
- *   <li>The {@code sslcert} and/or {@code sslrootcert} parameters point to
- *       valid PEM files</li>
+ *   <li>The database server has TLS certificates installed
+ *   <li>The client has the CA certificate or server certificate
+ *   <li>The JDBC URL includes {@code sslmode=verify-ca} or {@code verify-full}
+ *   <li>The {@code sslcert} and/or {@code sslrootcert} parameters point to valid PEM files
  * </ol>
  *
- * <p>This test does NOT use {@code @QuarkusTest} or {@code @WithTestResource}
- * because it only validates SSL parameter string handling — no actual database
- * connections are made. Using a separate {@code QuarkusTestResourceLifecycleManager}
- * would force Quarkus to restart between test classes, recycling the shared
- * Postgres and Redis containers and destroying state needed by other integration
- * tests.
+ * <p>This test does NOT use {@code @QuarkusTest} or {@code @WithTestResource} because it only
+ * validates SSL parameter string handling — no actual database connections are made. Using a
+ * separate {@code QuarkusTestResourceLifecycleManager} would force Quarkus to restart between test
+ * classes, recycling the shared Postgres and Redis containers and destroying state needed by other
+ * integration tests.
  */
 @DisplayName("PostgreSQL SSL/TLS Integration Tests")
 class PostgresSslIntegrationIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(
-        PostgresSslIntegrationIT.class
-    );
+    private static final Logger LOG = LoggerFactory.getLogger(PostgresSslIntegrationIT.class);
 
     // -----------------------------------------------------------------------
     // Tests
@@ -91,8 +88,7 @@ class PostgresSslIntegrationIT {
         String sslCertPath = "/etc/ssl/certs/ca.pem";
 
         // When: appending multiple SSL parameters
-        String urlWithSsl =
-            baseUrl + "?sslmode=" + sslMode + "&sslcert=" + sslCertPath;
+        String urlWithSsl = baseUrl + "?sslmode=" + sslMode + "&sslcert=" + sslCertPath;
 
         // Then: all parameters should be present
         assertThat(urlWithSsl).contains("sslmode=verify-ca");
@@ -104,8 +100,7 @@ class PostgresSslIntegrationIT {
     @DisplayName("Existing query parameters should not be overwritten")
     void testExistingParametersPreserved() {
         // Given: a JDBC URL with existing query parameters
-        String baseUrl =
-            "jdbc:postgresql://localhost:5432/operio?application_name=operio";
+        String baseUrl = "jdbc:postgresql://localhost:5432/operio?application_name=operio";
         String sslMode = "require";
 
         // When: appending SSL mode (should use & not ?)
@@ -124,7 +119,8 @@ class PostgresSslIntegrationIT {
         String h2Url = "jdbc:h2:mem:operio";
 
         // When: attempting to append SSL parameters (should be skipped for non-Postgres)
-        String urlAfter = h2Url; // In actual code, appendSslParameters() returns original for non-Postgres
+        String urlAfter =
+                h2Url; // In actual code, appendSslParameters() returns original for non-Postgres
 
         // Then: the URL should be unchanged
         assertThat(urlAfter).isEqualTo("jdbc:h2:mem:operio");
@@ -143,10 +139,7 @@ class PostgresSslIntegrationIT {
 
         // Then: the URL should allow plaintext connections
         assertThat(urlWithSsl).contains("sslmode=disable");
-        LOG.info(
-            "✓ SSL disable mode allows backward compatibility: {}",
-            urlWithSsl
-        );
+        LOG.info("✓ SSL disable mode allows backward compatibility: {}", urlWithSsl);
     }
 
     @Test
@@ -158,8 +151,7 @@ class PostgresSslIntegrationIT {
         String caCertPath = "/etc/ssl/certs/ca.pem";
 
         // When: creating a connection with verify-full mode
-        String urlWithSsl =
-            jdbcUrl + "?sslmode=" + sslMode + "&sslcert=" + caCertPath;
+        String urlWithSsl = jdbcUrl + "?sslmode=" + sslMode + "&sslcert=" + caCertPath;
 
         // Then: the URL should enforce hostname verification
         assertThat(urlWithSsl).contains("sslmode=verify-full");

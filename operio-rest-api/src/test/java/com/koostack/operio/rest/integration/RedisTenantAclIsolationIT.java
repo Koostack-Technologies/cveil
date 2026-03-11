@@ -61,8 +61,8 @@ import redis.clients.jedis.exceptions.JedisAccessControlException;
  * <p>Tests are ordered to build on each other:
  *
  * <ol>
- *   <li><strong>Setup</strong> — creates two tenants (A and B) via the orchestrator and obtains
- *       JWT access tokens via Keycloak login using the bootstrap key.
+ *   <li><strong>Setup</strong> — creates two tenants (A and B) via the orchestrator and obtains JWT
+ *       access tokens via Keycloak login using the bootstrap key.
  *   <li><strong>Write isolation</strong> — writes keys in each tenant's namespace using per-tenant
  *       ACL connections, verifies cross-tenant writes are rejected.
  *   <li><strong>Read isolation</strong> — verifies cross-tenant reads are rejected.
@@ -219,12 +219,10 @@ class RedisTenantAclIsolationIT {
 
             assertNotNull(tenantAAclPassword, "Tenant A redis_acl_password must not be null");
             assertFalse(
-                    tenantAAclPassword.isBlank(),
-                    "Tenant A redis_acl_password must not be blank");
+                    tenantAAclPassword.isBlank(), "Tenant A redis_acl_password must not be blank");
             assertNotNull(tenantBAclPassword, "Tenant B redis_acl_password must not be null");
             assertFalse(
-                    tenantBAclPassword.isBlank(),
-                    "Tenant B redis_acl_password must not be blank");
+                    tenantBAclPassword.isBlank(), "Tenant B redis_acl_password must not be blank");
 
             // Verify the ACL users exist in Redis
             try (Jedis adminJedis = createAdminJedis()) {
@@ -846,9 +844,12 @@ class RedisTenantAclIsolationIT {
                                                             "scopes",
                                                             Set.of(
                                                                     Map.of(
-                                                                            "category", CATEGORY,
-                                                                            "fieldName", FIELD,
-                                                                            "entityName", ENTITY,
+                                                                            "category",
+                                                                            CATEGORY,
+                                                                            "fieldName",
+                                                                            FIELD,
+                                                                            "entityName",
+                                                                            ENTITY,
                                                                             "purposeName",
                                                                             PURPOSE))))
                                             .when()
@@ -918,9 +919,12 @@ class RedisTenantAclIsolationIT {
                                                             "scopes",
                                                             Set.of(
                                                                     Map.of(
-                                                                            "category", CATEGORY,
-                                                                            "fieldName", FIELD,
-                                                                            "entityName", ENTITY,
+                                                                            "category",
+                                                                            CATEGORY,
+                                                                            "fieldName",
+                                                                            FIELD,
+                                                                            "entityName",
+                                                                            ENTITY,
                                                                             "purposeName",
                                                                             PURPOSE))))
                                             .when()

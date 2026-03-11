@@ -454,7 +454,6 @@ class OpenApiAnnotationTest {
                             .count();
             assertTrue(paramCount >= 1, "getTenant should have at least 1 @Parameter");
         }
-
     }
 
     // ===================================================================

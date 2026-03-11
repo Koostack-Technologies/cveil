@@ -36,12 +36,26 @@ public record PlatformEventJooqConfig(
         implements JooqPluginConfig {
 
     public PlatformEventJooqConfig(String connectionString, String dialect) {
-        this(connectionString, dialect, null, null, null, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        this(
+                connectionString,
+                dialect,
+                null,
+                null,
+                null,
+                null,
+                RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
             String connectionString, String dialect, RedisPluginConfig redis) {
-        this(connectionString, dialect, null, null, redis, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        this(
+                connectionString,
+                dialect,
+                null,
+                null,
+                redis,
+                null,
+                RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
@@ -50,7 +64,14 @@ public record PlatformEventJooqConfig(
             String username,
             String password,
             RedisPluginConfig redis) {
-        this(connectionString, dialect, username, password, redis, null, RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        this(
+                connectionString,
+                dialect,
+                username,
+                password,
+                redis,
+                null,
+                RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     public PlatformEventJooqConfig(
@@ -60,6 +81,13 @@ public record PlatformEventJooqConfig(
             String password,
             RedisPluginConfig redis,
             TenantAwareJedisProvider.TenantCredentialLookup tenantCredentialLookup) {
-        this(connectionString, dialect, username, password, redis, tenantCredentialLookup, RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        this(
+                connectionString,
+                dialect,
+                username,
+                password,
+                redis,
+                tenantCredentialLookup,
+                RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 }

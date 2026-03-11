@@ -2,7 +2,6 @@ package com.koostack.operio.rest.dto;
 
 import com.koostack.operio.core.models.AuthResult;
 import com.koostack.operio.core.models.IdpUser;
-import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -32,44 +31,25 @@ public final class IamDtos {
             @Size(max = 255) String fullName,
             Set<String> roles,
             boolean temporaryPassword,
-            @Size(max = 255) String password,
-            @Size(max = 255) String organizationName,
-            @Size(max = 255) String organizationDisplayName) {}
+            @Size(max = 255) String password) {}
 
-    /** Response after user registration (with optional org + tenant). */
+    /** Response after user registration. */
     public record UserRegisteredResponse(
             String username,
             String email,
             String realmId,
             String keycloakUserId,
-            String orgId,
-            String orgName,
             String tenantId,
             String plan,
             String tenantStatus) {
-        public static UserRegisteredResponse from(IamCommandService.RegisterUserResult r) {
-            return new UserRegisteredResponse(
-                    r.username(), r.email(), r.realmId(), null, null, null, null, null, null);
-        }
-
         public static UserRegisteredResponse from(
-                com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator.RegisterUserResult
-                        r) {
-            return new UserRegisteredResponse(
-                    r.username(), r.email(), r.realmId(), null, null, null, null, null, null);
-        }
-
-        public static UserRegisteredResponse from(
-                com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator
-                                .RegisterUserWithOrgResult
+                com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator.RegisterUserResult
                         r) {
             return new UserRegisteredResponse(
                     r.username(),
                     r.email(),
                     r.realmId(),
                     r.keycloakUserId(),
-                    r.orgId(),
-                    r.orgName(),
                     r.tenantId(),
                     r.plan(),
                     r.tenantStatus());
@@ -107,6 +87,18 @@ public final class IamDtos {
         }
     }
 
+    /** Response after organization registration (with full provisioning). */
+    public record OrganizationRegisteredResponse(
+            String orgId, String orgName, String tenantId, String plan, String tenantStatus) {
+        public static OrganizationRegisteredResponse from(
+                com.koostack.operio.rest.orchestrator.RegisterOrganizationOrchestrator
+                                .RegisterOrgResult
+                        r) {
+            return new OrganizationRegisteredResponse(
+                    r.orgId(), r.orgName(), r.tenantId(), r.plan(), r.tenantStatus());
+        }
+    }
+
     /** Response for organization queries. */
     public record OrganizationResponse(
             String orgId, String orgName, String displayName, boolean enabled) {
@@ -119,6 +111,33 @@ public final class IamDtos {
     public record AddOrgMemberRequest(
             @NotBlank(message = "userId must not be blank") String userId,
             @Size(max = 255) String username) {}
+
+    /** Request body for {@code POST /organizations/{orgId}/members/invites}. */
+    public record InviteOrgMemberRequest(
+            @NotBlank(message = "email must not be blank") @Email(message = "email must be a valid email address") String email) {}
+
+    /** Response after inviting a member to an organization. */
+    public record InviteOrgMemberResponse(String orgId, String inviteeEmail, String status) {
+        public static InviteOrgMemberResponse from(
+                com.koostack.operio.rest.orchestrator.InviteOrgMemberOrchestrator
+                                .InviteOrgMemberResult
+                        r) {
+            return new InviteOrgMemberResponse(r.orgId(), r.inviteeEmail(), r.status());
+        }
+    }
+
+    /** Request body for {@code PUT /organizations/{orgId}}. */
+    public record UpdateOrganizationRequest(
+            @Size(max = 255) String displayName, @Size(max = 1000) String description) {}
+
+    /** Response after updating an organization. */
+    public record OrganizationUpdatedResponse(String orgId, String displayName) {
+        public static OrganizationUpdatedResponse from(
+                com.koostack.operio.rest.orchestrator.UpdateOrganizationOrchestrator.UpdateOrgResult
+                        r) {
+            return new OrganizationUpdatedResponse(r.orgId(), r.displayName());
+        }
+    }
 
     /** Response for organization member queries. */
     public record OrgMemberResponse(String userId, String username, String email) {
@@ -139,11 +158,6 @@ public final class IamDtos {
     /** Response after service account creation. */
     public record ServiceAccountCreatedResponse(
             String clientId, String clientSecret, String realmId) {
-        public static ServiceAccountCreatedResponse from(
-                IamCommandService.CreateServiceAccountResult r) {
-            return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
-        }
-
         public static ServiceAccountCreatedResponse from(
                 com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
                                 .CreateServiceAccountResult

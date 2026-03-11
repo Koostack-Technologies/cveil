@@ -877,8 +877,7 @@ class TenantIamResourceIT {
                     .then()
                     .statusCode(201);
 
-            support.awaitKeycloakUserExists(
-                    PLATFORM_REALM, readOnlyEmail, Duration.ofSeconds(30));
+            support.awaitKeycloakUserExists(PLATFORM_REALM, readOnlyEmail, Duration.ofSeconds(30));
 
             var users =
                     support.keycloak()

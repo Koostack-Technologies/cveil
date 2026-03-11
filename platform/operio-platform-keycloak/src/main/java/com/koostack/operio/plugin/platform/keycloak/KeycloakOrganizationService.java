@@ -194,6 +194,47 @@ public class KeycloakOrganizationService {
         }
     }
 
+    /**
+     * Invite a user by email to a Keycloak Organization.
+     *
+     * @param orgId the Keycloak organization ID
+     * @param email the email address to invite
+     */
+    public void inviteMember(String orgId, String email) {
+        OrganizationResource org = orgs().get(orgId);
+        Response response = org.members().inviteUser(email, null, null);
+        try {
+            if (response.getStatus() == 204 || response.getStatus() == 201) {
+                LOG.info("Invite sent to {} for organization {}", email, orgId);
+            } else {
+                throw new OperioServiceException(
+                        "Failed to invite "
+                                + email
+                                + " to organization "
+                                + orgId
+                                + ": HTTP "
+                                + response.getStatus());
+            }
+        } finally {
+            response.close();
+        }
+    }
+
+    /**
+     * Update an organization's metadata in Keycloak.
+     *
+     * @param orgId the Keycloak organization ID
+     * @param displayName new display name (nullable — no change if null)
+     * @param description new description (nullable — no change if null)
+     */
+    public void updateOrganization(String orgId, String displayName, String description) {
+        OrganizationRepresentation rep = orgs().get(orgId).toRepresentation();
+        if (displayName != null) rep.setName(displayName);
+        if (description != null) rep.setDescription(description);
+        orgs().get(orgId).update(rep);
+        LOG.info("Organization updated: id={}", orgId);
+    }
+
     /** Enable the organizations feature on the realm if not already enabled. */
     public void ensureOrganizationsEnabled() {
         var realmRep = realm().toRepresentation();

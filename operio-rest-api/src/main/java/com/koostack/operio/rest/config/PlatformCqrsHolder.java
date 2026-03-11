@@ -5,7 +5,6 @@ import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
-import com.koostack.operio.core.platform.iam.IamCommandService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.platform.plan.PlanQueryService;
@@ -13,7 +12,7 @@ import com.koostack.operio.core.platform.plan.PlanQueryService;
 /**
  * Concrete non-generic holder for platform CQRS services.
  *
- * <p>Quarkus ArC cannot resolve raw parameterized types (e.g., {@code IamCommandService}) through
+ * <p>Quarkus ArC cannot resolve raw parameterized types (e.g., {@code IamQueryService}) through
  * {@code Instance<T>}. This holder wraps nullable service references in a concrete type that ArC
  * can produce and inject normally.
  *
@@ -21,7 +20,7 @@ import com.koostack.operio.core.platform.plan.PlanQueryService;
  */
 public class PlatformCqrsHolder {
 
-    private final IamCommandService<?> iamCommandService;
+    private final CommandDispatcher iamDispatcher;
     private final IamQueryService<?> iamQueryService;
     private final CoreQueryService<?> coreQueryService;
     private final CoreCommandService<?> coreCommandService;
@@ -31,14 +30,14 @@ public class PlatformCqrsHolder {
 
     @SuppressWarnings("rawtypes")
     public PlatformCqrsHolder(
-            IamCommandService iamCommandService,
+            CommandDispatcher iamDispatcher,
             IamQueryService iamQueryService,
             CoreQueryService coreQueryService,
             CoreCommandService coreCommandService,
             BillingCommandService billingCommandService,
             PlanQueryService planQueryService,
             TokenValidationService tokenValidationService) {
-        this.iamCommandService = iamCommandService;
+        this.iamDispatcher = iamDispatcher;
         this.iamQueryService = iamQueryService;
         this.coreQueryService = coreQueryService;
         this.coreCommandService = coreCommandService;
@@ -51,7 +50,7 @@ public class PlatformCqrsHolder {
      * Returns {@code true} if IAM command, IAM query, and core query services are all available.
      */
     public boolean isCqrsAvailable() {
-        return iamCommandService != null && iamQueryService != null && coreQueryService != null;
+        return iamDispatcher != null && iamQueryService != null && coreQueryService != null;
     }
 
     /** Returns {@code true} if API key token validation is available. */
@@ -59,21 +58,9 @@ public class PlatformCqrsHolder {
         return tokenValidationService != null;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> IamCommandService<T> iamCommandService() {
-        return (IamCommandService<T>) iamCommandService;
-    }
-
-    /**
-     * Returns the IAM command dispatcher for direct command-record dispatch.
-     *
-     * @throws IllegalStateException if the underlying service is not a CommandDispatcher
-     */
+    /** Returns the IAM command dispatcher for direct command-record dispatch. */
     public CommandDispatcher iamDispatcher() {
-        if (iamCommandService instanceof CommandDispatcher cd) {
-            return cd;
-        }
-        throw new IllegalStateException("IAM command service does not implement CommandDispatcher");
+        return iamDispatcher;
     }
 
     @SuppressWarnings("unchecked")

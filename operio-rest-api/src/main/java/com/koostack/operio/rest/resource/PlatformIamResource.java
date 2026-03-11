@@ -1,17 +1,23 @@
 package com.koostack.operio.rest.resource;
 
 import com.koostack.operio.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.iam.jooq.*;
 import com.koostack.operio.rest.auth.Roles;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.IamDtos.*;
 import com.koostack.operio.rest.interceptor.TenantScoped;
+import com.koostack.operio.rest.orchestrator.InviteOrgMemberOrchestrator;
+import com.koostack.operio.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator;
+import com.koostack.operio.rest.orchestrator.UpdateOrganizationOrchestrator;
+import com.koostack.operio.rest.util.TenantIdDeriver;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -52,6 +58,8 @@ public class PlatformIamResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
+    @Inject OperioRequestHolder requestHolder;
+
     // -----------------------------------------------------------------------
     // Users
     // -----------------------------------------------------------------------
@@ -62,26 +70,25 @@ public class PlatformIamResource {
             operationId = "registerUser",
             summary = "Register a user",
             description =
-                    "Creates a new user in Keycloak. If organizationName is provided, also creates"
-                            + " the organization, adds the user as a member, and provisions Redis"
-                            + " infrastructure.")
+                    "Self-service user registration. Creates a Keycloak user, personal tenant,"
+                            + " billing profile, and subscription on the free plan. Public endpoint"
+                            + " — no authentication required.")
     public Response registerUser(@Context SecurityContext sc, @Valid RegisterUserRequest request) {
-        requireSuperAdmin(sc);
         requireCqrs();
 
         LOG.debug(
-                "POST /platform/iam/users username={}, email={}, org={}",
+                "POST /platform/iam/users username={}, email={}",
                 request.username(),
-                request.email(),
-                request.organizationName());
+                request.email());
+
+        String tenantId = TenantIdDeriver.derive(request.username());
 
         var orchestrator =
                 new RegisterUserOrchestrator(
                         cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
-        orchestrator.setQueryService(cqrs.iamQueryService());
 
         var command =
-                new RegisterUserOrchestrator.RegisterUserWithOrgCommand(
+                new RegisterUserOrchestrator.RegisterUserCommand(
                         REALM,
                         request.username(),
                         request.email(),
@@ -89,12 +96,10 @@ public class PlatformIamResource {
                         request.roles(),
                         request.temporaryPassword(),
                         request.password(),
-                        request.organizationName(),
-                        request.organizationDisplayName());
+                        tenantId);
 
         try {
-            RegisterUserOrchestrator.RegisterUserWithOrgResult result =
-                    orchestrator.execute(command);
+            RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
             return Response.status(Response.Status.CREATED)
                     .entity(UserRegisteredResponse.from(result))
                     .build();
@@ -274,23 +279,51 @@ public class PlatformIamResource {
             operationId = "createOrganization",
             summary = "Create an organization",
             description =
-                    "Creates a Keycloak Organization (tenant). Organizations scope consent"
-                            + " data and Redis infrastructure.")
+                    "Creates a Keycloak Organization (tenant) with full provisioning: org, member,"
+                            + " org-admin role, Redis, tenant, billing, subscription. Requires JWT"
+                            + " authentication.")
     public Response createOrganization(
             @Context SecurityContext sc, @Valid CreateOrganizationRequest request) {
-        requireSuperAdmin(sc);
+        requireAuthenticated(sc);
+        requireJwtAuth();
         requireCqrs();
 
         LOG.debug("POST /platform/iam/organizations name={}", request.name());
 
+        String kcUserId = requestHolder.identity().subject();
+        String username = requestHolder.identity().email();
+
+        var orchestrator =
+                new RegisterOrganizationOrchestrator(
+                        cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+
         var command =
-                new CreateOrganizationCommandActuator.CreateOrganizationCommand(
-                        request.name(), request.displayName());
-        CreateOrganizationCommandActuator.CreateOrganizationResult result =
-                cqrs.iamDispatcher().dispatch(command);
-        return Response.status(Response.Status.CREATED)
-                .entity(OrganizationCreatedResponse.from(result))
-                .build();
+                new RegisterOrganizationOrchestrator.RegisterOrgCommand(
+                        REALM, request.name(), request.displayName(), kcUserId, username, "free");
+
+        try {
+            RegisterOrganizationOrchestrator.RegisterOrgResult result =
+                    orchestrator.execute(command);
+            return Response.status(Response.Status.CREATED)
+                    .entity(OrganizationRegisteredResponse.from(result))
+                    .build();
+        } catch (OrchestratorException e) {
+            LOG.error(
+                    "Organization registration saga failed at step '{}' ({}/{} completed): {}",
+                    e.failedStep(),
+                    e.completedSteps(),
+                    e.totalSteps(),
+                    e.getMessage(),
+                    e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "org_registration_failed",
+                                    "Organization registration failed at step '"
+                                            + e.failedStep()
+                                            + "'. Contact support."))
+                    .build();
+        }
     }
 
     @GET
@@ -392,6 +425,95 @@ public class PlatformIamResource {
                         new RemoveOrgMemberCommandActuator.RemoveOrgMemberCommand(
                                 orgId, null, userId));
         return Response.ok(MessageResponse.of("Member removed from organization")).build();
+    }
+
+    @POST
+    @Path("/organizations/{orgId}/members/invites")
+    @Operation(
+            operationId = "inviteOrgMember",
+            summary = "Invite a member to an organization",
+            description =
+                    "Sends an invite to the specified email address via Keycloak Organizations"
+                            + " invite API. Requires org-admin or super-admin role.")
+    public Response inviteOrgMember(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @Valid InviteOrgMemberRequest request) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+
+        String orgName = resolveOrgName(orgId);
+        requireOrgAdmin(sc, orgName);
+
+        LOG.debug(
+                "POST /platform/iam/organizations/{}/members/invites email={}",
+                orgId,
+                request.email());
+
+        String inviterUserId = requestHolder.identity().subject();
+
+        var orchestrator = new InviteOrgMemberOrchestrator(cqrs.iamDispatcher());
+        var command =
+                new InviteOrgMemberOrchestrator.InviteOrgMemberCommand(
+                        orgId, orgName, request.email(), inviterUserId);
+
+        try {
+            InviteOrgMemberOrchestrator.InviteOrgMemberResult result =
+                    orchestrator.execute(command);
+            return Response.status(Response.Status.CREATED)
+                    .entity(InviteOrgMemberResponse.from(result))
+                    .build();
+        } catch (OrchestratorException e) {
+            LOG.error("Member invite failed at step '{}': {}", e.failedStep(), e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("invite_failed", "Invite failed: " + e.getMessage()))
+                    .build();
+        }
+    }
+
+    @PUT
+    @Path("/organizations/{orgId}")
+    @Operation(
+            operationId = "updateOrganization",
+            summary = "Update an organization",
+            description =
+                    "Updates organization metadata in Keycloak. Requires org-admin or super-admin"
+                            + " role.")
+    public Response updateOrganization(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @Valid UpdateOrganizationRequest request) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+
+        String orgName = resolveOrgName(orgId);
+        requireOrgAdmin(sc, orgName);
+
+        LOG.debug("PUT /platform/iam/organizations/{}", orgId);
+
+        var orchestrator = new UpdateOrganizationOrchestrator(cqrs.iamDispatcher());
+        var command =
+                new UpdateOrganizationOrchestrator.UpdateOrgCommand(
+                        orgId, orgName, request.displayName(), request.description());
+
+        try {
+            UpdateOrganizationOrchestrator.UpdateOrgResult result = orchestrator.execute(command);
+            return Response.ok(OrganizationUpdatedResponse.from(result)).build();
+        } catch (OrchestratorException e) {
+            LOG.error(
+                    "Organization update failed at step '{}': {}",
+                    e.failedStep(),
+                    e.getMessage(),
+                    e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "update_failed",
+                                    "Organization update failed: " + e.getMessage()))
+                    .build();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -555,6 +677,42 @@ public class PlatformIamResource {
 
     private void requireSuperAdmin(SecurityContext sc) {
         Roles.requireRole(sc, Roles.SUPER_ADMIN);
+    }
+
+    private void requireAuthenticated(SecurityContext sc) {
+        if (sc == null || sc.getUserPrincipal() == null) {
+            throw new OperioAuthException("Authentication required");
+        }
+    }
+
+    private void requireJwtAuth() {
+        if (requestHolder == null || !requestHolder.isAuthenticated()) {
+            throw new OperioAuthException("This endpoint requires JWT authentication");
+        }
+        String provider = requestHolder.identity().provider();
+        if (!"keycloak".equals(provider) && !"oidc".equals(provider)) {
+            throw new OperioAuthException("This endpoint requires JWT authentication");
+        }
+    }
+
+    private void requireOrgAdmin(SecurityContext sc, String orgName) {
+        if (sc != null && sc.isUserInRole(Roles.SUPER_ADMIN)) return;
+        String requiredRole = "org-admin:" + orgName;
+        if (sc == null || !sc.isUserInRole(requiredRole)) {
+            throw new OperioAuthException(
+                    "Access denied: requires role '" + requiredRole + "' or super-admin");
+        }
+    }
+
+    private String resolveOrgName(String orgId) {
+        IamQueryService.OrganizationInfo org =
+                cqrs.iamQueryDispatcher()
+                        .dispatch(new GetOrganizationQueryActuator.GetOrganizationQuery(orgId));
+        if (org == null) {
+            throw new com.koostack.operio.core.exception.OperioServiceException(
+                    "Organization not found: " + orgId);
+        }
+        return org.orgName();
     }
 
     private void requireCqrs() {

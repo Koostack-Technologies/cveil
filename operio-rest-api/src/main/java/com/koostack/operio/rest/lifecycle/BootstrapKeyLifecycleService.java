@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Manages the lifecycle of the bootstrap super-admin key.
  *
- * <p>The bootstrap key is a shared secret that grants super-admin access for initial platform
- * setup (creating the first tenant and admin user). In production, it should be removed from the
+ * <p>The bootstrap key is a shared secret that grants super-admin access for initial platform setup
+ * (creating the first tenant and admin user). In production, it should be removed from the
  * environment once real Keycloak users with admin roles exist.
  *
  * <p>With {@code operio.super-admin.force-bootstrap=true} (used in integration tests), the
@@ -28,8 +28,8 @@ public class BootstrapKeyLifecycleService {
     /**
      * Returns whether the bootstrap key should be accepted for authentication.
      *
-     * <p>The bootstrap key is active when a non-blank key is configured via
-     * {@code operio.super-admin.bootstrap-key}.
+     * <p>The bootstrap key is active when a non-blank key is configured via {@code
+     * operio.super-admin.bootstrap-key}.
      */
     public boolean isBootstrapKeyActive() {
         return isBootstrapKeyConfigured();

@@ -25,9 +25,9 @@ import redis.clients.jedis.resps.StreamEntry;
  * streams ({@code operio:stream:shard:{0..N-1}}).
  *
  * <p>Unlike the per-tenant {@link TenantStreamConsumer}, this consumer uses a fixed number of shard
- * streams regardless of tenant count. Each shard has one reader thread per registered handler group,
- * and incoming messages are dispatched to a shared virtual thread pool for per-tenant parallel
- * processing.
+ * streams regardless of tenant count. Each shard has one reader thread per registered handler
+ * group, and incoming messages are dispatched to a shared virtual thread pool for per-tenant
+ * parallel processing.
  *
  * <h2>Architecture</h2>
  *
@@ -321,8 +321,7 @@ public class ShardedStreamConsumer implements AutoCloseable {
         String tenantId = entry.getFields().get("tenantId");
 
         // Per-tenant-per-handler executor ensures FIFO event ordering within a tenant.
-        String executorKey =
-                reg.groupName() + ":" + (tenantId != null ? tenantId : "__none__");
+        String executorKey = reg.groupName() + ":" + (tenantId != null ? tenantId : "__none__");
         ExecutorService executor =
                 tenantExecutors.computeIfAbsent(
                         executorKey,

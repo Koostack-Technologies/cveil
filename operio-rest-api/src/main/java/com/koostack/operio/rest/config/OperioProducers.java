@@ -36,9 +36,9 @@ import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminQueryDispatcher;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
 import com.koostack.operio.plugin.event.jooq.JooqPlatformEventService;
 import com.koostack.operio.plugin.event.jooq.PlatformEventJooqConfig;
-import com.koostack.operio.plugin.event.jooq.ShardedStreamConsumer;
 import com.koostack.operio.plugin.event.jooq.RedisEventPublisher;
 // TenantRegistry import removed — no async tenant discovery needed (Phase 8)
+import com.koostack.operio.plugin.event.jooq.ShardedStreamConsumer;
 import com.koostack.operio.plugin.jooq.common.JooqDataSourceFactory;
 import com.koostack.operio.plugin.redis.common.JedisProvider;
 import com.koostack.operio.plugin.redis.common.RedisClientFactory;
@@ -133,8 +133,7 @@ public class OperioProducers {
     @SuppressWarnings("rawtypes")
     private com.koostack.operio.core.platform.plan.PlanQueryService planQueryService;
 
-    @SuppressWarnings("rawtypes")
-    private com.koostack.operio.core.platform.iam.IamCommandService iamCommandService;
+    private com.koostack.operio.core.cqrs.CommandDispatcher iamDispatcher;
 
     @SuppressWarnings("rawtypes")
     private com.koostack.operio.core.platform.iam.IamQueryService iamQueryService;
@@ -386,12 +385,12 @@ public class OperioProducers {
         operio.appName();
         LOG.debug(
                 "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}",
-                iamCommandService != null,
+                iamDispatcher != null,
                 iamQueryService != null,
                 coreQueryService != null,
                 coreCommandService != null);
         return new PlatformCqrsHolder(
-                iamCommandService,
+                iamDispatcher,
                 iamQueryService,
                 coreQueryService,
                 coreCommandService,
@@ -502,6 +501,25 @@ public class OperioProducers {
                             LOG.info(
                                     "Operio REST API: KeycloakIdpProvider wired (url={})",
                                     kc.url().get());
+
+                            // Bootstrap: ensure the operio realm exists
+                            String rootEmail = kc.rootEmail().orElse(null);
+                            String rootPassword = kc.rootPassword().orElse(null);
+                            if (rootEmail != null && rootPassword != null) {
+                                try {
+                                    provider.ensureOperioRealm(rootEmail, rootPassword);
+                                } catch (Exception e) {
+                                    LOG.error(
+                                            "Failed to ensure Operio realm — signup will not"
+                                                    + " work until the realm is created",
+                                            e);
+                                }
+                            } else {
+                                LOG.info(
+                                        "Operio REST API: Keycloak root-email/root-password not"
+                                                + " configured — skipping realm bootstrap");
+                            }
+
                             return (IdpProvider) provider;
                         })
                 .orElseGet(
@@ -702,9 +720,10 @@ public class OperioProducers {
         // Block timeout of 500ms balances responsiveness with CPU usage —
         // virtual threads unmount during the blocking XREADGROUP so the cost
         // is negligible.
-        int shardCount = config.stream()
-                .map(OperioConfig.StreamConfig::shardCount)
-                .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        int shardCount =
+                config.stream()
+                        .map(OperioConfig.StreamConfig::shardCount)
+                        .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
         ShardedStreamConsumer consumer =
                 new ShardedStreamConsumer(
                         JedisProvider.shared(adminRedisPool), shardCount, 200L, 100);
@@ -859,9 +878,10 @@ public class OperioProducers {
             String sep = eventDbUrl.contains("?") ? "&" : "?";
             eventDbUrl = eventDbUrl + sep + "currentSchema=operio_event,public";
         }
-        int eventShardCount = config.stream()
-                .map(OperioConfig.StreamConfig::shardCount)
-                .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        int eventShardCount =
+                config.stream()
+                        .map(OperioConfig.StreamConfig::shardCount)
+                        .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
         PlatformEventJooqConfig eventConfig =
                 new PlatformEventJooqConfig(
                         eventDbUrl,
@@ -881,7 +901,7 @@ public class OperioProducers {
         // live in operio_consent. Metrics in operio_metrics.
         // -- Unified schema migrations (all schemas created at startup) -----
         try (var conn = migrationDs.getConnection();
-             var stmt = conn.createStatement()) {
+                var stmt = conn.createStatement()) {
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_event");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_consent");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS operio_metrics");
@@ -944,7 +964,7 @@ public class OperioProducers {
 
         this.coreCommandService = coreCmdSvc;
         this.billingCommandService = billingCmdSvc;
-        this.iamCommandService = iamCmdSvc;
+        this.iamDispatcher = iamCmdSvc;
 
         builder.withCoreCommandService(coreCmdSvc);
         builder.withBillingCommandService(billingCmdSvc);
