@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <title>Dashboard | ConsentVeil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cv: { 50: '#f0fdfa', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
+                        gray: { 900: '#0a0f1c', 800: '#172136', 750: '#1e293b' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="antialiased bg-gray-900 text-gray-100 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="hidden md:flex md:flex-col w-64 bg-[#0a0f1c] border-r border-gray-800">
+        <!-- Logo -->
+        <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
+            <img src="/logo.svg" alt="ConsentVeil" class="w-8 h-8 rounded">
+            <span class="text-lg font-bold tracking-tight text-white">ConsentVeil</span>
+        </div>
+
+        <!-- Workspace badge -->
+        <div class="px-4 py-4">
+            <div class="bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
+                <p class="text-sm text-white font-mono truncate">{tenantId ?: 'default'}</p>
+            </div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 px-3 space-y-1 overflow-y-auto">
+            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-800/60 text-white text-sm font-medium">
+                <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
+                Overview
+            </a>
+            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800/40 hover:text-white text-sm transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                Consent
+            </a>
+            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800/40 hover:text-white text-sm transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                Catalogue
+            </a>
+            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800/40 hover:text-white text-sm transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                API Keys
+            </a>
+            <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800/40 hover:text-white text-sm transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Settings
+            </a>
+        </nav>
+
+        <!-- Sidebar footer -->
+        <div class="px-4 py-4 border-t border-gray-800">
+            <a href="/docs" class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                Documentation
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Top header -->
+        <header class="h-16 flex items-center justify-between px-6 border-b border-gray-800 bg-[#0a0f1c]/80 backdrop-blur-md">
+            <!-- Mobile menu button -->
+            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-gray-400 hover:text-white" aria-label="Toggle sidebar">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+
+            <div class="hidden md:block">
+                <h2 class="text-lg font-semibold">Overview</h2>
+            </div>
+
+            <!-- User actions -->
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm font-medium text-white">{username ?: 'User'}</p>
+                    <p class="text-xs text-gray-500">{roles ?: 'member'}</p>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center text-cv-500 text-sm font-bold">
+                    {initial ?: 'U'}
+                </div>
+                <form method="POST" action="/logout" class="inline">
+                    <button type="submit" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800/60 transition-colors" title="Sign out">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </header>
+
+        <!-- Mobile sidebar overlay -->
+        <div id="mobile-sidebar" class="hidden fixed inset-0 z-40 md:hidden">
+            <div class="fixed inset-0 bg-black/50" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
+            <aside class="relative w-64 h-full bg-[#0a0f1c] border-r border-gray-800 overflow-y-auto">
+                <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
+                    <img src="/logo.svg" alt="ConsentVeil" class="w-8 h-8 rounded">
+                    <span class="text-lg font-bold tracking-tight text-white">ConsentVeil</span>
+                </div>
+                <nav class="px-3 py-4 space-y-1">
+                    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-800/60 text-white text-sm font-medium">Overview</a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 text-sm">Consent</a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 text-sm">Catalogue</a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 text-sm">API Keys</a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 text-sm">Settings</a>
+                </nav>
+            </aside>
+        </div>
+
+        <!-- Main content -->
+        <main class="flex-1 overflow-y-auto p-6 sm:p-8">
+
+            <!-- Welcome section -->
+            <div class="mb-8">
+                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-2">
+                    Welcome back, <span class="text-cv-500">{username ?: 'there'}</span>
+                </h1>
+                <p class="text-gray-400">Here's an overview of your ConsentVeil workspace.</p>
+            </div>
+
+            <!-- Workspace info card -->
+            <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6 mb-8">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Workspace Details</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
+                    <div>
+                        <dt class="text-gray-500 mb-1">Workspace ID</dt>
+                        <dd class="text-white font-mono">{tenantId ?: '—'}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500 mb-1">Plan</dt>
+                        <dd class="text-cv-500 font-medium">Free</dd>
+                    </div>
+                    <div>
+                        <dt class="text-gray-500 mb-1">Status</dt>
+                        <dd class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                            <span class="text-green-400 font-medium">Active</span>
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Quick start links -->
+            <h2 class="text-lg font-semibold mb-4">Quick Start</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                <a href="/docs" class="group bg-gray-800/40 border border-gray-700 rounded-xl p-5 hover:border-cv-500/40 transition-colors">
+                    <div class="w-10 h-10 rounded-lg bg-cv-900/50 border border-cv-500/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                    </div>
+                    <h3 class="text-white font-medium mb-1 group-hover:text-cv-500 transition-colors">Read the Docs</h3>
+                    <p class="text-gray-400 text-sm">Learn how to integrate ConsentVeil into your application.</p>
+                </a>
+
+                <a href="/api/v1/docs" class="group bg-gray-800/40 border border-gray-700 rounded-xl p-5 hover:border-cv-500/40 transition-colors">
+                    <div class="w-10 h-10 rounded-lg bg-cv-900/50 border border-cv-500/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    </div>
+                    <h3 class="text-white font-medium mb-1 group-hover:text-cv-500 transition-colors">API Explorer</h3>
+                    <p class="text-gray-400 text-sm">Try out endpoints interactively with the Swagger UI.</p>
+                </a>
+
+                <a href="#" class="group bg-gray-800/40 border border-gray-700 rounded-xl p-5 hover:border-cv-500/40 transition-colors">
+                    <div class="w-10 h-10 rounded-lg bg-cv-900/50 border border-cv-500/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                    </div>
+                    <h3 class="text-white font-medium mb-1 group-hover:text-cv-500 transition-colors">Create API Key</h3>
+                    <p class="text-gray-400 text-sm">Generate a key to start making authenticated API calls.</p>
+                </a>
+
+            </div>
+
+        </main>
+    </div>
+
+</body>
+</html>

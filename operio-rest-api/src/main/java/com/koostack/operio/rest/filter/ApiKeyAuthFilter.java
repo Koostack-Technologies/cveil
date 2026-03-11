@@ -616,7 +616,14 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("signup")
                 || normalized.equals("signup/")
                 || normalized.equals("signup/success")
-                || normalized.equals("signup/success/"));
+                || normalized.equals("signup/success/")
+                || normalized.equals("login")
+                || normalized.equals("login/")
+                || normalized.equals("logout")
+                || normalized.equals("logout/")
+                // Dashboard uses cookie-based auth (checked in SiteResource)
+                || normalized.equals("dashboard")
+                || normalized.equals("dashboard/"));
     }
 
     /**

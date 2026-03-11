@@ -1,15 +1,19 @@
 package com.koostack.operio.rest.site;
 
 import com.koostack.operio.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.operio.core.exception.OperioAuthException;
+import com.koostack.operio.core.models.AuthResult;
+import com.koostack.operio.platform.iam.jooq.AuthenticateCommandActuator;
+import com.koostack.operio.platform.iam.jooq.LogoutCommandActuator;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.orchestrator.RegisterUserOrchestrator;
+import com.koostack.operio.rest.util.AuthCookieHelper;
 import com.koostack.operio.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.*;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -20,10 +24,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Serves the public-facing Operio website pages using Qute templates.
+ * Serves the public-facing Operio website pages and authenticated dashboard using Qute templates.
  *
- * <p>These endpoints are unauthenticated (listed in {@code ApiKeyAuthFilter.isPublicPath}) and
- * produce HTML responses.
+ * <p>Public pages are unauthenticated (listed in {@code ApiKeyAuthFilter.isPublicPath}). The
+ * dashboard uses HTTP-only cookie-based authentication managed by {@link AuthCookieHelper}.
  */
 @Path("/")
 public class SiteResource {
@@ -41,7 +45,13 @@ public class SiteResource {
 
     @Inject Template signupSuccess;
 
+    @Inject Template login;
+
+    @Inject Template dashboard;
+
     @Inject PlatformCqrsHolder cqrs;
+
+    @Context HttpHeaders httpHeaders;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -123,15 +133,31 @@ public class SiteResource {
                             REALM, username, email, fullName, Set.of(), false, password, tenantId);
 
             RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
-            return Response.seeOther(
-                            URI.create(
-                                    "/signup/success?username="
-                                            + URLEncoder.encode(
-                                                    result.username(), StandardCharsets.UTF_8)
-                                            + "&tenant="
-                                            + URLEncoder.encode(
-                                                    result.tenantId(), StandardCharsets.UTF_8)))
-                    .build();
+
+            // Auto-login: authenticate with the credentials just used for registration
+            try {
+                AuthResult auth =
+                        cqrs.iamDispatcher()
+                                .dispatch(
+                                        new AuthenticateCommandActuator.AuthenticateCommand(
+                                                REALM, email, password));
+                NewCookie[] cookies =
+                        AuthCookieHelper.setAuthCookies(
+                                auth.accessToken(), auth.refreshToken(), auth.expiresIn());
+                return Response.seeOther(URI.create("/dashboard")).cookie(cookies).build();
+            } catch (Exception loginEx) {
+                LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
+                // Fallback: redirect to signup success page
+                return Response.seeOther(
+                                URI.create(
+                                        "/signup/success?username="
+                                                + URLEncoder.encode(
+                                                        result.username(), StandardCharsets.UTF_8)
+                                                + "&tenant="
+                                                + URLEncoder.encode(
+                                                        result.tenantId(), StandardCharsets.UTF_8)))
+                        .build();
+            }
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid username for tenant derivation: {}", e.getMessage());
             return signup.data(
@@ -167,6 +193,150 @@ public class SiteResource {
     public TemplateInstance signupSuccessPage(
             @QueryParam("username") String username, @QueryParam("tenant") String tenantId) {
         return signupSuccess.data("username", username).data("tenantId", tenantId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Login
+    // -----------------------------------------------------------------------
+
+    @GET
+    @Path("login")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance loginPage() {
+        return login.data("error", null).data("identifier", null);
+    }
+
+    @POST
+    @Path("login")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Object processLogin(
+            @FormParam("identifier") String identifier, @FormParam("password") String password) {
+
+        LOG.debug("POST /login identifier={}", identifier);
+
+        if (identifier == null || identifier.isBlank() || password == null || password.isBlank()) {
+            return login.data("error", "Email/username and password are required.")
+                    .data("identifier", identifier);
+        }
+
+        if (!cqrs.isCqrsAvailable()) {
+            return login.data(
+                            "error",
+                            "Authentication is temporarily unavailable. Please try again later.")
+                    .data("identifier", identifier);
+        }
+
+        try {
+            AuthResult result =
+                    cqrs.iamDispatcher()
+                            .dispatch(
+                                    new AuthenticateCommandActuator.AuthenticateCommand(
+                                            REALM, identifier, password));
+            NewCookie[] cookies =
+                    AuthCookieHelper.setAuthCookies(
+                            result.accessToken(), result.refreshToken(), result.expiresIn());
+            return Response.seeOther(URI.create("/dashboard")).cookie(cookies).build();
+        } catch (OperioAuthException e) {
+            LOG.debug("Login failed for identifier={}: {}", identifier, e.getMessage());
+            return login.data("error", "Invalid email/username or password.")
+                    .data("identifier", identifier);
+        } catch (Exception e) {
+            LOG.error("Unexpected error during login: {}", e.getMessage(), e);
+            return login.data("error", "An unexpected error occurred. Please try again.")
+                    .data("identifier", identifier);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Dashboard
+    // -----------------------------------------------------------------------
+
+    @GET
+    @Path("dashboard")
+    @Produces(MediaType.TEXT_HTML)
+    public Object dashboardPage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        // Decode JWT payload for display (without cryptographic verification —
+        // the token was set by this server via HttpOnly cookie)
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        // Extract claims from JWT payload JSON
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) {
+            username = extractJsonString(payload, "sub");
+        }
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return dashboard
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", "member")
+                .data("initial", initial);
+    }
+
+    // -----------------------------------------------------------------------
+    // Logout
+    // -----------------------------------------------------------------------
+
+    @POST
+    @Path("logout")
+    @Produces(MediaType.TEXT_HTML)
+    public Response processLogout() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String refreshToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.REFRESH_COOKIE);
+
+        // Revoke the refresh token in Keycloak (best-effort)
+        if (refreshToken != null && cqrs.isCqrsAvailable()) {
+            try {
+                cqrs.iamDispatcher()
+                        .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, refreshToken));
+            } catch (Exception e) {
+                LOG.warn("Token revocation during logout failed: {}", e.getMessage());
+            }
+        }
+
+        NewCookie[] cleared = AuthCookieHelper.clearAuthCookies();
+        return Response.seeOther(URI.create("/login")).cookie(cleared).build();
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Minimal JSON string extractor — avoids pulling in a JSON library for a single use case. Finds
+     * {@code "key":"value"} in a flat JSON object.
+     */
+    private static String extractJsonString(String json, String key) {
+        String search = "\"" + key + "\"";
+        int idx = json.indexOf(search);
+        if (idx < 0) return null;
+        int colonIdx = json.indexOf(':', idx + search.length());
+        if (colonIdx < 0) return null;
+        int startQuote = json.indexOf('"', colonIdx + 1);
+        if (startQuote < 0) return null;
+        int endQuote = json.indexOf('"', startQuote + 1);
+        if (endQuote < 0) return null;
+        return json.substring(startQuote + 1, endQuote);
     }
 
     private List<Map<String, Object>> pricingTiers() {
