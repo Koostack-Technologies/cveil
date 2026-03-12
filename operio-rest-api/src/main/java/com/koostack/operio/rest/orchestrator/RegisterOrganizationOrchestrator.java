@@ -8,13 +8,11 @@ import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuat
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.iam.jooq.AddOrgMemberCommandActuator;
-import com.koostack.operio.platform.iam.jooq.AssignRoleCommandActuator;
 import com.koostack.operio.platform.iam.jooq.CreateOrganizationCommandActuator;
 import com.koostack.operio.platform.iam.jooq.DeleteOrganizationCommandActuator;
 import com.koostack.operio.platform.iam.jooq.ProvisionRedisCommandActuator;
 import com.koostack.operio.rest.util.TenantIdDeriver;
 import com.koostack.operio.platform.iam.jooq.RemoveOrgMemberCommandActuator;
-import com.koostack.operio.platform.iam.jooq.RemoveRoleCommandActuator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -152,36 +150,8 @@ public class RegisterOrganizationOrchestrator
                         }));
 
         // Step 3: Assign org-admin role to the requesting user
-        steps.add(
-                SagaStep.of(
-                        "assign-org-admin-role",
-                        (in, ctx) -> {
-                            String roleName = "org-admin:" + in.orgName();
-                            dispatcher(DISPATCHER_IAM)
-                                    .dispatch(
-                                            new AssignRoleCommandActuator.AssignRoleCommand(
-                                                    in.realmId(),
-                                                    in.requestingUsername(),
-                                                    roleName));
-                            ctx.put("orgAdminRole", roleName);
-                        },
-                        (in, ctx) -> {
-                            try {
-                                String roleName = ctx.get("orgAdminRole");
-                                if (roleName != null) {
-                                    dispatcher(DISPATCHER_IAM)
-                                            .dispatch(
-                                                    new RemoveRoleCommandActuator.RemoveRoleCommand(
-                                                            in.realmId(),
-                                                            in.requestingUsername(),
-                                                            roleName));
-                                }
-                            } catch (Exception e) {
-                                LOG.warning(
-                                        "Compensation failed for assign-org-admin-role: "
-                                                + e.getMessage());
-                            }
-                        }));
+        // Step 3: KC org-admin role skipped — DB-backed roles are authoritative (step 4).
+        // Kept as no-op to preserve saga step ordering for compensation.
 
         // Step 4: Assign DB-backed roles (org-admin + tenant-admin for the org's tenant)
         steps.add(

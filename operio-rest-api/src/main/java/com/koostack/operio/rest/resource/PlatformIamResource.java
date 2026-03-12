@@ -96,7 +96,7 @@ public class PlatformIamResource {
                         request.username(),
                         request.email(),
                         request.fullName(),
-                        request.roles(),
+                        Set.of(), // KC roles empty — DB-backed roles are authoritative
                         request.temporaryPassword(),
                         request.password(),
                         tenantId);

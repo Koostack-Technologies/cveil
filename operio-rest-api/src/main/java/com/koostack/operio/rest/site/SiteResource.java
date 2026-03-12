@@ -147,7 +147,7 @@ public class SiteResource {
                             username,
                             email,
                             fullName,
-                            Set.of("tenant-admin"),
+                            Set.of(), // KC roles empty — DB-backed roles are authoritative
                             false,
                             password,
                             tenantId);
