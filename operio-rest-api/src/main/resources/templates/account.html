@@ -1,0 +1,493 @@
+{#include dashboard-layout}
+{#title}Account{/title}
+{#headerTitle}Account{/headerTitle}
+{#content}
+
+    <!-- Sub-navigation tabs -->
+    <div class="border-b border-gray-700 mb-8">
+        <nav class="flex gap-6 -mb-px">
+            <button onclick="showSection('profile')" id="tab-profile"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-cv-500 text-cv-500 transition-colors">
+                Profile
+            </button>
+            <button onclick="showSection('organizations')" id="tab-organizations"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                Organizations
+            </button>
+            <button onclick="showSection('tokens')" id="tab-tokens"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                Access Tokens
+            </button>
+        </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Profile Section                                               -->
+    <!-- ============================================================ -->
+    <section id="section-profile">
+        <div class="max-w-2xl">
+            <h2 class="text-xl font-semibold mb-6">Profile</h2>
+
+            <!-- Profile info card -->
+            <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6 mb-6">
+                <dl class="space-y-4 text-sm">
+                    <div class="flex justify-between">
+                        <dt class="text-gray-500">Username</dt>
+                        <dd class="text-white font-mono">{username ?: '—'}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-gray-500">Email</dt>
+                        <dd class="text-white" id="display-email">{email ?: '—'}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-gray-500">Full Name</dt>
+                        <dd class="text-white" id="display-fullname">{fullName ?: '—'}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-gray-500">Roles</dt>
+                        <dd class="text-white">{roles ?: 'member'}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Edit profile form -->
+            <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6 mb-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Edit Profile</h3>
+                <form id="profile-form" onsubmit="updateProfile(event)" class="space-y-4">
+                    <div>
+                        <label for="fullName" class="block text-sm text-gray-400 mb-1">Full Name</label>
+                        <input type="text" id="fullName" name="fullName" value="{fullName ?: ''}"
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label for="emailInput" class="block text-sm text-gray-400 mb-1">Email</label>
+                        <input type="email" id="emailInput" name="email" value="{email ?: ''}"
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button type="submit" id="profile-save-btn"
+                            class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            Save Changes
+                        </button>
+                        <span id="profile-msg" class="text-sm hidden"></span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Change password form -->
+            <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Change Password</h3>
+                <form id="password-form" onsubmit="changePassword(event)" class="space-y-4">
+                    <div>
+                        <label for="newPassword" class="block text-sm text-gray-400 mb-1">New Password</label>
+                        <input type="password" id="newPassword" name="newPassword" minlength="8" required
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none"
+                            placeholder="Minimum 8 characters">
+                    </div>
+                    <div>
+                        <label for="confirmPassword" class="block text-sm text-gray-400 mb-1">Confirm Password</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" minlength="8" required
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button type="submit" id="password-save-btn"
+                            class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            Change Password
+                        </button>
+                        <span id="password-msg" class="text-sm hidden"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Organizations Section                                         -->
+    <!-- ============================================================ -->
+    <section id="section-organizations" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold">Organizations</h2>
+            <button onclick="showCreateOrgForm()" id="create-org-toggle-btn"
+                class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                + New Organization
+            </button>
+        </div>
+
+        <!-- Create org form (hidden by default) -->
+        <div id="create-org-form-container" class="hidden mb-6">
+            <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Create Organization</h3>
+                <form id="create-org-form" onsubmit="createOrganization(event)" class="space-y-4">
+                    <div>
+                        <label for="org-name" class="block text-sm text-gray-400 mb-1">Name <span class="text-gray-600">(slug, used as identifier)</span></label>
+                        <input type="text" id="org-name" name="name" required
+                            pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]"
+                            minlength="2" maxlength="255"
+                            placeholder="my-organization"
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none font-mono">
+                        <p class="text-gray-600 text-xs mt-1">Lowercase letters, numbers, and hyphens only.</p>
+                    </div>
+                    <div>
+                        <label for="org-display-name" class="block text-sm text-gray-400 mb-1">Display Name <span class="text-gray-600">(optional)</span></label>
+                        <input type="text" id="org-display-name" name="displayName" maxlength="255"
+                            placeholder="My Organization"
+                            class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button type="submit" id="create-org-btn"
+                            class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            Create Organization
+                        </button>
+                        <button type="button" onclick="hideCreateOrgForm()"
+                            class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium transition-colors">
+                            Cancel
+                        </button>
+                        <span id="create-org-msg" class="text-sm hidden"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="orgs-list" class="space-y-3">
+            <p class="text-gray-500 text-sm">Loading organizations…</p>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Access Tokens Section                                         -->
+    <!-- ============================================================ -->
+    <section id="section-tokens" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold">Access Tokens</h2>
+            <button onclick="createToken()"
+                id="token-create-btn"
+                class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                + Generate Token
+            </button>
+        </div>
+
+        <p class="text-gray-400 text-sm mb-6">
+            Offline access tokens can be used as Bearer tokens in API requests. Each token creates a Keycloak offline session.
+        </p>
+
+        <!-- Show-once token modal -->
+        <div id="token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 max-w-lg w-full mx-4">
+                <h3 class="text-lg font-semibold text-white mb-2">Token Generated</h3>
+                <p class="text-yellow-400 text-sm mb-4">⚠ Copy this token now. It will not be shown again.</p>
+                <div class="relative">
+                    <pre id="token-value" class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
+                    <button onclick="copyToken()" title="Copy"
+                        class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    </button>
+                </div>
+                <button onclick="closeTokenModal()"
+                    class="mt-4 px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                    I've copied the token
+                </button>
+            </div>
+        </div>
+
+        <!-- Session list -->
+        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="border-b border-gray-700">
+                    <tr class="text-gray-400 text-left">
+                        <th class="px-4 py-3 font-medium">Session ID</th>
+                        <th class="px-4 py-3 font-medium hidden sm:table-cell">Started</th>
+                        <th class="px-4 py-3 font-medium hidden sm:table-cell">Last Access</th>
+                        <th class="px-4 py-3 font-medium hidden md:table-cell">IP Address</th>
+                        <th class="px-4 py-3 font-medium"></th>
+                    </tr>
+                </thead>
+                <tbody id="tokens-table-body">
+                    <tr><td colspan="5" class="px-4 py-6 text-gray-500 text-center">Loading sessions…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        // -------------------------------------------------------------------
+        // Tab navigation
+        // -------------------------------------------------------------------
+        function showSection(name) {
+            document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(t => {
+                t.classList.remove('border-cv-500', 'text-cv-500');
+                t.classList.add('border-transparent', 'text-gray-400');
+            });
+            document.getElementById('section-' + name).classList.remove('hidden');
+            const tab = document.getElementById('tab-' + name);
+            tab.classList.add('border-cv-500', 'text-cv-500');
+            tab.classList.remove('border-transparent', 'text-gray-400');
+
+            if (name === 'organizations') loadOrganizations();
+            if (name === 'tokens') loadTokens();
+        }
+
+        // Handle hash-based section switching
+        if (window.location.hash) {
+            const section = window.location.hash.substring(1);
+            if (['profile', 'organizations', 'tokens'].includes(section)) {
+                showSection(section);
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // Profile
+        // -------------------------------------------------------------------
+        async function updateProfile(e) {
+            e.preventDefault();
+            const btn = document.getElementById('profile-save-btn');
+            const msg = document.getElementById('profile-msg');
+            btn.disabled = true;
+            btn.textContent = 'Saving…';
+            msg.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/v1/platform/iam/me', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fullName: document.getElementById('fullName').value || null,
+                        email: document.getElementById('emailInput').value || null
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showMsg(msg, 'Profile updated ✓', 'text-green-400');
+                } else {
+                    showMsg(msg, data.message || 'Update failed', 'text-red-400');
+                }
+            } catch (err) {
+                showMsg(msg, 'Network error', 'text-red-400');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        }
+
+        async function changePassword(e) {
+            e.preventDefault();
+            const pw = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+            const msg = document.getElementById('password-msg');
+            const btn = document.getElementById('password-save-btn');
+
+            if (pw !== confirm) {
+                showMsg(msg, 'Passwords do not match', 'text-red-400');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Changing…';
+            msg.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/v1/platform/iam/me/password', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ newPassword: pw })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showMsg(msg, 'Password changed ✓', 'text-green-400');
+                    document.getElementById('password-form').reset();
+                } else {
+                    showMsg(msg, data.message || 'Change failed', 'text-red-400');
+                }
+            } catch (err) {
+                showMsg(msg, 'Network error', 'text-red-400');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Change Password';
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // Organizations
+        // -------------------------------------------------------------------
+        function showCreateOrgForm() {
+            document.getElementById('create-org-form-container').classList.remove('hidden');
+            document.getElementById('create-org-toggle-btn').classList.add('hidden');
+            document.getElementById('org-name').focus();
+        }
+
+        function hideCreateOrgForm() {
+            document.getElementById('create-org-form-container').classList.add('hidden');
+            document.getElementById('create-org-toggle-btn').classList.remove('hidden');
+            document.getElementById('create-org-form').reset();
+            var msg = document.getElementById('create-org-msg');
+            msg.classList.add('hidden');
+        }
+
+        async function createOrganization(e) {
+            e.preventDefault();
+            var btn = document.getElementById('create-org-btn');
+            var msg = document.getElementById('create-org-msg');
+            btn.disabled = true;
+            btn.textContent = 'Creating…';
+            msg.classList.add('hidden');
+
+            try {
+                var res = await fetch('/api/v1/platform/iam/organizations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('org-name').value.trim(),
+                        displayName: document.getElementById('org-display-name').value.trim() || null
+                    })
+                });
+                var data = await res.json();
+                if (res.ok) {
+                    hideCreateOrgForm();
+                    loadOrganizations();
+                } else {
+                    showMsg(msg, data.message || 'Failed to create organization', 'text-red-400');
+                }
+            } catch (err) {
+                showMsg(msg, 'Network error', 'text-red-400');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create Organization';
+            }
+        }
+
+        async function loadOrganizations() {
+            var container = document.getElementById('orgs-list');
+            try {
+                var res = await fetch('/api/v1/platform/iam/me');
+                var data = await res.json();
+                var orgs = data.organizations || [];
+                if (orgs.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-sm">You are not a member of any organizations. Create one above to get started.</p>';
+                    return;
+                }
+                container.innerHTML = orgs.map(function(o) {
+                    var adminBadge = o.isAdmin
+                        ? '<span class="inline-block px-2 py-0.5 rounded-full bg-cv-600/20 text-cv-400 text-xs font-medium">Admin</span>'
+                        : '';
+                    return '<a href="/dashboard/organizations/' + escHtml(o.orgId) + '" class="block bg-gray-800/40 border border-gray-700 rounded-xl p-5 hover:border-cv-500/40 transition-colors">'
+                        + '<div class="flex items-center justify-between"><div>'
+                        + '<div class="flex items-center gap-2 mb-1">'
+                        + '<h3 class="text-white font-medium">' + escHtml(o.displayName || o.orgName) + '</h3>'
+                        + adminBadge
+                        + '</div>'
+                        + '<p class="text-gray-500 text-sm font-mono">' + escHtml(o.orgId) + '</p>'
+                        + '</div>'
+                        + '<svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>'
+                        + '</div></a>';
+                }).join('');
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-400 text-sm">Failed to load organizations.</p>';
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // Tokens
+        // -------------------------------------------------------------------
+        async function loadTokens() {
+            const tbody = document.getElementById('tokens-table-body');
+            try {
+                const res = await fetch('/api/v1/platform/iam/me/tokens');
+                const sessions = await res.json();
+                if (!Array.isArray(sessions) || sessions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-gray-500 text-center">No offline sessions. Generate a token above.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = sessions.map(function(s) {
+                    var sid = escHtml(s.sessionId);
+                    return '<tr class="border-b border-gray-700/50">'
+                        + '<td class="px-4 py-3 text-white font-mono text-xs">' + sid.substring(0, 12) + '\u2026</td>'
+                        + '<td class="px-4 py-3 text-gray-400 hidden sm:table-cell">' + fmtEpoch(s.start) + '</td>'
+                        + '<td class="px-4 py-3 text-gray-400 hidden sm:table-cell">' + fmtEpoch(s.lastAccess) + '</td>'
+                        + '<td class="px-4 py-3 text-gray-400 hidden md:table-cell">' + escHtml(s.ipAddress || '\u2014') + '</td>'
+                        + '<td class="px-4 py-3 text-right">'
+                        + '<button onclick="revokeToken(\'' + sid + '\')" class="text-red-400 hover:text-red-300 text-xs font-medium">Revoke</button>'
+                        + '</td></tr>';
+                }).join('');
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-red-400 text-center">Failed to load sessions.</td></tr>';
+            }
+        }
+
+        async function createToken() {
+            const btn = document.getElementById('token-create-btn');
+            btn.disabled = true;
+            btn.textContent = 'Generating…';
+
+            try {
+                const res = await fetch('/api/v1/platform/iam/me/tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('token-value').textContent = data.token;
+                    document.getElementById('token-modal').classList.remove('hidden');
+                    loadTokens();
+                } else {
+                    alert(data.message || 'Failed to generate token');
+                }
+            } catch (err) {
+                alert('Network error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '+ Generate Token';
+            }
+        }
+
+        async function revokeToken(sessionId) {
+            if (!confirm('Revoke this offline session? This cannot be undone.')) return;
+            try {
+                const res = await fetch('/api/v1/platform/iam/me/tokens/' + sessionId, { method: 'DELETE' });
+                if (res.ok) {
+                    loadTokens();
+                } else {
+                    alert('Failed to revoke session');
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+
+        function copyToken() {
+            const text = document.getElementById('token-value').textContent;
+            navigator.clipboard.writeText(text).catch(() => {});
+        }
+
+        function closeTokenModal() {
+            document.getElementById('token-modal').classList.add('hidden');
+        }
+
+        // -------------------------------------------------------------------
+        // Helpers
+        // -------------------------------------------------------------------
+        function showMsg(el, text, cls) {
+            el.textContent = text;
+            el.className = 'text-sm ' + cls;
+            el.classList.remove('hidden');
+        }
+
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function fmtDate(iso) {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function fmtEpoch(epoch) {
+            if (!epoch) return '—';
+            return new Date(epoch * 1000).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+    </script>
+
+{/content}
+{/include}

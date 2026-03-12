@@ -52,7 +52,9 @@ class KeycloakRealmProvisionerTest {
         when(realmResource.clients()).thenReturn(clientsResource);
         when(realmResource.roles()).thenReturn(rolesResource);
 
-        provisioner = new KeycloakRealmProvisioner(adminClient, OPERIO_CLIENT_ID);
+        provisioner =
+                new KeycloakRealmProvisioner(
+                        adminClient, OPERIO_CLIENT_ID, "http://localhost:8080");
     }
 
     // -----------------------------------------------------------------------

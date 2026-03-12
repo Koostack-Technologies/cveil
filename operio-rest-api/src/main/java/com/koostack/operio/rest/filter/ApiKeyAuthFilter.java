@@ -2,12 +2,16 @@ package com.koostack.operio.rest.filter;
 
 import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.platform.iam.AccessTokenGenerator;
+import com.koostack.operio.core.platform.iam.AccessTokenInfo;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
+import com.koostack.operio.rest.util.AuthCookieHelper;
+import com.koostack.operio.rest.util.TenantIdDeriver;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -21,10 +25,13 @@ import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -49,9 +56,10 @@ import org.slf4j.MDC;
  *   <li><strong>Bootstrap key check</strong> — if the token matches the configured {@code
  *       operio.super-admin.bootstrap-key}, the request is granted {@code super-admin} role with no
  *       tenant scope. This allows initial platform setup before any real API keys exist.
- *   <li><strong>Token verification</strong> — delegates to {@link
- *       TokenValidationService#verifyToken(String)} (the {@code ApiKeyTokenVerifier} implementation
- *       SHA-256 hashes the token and looks it up in the platform {@code api_key} table).
+ *   <li><strong>Token verification</strong> — for {@code cveil_} prefixed tokens, validates the
+ *       CRC32 checksum, computes a SHA-256 hash, and looks it up in the {@code
+ *       platform_iam.access_token} table. For JWT tokens (three dot-separated segments), delegates
+ *       to the tenant's {@link IdpProvider} for JWKS-based verification.
  *   <li><strong>Security context</strong> — on success, sets a JAX-RS {@link SecurityContext} with
  *       the authenticated principal and roles, and stores the full {@link IdentityContext} as a
  *       request property for downstream consumption (e.g. {@code TenantScopeInterceptor}).
@@ -166,13 +174,21 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 3. Extract Bearer token from Authorization header
+        // 3. Extract Bearer token from Authorization header, falling back to cookie
         String authHeader = ctx.getHeaderString("Authorization");
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            abortUnauthorized(
-                    ctx,
-                    "Missing or invalid Authorization header — " + "expected 'Bearer <token>'");
-            return;
+            // Fallback: read JWT from HttpOnly access cookie (dashboard fetch() calls)
+            String cookieToken =
+                    AuthCookieHelper.readCookie(
+                            ctx.getHeaderString("Cookie"), AuthCookieHelper.ACCESS_COOKIE);
+            if (cookieToken != null && !cookieToken.isEmpty()) {
+                authHeader = BEARER_PREFIX + cookieToken;
+            } else {
+                abortUnauthorized(
+                        ctx,
+                        "Missing or invalid Authorization header — " + "expected 'Bearer <token>'");
+                return;
+            }
         }
 
         String token = authHeader.substring(BEARER_PREFIX.length()).trim();
@@ -243,7 +259,14 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 4d. JWT detection — if the token looks like a JWT (3 dot-separated
+        // 4d. Personal access token (cveil_ prefix) — SHA-256 hash lookup
+        //     in the platform_iam.access_token table.
+        if (AccessTokenGenerator.isAccessToken(token)) {
+            verifyAccessToken(ctx, token);
+            return;
+        }
+
+        // 4e. JWT detection — if the token looks like a JWT (3 dot-separated
         //     base64url segments), verify via the tenant's IdpProvider.
         if (isJwt(token)) {
             verifyJwt(ctx, token);
@@ -302,6 +325,95 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
+     * Verifies a {@code cveil_} personal access token by hashing and looking up in the platform
+     * database.
+     *
+     * <p>Flow:
+     * <ol>
+     *   <li>Fast-reject malformed tokens via CRC32 checksum validation
+     *   <li>Compute SHA-256 hash of the raw token
+     *   <li>Look up hash in {@code platform_iam.access_token} via CQRS query
+     *   <li>Validate status ({@code active}) and expiration
+     *   <li>Build {@link IdentityContext} with snapshotted roles
+     * </ol>
+     */
+    private void verifyAccessToken(ContainerRequestContext ctx, String token) {
+        // Fast reject: validate CRC32 checksum without touching the DB
+        if (!AccessTokenGenerator.validateChecksum(token)) {
+            LOG.debug("Access token failed CRC32 checksum validation");
+            abortUnauthorized(ctx, "Invalid access token — checksum mismatch");
+            return;
+        }
+
+        // Ensure CQRS query layer is available
+        if (!cqrsHolder.isCqrsAvailable()) {
+            LOG.error("Access token received but CQRS query layer not available");
+            abortUnauthorized(ctx, "Access token authentication not available — server not ready");
+            return;
+        }
+
+        String tokenHash = AccessTokenGenerator.sha256Hex(token);
+        AccessTokenInfo tokenInfo = cqrsHolder.iamQueryService().findAccessTokenByHash(tokenHash);
+
+        if (tokenInfo == null) {
+            LOG.debug("Access token not found (hash prefix: {}…)", tokenHash.substring(0, 8));
+            abortUnauthorized(ctx, "Invalid access token");
+            return;
+        }
+
+        // Validate status
+        if (!"active".equalsIgnoreCase(tokenInfo.status())) {
+            LOG.debug(
+                    "Access token {} is {} — rejecting",
+                    tokenInfo.tokenPrefix(),
+                    tokenInfo.status());
+            abortUnauthorized(
+                    ctx, "Access token is " + tokenInfo.status() + " (" + tokenInfo.tokenPrefix() + ")");
+            return;
+        }
+
+        // Validate expiration
+        if (tokenInfo.expiresAt().isBefore(Instant.now())) {
+            LOG.debug("Access token {} has expired at {}", tokenInfo.tokenPrefix(), tokenInfo.expiresAt());
+            abortUnauthorized(
+                    ctx, "Access token has expired (" + tokenInfo.tokenPrefix() + ")");
+            return;
+        }
+
+        // Parse roles from comma-separated string
+        Set<String> roles;
+        if (tokenInfo.roles() != null && !tokenInfo.roles().isBlank()) {
+            roles =
+                    Arrays.stream(tokenInfo.roles().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toUnmodifiableSet());
+        } else {
+            roles = Set.of();
+        }
+
+        IdentityContext identity =
+                new IdentityContext(
+                        tokenInfo.createdBy(),
+                        token,
+                        null,
+                        roles,
+                        Map.of("token_prefix", tokenInfo.tokenPrefix(),
+                               "token_name", tokenInfo.name()),
+                        tokenInfo.tenantId(),
+                        "access-token");
+
+        LOG.debug(
+                "Access token authenticated: prefix={}, tenant={}, roles={}",
+                tokenInfo.tokenPrefix(),
+                tokenInfo.tenantId(),
+                roles);
+
+        applyAuthentication(
+                ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
+    }
+
+    /**
      * Checks whether the bearer token looks like a JWT (three dot-separated base64url segments).
      */
     private static boolean isJwt(String token) {
@@ -342,10 +454,22 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
             if (tenantId == null) {
                 // For Keycloak JWTs: iss = http://host/realms/{realmName}
+                // If the realm is "operio" (the shared platform realm), derive tenant
+                // from the user's preferred_username instead.
                 String issuer = extractJsonStringValue(payload, "iss");
                 if (issuer != null && issuer.contains("/realms/")) {
-                    tenantId =
-                            issuer.substring(issuer.lastIndexOf("/realms/") + "/realms/".length());
+                    String realmName =
+                            issuer.substring(
+                                    issuer.lastIndexOf("/realms/") + "/realms/".length());
+                    if ("operio".equals(realmName)) {
+                        // Shared platform realm — derive tenant from username
+                        String username = extractJsonStringValue(payload, "preferred_username");
+                        if (username != null && !username.isBlank()) {
+                            tenantId = TenantIdDeriver.derive(username);
+                        }
+                    } else {
+                        tenantId = realmName;
+                    }
                 }
             }
 
@@ -623,7 +747,11 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("logout/")
                 // Dashboard uses cookie-based auth (checked in SiteResource)
                 || normalized.equals("dashboard")
-                || normalized.equals("dashboard/"));
+                || normalized.equals("dashboard/")
+                || normalized.startsWith("dashboard/account")
+                || normalized.startsWith("dashboard/governance")
+                || normalized.startsWith("dashboard/consent")
+                || normalized.startsWith("dashboard/organizations/"));
     }
 
     /**

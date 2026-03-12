@@ -1,0 +1,298 @@
+{#include dashboard-layout}
+{#title}{orgName ?: 'Organization'}{/title}
+{#headerTitle}{orgDisplayName ?: orgName ?: 'Organization'}{/headerTitle}
+{#content}
+
+    <!-- Back link -->
+    <a href="/dashboard/account#organizations" class="inline-flex items-center gap-1 text-gray-400 hover:text-white text-sm mb-6 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        Back to Account
+    </a>
+
+    <!-- Org info card -->
+    <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6 mb-8">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Organization Details</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
+            <div>
+                <dt class="text-gray-500 mb-1">Organization ID</dt>
+                <dd class="text-white font-mono">{orgId ?: '—'}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500 mb-1">Name</dt>
+                <dd class="text-white">{orgName ?: '—'}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500 mb-1">Display Name</dt>
+                <dd class="text-white">{orgDisplayName ?: '—'}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Members section -->
+    <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Members</h2>
+        </div>
+
+        <!-- Invite member form (admin only, hidden until loaded) -->
+        <div id="invite-section" class="hidden mb-4">
+            <form id="invite-form" onsubmit="inviteMember(event)" class="flex items-end gap-3">
+                <div class="flex-1">
+                    <label for="invite-email" class="block text-xs text-gray-400 mb-1">Invite by email</label>
+                    <input type="email" id="invite-email" required
+                        placeholder="user@example.com"
+                        class="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm focus:border-cv-500 focus:outline-none">
+                </div>
+                <button type="submit" id="invite-btn"
+                    class="px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors whitespace-nowrap">
+                    Send Invite
+                </button>
+            </form>
+            <span id="invite-msg" class="text-sm hidden mt-2 block"></span>
+        </div>
+
+        <div id="members-list">
+            <p class="text-gray-500 text-sm">Loading members…</p>
+        </div>
+    </div>
+
+    <!-- Service Account section -->
+    <div class="bg-gray-800/40 border border-gray-700 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Service Account</h2>
+                <p class="text-gray-500 text-xs mt-1">Machine-to-machine credentials for this organization.</p>
+            </div>
+            <div id="sa-toggle-container">
+                <p class="text-gray-500 text-sm">Loading…</p>
+            </div>
+        </div>
+
+        <!-- Service account details (shown when enabled) -->
+        <div id="sa-details" class="hidden mt-4">
+            <dl class="space-y-3 text-sm">
+                <div class="flex justify-between">
+                    <dt class="text-gray-500">Client ID</dt>
+                    <dd class="text-white font-mono" id="sa-client-id">—</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Show-once secret modal -->
+        <div id="sa-secret-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-6 max-w-lg w-full mx-4">
+                <h3 class="text-lg font-semibold text-white mb-2">Service Account Created</h3>
+                <p class="text-yellow-400 text-sm mb-4">⚠ Copy these credentials now. The secret will not be shown again.</p>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-gray-400">Client ID</label>
+                        <pre id="sa-modal-client-id" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-white font-mono"></pre>
+                    </div>
+                    <div class="relative">
+                        <label class="text-xs text-gray-400">Client Secret</label>
+                        <pre id="sa-modal-secret" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
+                        <button onclick="copySaSecret()" title="Copy"
+                            class="absolute top-6 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('sa-secret-modal').classList.add('hidden')"
+                    class="mt-4 px-4 py-2 rounded-lg bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                    I've copied the credentials
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>const ORG_ID = '{orgId}';</script>
+    <script>
+        var IS_ADMIN = false;
+
+        // Detect admin status, then load page data
+        (async function init() {
+            try {
+                var res = await fetch('/api/v1/platform/iam/me');
+                var me = await res.json();
+                var org = (me.organizations || []).find(function(o) { return o.orgId === ORG_ID; });
+                IS_ADMIN = org ? org.isAdmin : false;
+            } catch (e) {
+                IS_ADMIN = false;
+            }
+
+            if (IS_ADMIN) {
+                document.getElementById('invite-section').classList.remove('hidden');
+            }
+
+            loadMembers();
+            loadServiceAccountStatus();
+        })();
+
+        // Load members
+        async function loadMembers() {
+            var container = document.getElementById('members-list');
+            try {
+                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members');
+                if (!res.ok) {
+                    container.innerHTML = '<p class="text-gray-500 text-sm">Unable to load members.</p>';
+                    return;
+                }
+                var members = await res.json();
+                if (!Array.isArray(members) || members.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-sm">No members found.</p>';
+                    return;
+                }
+                container.innerHTML = '<div class="space-y-2">' + members.map(function(m) {
+                    var initial = (m.username || m.email || '?')[0].toUpperCase();
+                    var removeBtn = IS_ADMIN
+                        ? '<button onclick="removeMember(\'' + escJsString(m.userId) + '\', \'' + escJsString(m.username || m.email) + '\')"'
+                          + ' class="text-red-400 hover:text-red-300 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">Remove</button>'
+                        : '';
+                    return '<div class="group flex items-center justify-between py-2 border-b border-gray-700/50 last:border-0">'
+                        + '<div class="flex items-center gap-3">'
+                        + '<div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 text-sm font-bold">'
+                        + escHtml(initial)
+                        + '</div>'
+                        + '<div>'
+                        + '<p class="text-white text-sm">' + escHtml(m.username || m.email) + '</p>'
+                        + '<p class="text-gray-500 text-xs">' + escHtml(m.email || '') + '</p>'
+                        + '</div></div>'
+                        + removeBtn
+                        + '</div>';
+                }).join('') + '</div>';
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-400 text-sm">Failed to load members.</p>';
+            }
+        }
+
+        // Invite member
+        async function inviteMember(e) {
+            e.preventDefault();
+            var btn = document.getElementById('invite-btn');
+            var msg = document.getElementById('invite-msg');
+            var emailInput = document.getElementById('invite-email');
+            btn.disabled = true;
+            btn.textContent = 'Sending…';
+            msg.classList.add('hidden');
+
+            try {
+                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/invites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailInput.value.trim() })
+                });
+                var data = await res.json();
+                if (res.ok) {
+                    showMsg(msg, 'Invitation sent to ' + emailInput.value.trim() + ' ✓', 'text-green-400');
+                    emailInput.value = '';
+                    loadMembers();
+                } else {
+                    showMsg(msg, data.message || 'Failed to send invitation', 'text-red-400');
+                }
+            } catch (err) {
+                showMsg(msg, 'Network error', 'text-red-400');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send Invite';
+            }
+        }
+
+        // Remove member
+        async function removeMember(userId, displayName) {
+            if (!confirm('Remove ' + displayName + ' from this organization?')) return;
+            try {
+                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + userId, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    loadMembers();
+                } else {
+                    var data = await res.json();
+                    alert(data.message || 'Failed to remove member');
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+
+        function showMsg(el, text, cls) {
+            el.textContent = text;
+            el.className = 'text-sm mt-2 block ' + cls;
+            el.classList.remove('hidden');
+        }
+
+        // Load service account status
+        async function loadServiceAccountStatus() {
+            const container = document.getElementById('sa-toggle-container');
+            try {
+                const res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account');
+                const data = await res.json();
+                renderSaToggle(data.enabled, data.clientId);
+            } catch (err) {
+                container.innerHTML = '<p class="text-red-400 text-sm">Failed to load status.</p>';
+            }
+        }
+
+        function renderSaToggle(enabled, clientId) {
+            const container = document.getElementById('sa-toggle-container');
+            const details = document.getElementById('sa-details');
+
+            var btnClass = enabled ? 'bg-cv-600' : 'bg-gray-700';
+            var spanClass = enabled ? 'translate-x-6' : 'translate-x-1';
+            container.innerHTML = '<button onclick="toggleServiceAccount(' + (!enabled) + ')"'
+                + ' class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors ' + btnClass + '">'
+                + '<span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform ' + spanClass + '"></span>'
+                + '</button>';
+
+            if (enabled && clientId) {
+                document.getElementById('sa-client-id').textContent = clientId;
+                details.classList.remove('hidden');
+            } else {
+                details.classList.add('hidden');
+            }
+        }
+
+        async function toggleServiceAccount(enable) {
+            const action = enable ? 'enable' : 'disable';
+            if (!enable && !confirm('Disable service account? The client and its secret will be deleted.')) return;
+
+            try {
+                const res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enable })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    renderSaToggle(data.enabled, data.clientId);
+                    if (enable && data.clientSecret) {
+                        document.getElementById('sa-modal-client-id').textContent = data.clientId;
+                        document.getElementById('sa-modal-secret').textContent = data.clientSecret;
+                        document.getElementById('sa-secret-modal').classList.remove('hidden');
+                    }
+                } else {
+                    alert(data.message || 'Failed to ' + action + ' service account');
+                }
+            } catch (err) {
+                alert('Network error');
+            }
+        }
+
+        function copySaSecret() {
+            const text = document.getElementById('sa-modal-secret').textContent;
+            navigator.clipboard.writeText(text).catch(() => {});
+        }
+
+        function escJsString(s) {
+            return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s || '';
+            return d.innerHTML;
+        }
+    </script>
+
+{/content}
+{/include}

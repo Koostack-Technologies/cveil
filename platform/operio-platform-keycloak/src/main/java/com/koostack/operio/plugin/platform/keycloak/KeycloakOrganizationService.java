@@ -1,6 +1,7 @@
 package com.koostack.operio.plugin.platform.keycloak;
 
 import com.koostack.operio.core.exception.OperioServiceException;
+import com.koostack.operio.core.platform.iam.IamQueryService.OrganizationInfo;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
 import org.keycloak.admin.client.Keycloak;
@@ -243,5 +244,40 @@ public class KeycloakOrganizationService {
             realm().update(realmRep);
             LOG.info("Organizations feature enabled on realm '{}'", realmName);
         }
+    }
+
+    /**
+     * List organizations that a specific user belongs to.
+     *
+     * @param userId the Keycloak user ID
+     * @return list of organizations the user is a member of
+     */
+    public List<OrganizationInfo> listUserOrganizations(String userId) {
+        // Iterate all orgs and check membership — Keycloak 26 doesn't have
+        // a direct "list orgs for user" API, so we search orgs and filter.
+        List<OrganizationRepresentation> allOrgs = orgs().list(0, 100);
+        return allOrgs.stream()
+                .filter(
+                        org -> {
+                            try {
+                                List<MemberRepresentation> members =
+                                        orgs().get(org.getId()).members().list(0, 500);
+                                return members.stream().anyMatch(m -> userId.equals(m.getId()));
+                            } catch (Exception e) {
+                                LOG.debug(
+                                        "Failed to check membership in org {}: {}",
+                                        org.getId(),
+                                        e.getMessage());
+                                return false;
+                            }
+                        })
+                .map(
+                        org ->
+                                new OrganizationInfo(
+                                        org.getId(),
+                                        org.getAlias() != null ? org.getAlias() : org.getName(),
+                                        org.getName(),
+                                        Boolean.TRUE.equals(org.isEnabled())))
+                .toList();
     }
 }

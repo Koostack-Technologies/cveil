@@ -98,7 +98,9 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
                         .username(config.adminUsername())
                         .password(config.adminPassword())
                         .build();
-        this.realmProvisioner = new KeycloakRealmProvisioner(adminClient, config.operioClientId());
+        this.realmProvisioner =
+                new KeycloakRealmProvisioner(
+                        adminClient, config.operioClientId(), config.serverUrl());
         this.jwksVerifier = new JwksTokenVerifier();
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     }

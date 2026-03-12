@@ -7,6 +7,7 @@ import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuat
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.iam.jooq.DeleteUserCommandActuator;
+import com.koostack.operio.platform.iam.jooq.ProvisionRedisCommandActuator;
 import com.koostack.operio.platform.iam.jooq.RegisterUserCommandActuator;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +28,7 @@ import java.util.logging.Logger;
  * <ol>
  *   <li><b>register-user</b> — creates the user in Keycloak. Compensation: deletes the KC user.
  *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes the tenant.
+ *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub + ACL user (non-fatal).
  *   <li><b>create-billing-profile</b> — creates billing profile.
  *   <li><b>create-subscription</b> — creates subscription on free plan.
  * </ol>
@@ -109,7 +111,8 @@ public class RegisterUserOrchestrator
                                             in.fullName(),
                                             in.roles(),
                                             in.temporaryPassword(),
-                                            in.password());
+                                            in.password(),
+                                            in.tenantId());
                             RegisterUserCommandActuator.RegisterUserResult result =
                                     dispatcher(DISPATCHER_IAM).dispatch(cmd);
                             ctx.put("userResult", result);
@@ -152,7 +155,28 @@ public class RegisterUserOrchestrator
                             }
                         }),
 
-                // Step 3: Create billing profile
+                // Step 3: Provision Redis infrastructure (non-fatal)
+                SagaStep.of(
+                        "provision-redis",
+                        (in, ctx) -> {
+                            try {
+                                var cmd =
+                                        new ProvisionRedisCommandActuator.ProvisionRedisCommand(
+                                                in.tenantId());
+                                ProvisionRedisCommandActuator.ProvisionRedisResult result =
+                                        dispatcher(DISPATCHER_IAM).dispatch(cmd);
+                                ctx.put("redisStreamKey", result.streamKey());
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Redis provisioning non-fatal failure for tenant "
+                                                + in.tenantId()
+                                                + ": "
+                                                + e.getMessage());
+                                ctx.put("redisStreamKey", null);
+                            }
+                        }),
+
+                // Step 4: Create billing profile
                 SagaStep.of(
                         "create-billing-profile",
                         (in, ctx) -> {
@@ -164,7 +188,7 @@ public class RegisterUserOrchestrator
                             ctx.put("billingProfileCreated", true);
                         }),
 
-                // Step 4: Create subscription on free plan
+                // Step 5: Create subscription on free plan
                 SagaStep.of(
                         "create-subscription",
                         (in, ctx) -> {

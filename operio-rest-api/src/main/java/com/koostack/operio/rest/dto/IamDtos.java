@@ -147,41 +147,39 @@ public final class IamDtos {
     }
 
     // ===================================================================
-    // Service Accounts
+    // Access Tokens
     // ===================================================================
 
-    /** Request body for {@code POST /service-accounts}. */
-    public record CreateServiceAccountRequest(
-            @NotBlank(message = "name must not be blank") @Size(max = 255) String name,
-            Set<String> roles) {}
+    /** Request body for {@code POST /me/tokens}. */
+    public record CreateAccessTokenRequest(
+            @NotBlank(message = "name must not be blank") @Size(max = 100) String name,
+            Instant expiresAt) {}
 
-    /** Response after service account creation. */
-    public record ServiceAccountCreatedResponse(
-            String clientId, String clientSecret, String realmId) {
-        public static ServiceAccountCreatedResponse from(
-                com.koostack.operio.platform.iam.jooq.CreateServiceAccountCommandActuator
-                                .CreateServiceAccountResult
-                        r) {
-            return new ServiceAccountCreatedResponse(r.clientId(), r.clientSecret(), r.realmId());
-        }
-    }
+    /** Response after access token creation — plaintext token is shown exactly once. */
+    public record AccessTokenCreatedResponse(
+            String token, String tokenPrefix, String name, Instant expiresAt) {}
 
-    /** Response for service account queries. */
-    public record ServiceAccountResponse(
-            String clientId,
+    /** Response for access token listing (no raw token or hash). */
+    public record AccessTokenResponse(
+            String tokenPrefix,
             String name,
-            String realmId,
-            Set<String> roles,
+            String roles,
             String status,
+            Instant expiresAt,
+            String createdBy,
+            Instant lastUsedAt,
             Instant createdAt) {
-        public static ServiceAccountResponse from(IamQueryService.ServiceAccountInfo sa) {
-            return new ServiceAccountResponse(
-                    sa.clientId(),
-                    sa.name(),
-                    sa.realmId(),
-                    sa.roles(),
-                    sa.status(),
-                    sa.createdAt());
+        public static AccessTokenResponse from(
+                com.koostack.operio.core.platform.iam.AccessTokenInfo t) {
+            return new AccessTokenResponse(
+                    t.tokenPrefix(),
+                    t.name(),
+                    t.roles(),
+                    t.status(),
+                    t.expiresAt(),
+                    t.createdBy(),
+                    t.lastUsedAt(),
+                    t.createdAt());
         }
     }
 
@@ -220,4 +218,29 @@ public final class IamDtos {
                     r.identity() != null ? r.identity().roles() : Set.of());
         }
     }
+
+    // ===================================================================
+    // Current User (/me)
+    // ===================================================================
+
+    /** Response for {@code GET /me}. */
+    public record CurrentUserResponse(
+            String userId,
+            String username,
+            String email,
+            String fullName,
+            Set<String> roles,
+            java.util.List<OrgMembership> organizations) {}
+
+    /** Lightweight org membership included in /me response. */
+    public record OrgMembership(String orgId, String orgName, String displayName, boolean isAdmin) {}
+
+    /** Request body for {@code PUT /me}. */
+    public record UpdateProfileRequest(
+            @Size(max = 255) String fullName,
+            @Email(message = "email must be a valid email address") @Size(max = 320) String email) {}
+
+    /** Request body for {@code PUT /me/password}. */
+    public record ChangePasswordRequest(
+            @NotBlank(message = "newPassword must not be blank") @Size(min = 8, max = 255) String newPassword) {}
 }

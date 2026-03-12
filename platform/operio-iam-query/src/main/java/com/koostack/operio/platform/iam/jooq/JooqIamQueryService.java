@@ -172,24 +172,30 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         }
     }
 
-    // -- Service account queries ----------------------------------------------
+    // -- Access token queries -------------------------------------------------
 
     @Override
-    public List<ServiceAccountInfo> listServiceAccounts(String realmId) {
-        RealmResource realm = adminClient.realm(realmId);
-        return realm.clients().findAll().stream()
-                .filter(c -> Boolean.TRUE.equals(c.isServiceAccountsEnabled()))
-                .filter(c -> !config.operioClientId().equals(c.getClientId()))
-                .map(c -> toServiceAccountInfo(c, realmId))
-                .toList();
+    public List<com.koostack.operio.core.platform.iam.AccessTokenInfo> listAccessTokens(
+            String tenantId) {
+        return List.of(); // Legacy service — use KeycloakIamQueryDispatcher
     }
 
     @Override
-    public ServiceAccountInfo getServiceAccount(String realmId, String clientId) {
-        RealmResource realm = adminClient.realm(realmId);
-        List<ClientRepresentation> clients = realm.clients().findByClientId(clientId);
-        if (clients.isEmpty()) return null;
-        return toServiceAccountInfo(clients.get(0), realmId);
+    public List<com.koostack.operio.core.platform.iam.AccessTokenInfo> listAccessTokensByCreator(
+            String tenantId, String createdBy) {
+        return List.of(); // Legacy service — use KeycloakIamQueryDispatcher
+    }
+
+    @Override
+    public com.koostack.operio.core.platform.iam.AccessTokenInfo getAccessToken(
+            String tenantId, String tokenPrefix) {
+        return null; // Legacy service — use KeycloakIamQueryDispatcher
+    }
+
+    @Override
+    public com.koostack.operio.core.platform.iam.AccessTokenInfo findAccessTokenByHash(
+            String tokenHash) {
+        return null; // Legacy service — use KeycloakIamQueryDispatcher
     }
 
     // -- Authentication -------------------------------------------------------
@@ -312,41 +318,7 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
         }
     }
 
-    // -- Legacy API key support -----------------------------------------------
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public ApiKeyInfo findByKeyHash(String keyHash) {
-        if (platformDataSource == null) return null;
-        String sql =
-                "SELECT key_prefix, name, tenant_id, subject, roles, status, created_at, expires_at"
-                        + " FROM platform_iam.api_key WHERE key_hash = ?";
-        try (var conn = platformDataSource.getConnection();
-                var ps = conn.prepareStatement(sql)) {
-            ps.setString(1, keyHash);
-            try (var rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                return new ApiKeyInfo(
-                        rs.getString("key_prefix"),
-                        rs.getString("key_prefix"),
-                        rs.getString("name"),
-                        rs.getString("tenant_id"),
-                        null,
-                        rs.getString("subject"),
-                        rs.getString("roles"),
-                        rs.getString("status"),
-                        rs.getTimestamp("created_at") != null
-                                ? rs.getTimestamp("created_at").toInstant()
-                                : null,
-                        rs.getTimestamp("expires_at") != null
-                                ? rs.getTimestamp("expires_at").toInstant()
-                                : null);
-            }
-        } catch (Exception e) {
-            LOG.warn("Failed to look up API key by hash: {}", e.getMessage());
-            return null;
-        }
-    }
+    // (Legacy API key support removed — use FindAccessTokenByHashQueryActuator)
 
     // -- Internal helpers -----------------------------------------------------
 
@@ -386,16 +358,6 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
             }
         }
         return null;
-    }
-
-    private ServiceAccountInfo toServiceAccountInfo(ClientRepresentation client, String realmId) {
-        return new ServiceAccountInfo(
-                client.getClientId(),
-                client.getName(),
-                realmId,
-                Set.of(),
-                Boolean.TRUE.equals(client.isEnabled()) ? "active" : "disabled",
-                null);
     }
 
     private String resolveClientSecret(String realmId) {

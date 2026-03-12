@@ -1,14 +1,14 @@
 package com.koostack.operio.core.platform.iam;
 
 import com.koostack.operio.core.spi.Plugin;
+import java.time.Instant;
 import java.util.Set;
 
 /**
- * Command service for IAM operations — registers users, manages service accounts, and assigns
- * roles.
+ * Command service for IAM operations — registers users, manages access tokens, and assigns roles.
  *
  * <p>Each command publishes a domain event to the event store. The projection handler translates
- * these events into Keycloak Admin API calls.
+ * these events into Keycloak Admin API calls or database writes as appropriate.
  *
  * @param <T> the configuration type for the backing implementation
  */
@@ -24,13 +24,12 @@ public interface IamCommandService<T> extends Plugin<T> {
     record RegisterUserResult(String username, String email, String realmId) {}
 
     /**
-     * Result of creating a service account (Keycloak confidential client).
+     * Result of creating a personal access token.
      *
-     * @param clientId the Keycloak client ID
-     * @param clientSecret the generated client secret (returned once)
-     * @param realmId the realm the service account was created in
+     * @param plaintextToken the full token (shown once only — store securely)
+     * @param tokenPrefix the display prefix for identification
      */
-    record CreateServiceAccountResult(String clientId, String clientSecret, String realmId) {}
+    record CreateAccessTokenResult(String plaintextToken, String tokenPrefix) {}
 
     /**
      * Register a new user in the given realm. Publishes a {@code UserRegisteredEvent}.
@@ -68,23 +67,28 @@ public interface IamCommandService<T> extends Plugin<T> {
     void activateUser(String realmId, String emailOrUsername);
 
     /**
-     * Create a service account (confidential client with client credentials grant). Publishes a
-     * {@code ServiceAccountCreatedEvent}.
+     * Create a personal access token (PAT) scoped to a tenant.
      *
-     * @param realmId the Keycloak realm
-     * @param name human-readable name for the service account
-     * @param roles roles to assign to the service account
-     * @return the result containing the one-time client secret
+     * <p>The token carries a snapshot of the creator's Keycloak roles and expires at the given
+     * time. Publishes an {@code AccessTokenCreatedEvent}.
+     *
+     * @param tenantId the tenant this token is scoped to
+     * @param name human-readable name for the token
+     * @param roles comma-separated Keycloak roles to embed
+     * @param createdBy the Keycloak user ID (subject) of the creator
+     * @param expiresAt when the token should expire (max 90 days from now)
+     * @return the result containing the one-time plaintext token
      */
-    CreateServiceAccountResult createServiceAccount(String realmId, String name, Set<String> roles);
+    CreateAccessTokenResult createAccessToken(
+            String tenantId, String name, String roles, String createdBy, Instant expiresAt);
 
     /**
-     * Revoke/disable a service account. Publishes a {@code ServiceAccountRevokedEvent}.
+     * Revoke a personal access token. Publishes an {@code AccessTokenRevokedEvent}.
      *
-     * @param realmId the Keycloak realm
-     * @param clientId the Keycloak client ID
+     * @param tenantId the tenant this token is scoped to
+     * @param tokenPrefix the display prefix identifying the token to revoke
      */
-    void revokeServiceAccount(String realmId, String clientId);
+    void revokeAccessToken(String tenantId, String tokenPrefix);
 
     /**
      * Assign a role to a user. Publishes a {@code RoleAssignedEvent}.
@@ -147,32 +151,5 @@ public interface IamCommandService<T> extends Plugin<T> {
      */
     default void deleteOrganization(String orgId) {
         throw new UnsupportedOperationException("deleteOrganization not implemented");
-    }
-
-    // -- Legacy API key methods (kept for backward compatibility) --------------
-
-    /**
-     * @deprecated Use {@link #createServiceAccount} for new code.
-     */
-    @Deprecated(forRemoval = true)
-    record CreateApiTokenResult(String keyId, String keyPrefix, String plaintextKey) {}
-
-    /**
-     * @deprecated Use {@link #createServiceAccount} for new code.
-     */
-    @Deprecated(forRemoval = true)
-    default CreateApiTokenResult createApiToken(
-            String tenantId, String name, String environment, String roles) {
-        throw new UnsupportedOperationException(
-                "API key generation is deprecated — use createServiceAccount()");
-    }
-
-    /**
-     * @deprecated Use {@link #revokeServiceAccount} for new code.
-     */
-    @Deprecated(forRemoval = true)
-    default void revokeApiToken(String tenantId, String keyId) {
-        throw new UnsupportedOperationException(
-                "API key revocation is deprecated — use revokeServiceAccount()");
     }
 }

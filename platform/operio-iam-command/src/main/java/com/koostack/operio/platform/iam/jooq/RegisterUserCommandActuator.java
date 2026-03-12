@@ -8,7 +8,9 @@ import com.koostack.operio.core.metrics.MetricPublisherService;
 import com.koostack.operio.core.models.AggregateKey;
 import com.koostack.operio.core.platform.events.UserRegisteredEvent;
 import com.koostack.operio.core.platform.iam.IamEventTypes;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.keycloak.admin.client.Keycloak;
@@ -53,6 +55,8 @@ public class RegisterUserCommandActuator
      * @param roles initial roles to assign (nullable — defaults to empty)
      * @param temporaryPassword if true, user must change password on first login
      * @param password the user's initial password (nullable — if null, no credentials are set)
+     * @param tenantId the derived tenant ID (nullable — stored as Keycloak user attribute for JWT
+     *     mapping)
      */
     public record RegisterUserCommand(
             String realmId,
@@ -61,9 +65,22 @@ public class RegisterUserCommandActuator
             String fullName,
             Set<String> roles,
             boolean temporaryPassword,
-            String password) {
+            String password,
+            String tenantId) {
 
-        /** Backward-compatible constructor without password. */
+        /** Backward-compatible constructor without tenantId. */
+        public RegisterUserCommand(
+                String realmId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                boolean temporaryPassword,
+                String password) {
+            this(realmId, username, email, fullName, roles, temporaryPassword, password, null);
+        }
+
+        /** Backward-compatible constructor without password or tenantId. */
         public RegisterUserCommand(
                 String realmId,
                 String username,
@@ -71,7 +88,7 @@ public class RegisterUserCommandActuator
                 String fullName,
                 Set<String> roles,
                 boolean temporaryPassword) {
-            this(realmId, username, email, fullName, roles, temporaryPassword, null);
+            this(realmId, username, email, fullName, roles, temporaryPassword, null, null);
         }
     }
 
@@ -169,6 +186,13 @@ public class RegisterUserCommandActuator
         user.setUsername(command.username());
         user.setEnabled(true);
         user.setEmailVerified(!command.temporaryPassword());
+
+        // Store tenant_id as a user attribute so it appears in JWT via protocol mapper
+        if (command.tenantId() != null && !command.tenantId().isBlank()) {
+            Map<String, List<String>> attrs = new HashMap<>();
+            attrs.put("tenant_id", List.of(command.tenantId()));
+            user.setAttributes(attrs);
+        }
 
         if (command.fullName() != null && !command.fullName().isBlank()) {
             String[] parts = command.fullName().trim().split("\\s+", 2);

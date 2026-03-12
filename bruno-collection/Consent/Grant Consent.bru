@@ -11,18 +11,15 @@ post {
 }
 
 auth:bearer {
-  token: {{tenantToken}}
+  token: eyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI1MmQ3MTc0Ny05NDliLTQ4NzAtOGMzNC0yODU4OGQ0YjhiNDQifQ.eyJpYXQiOjE3NzMyODQ1OTQsImp0aSI6IjI5YzQyOTI2LTYwZjYtNDNmYS1iMmIzLTg3ZDJiNTk0NjVhZiIsImlzcyI6Imh0dHA6Ly9rZXljbG9hazo4MDgwL3JlYWxtcy9vcGVyaW8iLCJhdWQiOiJodHRwOi8va2V5Y2xvYWs6ODA4MC9yZWFsbXMvb3BlcmlvIiwic3ViIjoiYWFkYjA0NjgtZTFiMy00YmU5LWJiMWEtZDllNmNjMDhkZTU0IiwidHlwIjoiT2ZmbGluZSIsImF6cCI6Im9wZXJpby1iYWNrZW5kIiwic2lkIjoiNjVlYWQxMTQtY2E4MS00NGQzLTgzYWItMzNhMmVkZjAyZTU1Iiwic2NvcGUiOiJvZmZsaW5lX2FjY2VzcyB3ZWItb3JpZ2lucyBhY3Igcm9sZXMgZW1haWwgcHJvZmlsZSBiYXNpYyJ9.Nd1pa2VkxTGF_rjIHJDQHsCz4wRRPuaiCUbwJJxGalYEf1xOPeFgFsKwjaNiGaY7G2LWckHp04NSbVouFaafOw
 }
 
 body:json {
   {
-    "subject": "user-123",
+    "subject": "koo",
     "scope": {
       "category": "PII",
-      "fieldName": "email",
-      "entityName": "User",
-      "purposeName": "marketing"
+      "purposeName": "MARKETING"
     },
-    "expiresAt": null
   }
 }

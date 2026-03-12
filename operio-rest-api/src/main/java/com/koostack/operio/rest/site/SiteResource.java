@@ -49,6 +49,16 @@ public class SiteResource {
 
     @Inject Template dashboard;
 
+    @Inject Template account;
+
+    @Inject Template governance;
+
+    @Inject Template consent;
+
+    @Inject
+    @io.quarkus.qute.Location("org-detail.html")
+    Template orgDetail;
+
     @Inject PlatformCqrsHolder cqrs;
 
     @Context HttpHeaders httpHeaders;
@@ -130,7 +140,9 @@ public class SiteResource {
 
             var command =
                     new RegisterUserOrchestrator.RegisterUserCommand(
-                            REALM, username, email, fullName, Set.of(), false, password, tenantId);
+                            REALM, username, email, fullName,
+                            Set.of("tenant-admin"),
+                            false, password, tenantId);
 
             RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
 
@@ -289,7 +301,175 @@ public class SiteResource {
                 .data("email", email)
                 .data("tenantId", tenantId)
                 .data("roles", "member")
-                .data("initial", initial);
+                .data("initial", initial)
+                .data("activeNav", "overview");
+    }
+
+    @GET
+    @Path("dashboard/account")
+    @Produces(MediaType.TEXT_HTML)
+    public Object accountPage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String fullName = extractJsonString(payload, "name");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return account.data("username", username)
+                .data("email", email)
+                .data("fullName", fullName)
+                .data("tenantId", tenantId)
+                .data("roles", "member")
+                .data("initial", initial)
+                .data("activeNav", "account");
+    }
+
+    @GET
+    @Path("dashboard/governance")
+    @Produces(MediaType.TEXT_HTML)
+    public Object governancePage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return governance
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", "member")
+                .data("initial", initial)
+                .data("activeNav", "governance");
+    }
+
+    @GET
+    @Path("dashboard/consent")
+    @Produces(MediaType.TEXT_HTML)
+    public Object consentPage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return consent
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", "member")
+                .data("initial", initial)
+                .data("activeNav", "consent");
+    }
+
+    @GET
+    @Path("dashboard/organizations/{orgId}")
+    @Produces(MediaType.TEXT_HTML)
+    public Object orgDetailPage(@PathParam("orgId") String orgId) {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        // Look up org info for display
+        String orgName = orgId;
+        String orgDisplayName = orgId;
+        if (cqrs.isCqrsAvailable()) {
+            try {
+                var result =
+                        cqrs.iamQueryDispatcher()
+                                .dispatch(
+                                        new com.koostack.operio.platform.iam.jooq
+                                                .GetOrganizationQueryActuator.GetOrganizationQuery(
+                                                orgId));
+                if (result
+                        instanceof
+                        com.koostack.operio.core.platform.iam.IamQueryService.OrganizationInfo
+                        org) {
+                    orgName = org.orgName();
+                    orgDisplayName = org.displayName() != null ? org.displayName() : org.orgName();
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to look up org {}: {}", orgId, e.getMessage());
+            }
+        }
+
+        return orgDetail
+                .data("orgId", orgId)
+                .data("orgName", orgName)
+                .data("orgDisplayName", orgDisplayName)
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", "member")
+                .data("initial", initial)
+                .data("activeNav", "account");
     }
 
     // -----------------------------------------------------------------------

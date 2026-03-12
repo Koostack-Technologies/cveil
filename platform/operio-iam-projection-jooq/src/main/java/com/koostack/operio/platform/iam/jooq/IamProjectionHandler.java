@@ -41,16 +41,12 @@ public class IamProjectionHandler {
                 case IamEventTypes.USER_REGISTERED -> acknowledgeEvent("UserRegistered", payload);
                 case IamEventTypes.USER_SUSPENDED -> acknowledgeEvent("UserSuspended", payload);
                 case IamEventTypes.USER_ACTIVATED -> acknowledgeEvent("UserActivated", payload);
-                case IamEventTypes.SERVICE_ACCOUNT_CREATED -> acknowledgeEvent(
-                        "ServiceAccountCreated", payload);
-                case IamEventTypes.SERVICE_ACCOUNT_REVOKED -> acknowledgeEvent(
-                        "ServiceAccountRevoked", payload);
+                case IamEventTypes.ACCESS_TOKEN_CREATED -> acknowledgeEvent(
+                        "AccessTokenCreated", payload);
+                case IamEventTypes.ACCESS_TOKEN_REVOKED -> acknowledgeEvent(
+                        "AccessTokenRevoked", payload);
                 case IamEventTypes.ROLE_ASSIGNED -> acknowledgeEvent("RoleAssigned", payload);
                 case IamEventTypes.ROLE_REMOVED -> acknowledgeEvent("RoleRemoved", payload);
-                case IamEventTypes.API_KEY_GENERATED -> LOG.debug(
-                        "Ignoring legacy api-key.generated event");
-                case IamEventTypes.API_KEY_REVOKED -> LOG.debug(
-                        "Ignoring legacy api-key.revoked event");
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
         } catch (Exception e) {

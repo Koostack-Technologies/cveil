@@ -67,17 +67,28 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
                 ActivateUserCommandActuator.ActivateUserCommand.class,
                 new ActivateUserCommandActuator(eventService, kc));
         actuators.put(
-                CreateServiceAccountCommandActuator.CreateServiceAccountCommand.class,
-                new CreateServiceAccountCommandActuator(eventService, kc));
-        actuators.put(
-                RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand.class,
-                new RevokeServiceAccountCommandActuator(eventService, kc));
-        actuators.put(
                 AssignRoleCommandActuator.AssignRoleCommand.class,
                 new AssignRoleCommandActuator(eventService, kc));
         actuators.put(
                 RemoveRoleCommandActuator.RemoveRoleCommand.class,
                 new RemoveRoleCommandActuator(eventService, kc));
+        actuators.put(
+                UpdateUserProfileCommandActuator.UpdateUserProfileCommand.class,
+                new UpdateUserProfileCommandActuator(eventService, kc, keycloakConfig));
+        actuators.put(
+                ChangePasswordCommandActuator.ChangePasswordCommand.class,
+                new ChangePasswordCommandActuator(eventService, kc, keycloakConfig));
+
+        // Access token actuators (DB-backed)
+        var platformDs = config.platformDataSource();
+        if (platformDs != null) {
+            actuators.put(
+                    CreateAccessTokenCommandActuator.CreateAccessTokenCommand.class,
+                    new CreateAccessTokenCommandActuator(eventService, platformDs));
+            actuators.put(
+                    RevokeAccessTokenCommandActuator.RevokeAccessTokenCommand.class,
+                    new RevokeAccessTokenCommandActuator(eventService, platformDs));
+        }
 
         // Organization actuators (Keycloak Organizations API)
         var orgService = config.orgService();

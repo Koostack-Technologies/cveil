@@ -5,6 +5,7 @@ import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.AuthResult;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.models.IdpUser;
+import com.koostack.operio.core.platform.iam.AccessTokenInfo;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.plugin.platform.keycloak.JwksTokenVerifier;
 import com.koostack.operio.plugin.platform.keycloak.KeycloakConfig;
@@ -110,19 +111,8 @@ public class KeycloakIamQueryDispatcher
                 ResolveUserIdQueryActuator.ResolveUserIdQuery.class,
                 new ResolveUserIdQueryActuator(adminClient, userMapper));
         actuators.put(
-                ListServiceAccountsQueryActuator.ListServiceAccountsQuery.class,
-                new ListServiceAccountsQueryActuator(adminClient, config.operioClientId()));
-        actuators.put(
-                GetServiceAccountQueryActuator.GetServiceAccountQuery.class,
-                new GetServiceAccountQueryActuator(adminClient));
-        actuators.put(
                 VerifyTokenQueryActuator.VerifyTokenQuery.class,
                 new VerifyTokenQueryActuator(jwksVerifier, config));
-        @SuppressWarnings("removal")
-        var ignored =
-                actuators.put(
-                        FindByKeyHashQueryActuator.FindByKeyHashQuery.class,
-                        new FindByKeyHashQueryActuator(platformDataSource));
 
         // Organization query actuators
         var orgService = cfg.orgService();
@@ -136,7 +126,18 @@ public class KeycloakIamQueryDispatcher
             actuators.put(
                     ListOrgMembersQueryActuator.ListOrgMembersQuery.class,
                     new ListOrgMembersQueryActuator(orgService));
+            actuators.put(
+                    GetCurrentUserQueryActuator.GetCurrentUserQuery.class,
+                    new GetCurrentUserQueryActuator(adminClient, config, orgService));
         }
+
+        // Access token query actuators (DB-backed)
+        actuators.put(
+                ListAccessTokensQueryActuator.ListAccessTokensQuery.class,
+                new ListAccessTokensQueryActuator(platformDataSource));
+        actuators.put(
+                FindAccessTokenByHashQueryActuator.FindAccessTokenByHashQuery.class,
+                new FindAccessTokenByHashQueryActuator(platformDataSource));
 
         LOG.info("KeycloakIamQueryDispatcher configured with {} actuators", actuators.size());
     }
@@ -193,21 +194,42 @@ public class KeycloakIamQueryDispatcher
                 new ResolveUserIdQueryActuator.ResolveUserIdQuery(realmId, emailOrUsername));
     }
 
+    // -- Access token query delegation ----------------------------------------
+
     @Override
-    public List<ServiceAccountInfo> listServiceAccounts(String realmId) {
-        return dispatch(new ListServiceAccountsQueryActuator.ListServiceAccountsQuery(realmId));
+    public List<AccessTokenInfo> listAccessTokens(String tenantId) {
+        return dispatch(
+                new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
     }
 
     @Override
-    public ServiceAccountInfo getServiceAccount(String realmId, String clientId) {
+    public List<AccessTokenInfo> listAccessTokensByCreator(String tenantId, String createdBy) {
         return dispatch(
-                new GetServiceAccountQueryActuator.GetServiceAccountQuery(realmId, clientId));
+                new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, createdBy));
     }
+
+    @Override
+    public AccessTokenInfo getAccessToken(String tenantId, String tokenPrefix) {
+        // Implemented by listing tokens for the tenant and filtering by prefix
+        List<AccessTokenInfo> tokens =
+                dispatch(
+                        new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
+        return tokens.stream()
+                .filter(t -> tokenPrefix.equals(t.tokenPrefix()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Override
+    public AccessTokenInfo findAccessTokenByHash(String tokenHash) {
+        return dispatch(
+                new FindAccessTokenByHashQueryActuator.FindAccessTokenByHashQuery(tokenHash));
+    }
+
+    // -- Authentication (command-side concern) ---------------------------------
 
     @Override
     public AuthResult authenticate(String realmId, String email, String password) {
-        // Authentication is a command-side concern — delegate remains on IamQueryService
-        // for backward compatibility but callers should use the command dispatcher.
         throw new UnsupportedOperationException(
                 "Use the command dispatcher for authentication — "
                         + "AuthenticateCommandActuator handles this operation");
@@ -230,12 +252,6 @@ public class KeycloakIamQueryDispatcher
         throw new UnsupportedOperationException(
                 "Use the command dispatcher for logout — "
                         + "LogoutCommandActuator handles this operation");
-    }
-
-    @SuppressWarnings({"deprecation", "removal"})
-    @Override
-    public ApiKeyInfo findByKeyHash(String keyHash) {
-        return dispatch(new FindByKeyHashQueryActuator.FindByKeyHashQuery(keyHash));
     }
 
     // -- Organization query delegation ----------------------------------------

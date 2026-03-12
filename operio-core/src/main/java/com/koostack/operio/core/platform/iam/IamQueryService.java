@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Query service for IAM operations — reads users, service accounts, and roles from Keycloak.
+ * Query service for IAM operations — reads users, access tokens, and roles from Keycloak and the
+ * platform database.
  *
  * <p>Also provides authentication (token exchange) and token verification operations since these
  * are read-side operations that query the IdP.
@@ -16,15 +17,6 @@ import java.util.Set;
  * @param <T> the configuration type for the backing implementation
  */
 public interface IamQueryService<T> extends Plugin<T> {
-
-    /** Projected service account metadata. */
-    record ServiceAccountInfo(
-            String clientId,
-            String name,
-            String realmId,
-            Set<String> roles,
-            String status,
-            java.time.Instant createdAt) {}
 
     // -- User queries ---------------------------------------------------------
 
@@ -100,24 +92,41 @@ public interface IamQueryService<T> extends Plugin<T> {
      */
     String resolveUserId(String realmId, String emailOrUsername);
 
-    // -- Service account queries ----------------------------------------------
+    // -- Access token queries -------------------------------------------------
 
     /**
-     * List all service accounts (confidential clients) in the given realm.
+     * List all access tokens for a tenant.
      *
-     * @param realmId the Keycloak realm
-     * @return list of service accounts
+     * @param tenantId the tenant ID
+     * @return list of access token metadata (never contains raw tokens or hashes)
      */
-    List<ServiceAccountInfo> listServiceAccounts(String realmId);
+    List<AccessTokenInfo> listAccessTokens(String tenantId);
 
     /**
-     * Get a single service account by client ID.
+     * List access tokens created by a specific user within a tenant.
      *
-     * @param realmId the Keycloak realm
-     * @param clientId the Keycloak client ID
-     * @return the service account, or {@code null} if not found
+     * @param tenantId the tenant ID
+     * @param createdBy the Keycloak user ID of the creator
+     * @return list of access token metadata
      */
-    ServiceAccountInfo getServiceAccount(String realmId, String clientId);
+    List<AccessTokenInfo> listAccessTokensByCreator(String tenantId, String createdBy);
+
+    /**
+     * Get a single access token by tenant and prefix.
+     *
+     * @param tenantId the tenant ID
+     * @param tokenPrefix the display prefix (e.g. {@code cveil_a8Kx3mNp})
+     * @return the token metadata, or {@code null} if not found
+     */
+    AccessTokenInfo getAccessToken(String tenantId, String tokenPrefix);
+
+    /**
+     * Look up an access token by its SHA-256 hash. Used by the auth filter hot path.
+     *
+     * @param tokenHash the SHA-256 hex digest of the raw token
+     * @return the token metadata, or {@code null} if not found
+     */
+    AccessTokenInfo findAccessTokenByHash(String tokenHash);
 
     // -- Organization queries (single realm + Keycloak Organizations) ----------
 
@@ -198,46 +207,4 @@ public interface IamQueryService<T> extends Plugin<T> {
      * @param refreshToken the refresh token to revoke
      */
     void logout(String realmId, String refreshToken);
-
-    // -- Legacy API key methods (kept for backward compatibility) --------------
-
-    /**
-     * @deprecated Use {@link ServiceAccountInfo} for new code.
-     */
-    @Deprecated(forRemoval = true)
-    record ApiKeyInfo(
-            String keyId,
-            String keyPrefix,
-            String name,
-            String tenantId,
-            String environment,
-            String subject,
-            String roles,
-            String status,
-            java.time.Instant createdAt,
-            java.time.Instant expiresAt) {}
-
-    /**
-     * @deprecated Use {@link #listServiceAccounts} for new code.
-     */
-    @Deprecated(forRemoval = true)
-    default List<ApiKeyInfo> listApiKeys(String tenantId) {
-        return List.of();
-    }
-
-    /**
-     * @deprecated No longer needed — JWT verification replaces hash lookup.
-     */
-    @Deprecated(forRemoval = true)
-    default ApiKeyInfo findByKeyHash(String keyHash) {
-        return null;
-    }
-
-    /**
-     * @deprecated No longer needed — JWT verification replaces prefix lookup.
-     */
-    @Deprecated(forRemoval = true)
-    default ApiKeyInfo findByKeyPrefix(String keyPrefix) {
-        return null;
-    }
 }

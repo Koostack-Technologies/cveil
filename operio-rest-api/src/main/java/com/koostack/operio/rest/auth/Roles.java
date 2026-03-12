@@ -2,6 +2,9 @@ package com.koostack.operio.rest.auth;
 
 import com.koostack.operio.core.models.IdentityContext;
 
+import java.util.Map;
+import java.util.Set;
+
 /**
  * Defines the canonical role names used for RBAC enforcement across the Operio REST API.
  *
@@ -13,10 +16,17 @@ import com.koostack.operio.core.models.IdentityContext;
  *
  * <h2>Role Hierarchy</h2>
  *
- * <p>There is <strong>no implicit hierarchy</strong> — each role grants exactly the permissions
- * listed below. If an API key needs both read and write access to consent endpoints, it must be
- * assigned both {@link #CONSENT_READ} and {@link #CONSENT_WRITE}. This keeps the authorization
- * model explicit and auditable.
+ * <p>API key roles ({@code consent:read}, {@code consent:write}, {@code admin:read}, {@code
+ * admin:write}) are atomic — each grants exactly the permissions listed below. Tenant-scoped roles
+ * for human users imply the corresponding API roles:
+ *
+ * <ul>
+ *   <li>{@code tenant-admin} → all API roles ({@code consent:read/write}, {@code admin:read/write})
+ *       plus {@code tenant-write} and {@code tenant-read}</li>
+ *   <li>{@code tenant-write} → {@code consent:read/write}, {@code admin:read/write}, {@code
+ *       tenant-read}</li>
+ *   <li>{@code tenant-read} → {@code consent:read}, {@code admin:read}</li>
+ * </ul>
  *
  * <h2>Roles</h2>
  *
@@ -103,8 +113,35 @@ public final class Roles {
     // -- Enforcement helpers --------------------------------------------
 
     /**
-     * Verifies that the current caller has the specified role, or is a {@link #SUPER_ADMIN} (which
-     * bypasses all role checks).
+     * Maps tenant-scoped roles to the API roles they imply. API key roles
+     * ({@code consent:*}, {@code admin:*}) are atomic and don't imply others.
+     */
+    private static final Map<String, Set<String>> ROLE_HIERARCHY = Map.of(
+            TENANT_ADMIN, Set.of(CONSENT_READ, CONSENT_WRITE, ADMIN_READ, ADMIN_WRITE,
+                    TENANT_WRITE, TENANT_READ),
+            TENANT_WRITE, Set.of(CONSENT_READ, CONSENT_WRITE, ADMIN_READ, ADMIN_WRITE,
+                    TENANT_READ),
+            TENANT_READ, Set.of(CONSENT_READ, ADMIN_READ));
+
+    /**
+     * Checks whether the caller has the given role directly or via hierarchy.
+     */
+    private static boolean hasEffectiveRole(
+            jakarta.ws.rs.core.SecurityContext ctx, String requiredRole) {
+        if (ctx.isUserInRole(requiredRole)) {
+            return true;
+        }
+        for (var entry : ROLE_HIERARCHY.entrySet()) {
+            if (entry.getValue().contains(requiredRole) && ctx.isUserInRole(entry.getKey())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifies that the current caller has the specified role (directly or via hierarchy), or is a
+     * {@link #SUPER_ADMIN} (which bypasses all role checks).
      *
      * <p>If the caller lacks the required role, an {@link
      * com.koostack.operio.core.exception.OperioAuthException} is thrown, which the {@link
@@ -123,15 +160,15 @@ public final class Roles {
             // Super-admin bypasses all role checks
             return;
         }
-        if (securityContext == null || !securityContext.isUserInRole(requiredRole)) {
+        if (securityContext == null || !hasEffectiveRole(securityContext, requiredRole)) {
             throw new com.koostack.operio.core.exception.OperioAuthException(
                     "Access denied: this endpoint requires the '" + requiredRole + "' role");
         }
     }
 
     /**
-     * Verifies that the current caller has <em>any</em> of the specified roles, or is a {@link
-     * #SUPER_ADMIN}.
+     * Verifies that the current caller has <em>any</em> of the specified roles (directly or via
+     * hierarchy), or is a {@link #SUPER_ADMIN}.
      *
      * <p>Useful for endpoints that accept multiple roles (e.g. an endpoint accessible to both
      * readers and writers).
@@ -148,7 +185,7 @@ public final class Roles {
         }
         if (securityContext != null) {
             for (String role : roles) {
-                if (securityContext.isUserInRole(role)) {
+                if (hasEffectiveRole(securityContext, role)) {
                     return;
                 }
             }

@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Unified IAM endpoints for managing users, organizations, service accounts, and authentication in
+ * Unified IAM endpoints for managing users, organizations, access tokens, and authentication in
  * the single Keycloak realm ({@code operio}).
  *
  * <p>User registration optionally creates a Keycloak Organization (tenant) and provisions Redis
@@ -350,8 +350,10 @@ public class PlatformIamResource {
     @Path("/organizations/{orgId}")
     @Operation(operationId = "getOrganization", summary = "Get organization by ID")
     public Response getOrganization(@Context SecurityContext sc, @PathParam("orgId") String orgId) {
-        requireSuperAdmin(sc);
+        requireAuthenticated(sc);
+        requireJwtAuth();
         requireCqrs();
+        requireOrgMember(sc, orgId);
 
         LOG.debug("GET /platform/iam/organizations/{}", orgId);
 
@@ -374,8 +376,10 @@ public class PlatformIamResource {
             @PathParam("orgId") String orgId,
             @QueryParam("offset") @DefaultValue("0") int offset,
             @QueryParam("limit") @DefaultValue("100") int limit) {
-        requireSuperAdmin(sc);
+        requireAuthenticated(sc);
+        requireJwtAuth();
         requireCqrs();
+        requireOrgMember(sc, orgId);
 
         LOG.debug("GET /platform/iam/organizations/{}/members", orgId);
 
@@ -394,8 +398,11 @@ public class PlatformIamResource {
             @Context SecurityContext sc,
             @PathParam("orgId") String orgId,
             @Valid AddOrgMemberRequest request) {
-        requireSuperAdmin(sc);
+        requireAuthenticated(sc);
+        requireJwtAuth();
         requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        requireOrgAdmin(sc, orgName);
 
         LOG.debug("POST /platform/iam/organizations/{}/members userId={}", orgId, request.userId());
 
@@ -415,8 +422,11 @@ public class PlatformIamResource {
             @Context SecurityContext sc,
             @PathParam("orgId") String orgId,
             @PathParam("userId") String userId) {
-        requireSuperAdmin(sc);
+        requireAuthenticated(sc);
+        requireJwtAuth();
         requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        requireOrgAdmin(sc, orgName);
 
         LOG.debug("DELETE /platform/iam/organizations/{}/members/{}", orgId, userId);
 
@@ -517,93 +527,147 @@ public class PlatformIamResource {
     }
 
     // -----------------------------------------------------------------------
-    // Service Accounts
+    // Access Tokens (/me/tokens)
     // -----------------------------------------------------------------------
 
     @POST
-    @Path("/service-accounts")
+    @Path("/me/tokens")
     @Operation(
-            operationId = "createServiceAccount",
-            summary = "Create a service account",
+            operationId = "createAccessToken",
+            summary = "Create a personal access token",
             description =
-                    "Creates a Keycloak confidential client with service account enabled. "
-                            + "The client secret is returned once — store it securely.")
-    public Response createServiceAccount(
-            @Context SecurityContext sc, @Valid CreateServiceAccountRequest request) {
-        requireSuperAdmin(sc);
+                    "Creates a personal access token with the caller's current Keycloak roles "
+                            + "snapshotted at creation time. The plaintext token is returned once — "
+                            + "store it securely. Maximum expiration: 90 days.")
+    public Response createAccessToken(
+            @Context SecurityContext sc, @Valid CreateAccessTokenRequest request) {
         requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
 
-        LOG.debug("POST /platform/iam/service-accounts name={}", request.name());
+        String tenantId = requestHolder.identity().tenantId();
+        String createdBy = requestHolder.identity().subject();
+        Set<String> callerRoles = requestHolder.identity().roles();
+        String roles = callerRoles != null ? String.join(",", callerRoles) : "";
 
-        var command =
-                new CreateServiceAccountCommandActuator.CreateServiceAccountCommand(
-                        REALM, request.name(), request.roles());
-        CreateServiceAccountCommandActuator.CreateServiceAccountResult result =
-                cqrs.iamDispatcher().dispatch(command);
-        return Response.status(Response.Status.CREATED)
-                .entity(ServiceAccountCreatedResponse.from(result))
-                .build();
-    }
+        LOG.debug(
+                "POST /platform/iam/me/tokens name={} tenant={} createdBy={}",
+                request.name(),
+                tenantId,
+                createdBy);
 
-    @GET
-    @Path("/service-accounts")
-    @Operation(operationId = "listServiceAccounts", summary = "List service accounts")
-    public Response listServiceAccounts(@Context SecurityContext sc) {
-        requireSuperAdmin(sc);
-        requireCqrs();
-
-        LOG.debug("GET /platform/iam/service-accounts");
-
-        var accounts =
-                cqrs.iamQueryDispatcher()
-                        .<ListServiceAccountsQueryActuator.ListServiceAccountsQuery,
-                                List<IamQueryService.ServiceAccountInfo>>
-                                dispatch(
-                                        new ListServiceAccountsQueryActuator
-                                                .ListServiceAccountsQuery(REALM));
-        return Response.ok(accounts.stream().map(ServiceAccountResponse::from).toList()).build();
-    }
-
-    @GET
-    @Path("/service-accounts/{clientId}")
-    @Operation(operationId = "getServiceAccount", summary = "Get a service account by client ID")
-    public Response getServiceAccount(
-            @Context SecurityContext sc,
-            @Parameter(description = "Client ID") @PathParam("clientId") String clientId) {
-        requireSuperAdmin(sc);
-        requireCqrs();
-
-        LOG.debug("GET /platform/iam/service-accounts/{}", clientId);
-
-        var account =
-                cqrs.iamQueryDispatcher()
-                        .<GetServiceAccountQueryActuator.GetServiceAccountQuery,
-                                IamQueryService.ServiceAccountInfo>
-                                dispatch(
-                                        new GetServiceAccountQueryActuator.GetServiceAccountQuery(
-                                                REALM, clientId));
-        if (account == null) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(ErrorResponse.of("not_found", "Service account not found: " + clientId))
+        // Validate expiration: required, max 90 days
+        if (request.expiresAt() == null) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("validation_error", "expiresAt is required"))
                     .build();
         }
-        return Response.ok(ServiceAccountResponse.from(account)).build();
+        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant maxExpiry = now.plus(java.time.Duration.ofDays(90));
+        if (request.expiresAt().isBefore(now)) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("validation_error", "expiresAt must be in the future"))
+                    .build();
+        }
+        if (request.expiresAt().isAfter(maxExpiry)) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(
+                            ErrorResponse.of(
+                                    "validation_error",
+                                    "expiresAt must be within 90 days"))
+                    .build();
+        }
+
+        try {
+            var command =
+                    new CreateAccessTokenCommandActuator.CreateAccessTokenCommand(
+                            tenantId, request.name(), roles, createdBy, request.expiresAt());
+            CreateAccessTokenCommandActuator.CreateAccessTokenResult result =
+                    cqrs.iamDispatcher().dispatch(command);
+
+            return Response.status(Response.Status.CREATED)
+                    .entity(
+                            new AccessTokenCreatedResponse(
+                                    result.plaintextToken(),
+                                    result.tokenPrefix(),
+                                    request.name(),
+                                    request.expiresAt()))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Failed to create access token: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "token_creation_failed", "Failed to create access token"))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/me/tokens")
+    @Operation(
+            operationId = "listAccessTokens",
+            summary = "List the caller's access tokens",
+            description = "Returns metadata for all access tokens created by the caller.")
+    public Response listAccessTokens(@Context SecurityContext sc) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String tenantId = requestHolder.identity().tenantId();
+        String createdBy = requestHolder.identity().subject();
+        LOG.debug("GET /platform/iam/me/tokens tenant={} createdBy={}", tenantId, createdBy);
+
+        try {
+            var tokens = cqrs.iamQueryService().listAccessTokensByCreator(tenantId, createdBy);
+            return Response.ok(tokens.stream().map(AccessTokenResponse::from).toList()).build();
+        } catch (Exception e) {
+            LOG.error("Failed to list tokens: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("list_failed", "Failed to list access tokens"))
+                    .build();
+        }
     }
 
     @DELETE
-    @Path("/service-accounts/{clientId}")
-    @Operation(operationId = "revokeServiceAccount", summary = "Revoke a service account")
-    public Response revokeServiceAccount(
-            @Context SecurityContext sc, @PathParam("clientId") String clientId) {
-        requireSuperAdmin(sc);
+    @Path("/me/tokens/{tokenPrefix}")
+    @Operation(
+            operationId = "revokeAccessToken",
+            summary = "Revoke an access token",
+            description = "Revokes a personal access token by its prefix identifier.")
+    public Response revokeAccessToken(
+            @Context SecurityContext sc,
+            @Parameter(description = "Token prefix (e.g. cveil_a8Kx3mNp)")
+                    @PathParam("tokenPrefix")
+                    String tokenPrefix) {
         requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
 
-        LOG.debug("DELETE /platform/iam/service-accounts/{}", clientId);
-        cqrs.iamDispatcher()
-                .dispatch(
-                        new RevokeServiceAccountCommandActuator.RevokeServiceAccountCommand(
-                                REALM, clientId));
-        return Response.ok(MessageResponse.of("Service account revoked")).build();
+        String tenantId = requestHolder.identity().tenantId();
+        LOG.debug("DELETE /platform/iam/me/tokens/{} tenant={}", tokenPrefix, tenantId);
+
+        try {
+            RevokeAccessTokenCommandActuator.RevokeAccessTokenResult result =
+                    cqrs.iamDispatcher()
+                            .dispatch(
+                                    new RevokeAccessTokenCommandActuator.RevokeAccessTokenCommand(
+                                            tenantId, tokenPrefix));
+
+            if (!result.success()) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity(
+                                ErrorResponse.of(
+                                        "not_found", "Token not found or already revoked"))
+                        .build();
+            }
+            return Response.ok(MessageResponse.of("Access token revoked")).build();
+        } catch (Exception e) {
+            LOG.error("Failed to revoke token: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("revoke_failed", "Failed to revoke token"))
+                    .build();
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -672,6 +736,115 @@ public class PlatformIamResource {
     }
 
     // -----------------------------------------------------------------------
+    // Current User (/me)
+    // -----------------------------------------------------------------------
+
+    @GET
+    @Path("/me")
+    @Operation(operationId = "getCurrentUser", summary = "Get the authenticated user's profile")
+    public Response getCurrentUser(@Context SecurityContext sc) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String userId = requestHolder.identity().subject();
+        LOG.debug("GET /platform/iam/me userId={}", userId);
+
+        try {
+            GetCurrentUserQueryActuator.CurrentUserResult result =
+                    cqrs.iamQueryDispatcher()
+                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+
+            var orgs =
+                    result.organizations().stream()
+                            .map(o -> {
+                                boolean isAdmin = result.roles().contains("org-admin:" + o.orgName())
+                                        || result.roles().contains(Roles.SUPER_ADMIN);
+                                return new OrgMembership(o.orgId(), o.orgName(), o.displayName(), isAdmin);
+                            })
+                            .toList();
+
+            return Response.ok(
+                            new CurrentUserResponse(
+                                    result.userId(),
+                                    result.username(),
+                                    result.email(),
+                                    result.fullName(),
+                                    result.roles(),
+                                    orgs))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Failed to fetch current user: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("fetch_failed", "Failed to fetch user profile"))
+                    .build();
+        }
+    }
+
+    @PUT
+    @Path("/me")
+    @Operation(operationId = "updateProfile", summary = "Update the authenticated user's profile")
+    public Response updateProfile(
+            @Context SecurityContext sc, @Valid UpdateProfileRequest request) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String userId = requestHolder.identity().subject();
+        LOG.debug("PUT /platform/iam/me userId={}", userId);
+
+        try {
+            UpdateUserProfileCommandActuator.UpdateUserProfileResult result =
+                    cqrs.iamDispatcher()
+                            .dispatch(
+                                    new UpdateUserProfileCommandActuator.UpdateUserProfileCommand(
+                                            userId, request.fullName(), request.email()));
+
+            return Response.ok(MessageResponse.of("Profile updated for user " + result.userId()))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("invalid_request", e.getMessage()))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Failed to update profile: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("update_failed", "Failed to update profile"))
+                    .build();
+        }
+    }
+
+    @PUT
+    @Path("/me/password")
+    @Operation(operationId = "changePassword", summary = "Change the authenticated user's password")
+    public Response changePassword(
+            @Context SecurityContext sc, @Valid ChangePasswordRequest request) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String userId = requestHolder.identity().subject();
+        LOG.debug("PUT /platform/iam/me/password userId={}", userId);
+
+        try {
+            cqrs.iamDispatcher()
+                    .dispatch(
+                            new ChangePasswordCommandActuator.ChangePasswordCommand(
+                                    userId, request.newPassword()));
+            return Response.ok(MessageResponse.of("Password changed")).build();
+        } catch (OperioAuthException e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponse.of("invalid_password", e.getMessage()))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Failed to change password: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.of("password_change_failed", "Failed to change password"))
+                    .build();
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -701,6 +874,26 @@ public class PlatformIamResource {
         if (sc == null || !sc.isUserInRole(requiredRole)) {
             throw new OperioAuthException(
                     "Access denied: requires role '" + requiredRole + "' or super-admin");
+        }
+    }
+
+    private void requireOrgMember(SecurityContext sc, String orgId) {
+        if (sc != null && sc.isUserInRole(Roles.SUPER_ADMIN)) return;
+        // Verify the authenticated user is a member of this organization
+        String userId = requestHolder.identity().subject();
+        try {
+            GetCurrentUserQueryActuator.CurrentUserResult user =
+                    cqrs.iamQueryDispatcher()
+                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+            boolean isMember = user.organizations().stream().anyMatch(o -> o.orgId().equals(orgId));
+            if (!isMember) {
+                throw new OperioAuthException(
+                        "Access denied: you are not a member of organization " + orgId);
+            }
+        } catch (OperioAuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new OperioAuthException("Access denied: unable to verify org membership");
         }
     }
 
