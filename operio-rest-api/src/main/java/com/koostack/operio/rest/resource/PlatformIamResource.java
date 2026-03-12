@@ -1034,7 +1034,8 @@ public class PlatformIamResource {
                                     })
                             .toList();
 
-            // Active tenant permissions
+            // Active tenant roles and permissions from DB (not Keycloak)
+            Set<String> activeRoles = authz != null ? authz.roles() : Set.of();
             Set<String> activePermissions = authz != null ? authz.permissions() : Set.of();
 
             return Response.ok(
@@ -1043,7 +1044,7 @@ public class PlatformIamResource {
                                     result.username(),
                                     result.email(),
                                     result.fullName(),
-                                    result.roles(),
+                                    activeRoles,
                                     activePermissions,
                                     orgs))
                     .build();
