@@ -576,7 +576,7 @@ public class PlatformIamResource {
         requireJwtAuth();
         requireCqrs();
         String orgName = resolveOrgName(orgId);
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+        requirePermissionInOrg(orgName, Permissions.ORG_ROLE_MANAGE);
 
         if (!cqrs.isPermissionServiceAvailable()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
@@ -586,15 +586,36 @@ public class PlatformIamResource {
 
         String tenantId = TenantIdDeriver.derive(orgName);
         String createdBy = requestHolder.identity().subject();
+        List<String> requestedPermissions =
+                request.permissions() != null ? List.copyOf(request.permissions()) : List.of();
+        if (requestedPermissions.isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(
+                            ErrorResponse.of(
+                                    "validation_error",
+                                    "At least one permission is required for a custom role"))
+                    .build();
+        }
+        // Prevent org admins from granting platform-scope permissions to custom roles
+        for (String perm : requestedPermissions) {
+            if (perm.startsWith("platform:") || perm.startsWith("iam:user:")) {
+                return Response.status(Response.Status.FORBIDDEN)
+                        .entity(
+                                ErrorResponse.of(
+                                        "forbidden",
+                                        "Cannot grant platform-scope permission '"
+                                                + perm
+                                                + "' to a custom org role"))
+                        .build();
+            }
+        }
         cqrs.permissionService()
                 .createCustomRole(
                         tenantId,
                         request.roleId(),
                         request.displayName(),
                         null,
-                        request.permissions() != null
-                                ? List.copyOf(request.permissions())
-                                : List.of());
+                        requestedPermissions);
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Custom role '" + request.roleId() + "' created"))
                 .build();
@@ -611,7 +632,7 @@ public class PlatformIamResource {
         requireJwtAuth();
         requireCqrs();
         String orgName = resolveOrgName(orgId);
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+        requirePermissionInOrg(orgName, Permissions.ORG_ROLE_MANAGE);
 
         if (!cqrs.isPermissionServiceAvailable()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
@@ -638,7 +659,7 @@ public class PlatformIamResource {
         requireJwtAuth();
         requireCqrs();
         String orgName = resolveOrgName(orgId);
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+        requirePermissionInOrg(orgName, Permissions.ORG_ROLE_MANAGE);
 
         if (!cqrs.isPermissionServiceAvailable()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
@@ -669,7 +690,7 @@ public class PlatformIamResource {
         requireJwtAuth();
         requireCqrs();
         String orgName = resolveOrgName(orgId);
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+        requirePermissionInOrg(orgName, Permissions.ORG_ROLE_MANAGE);
 
         if (!cqrs.isPermissionServiceAvailable()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
@@ -746,8 +767,7 @@ public class PlatformIamResource {
                                 .anyMatch(
                                         o ->
                                                 TenantIdDeriver.derive(o.orgName())
-                                                                .equals(request.tenantId())
-                                                        || o.orgId().equals(request.tenantId()));
+                                                                .equals(request.tenantId()));
                 if (!isMember) {
                     return Response.status(Response.Status.FORBIDDEN)
                             .entity(
@@ -1008,6 +1028,7 @@ public class PlatformIamResource {
                                                 o.orgName(),
                                                 o.displayName(),
                                                 isAdmin,
+                                                orgTenantId,
                                                 orgRoles,
                                                 orgPerms);
                                     })
@@ -1121,12 +1142,53 @@ public class PlatformIamResource {
         }
     }
 
+    /**
+     * Require that the caller has org:member:manage in the specified org's tenant,
+     * not just in their active tenant. Prevents cross-org privilege escalation.
+     */
     private void requireOrgAdmin(SecurityContext sc, String orgName) {
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_MEMBER_MANAGE);
+        requirePermissionInOrg(orgName, Permissions.ORG_MEMBER_MANAGE);
     }
 
+    /**
+     * Require that the caller has org:read in the specified org's tenant,
+     * not just in their active tenant. Prevents cross-org privilege escalation.
+     */
     private void requireOrgMember(SecurityContext sc, String orgId) {
-        Permissions.require(requestHolder.authorization(), Permissions.ORG_READ);
+        String orgName = resolveOrgName(orgId);
+        requirePermissionInOrg(orgName, Permissions.ORG_READ);
+    }
+
+    /**
+     * Resolve permissions against a specific target org's tenant (not the caller's active tenant).
+     * This prevents cross-org privilege escalation where a user is admin in OrgA but tries to
+     * manage OrgB by setting X-Org-Id to OrgA's tenant.
+     */
+    private void requirePermissionInOrg(String orgName, String permission) {
+        var authz = requestHolder.authorization();
+        if (authz != null && authz.isSuperAdmin()) {
+            return;
+        }
+        String targetTenantId = TenantIdDeriver.derive(orgName);
+        // If the caller's active tenant matches the target, the existing authz context is valid
+        if (authz != null && targetTenantId.equals(authz.tenantId())) {
+            Permissions.require(authz, permission);
+            return;
+        }
+        // Otherwise, resolve permissions live against the target org's tenant
+        if (!cqrs.isPermissionServiceAvailable()) {
+            throw new OperioAuthException(
+                    "Permission service not available for cross-org authorization check");
+        }
+        String userId = requestHolder.identity().subject();
+        Set<String> targetPermissions =
+                cqrs.permissionService().resolvePermissions(userId, targetTenantId);
+        if (!targetPermissions.contains(permission)) {
+            throw new OperioAuthException(
+                    "Access denied: you do not have the '"
+                            + permission
+                            + "' permission in this organization");
+        }
     }
 
     private String resolveOrgName(String orgId) {

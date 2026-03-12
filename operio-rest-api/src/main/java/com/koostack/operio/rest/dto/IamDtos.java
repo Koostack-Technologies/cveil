@@ -247,11 +247,12 @@ public final class IamDtos {
             String orgName,
             String displayName,
             boolean isAdmin,
+            String tenantId,
             Set<String> roles,
             Set<String> permissions) {
-        /** Backward-compatible constructor without roles/permissions. */
+        /** Backward-compatible constructor without roles/permissions/tenantId. */
         public OrgMembership(String orgId, String orgName, String displayName, boolean isAdmin) {
-            this(orgId, orgName, displayName, isAdmin, Set.of(), Set.of());
+            this(orgId, orgName, displayName, isAdmin, null, Set.of(), Set.of());
         }
     }
 

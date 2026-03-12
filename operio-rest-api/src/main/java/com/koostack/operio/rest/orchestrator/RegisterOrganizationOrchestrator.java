@@ -12,6 +12,7 @@ import com.koostack.operio.platform.iam.jooq.AssignRoleCommandActuator;
 import com.koostack.operio.platform.iam.jooq.CreateOrganizationCommandActuator;
 import com.koostack.operio.platform.iam.jooq.DeleteOrganizationCommandActuator;
 import com.koostack.operio.platform.iam.jooq.ProvisionRedisCommandActuator;
+import com.koostack.operio.rest.util.TenantIdDeriver;
 import com.koostack.operio.platform.iam.jooq.RemoveOrgMemberCommandActuator;
 import com.koostack.operio.platform.iam.jooq.RemoveRoleCommandActuator;
 import java.util.ArrayList;
@@ -193,7 +194,7 @@ public class RegisterOrganizationOrchestrator
                                                 + " assignment");
                                 return;
                             }
-                            String tenantId = in.orgName();
+                            String tenantId = TenantIdDeriver.derive(in.orgName());
                             String userId = in.requestingKeycloakUserId();
                             permissionService.assignRole(userId, tenantId, "org-admin", userId);
                             permissionService.assignRole(userId, tenantId, "tenant-admin", userId);
@@ -203,7 +204,7 @@ public class RegisterOrganizationOrchestrator
                             try {
                                 if (permissionService != null
                                         && ctx.get("dbRolesAssigned") != null) {
-                                    String tenantId = in.orgName();
+                                    String tenantId = TenantIdDeriver.derive(in.orgName());
                                     String userId = in.requestingKeycloakUserId();
                                     permissionService.removeRole(userId, tenantId, "org-admin");
                                     permissionService.removeRole(userId, tenantId, "tenant-admin");

@@ -521,8 +521,8 @@
                 }
                 cachedOrgs.forEach(function(o) {
                     var opt = document.createElement('option');
-                    opt.value = o.orgId;
-                    opt.textContent = escHtml(o.displayName || o.orgName) + ' (' + o.orgId + ')';
+                    opt.value = o.tenantId || o.orgId;
+                    opt.textContent = (o.displayName || o.orgName) + ' (' + o.orgId + ')';
                     scopeSelect.appendChild(opt);
                 });
             } catch (e) { /* ignore — personal only */ }
@@ -571,7 +571,7 @@
                         : '';
                     var scopeLabel = 'Personal';
                     if (t.tenantId) {
-                        var matchedOrg = cachedOrgs.find(function(o) { return o.orgId === t.tenantId; });
+                        var matchedOrg = cachedOrgs.find(function(o) { return (o.tenantId || o.orgId) === t.tenantId || o.orgId === t.tenantId; });
                         scopeLabel = matchedOrg ? escHtml(matchedOrg.displayName || matchedOrg.orgName) : escHtml(t.tenantId);
                     }
                     var scopeBadge = t.tenantId

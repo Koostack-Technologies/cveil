@@ -32,8 +32,17 @@ public class JooqPermissionService implements PermissionService {
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqPermissionService.class);
     private static final long CACHE_TTL_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final int CACHE_MAX_SIZE = 10_000;
 
     private final DataSource dataSource;
+
+    /** Platform-scope permissions that cannot be granted to custom org roles. */
+    private static final Set<String> PLATFORM_ONLY_PERMISSIONS =
+            Set.of(
+                    "platform:tenant:read",
+                    "platform:tenant:manage",
+                    "iam:user:read",
+                    "iam:user:manage");
 
     /** Simple TTL cache: (userId + ":" + tenantId) → CacheEntry */
     private final Map<String, CacheEntry> permissionCache = new ConcurrentHashMap<>();
@@ -56,6 +65,7 @@ public class JooqPermissionService implements PermissionService {
     public Set<String> resolvePermissions(String userId, String tenantId) {
         if (dataSource == null) return Set.of();
 
+        evictIfOversized(permissionCache);
         String cacheKey = cacheKey(userId, tenantId);
         CacheEntry cached = permissionCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
@@ -72,6 +82,7 @@ public class JooqPermissionService implements PermissionService {
     public Set<String> resolveRoles(String userId, String tenantId) {
         if (dataSource == null) return Set.of();
 
+        evictIfOversized(roleCache);
         String cacheKey = cacheKey(userId, tenantId);
         CacheEntry cached = roleCache.get(cacheKey);
         if (cached != null && !cached.isExpired()) {
@@ -87,7 +98,7 @@ public class JooqPermissionService implements PermissionService {
 
     @Override
     public void assignRole(String userId, String tenantId, String roleId, String grantedBy) {
-        validateRoleExists(roleId);
+        validateRoleAssignable(roleId);
 
         String sql =
                 "INSERT INTO platform_iam.role_assignment"
@@ -440,7 +451,44 @@ public class JooqPermissionService implements PermissionService {
         }
     }
 
+    /** Validates the role exists and is assignable (not super-admin or other non-assignable). */
+    private void validateRoleAssignable(String roleId) {
+        String sql =
+                "SELECT is_assignable FROM platform_iam.role_definition WHERE role_id = ?";
+        try (Connection conn = dataSource.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, roleId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("Role not found: " + roleId);
+                }
+                if (!rs.getBoolean("is_assignable")) {
+                    throw new IllegalArgumentException(
+                            "Role '" + roleId + "' cannot be assigned directly");
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to validate role: " + e.getMessage(), e);
+        }
+    }
+
     private void validatePermissionsExist(List<String> permissions) {
+        if (permissions == null || permissions.isEmpty()) {
+            return; // no permissions to validate
+        }
+
+        // Block platform-scope permissions from custom org roles
+        for (String perm : permissions) {
+            if (PLATFORM_ONLY_PERMISSIONS.contains(perm)) {
+                throw new IllegalArgumentException(
+                        "Platform-scope permission '"
+                                + perm
+                                + "' cannot be granted to custom org roles");
+            }
+        }
+
         String placeholders = String.join(",", permissions.stream().map(p -> "?").toList());
         String sql =
                 "SELECT COUNT(*) FROM platform_iam.permission WHERE permission_id IN ("
@@ -466,5 +514,20 @@ public class JooqPermissionService implements PermissionService {
 
     private static String cacheKey(String userId, String tenantId) {
         return userId + ":" + (tenantId != null ? tenantId : "<platform>");
+    }
+
+    /** Evict expired entries and, if still oversized, clear the entire cache. */
+    private void evictIfOversized(Map<String, CacheEntry> cache) {
+        if (cache.size() <= CACHE_MAX_SIZE) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        cache.entrySet().removeIf(e -> e.getValue().expiresAt() < now);
+        if (cache.size() > CACHE_MAX_SIZE) {
+            LOG.warn(
+                    "Cache exceeded max size ({}) after expired eviction, clearing all entries",
+                    CACHE_MAX_SIZE);
+            cache.clear();
+        }
     }
 }
