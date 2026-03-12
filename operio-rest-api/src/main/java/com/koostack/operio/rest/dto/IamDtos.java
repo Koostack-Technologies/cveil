@@ -153,7 +153,13 @@ public final class IamDtos {
     /** Request body for {@code POST /me/tokens}. */
     public record CreateAccessTokenRequest(
             @NotBlank(message = "name must not be blank") @Size(max = 100) String name,
-            Instant expiresAt) {}
+            Instant expiresAt,
+            String tenantId) {
+        /** Backward-compatible constructor without explicit tenantId. */
+        public CreateAccessTokenRequest(String name, Instant expiresAt) {
+            this(name, expiresAt, null);
+        }
+    }
 
     /** Response after access token creation — plaintext token is shown exactly once. */
     public record AccessTokenCreatedResponse(
@@ -230,11 +236,22 @@ public final class IamDtos {
             String email,
             String fullName,
             Set<String> roles,
+            Set<String> permissions,
             java.util.List<OrgMembership> organizations) {}
 
     /** Lightweight org membership included in /me response. */
     public record OrgMembership(
-            String orgId, String orgName, String displayName, boolean isAdmin) {}
+            String orgId,
+            String orgName,
+            String displayName,
+            boolean isAdmin,
+            Set<String> roles,
+            Set<String> permissions) {
+        /** Backward-compatible constructor without roles/permissions. */
+        public OrgMembership(String orgId, String orgName, String displayName, boolean isAdmin) {
+            this(orgId, orgName, displayName, isAdmin, Set.of(), Set.of());
+        }
+    }
 
     /** Request body for {@code PUT /me}. */
     public record UpdateProfileRequest(
@@ -244,4 +261,14 @@ public final class IamDtos {
     /** Request body for {@code PUT /me/password}. */
     public record ChangePasswordRequest(
             @NotBlank(message = "newPassword must not be blank") @Size(min = 8, max = 255) String newPassword) {}
+
+    /** Request body for creating a custom organization role. */
+    public record CreateCustomRoleRequest(
+            @NotBlank(message = "roleId must not be blank") @Size(max = 100) String roleId,
+            @NotBlank(message = "displayName must not be blank") @Size(max = 200) String displayName,
+            java.util.Set<String> permissions) {}
+
+    /** Request body for assigning a role to a user. */
+    public record AssignRoleRequest(
+            @NotBlank(message = "roleId must not be blank") String roleId) {}
 }

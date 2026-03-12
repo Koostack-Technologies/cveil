@@ -5,8 +5,9 @@ import com.koostack.operio.core.tenant.consent.invalidation.CacheInvalidationMes
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSink;
 import com.koostack.operio.core.tenant.consent.invalidation.InvalidationSubscriber;
 import com.koostack.operio.core.tenant.consent.invalidation.SubscriptionManager;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import io.smallrye.mutiny.Multi;
 import jakarta.inject.Inject;
@@ -47,6 +48,8 @@ public class AdminEventsResource {
     @Named("adminSubscriptionManager")
     SubscriptionManager adminSubscriptionManager;
 
+    @Inject OperioRequestHolder requestHolder;
+
     @GET
     @Path("/invalidations")
     @Produces(MediaType.SERVER_SENT_EVENTS)
@@ -55,7 +58,7 @@ public class AdminEventsResource {
             operationId = "adminEvents",
             summary = "Stream admin cache invalidation signals via SSE")
     public Multi<CacheInvalidationMessage> streamAdminEvents(@Context SecurityContext sc) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.EVENTS_READ);
 
         if (adminSubscriptionManager == null) {
             log.warn("SSE invalidation requested but Redis Pub/Sub publisher not available");

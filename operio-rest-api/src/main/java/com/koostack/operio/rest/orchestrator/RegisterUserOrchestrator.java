@@ -2,6 +2,7 @@ package com.koostack.operio.rest.orchestrator;
 
 import com.koostack.operio.core.cqrs.AbstractOrchestrator;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.platform.iam.PermissionService;
 import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
 import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuator;
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
@@ -83,13 +84,25 @@ public class RegisterUserOrchestrator
     // Construction
     // -----------------------------------------------------------------------
 
+    private final PermissionService permissionService;
+
+    public RegisterUserOrchestrator(
+            CommandDispatcher iamDispatcher,
+            CommandDispatcher coreDispatcher,
+            CommandDispatcher billingDispatcher,
+            PermissionService permissionService) {
+        registerDispatcher(DISPATCHER_IAM, iamDispatcher);
+        registerDispatcher(DISPATCHER_CORE, coreDispatcher);
+        registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
+        this.permissionService = permissionService;
+    }
+
+    /** Backward-compatible constructor for callers without a PermissionService. */
     public RegisterUserOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher) {
-        registerDispatcher(DISPATCHER_IAM, iamDispatcher);
-        registerDispatcher(DISPATCHER_CORE, coreDispatcher);
-        registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
+        this(iamDispatcher, coreDispatcher, billingDispatcher, null);
     }
 
     // -----------------------------------------------------------------------
@@ -98,8 +111,10 @@ public class RegisterUserOrchestrator
 
     @Override
     protected List<SagaStep<RegisterUserCommand>> buildSteps(RegisterUserCommand input) {
-        return List.of(
-                // Step 1: Register user in Keycloak
+        var steps = new java.util.ArrayList<SagaStep<RegisterUserCommand>>();
+
+        // Step 1: Register user in Keycloak
+        steps.add(
                 SagaStep.of(
                         "register-user",
                         (in, ctx) -> {
@@ -131,9 +146,10 @@ public class RegisterUserOrchestrator
                                 LOG.warning(
                                         "Compensation failed for register-user: " + e.getMessage());
                             }
-                        }),
+                        }));
 
-                // Step 2: Create tenant aggregate
+        // Step 2: Create tenant aggregate
+        steps.add(
                 SagaStep.of(
                         "create-tenant",
                         (in, ctx) -> {
@@ -153,9 +169,41 @@ public class RegisterUserOrchestrator
                                 LOG.warning(
                                         "Compensation failed for create-tenant: " + e.getMessage());
                             }
-                        }),
+                        }));
 
-                // Step 3: Provision Redis infrastructure (non-fatal)
+        // Step 3: Assign DB-backed tenant-admin role for the personal tenant
+        steps.add(
+                SagaStep.of(
+                        "assign-db-roles",
+                        (in, ctx) -> {
+                            if (permissionService == null) {
+                                LOG.info(
+                                        "PermissionService not available — skipping DB role"
+                                                + " assignment");
+                                return;
+                            }
+                            String kcUserId = ctx.get("keycloakUserId");
+                            permissionService.assignRole(
+                                    kcUserId, in.tenantId(), "tenant-admin", kcUserId);
+                            ctx.put("dbRolesAssigned", true);
+                        },
+                        (in, ctx) -> {
+                            try {
+                                if (permissionService != null
+                                        && ctx.get("dbRolesAssigned") != null) {
+                                    String kcUserId = ctx.get("keycloakUserId");
+                                    permissionService.removeRole(
+                                            kcUserId, in.tenantId(), "tenant-admin");
+                                }
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Compensation failed for assign-db-roles: "
+                                                + e.getMessage());
+                            }
+                        }));
+
+        // Step 4: Provision Redis infrastructure (non-fatal)
+        steps.add(
                 SagaStep.of(
                         "provision-redis",
                         (in, ctx) -> {
@@ -174,9 +222,10 @@ public class RegisterUserOrchestrator
                                                 + e.getMessage());
                                 ctx.put("redisStreamKey", null);
                             }
-                        }),
+                        }));
 
-                // Step 4: Create billing profile
+        // Step 5: Create billing profile
+        steps.add(
                 SagaStep.of(
                         "create-billing-profile",
                         (in, ctx) -> {
@@ -186,9 +235,10 @@ public class RegisterUserOrchestrator
                                                     .CreateBillingProfileCommand(
                                                     in.tenantId(), in.email()));
                             ctx.put("billingProfileCreated", true);
-                        }),
+                        }));
 
-                // Step 5: Create subscription on free plan
+        // Step 6: Create subscription on free plan
+        steps.add(
                 SagaStep.of(
                         "create-subscription",
                         (in, ctx) -> {
@@ -199,6 +249,8 @@ public class RegisterUserOrchestrator
                                                     in.tenantId(), "free"));
                             ctx.put("subscriptionCreated", true);
                         }));
+
+        return steps;
     }
 
     @Override

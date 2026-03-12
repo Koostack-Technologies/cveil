@@ -5,7 +5,7 @@ import com.koostack.operio.core.exception.OperioAuthException;
 import com.koostack.operio.core.models.IdpUser;
 import com.koostack.operio.core.platform.iam.IamQueryService;
 import com.koostack.operio.platform.iam.jooq.*;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
@@ -85,7 +85,10 @@ public class PlatformIamResource {
 
         var orchestrator =
                 new RegisterUserOrchestrator(
-                        cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+                        cqrs.iamDispatcher(),
+                        cqrs.coreDispatcher(),
+                        cqrs.billingDispatcher(),
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
 
         var command =
                 new RegisterUserOrchestrator.RegisterUserCommand(
@@ -295,7 +298,10 @@ public class PlatformIamResource {
 
         var orchestrator =
                 new RegisterOrganizationOrchestrator(
-                        cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+                        cqrs.iamDispatcher(),
+                        cqrs.coreDispatcher(),
+                        cqrs.billingDispatcher(),
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
 
         var command =
                 new RegisterOrganizationOrchestrator.RegisterOrgCommand(
@@ -527,6 +533,182 @@ public class PlatformIamResource {
     }
 
     // -----------------------------------------------------------------------
+    // Organization Roles
+    // -----------------------------------------------------------------------
+
+    @GET
+    @Path("/organizations/{orgId}/roles")
+    @Operation(
+            operationId = "listOrgRoles",
+            summary = "List available roles for an organization",
+            description =
+                    "Returns system roles and any custom roles defined for this organization.")
+    public Response listOrgRoles(@Context SecurityContext sc, @PathParam("orgId") String orgId) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        requireOrgMember(sc, orgId);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(resolveOrgName(orgId));
+        var definitions = cqrs.permissionService().listRoleDefinitions(tenantId);
+        return Response.ok(definitions).build();
+    }
+
+    @POST
+    @Path("/organizations/{orgId}/roles")
+    @Operation(
+            operationId = "createCustomOrgRole",
+            summary = "Create a custom role for an organization",
+            description =
+                    "Creates a new custom role with specified permissions, scoped to this"
+                            + " organization.")
+    public Response createCustomOrgRole(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @Valid CreateCustomRoleRequest request) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(orgName);
+        String createdBy = requestHolder.identity().subject();
+        cqrs.permissionService()
+                .createCustomRole(
+                        tenantId,
+                        request.roleId(),
+                        request.displayName(),
+                        null,
+                        request.permissions() != null
+                                ? List.copyOf(request.permissions())
+                                : List.of());
+        return Response.status(Response.Status.CREATED)
+                .entity(MessageResponse.of("Custom role '" + request.roleId() + "' created"))
+                .build();
+    }
+
+    @DELETE
+    @Path("/organizations/{orgId}/roles/{roleId}")
+    @Operation(operationId = "deleteCustomOrgRole", summary = "Delete a custom organization role")
+    public Response deleteCustomOrgRole(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @PathParam("roleId") String roleId) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        cqrs.permissionService().deleteCustomRole(TenantIdDeriver.derive(orgName), roleId);
+        return Response.ok(MessageResponse.of("Custom role '" + roleId + "' deleted")).build();
+    }
+
+    @PUT
+    @Path("/organizations/{orgId}/members/{userId}/roles")
+    @Operation(
+            operationId = "assignOrgMemberRole",
+            summary = "Assign a role to an organization member",
+            description = "Assigns a tenant-scoped role to a member of this organization.")
+    public Response assignOrgMemberRole(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @PathParam("userId") String userId,
+            @Valid AssignRoleRequest request) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(orgName);
+        String grantedBy = requestHolder.identity().subject();
+        cqrs.permissionService().assignRole(userId, tenantId, request.roleId(), grantedBy);
+        return Response.ok(
+                        MessageResponse.of(
+                                "Role '" + request.roleId() + "' assigned to user " + userId))
+                .build();
+    }
+
+    @DELETE
+    @Path("/organizations/{orgId}/members/{userId}/roles/{roleId}")
+    @Operation(
+            operationId = "removeOrgMemberRole",
+            summary = "Remove a role from an organization member")
+    public Response removeOrgMemberRole(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @PathParam("userId") String userId,
+            @PathParam("roleId") String roleId) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        String orgName = resolveOrgName(orgId);
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_ROLE_MANAGE);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(orgName);
+        cqrs.permissionService().removeRole(userId, tenantId, roleId);
+        return Response.ok(MessageResponse.of("Role '" + roleId + "' removed from user " + userId))
+                .build();
+    }
+
+    @GET
+    @Path("/organizations/{orgId}/members/{userId}/roles")
+    @Operation(
+            operationId = "listOrgMemberRoles",
+            summary = "List roles assigned to an organization member")
+    public Response listOrgMemberRoles(
+            @Context SecurityContext sc,
+            @PathParam("orgId") String orgId,
+            @PathParam("userId") String userId) {
+        requireAuthenticated(sc);
+        requireJwtAuth();
+        requireCqrs();
+        requireOrgMember(sc, orgId);
+
+        if (!cqrs.isPermissionServiceAvailable()) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(ErrorResponse.of("unavailable", "Permission service not available"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(resolveOrgName(orgId));
+        var assignments = cqrs.permissionService().listUserRolesInTenant(userId, tenantId);
+        return Response.ok(assignments).build();
+    }
+
+    // -----------------------------------------------------------------------
     // Access Tokens (/me/tokens)
     // -----------------------------------------------------------------------
 
@@ -545,16 +727,65 @@ public class PlatformIamResource {
         requireAuthenticated(sc);
         requireJwtAuth();
 
-        String tenantId = requestHolder.identity().tenantId();
-        String createdBy = requestHolder.identity().subject();
-        Set<String> callerRoles = requestHolder.identity().roles();
-        String roles = callerRoles != null ? String.join(",", callerRoles) : "";
+        String userId = requestHolder.identity().subject();
+        String personalTenantId = requestHolder.identity().tenantId();
+
+        // Determine target tenant: explicit request > personal tenant
+        String targetTenantId = request.tenantId() != null ? request.tenantId() : personalTenantId;
+
+        // If scoping to an org tenant, validate user is a member
+        if (request.tenantId() != null && !request.tenantId().equals(personalTenantId)) {
+            try {
+                GetCurrentUserQueryActuator.CurrentUserResult user =
+                        cqrs.iamQueryDispatcher()
+                                .dispatch(
+                                        new GetCurrentUserQueryActuator.GetCurrentUserQuery(
+                                                userId));
+                boolean isMember =
+                        user.organizations().stream()
+                                .anyMatch(
+                                        o ->
+                                                TenantIdDeriver.derive(o.orgName())
+                                                                .equals(request.tenantId())
+                                                        || o.orgId().equals(request.tenantId()));
+                if (!isMember) {
+                    return Response.status(Response.Status.FORBIDDEN)
+                            .entity(
+                                    ErrorResponse.of(
+                                            "not_member",
+                                            "You are not a member of tenant: "
+                                                    + request.tenantId()))
+                            .build();
+                }
+            } catch (Exception e) {
+                LOG.error(
+                        "Failed to validate org membership for PAT creation: {}",
+                        e.getMessage(),
+                        e);
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(
+                                ErrorResponse.of(
+                                        "membership_check_failed",
+                                        "Failed to validate organization membership"))
+                        .build();
+            }
+        }
+
+        // Roles column is now informational — real authz resolved live from role_assignment
+        String roles = "";
+        if (cqrs.isPermissionServiceAvailable()) {
+            var resolvedRoles = cqrs.permissionService().resolveRoles(userId, targetTenantId);
+            roles = String.join(",", resolvedRoles);
+        } else {
+            Set<String> callerRoles = requestHolder.identity().roles();
+            roles = callerRoles != null ? String.join(",", callerRoles) : "";
+        }
 
         LOG.debug(
                 "POST /platform/iam/me/tokens name={} tenant={} createdBy={}",
                 request.name(),
-                tenantId,
-                createdBy);
+                targetTenantId,
+                userId);
 
         // Validate expiration: required, max 90 days
         if (request.expiresAt() == null) {
@@ -580,7 +811,7 @@ public class PlatformIamResource {
         try {
             var command =
                     new CreateAccessTokenCommandActuator.CreateAccessTokenCommand(
-                            tenantId, request.name(), roles, createdBy, request.expiresAt());
+                            targetTenantId, request.name(), roles, userId, request.expiresAt());
             CreateAccessTokenCommandActuator.CreateAccessTokenResult result =
                     cqrs.iamDispatcher().dispatch(command);
 
@@ -751,18 +982,39 @@ public class PlatformIamResource {
                     cqrs.iamQueryDispatcher()
                             .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
 
+            var authz = requestHolder.authorization();
+            boolean hasPermSvc = cqrs.isPermissionServiceAvailable();
             var orgs =
                     result.organizations().stream()
                             .map(
                                     o -> {
+                                        String orgTenantId = TenantIdDeriver.derive(o.orgName());
+                                        Set<String> orgRoles = Set.of();
+                                        Set<String> orgPerms = Set.of();
+                                        if (hasPermSvc) {
+                                            orgRoles =
+                                                    cqrs.permissionService()
+                                                            .resolveRoles(userId, orgTenantId);
+                                            orgPerms =
+                                                    cqrs.permissionService()
+                                                            .resolvePermissions(
+                                                                    userId, orgTenantId);
+                                        }
                                         boolean isAdmin =
-                                                result.roles().contains("org-admin:" + o.orgName())
-                                                        || result.roles()
-                                                                .contains(Roles.SUPER_ADMIN);
+                                                (authz != null && authz.isSuperAdmin())
+                                                        || orgRoles.contains("org-admin");
                                         return new OrgMembership(
-                                                o.orgId(), o.orgName(), o.displayName(), isAdmin);
+                                                o.orgId(),
+                                                o.orgName(),
+                                                o.displayName(),
+                                                isAdmin,
+                                                orgRoles,
+                                                orgPerms);
                                     })
                             .toList();
+
+            // Active tenant permissions
+            Set<String> activePermissions = authz != null ? authz.permissions() : Set.of();
 
             return Response.ok(
                             new CurrentUserResponse(
@@ -771,6 +1023,7 @@ public class PlatformIamResource {
                                     result.email(),
                                     result.fullName(),
                                     result.roles(),
+                                    activePermissions,
                                     orgs))
                     .build();
         } catch (Exception e) {
@@ -849,7 +1102,7 @@ public class PlatformIamResource {
     // -----------------------------------------------------------------------
 
     private void requireSuperAdmin(SecurityContext sc) {
-        Roles.requireRole(sc, Roles.SUPER_ADMIN);
+        Permissions.require(requestHolder.authorization(), Permissions.PLATFORM_TENANT_MANAGE);
     }
 
     private void requireAuthenticated(SecurityContext sc) {
@@ -869,32 +1122,11 @@ public class PlatformIamResource {
     }
 
     private void requireOrgAdmin(SecurityContext sc, String orgName) {
-        if (sc != null && sc.isUserInRole(Roles.SUPER_ADMIN)) return;
-        String requiredRole = "org-admin:" + orgName;
-        if (sc == null || !sc.isUserInRole(requiredRole)) {
-            throw new OperioAuthException(
-                    "Access denied: requires role '" + requiredRole + "' or super-admin");
-        }
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_MEMBER_MANAGE);
     }
 
     private void requireOrgMember(SecurityContext sc, String orgId) {
-        if (sc != null && sc.isUserInRole(Roles.SUPER_ADMIN)) return;
-        // Verify the authenticated user is a member of this organization
-        String userId = requestHolder.identity().subject();
-        try {
-            GetCurrentUserQueryActuator.CurrentUserResult user =
-                    cqrs.iamQueryDispatcher()
-                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
-            boolean isMember = user.organizations().stream().anyMatch(o -> o.orgId().equals(orgId));
-            if (!isMember) {
-                throw new OperioAuthException(
-                        "Access denied: you are not a member of organization " + orgId);
-            }
-        } catch (OperioAuthException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new OperioAuthException("Access denied: unable to verify org membership");
-        }
+        Permissions.require(requestHolder.authorization(), Permissions.ORG_READ);
     }
 
     private String resolveOrgName(String orgId) {

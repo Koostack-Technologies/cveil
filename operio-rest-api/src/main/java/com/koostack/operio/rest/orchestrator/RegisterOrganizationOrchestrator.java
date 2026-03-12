@@ -2,6 +2,7 @@ package com.koostack.operio.rest.orchestrator;
 
 import com.koostack.operio.core.cqrs.AbstractOrchestrator;
 import com.koostack.operio.core.cqrs.CommandDispatcher;
+import com.koostack.operio.core.platform.iam.PermissionService;
 import com.koostack.operio.platform.billing.jooq.CreateBillingProfileCommandActuator;
 import com.koostack.operio.platform.billing.jooq.CreateSubscriptionCommandActuator;
 import com.koostack.operio.platform.core.jooq.CreateTenantCommandActuator;
@@ -61,13 +62,25 @@ public class RegisterOrganizationOrchestrator
     public record RegisterOrgResult(
             String orgId, String orgName, String tenantId, String plan, String tenantStatus) {}
 
+    private final PermissionService permissionService;
+
+    public RegisterOrganizationOrchestrator(
+            CommandDispatcher iamDispatcher,
+            CommandDispatcher coreDispatcher,
+            CommandDispatcher billingDispatcher,
+            PermissionService permissionService) {
+        registerDispatcher(DISPATCHER_IAM, iamDispatcher);
+        registerDispatcher(DISPATCHER_CORE, coreDispatcher);
+        registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
+        this.permissionService = permissionService;
+    }
+
+    /** Backward-compatible constructor for callers without a PermissionService. */
     public RegisterOrganizationOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher) {
-        registerDispatcher(DISPATCHER_IAM, iamDispatcher);
-        registerDispatcher(DISPATCHER_CORE, coreDispatcher);
-        registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
+        this(iamDispatcher, coreDispatcher, billingDispatcher, null);
     }
 
     @Override
@@ -169,7 +182,40 @@ public class RegisterOrganizationOrchestrator
                             }
                         }));
 
-        // Step 4: Provision Redis infrastructure (non-fatal)
+        // Step 4: Assign DB-backed roles (org-admin + tenant-admin for the org's tenant)
+        steps.add(
+                SagaStep.of(
+                        "assign-db-roles",
+                        (in, ctx) -> {
+                            if (permissionService == null) {
+                                LOG.info(
+                                        "PermissionService not available — skipping DB role"
+                                                + " assignment");
+                                return;
+                            }
+                            String tenantId = in.orgName();
+                            String userId = in.requestingKeycloakUserId();
+                            permissionService.assignRole(userId, tenantId, "org-admin", userId);
+                            permissionService.assignRole(userId, tenantId, "tenant-admin", userId);
+                            ctx.put("dbRolesAssigned", true);
+                        },
+                        (in, ctx) -> {
+                            try {
+                                if (permissionService != null
+                                        && ctx.get("dbRolesAssigned") != null) {
+                                    String tenantId = in.orgName();
+                                    String userId = in.requestingKeycloakUserId();
+                                    permissionService.removeRole(userId, tenantId, "org-admin");
+                                    permissionService.removeRole(userId, tenantId, "tenant-admin");
+                                }
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Compensation failed for assign-db-roles: "
+                                                + e.getMessage());
+                            }
+                        }));
+
+        // Step 5: Provision Redis infrastructure (non-fatal)
         steps.add(
                 SagaStep.of(
                         "provision-redis",
@@ -186,7 +232,7 @@ public class RegisterOrganizationOrchestrator
                             }
                         }));
 
-        // Step 5: Create tenant aggregate
+        // Step 6: Create tenant aggregate
         steps.add(
                 SagaStep.of(
                         "create-tenant",
@@ -211,7 +257,7 @@ public class RegisterOrganizationOrchestrator
                             }
                         }));
 
-        // Step 6: Create billing profile
+        // Step 7: Create billing profile
         steps.add(
                 SagaStep.of(
                         "create-billing-profile",
@@ -225,7 +271,7 @@ public class RegisterOrganizationOrchestrator
                             ctx.put("billingProfileCreated", true);
                         }));
 
-        // Step 7: Create subscription
+        // Step 8: Create subscription
         steps.add(
                 SagaStep.of(
                         "create-subscription",

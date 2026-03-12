@@ -138,6 +138,9 @@ public class OperioProducers {
     @SuppressWarnings("rawtypes")
     private com.koostack.operio.core.platform.iam.IamQueryService iamQueryService;
 
+    /** Permission service for resolving user permissions per tenant. */
+    private com.koostack.operio.core.platform.iam.PermissionService permissionService;
+
     /** Platform event service — unified event store for all events. */
     private JooqPlatformEventService platformEventService;
 
@@ -384,11 +387,12 @@ public class OperioProducers {
         // snapshot the infrastructure fields into the immutable holder.
         operio.appName();
         LOG.debug(
-                "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}",
+                "PlatformCqrsHolder — iamCmd={}, iamQuery={}, coreQuery={}, coreCmd={}, permSvc={}",
                 iamDispatcher != null,
                 iamQueryService != null,
                 coreQueryService != null,
-                coreCommandService != null);
+                coreCommandService != null,
+                permissionService != null);
         return new PlatformCqrsHolder(
                 iamDispatcher,
                 iamQueryService,
@@ -396,7 +400,8 @@ public class OperioProducers {
                 coreCommandService,
                 billingCommandService,
                 planQueryService,
-                null);
+                null,
+                permissionService);
     }
 
     /**
@@ -1056,6 +1061,11 @@ public class OperioProducers {
             LOG.warn("Operio REST API: IamQueryService NOT configured — Keycloak not available");
         }
         this.iamQueryService = iamQuerySvc;
+
+        // Permission service — DB-backed role/permission resolution
+        this.permissionService =
+                new com.koostack.operio.platform.iam.jooq.JooqPermissionService(platformDataSource);
+        LOG.info("Operio REST API: JooqPermissionService initialized");
 
         // Wire query service into command service for email/username → UUID resolution
         if (iamCmdSvc

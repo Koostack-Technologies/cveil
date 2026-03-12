@@ -6,6 +6,7 @@ import com.koostack.operio.core.platform.billing.BillingCommandService;
 import com.koostack.operio.core.platform.core.CoreCommandService;
 import com.koostack.operio.core.platform.core.CoreQueryService;
 import com.koostack.operio.core.platform.iam.IamQueryService;
+import com.koostack.operio.core.platform.iam.PermissionService;
 import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.core.platform.plan.PlanQueryService;
 
@@ -27,6 +28,7 @@ public class PlatformCqrsHolder {
     private final BillingCommandService<?> billingCommandService;
     private final PlanQueryService<?> planQueryService;
     private final TokenValidationService<?> tokenValidationService;
+    private final PermissionService permissionService;
 
     @SuppressWarnings("rawtypes")
     public PlatformCqrsHolder(
@@ -37,6 +39,27 @@ public class PlatformCqrsHolder {
             BillingCommandService billingCommandService,
             PlanQueryService planQueryService,
             TokenValidationService tokenValidationService) {
+        this(
+                iamDispatcher,
+                iamQueryService,
+                coreQueryService,
+                coreCommandService,
+                billingCommandService,
+                planQueryService,
+                tokenValidationService,
+                null);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public PlatformCqrsHolder(
+            CommandDispatcher iamDispatcher,
+            IamQueryService iamQueryService,
+            CoreQueryService coreQueryService,
+            CoreCommandService coreCommandService,
+            BillingCommandService billingCommandService,
+            PlanQueryService planQueryService,
+            TokenValidationService tokenValidationService,
+            PermissionService permissionService) {
         this.iamDispatcher = iamDispatcher;
         this.iamQueryService = iamQueryService;
         this.coreQueryService = coreQueryService;
@@ -44,6 +67,7 @@ public class PlatformCqrsHolder {
         this.billingCommandService = billingCommandService;
         this.planQueryService = planQueryService;
         this.tokenValidationService = tokenValidationService;
+        this.permissionService = permissionService;
     }
 
     /**
@@ -141,5 +165,15 @@ public class PlatformCqrsHolder {
     @SuppressWarnings("unchecked")
     public <T> TokenValidationService<T> tokenValidationService() {
         return (TokenValidationService<T>) tokenValidationService;
+    }
+
+    /** Returns the permission service for resolving user permissions per tenant. */
+    public PermissionService permissionService() {
+        return permissionService;
+    }
+
+    /** Returns {@code true} if the permission service is available. */
+    public boolean isPermissionServiceAvailable() {
+        return permissionService != null;
     }
 }

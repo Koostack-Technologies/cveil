@@ -20,8 +20,9 @@ import com.koostack.operio.plugin.consent.jooq.RemoveFieldCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.UnassignFieldCategoryCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.UpdateCategoryCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.UpdateEntityCommandActuator;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterEntityRequest;
@@ -71,6 +72,8 @@ public class CatalogueResource {
     @Named("consentQueryDispatcher")
     QueryDispatcher consentQueryDispatcher;
 
+    @Inject OperioRequestHolder requestHolder;
+
     // -------------------------------------------------------------------
     // Fields
     // -------------------------------------------------------------------
@@ -96,7 +99,7 @@ public class CatalogueResource {
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response listFields(@Context SecurityContext sc) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
         List<FieldView> fields =
                 consentQueryDispatcher.dispatch(new ListFieldsQueryActuator.ListFieldsQuery());
         return Response.ok(fields).build();
@@ -116,7 +119,7 @@ public class CatalogueResource {
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response registerField(@Context SecurityContext sc, @Valid RegisterFieldRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new RegisterFieldCommandActuator.RegisterFieldCommand(
                         req.fieldName(),
@@ -145,7 +148,7 @@ public class CatalogueResource {
             @Context SecurityContext sc,
             @PathParam("entityName") String entityName,
             @PathParam("fieldName") String fieldName) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new RemoveFieldCommandActuator.RemoveFieldCommand(fieldName, entityName));
         return Response.ok(MessageResponse.of("Field removed")).build();
@@ -166,7 +169,7 @@ public class CatalogueResource {
     })
     public Response assignFieldCategory(
             @Context SecurityContext sc, @Valid AssignFieldCategoryRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         var command =
                 new AssignFieldCategoryCommandActuator.AssignFieldCategoryCommand(
                         req.fieldName(),
@@ -202,7 +205,7 @@ public class CatalogueResource {
             @PathParam("entityName") String entityName,
             @PathParam("fieldName") String fieldName,
             @PathParam("categoryName") String categoryName) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new UnassignFieldCategoryCommandActuator.UnassignFieldCategoryCommand(
                         fieldName, entityName, categoryName));
@@ -228,7 +231,7 @@ public class CatalogueResource {
                                                 implementation = EntityView.class))),
     })
     public Response listEntities(@Context SecurityContext sc) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
         List<EntityView> entities =
                 consentQueryDispatcher.dispatch(new ListEntitiesQueryActuator.ListEntitiesQuery());
         return Response.ok(entities).build();
@@ -249,7 +252,7 @@ public class CatalogueResource {
     })
     public Response getEntity(
             @Context SecurityContext sc, @PathParam("entityName") String entityName) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
         return ((Optional<EntityView>)
                         consentQueryDispatcher.dispatch(
                                 new GetEntityQueryActuator.GetEntityQuery(entityName)))
@@ -276,7 +279,7 @@ public class CatalogueResource {
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response registerEntity(@Context SecurityContext sc, @Valid RegisterEntityRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new RegisterEntityCommandActuator.RegisterEntityCommand(
                         req.entityName(), req.description()));
@@ -302,7 +305,7 @@ public class CatalogueResource {
             @Context SecurityContext sc,
             @PathParam("entityName") String entityName,
             @Valid UpdateEntityRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new UpdateEntityCommandActuator.UpdateEntityCommand(entityName, req.description()));
         return Response.ok(MessageResponse.of("Entity updated: " + entityName)).build();
@@ -325,7 +328,7 @@ public class CatalogueResource {
     })
     public Response removeEntity(
             @Context SecurityContext sc, @PathParam("entityName") String entityName) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         // Invariant: reject removal if fields still reference this entity
         // TODO(consent-bizlogic-migrate): move this check into RemoveEntityCommandActuator
         List<FieldView> fields =
@@ -365,7 +368,7 @@ public class CatalogueResource {
                                                 implementation = CategoryView.class))),
     })
     public Response listCategories(@Context SecurityContext sc) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
         List<CategoryView> categories =
                 consentQueryDispatcher.dispatch(
                         new ListCategoriesQueryActuator.ListCategoriesQuery());
@@ -387,7 +390,7 @@ public class CatalogueResource {
     })
     public Response getCategory(
             @Context SecurityContext sc, @PathParam("categoryName") String categoryName) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
         return ((Optional<CategoryView>)
                         consentQueryDispatcher.dispatch(
                                 new GetCategoryQueryActuator.GetCategoryQuery(categoryName)))
@@ -415,7 +418,7 @@ public class CatalogueResource {
     })
     public Response registerCategory(
             @Context SecurityContext sc, @Valid RegisterCategoryRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new RegisterCategoryCommandActuator.RegisterCategoryCommand(
                         req.categoryName(), req.description()));
@@ -441,7 +444,7 @@ public class CatalogueResource {
             @Context SecurityContext sc,
             @PathParam("categoryName") String categoryName,
             @Valid UpdateCategoryRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new UpdateCategoryCommandActuator.UpdateCategoryCommand(
                         categoryName, req.description()));
@@ -465,7 +468,7 @@ public class CatalogueResource {
     })
     public Response removeCategory(
             @Context SecurityContext sc, @PathParam("categoryName") String categoryName) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         // Invariant: reject removal if fields still reference this category
         // TODO(consent-bizlogic-migrate): move this check into RemoveCategoryCommandActuator
         List<FieldView> allFields =

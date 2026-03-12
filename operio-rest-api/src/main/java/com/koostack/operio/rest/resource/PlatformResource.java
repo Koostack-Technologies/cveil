@@ -4,9 +4,10 @@ import com.koostack.operio.platform.core.jooq.ChangeTenantPlanCommandActuator;
 import com.koostack.operio.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.operio.platform.core.jooq.GetTenantQueryActuator;
 import com.koostack.operio.platform.core.jooq.ListTenantsQueryActuator;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
@@ -60,12 +61,14 @@ public class PlatformResource {
 
     @Inject RateLimitService rateLimitService;
 
+    @Inject OperioRequestHolder requestHolder;
+
     // -------------------------------------------------------------------
     // Role enforcement
     // -------------------------------------------------------------------
 
     private void requireSuperAdmin(SecurityContext securityContext) {
-        Roles.requireRole(securityContext, Roles.SUPER_ADMIN);
+        Permissions.require(requestHolder.authorization(), Permissions.PLATFORM_TENANT_MANAGE);
     }
 
     private void requireCqrsServices() {

@@ -26,9 +26,10 @@ import com.koostack.operio.plugin.consent.jooq.RevokeAllConsentCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.RevokeConsentCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.ShredSubjectCommandActuator;
 import com.koostack.operio.plugin.consent.jooq.UpdateSubjectCommandActuator;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterSubjectRequest;
 import com.koostack.operio.rest.dto.AdminDtos.UpdateSubjectRequest;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
@@ -118,6 +119,8 @@ public class ConsentResource {
 
     @Inject OperioConfig operioConfig;
 
+    @Inject OperioRequestHolder requestHolder;
+
     // -------------------------------------------------------------------
     // Mutating endpoints -- require consent:write
     // -------------------------------------------------------------------
@@ -162,7 +165,7 @@ public class ConsentResource {
                                 schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response grant(@Context SecurityContext securityContext, @Valid GrantRequest request) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
 
         LOG.debug(
                 "POST /subjects/consent/grant - subject={}, scope={}",
@@ -227,7 +230,7 @@ public class ConsentResource {
                                 schema = @Schema(implementation = ErrorResponse.class))),
     })
     public Response revoke(@Context SecurityContext securityContext, @Valid RevokeRequest request) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_REVOKE);
 
         LOG.debug(
                 "POST /subjects/consent/revoke - subject={}, scope={}",
@@ -293,7 +296,7 @@ public class ConsentResource {
     })
     public Response grantAll(
             @Context SecurityContext securityContext, @Valid BatchGrantRequest request) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
 
         LOG.debug(
                 "POST /subjects/consent/grant-all - subject={}, count={}",
@@ -384,7 +387,7 @@ public class ConsentResource {
     })
     public Response revokeAll(
             @Context SecurityContext securityContext, @Valid BatchRevokeRequest request) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_REVOKE);
 
         LOG.debug(
                 "POST /subjects/consent/revoke-all - subject={}, count={}",
@@ -479,7 +482,7 @@ public class ConsentResource {
             @Context SecurityContext securityContext,
             @PathParam("subjectId") String subjectId,
             @Valid EvaluateRequest request) {
-        Roles.requireRole(securityContext, Roles.CONSENT_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_EVALUATE);
 
         LOG.debug(
                 "POST /subjects/{}/evaluate - scopeCount={}",
@@ -539,7 +542,7 @@ public class ConsentResource {
                             example = "user-12345")
                     @PathParam("id")
                     String subjectId) {
-        Roles.requireRole(securityContext, Roles.CONSENT_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
 
         LOG.debug("GET /subjects/{}/summary", subjectId);
 
@@ -590,7 +593,7 @@ public class ConsentResource {
                             example = "user-12345")
                     @PathParam("id")
                     String subjectId) {
-        Roles.requireRole(securityContext, Roles.CONSENT_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
 
         LOG.debug("GET /subjects/{}/history", subjectId);
 
@@ -648,7 +651,7 @@ public class ConsentResource {
                             example = "user_123")
                     @PathParam("id")
                     String subjectId) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_EXPORT);
 
         if (subjectId == null || subjectId.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
@@ -757,7 +760,7 @@ public class ConsentResource {
                             example = "DELETE_user_123")
                     @QueryParam("confirm")
                     String confirmToken) {
-        Roles.requireRole(securityContext, Roles.CONSENT_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_DSAR);
 
         // Validate confirmation token
         String expectedToken = "DELETE_" + subjectId;
@@ -891,7 +894,7 @@ public class ConsentResource {
                                                 implementation = SubjectView.class))),
     })
     public Response listSubjects(@Context SecurityContext sc) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
         List<SubjectView> subjects =
                 consentQueryDispatcher.dispatch(new ListSubjectsQueryActuator.ListSubjectsQuery());
         return Response.ok(subjects).build();
@@ -923,7 +926,7 @@ public class ConsentResource {
             @Context SecurityContext sc,
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
-        Roles.requireRole(sc, Roles.ADMIN_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
         return ((Optional<SubjectView>)
                         consentQueryDispatcher.dispatch(
                                 new GetSubjectQueryActuator.GetSubjectQuery(name)))
@@ -957,7 +960,7 @@ public class ConsentResource {
     })
     public Response registerSubject(
             @Context SecurityContext sc, @Valid RegisterSubjectRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
         consentDispatcher.dispatch(
                 new RegisterSubjectCommandActuator.RegisterSubjectCommand(
                         req.subjectName(), req.description()));
@@ -986,7 +989,7 @@ public class ConsentResource {
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name,
             @Valid UpdateSubjectRequest req) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
         consentDispatcher.dispatch(
                 new UpdateSubjectCommandActuator.UpdateSubjectCommand(name, req.description()));
         return Response.ok(MessageResponse.of("Subject updated: " + name)).build();
@@ -1020,7 +1023,7 @@ public class ConsentResource {
             @Context SecurityContext sc,
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
         consentDispatcher.dispatch(new RemoveSubjectCommandActuator.RemoveSubjectCommand(name));
         return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
     }
@@ -1055,7 +1058,7 @@ public class ConsentResource {
             @Context SecurityContext sc,
             @Parameter(description = "Subject name", required = true) @PathParam("name")
                     String name) {
-        Roles.requireRole(sc, Roles.ADMIN_WRITE);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_DSAR);
 
         ShredSubjectCommandActuator.ShredSubjectResult result =
                 consentDispatcher.dispatch(

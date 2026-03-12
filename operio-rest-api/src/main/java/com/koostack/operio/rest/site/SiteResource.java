@@ -136,7 +136,10 @@ public class SiteResource {
 
             var orchestrator =
                     new RegisterUserOrchestrator(
-                            cqrs.iamDispatcher(), cqrs.coreDispatcher(), cqrs.billingDispatcher());
+                            cqrs.iamDispatcher(),
+                            cqrs.coreDispatcher(),
+                            cqrs.billingDispatcher(),
+                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
 
             var command =
                     new RegisterUserOrchestrator.RegisterUserCommand(

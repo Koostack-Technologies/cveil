@@ -1,11 +1,13 @@
 package com.koostack.operio.rest.filter;
 
 import com.koostack.operio.core.exception.OperioAuthException;
+import com.koostack.operio.core.models.AuthorizationContext;
 import com.koostack.operio.core.models.IdentityContext;
 import com.koostack.operio.core.platform.iam.AccessTokenGenerator;
 import com.koostack.operio.core.platform.iam.AccessTokenInfo;
 import com.koostack.operio.core.platform.iam.IdpProvider;
 import com.koostack.operio.core.platform.iam.IdpTenantResolver;
+import com.koostack.operio.core.platform.iam.PermissionService;
 import com.koostack.operio.rest.config.OperioConfig;
 import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
@@ -101,6 +103,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     /** Provider name for bootstrap-key authenticated requests. */
     private static final String BOOTSTRAP_PROVIDER = "bootstrap-key";
+
+    /**
+     * HTTP header for selecting the active organization for JWT-authenticated requests. When
+     * present, the filter validates the user's org membership and uses the org as the active tenant
+     * instead of the user's personal tenant.
+     */
+    public static final String ORG_HEADER = "X-Org-Id";
 
     // -----------------------------------------------------------------------
     // Injected dependencies
@@ -368,19 +377,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                     "Access token {} is {} — rejecting",
                     tokenInfo.tokenPrefix(),
                     tokenInfo.status());
-            abortUnauthorized(
-                    ctx,
-                    "Access token is " + tokenInfo.status() + " (" + tokenInfo.tokenPrefix() + ")");
+            abortUnauthorized(ctx, "Invalid access token");
             return;
         }
 
         // Validate expiration
-        if (tokenInfo.expiresAt().isBefore(Instant.now())) {
+        if (tokenInfo.expiresAt() == null || tokenInfo.expiresAt().isBefore(Instant.now())) {
             LOG.debug(
                     "Access token {} has expired at {}",
                     tokenInfo.tokenPrefix(),
                     tokenInfo.expiresAt());
-            abortUnauthorized(ctx, "Access token has expired (" + tokenInfo.tokenPrefix() + ")");
+            abortUnauthorized(ctx, "Invalid access token");
             return;
         }
 
@@ -614,11 +621,15 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      * Applies the authenticated identity to the request context:
      *
      * <ol>
-     *   <li>Populates the {@link OperioRequestHolder} with the identity and HTTP metadata so the
-     *       {@code TenantScopeInterceptor} can bind {@code TenantContext} and {@code
-     *       RequestContext} scoped values.
-     *   <li>Sets the JAX-RS {@link SecurityContext} with the principal and role information
-     *       (enables {@code @RolesAllowed} on resources).
+     *   <li>Resolves the active tenant: for PATs, the stored tenant_id is authoritative and cannot
+     *       be overridden; for JWTs, the {@code X-Org-Id} header selects an org tenant (validated
+     *       against org membership), or the personal tenant is used as fallback.
+     *   <li>Resolves permissions from the {@code role_assignment} / {@code role_permission} tables
+     *       via the {@link PermissionService}, building an {@link AuthorizationContext}.
+     *   <li>Populates the {@link OperioRequestHolder} with the identity, authorization, and HTTP
+     *       metadata for the {@code TenantScopeInterceptor}.
+     *   <li>Sets the JAX-RS {@link SecurityContext} with the principal and role/permission
+     *       information.
      *   <li>Stores the full {@link IdentityContext} as a request property for backward-compatible
      *       downstream consumption.
      * </ol>
@@ -633,28 +644,104 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             IdentityContext identity,
             String remoteAddress,
             String userAgent) {
+
+        // -- Resolve active tenant --
+        String activeTenant = identity.tenantId();
+        String orgHeader = ctx.getHeaderString(ORG_HEADER);
+        boolean isPatAuth = "access-token".equals(identity.provider());
+
+        if (orgHeader != null && !orgHeader.isBlank()) {
+            if (isPatAuth) {
+                // PATs have a fixed tenant — reject mismatched X-Org-Id
+                if (!orgHeader.equals(activeTenant)) {
+                    LOG.warn(
+                            "PAT tenant mismatch: PAT={}, X-Org-Id={}. PAT tenant is"
+                                    + " authoritative.",
+                            activeTenant,
+                            orgHeader);
+                }
+                // PAT tenant wins regardless
+            } else {
+                // JWT user selecting an org context — use the org header as active tenant
+                // Org membership validation will happen at the resource level
+                // (the permission resolver will return empty permissions if user has no roles in
+                // that tenant)
+                activeTenant = orgHeader;
+                LOG.debug("JWT user selecting org context via X-Org-Id: {}", orgHeader);
+            }
+        }
+
+        // If the active tenant changed from what's in the identity, create
+        // an updated IdentityContext with the new tenant for downstream consumers
+        IdentityContext effectiveIdentity = identity;
+        if (activeTenant != null && !activeTenant.equals(identity.tenantId())) {
+            effectiveIdentity =
+                    new IdentityContext(
+                            identity.subject(),
+                            identity.token(),
+                            identity.email(),
+                            identity.roles(),
+                            identity.claims(),
+                            activeTenant,
+                            identity.provider());
+        }
+
+        // -- Resolve permissions from DB --
+        AuthorizationContext authz = null;
+        if (cqrsHolder.isPermissionServiceAvailable() && effectiveIdentity.subject() != null) {
+            try {
+                PermissionService permSvc = cqrsHolder.permissionService();
+                Set<String> roles = permSvc.resolveRoles(effectiveIdentity.subject(), activeTenant);
+                Set<String> permissions =
+                        permSvc.resolvePermissions(effectiveIdentity.subject(), activeTenant);
+                authz =
+                        new AuthorizationContext(
+                                effectiveIdentity.subject(), activeTenant, roles, permissions);
+            } catch (Exception e) {
+                LOG.warn(
+                        "Failed to resolve permissions for subject={}, tenant={}: {}",
+                        effectiveIdentity.subject(),
+                        activeTenant,
+                        e.getMessage());
+                // Fall back to identity roles only (no DB-backed permissions)
+            }
+        }
+
+        // If no DB permissions resolved, build a fallback AuthorizationContext from identity roles
+        if (authz == null) {
+            authz =
+                    new AuthorizationContext(
+                            effectiveIdentity.subject(),
+                            activeTenant,
+                            effectiveIdentity.roles() != null
+                                    ? effectiveIdentity.roles()
+                                    : Set.of(),
+                            Set.of());
+        }
+
         // Populate the request-scoped holder for TenantScopeInterceptor
-        requestHolder.set(identity, remoteAddress, userAgent);
+        requestHolder.set(effectiveIdentity, remoteAddress, userAgent);
+        requestHolder.setAuthorization(authz);
 
         // Store IdentityContext as request property for downstream use
-        ctx.setProperty(IDENTITY_CONTEXT_PROPERTY, identity);
+        ctx.setProperty(IDENTITY_CONTEXT_PROPERTY, effectiveIdentity);
 
         // Enrich SLF4J MDC with identity context so log lines emitted
         // during resource method execution include tenantId and subject.
         // The RequestTracingFilter already set placeholder values ("-")
         // for these keys; we upgrade them to real values now that auth
         // has succeeded.
-        if (identity.tenantId() != null && !identity.tenantId().isBlank()) {
-            MDC.put(RequestTracingFilter.MDC_TENANT_ID, identity.tenantId());
+        if (effectiveIdentity.tenantId() != null && !effectiveIdentity.tenantId().isBlank()) {
+            MDC.put(RequestTracingFilter.MDC_TENANT_ID, effectiveIdentity.tenantId());
         }
-        if (identity.subject() != null && !identity.subject().isBlank()) {
-            MDC.put(RequestTracingFilter.MDC_SUBJECT, identity.subject());
+        if (effectiveIdentity.subject() != null && !effectiveIdentity.subject().isBlank()) {
+            MDC.put(RequestTracingFilter.MDC_SUBJECT, effectiveIdentity.subject());
         }
 
         // Set JAX-RS SecurityContext for @RolesAllowed and
         // SecurityContext injection in resources
         boolean isSecure = ctx.getSecurityContext().isSecure();
-        ctx.setSecurityContext(new OperioSecurityContext(identity, isSecure));
+        ctx.setSecurityContext(new OperioSecurityContext(effectiveIdentity, authz, isSecure));
     }
 
     /**
@@ -777,12 +864,15 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     // -----------------------------------------------------------------------
 
     /**
-     * Simple {@link SecurityContext} implementation backed by an {@link IdentityContext}.
+     * {@link SecurityContext} implementation backed by an {@link IdentityContext} and {@link
+     * AuthorizationContext}.
      *
-     * <p>Enables standard Jakarta Security annotations ({@code @RolesAllowed}, {@code @PermitAll})
-     * and programmatic security context access in JAX-RS resources.
+     * <p>The {@code isUserInRole()} method checks both legacy roles from the IdentityContext (for
+     * backward compatibility with existing {@link com.koostack.operio.rest.auth.Roles} checks) and
+     * new permissions from the AuthorizationContext.
      */
-    private record OperioSecurityContext(IdentityContext identity, boolean secure)
+    private record OperioSecurityContext(
+            IdentityContext identity, AuthorizationContext authorization, boolean secure)
             implements SecurityContext {
         @Override
         public Principal getUserPrincipal() {
@@ -791,7 +881,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         @Override
         public boolean isUserInRole(String role) {
-            return (role != null && identity.roles() != null && identity.roles().contains(role));
+            // Check legacy roles from IdentityContext
+            if (role != null && identity.roles() != null && identity.roles().contains(role)) {
+                return true;
+            }
+            // Check DB-backed roles and permissions from AuthorizationContext
+            if (authorization != null) {
+                if (authorization.hasRole(role)) return true;
+                if (authorization.hasPermission(role)) return true;
+            }
+            return false;
         }
 
         @Override

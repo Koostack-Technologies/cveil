@@ -4,8 +4,9 @@ import com.koostack.operio.core.cqrs.QueryDispatcher;
 import com.koostack.operio.core.models.ConsentGraphModels.ConsentGraph;
 import com.koostack.operio.core.models.ConsentGraphModels.GraphPageInfo;
 import com.koostack.operio.plugin.consent.jooq.GetConsentGraphQueryActuator;
-import com.koostack.operio.rest.auth.Roles;
+import com.koostack.operio.rest.auth.Permissions;
 import com.koostack.operio.rest.config.OperioOpenApiConfig;
+import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.interceptor.TenantScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
@@ -48,6 +49,8 @@ public class GraphResource {
     @Named("consentQueryDispatcher")
     QueryDispatcher consentQueryDispatcher;
 
+    @Inject OperioRequestHolder requestHolder;
+
     @GET
     @Path("/graph")
     @Operation(
@@ -86,7 +89,7 @@ public class GraphResource {
                     String rootName,
             @Parameter(description = "BFS traversal depth limit") @QueryParam("depth")
                     Integer depth) {
-        Roles.requireRole(securityContext, Roles.CONSENT_READ);
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRAPH_READ);
 
         int clampedLimit = Math.max(1, Math.min(limit, 1000));
 
