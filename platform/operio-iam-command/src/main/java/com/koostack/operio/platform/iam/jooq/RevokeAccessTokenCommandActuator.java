@@ -69,8 +69,7 @@ public class RevokeAccessTokenCommandActuator
                     command.tenantId(),
                     command.tokenPrefix(),
                     e);
-            throw new IllegalStateException(
-                    "Failed to revoke access token: " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to revoke access token: " + e.getMessage(), e);
         }
 
         if (rowsUpdated == 0) {

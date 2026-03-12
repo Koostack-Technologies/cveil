@@ -140,9 +140,14 @@ public class SiteResource {
 
             var command =
                     new RegisterUserOrchestrator.RegisterUserCommand(
-                            REALM, username, email, fullName,
+                            REALM,
+                            username,
+                            email,
+                            fullName,
                             Set.of("tenant-admin"),
-                            false, password, tenantId);
+                            false,
+                            password,
+                            tenantId);
 
             RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
 
@@ -402,8 +407,7 @@ public class SiteResource {
                         ? username.substring(0, 1).toUpperCase()
                         : "U";
 
-        return consent
-                .data("username", username)
+        return consent.data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
                 .data("roles", "member")

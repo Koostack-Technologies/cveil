@@ -18,8 +18,7 @@ public class ListAccessTokensQueryActuator
         implements QueryActuator<
                 ListAccessTokensQueryActuator.ListAccessTokensQuery, List<AccessTokenInfo>> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(ListAccessTokensQueryActuator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ListAccessTokensQueryActuator.class);
 
     private final DataSource platformDataSource;
 

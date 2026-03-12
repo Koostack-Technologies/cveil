@@ -335,8 +335,8 @@ public class KeycloakRealmProvisioner {
     private static final String TENANT_ID_MAPPER_NAME = "tenant_id";
 
     /**
-     * Adds a protocol mapper to the operio-backend client that maps the user attribute
-     * {@code tenant_id} into the JWT access token as a {@code tenant_id} claim.
+     * Adds a protocol mapper to the operio-backend client that maps the user attribute {@code
+     * tenant_id} into the JWT access token as a {@code tenant_id} claim.
      */
     private void addTenantIdProtocolMapper(RealmResource realmResource, String clientInternalId) {
         try {
@@ -528,12 +528,10 @@ public class KeycloakRealmProvisioner {
 
     private void ensureAdminRole(RealmResource realm, String userId) {
         try {
-            RoleRepresentation adminRole =
-                    realm.roles().get("tenant-admin").toRepresentation();
+            RoleRepresentation adminRole = realm.roles().get("tenant-admin").toRepresentation();
             List<RoleRepresentation> current =
                     realm.users().get(userId).roles().realmLevel().listEffective();
-            boolean hasRole =
-                    current.stream().anyMatch(r -> "tenant-admin".equals(r.getName()));
+            boolean hasRole = current.stream().anyMatch(r -> "tenant-admin".equals(r.getName()));
             if (!hasRole) {
                 realm.users().get(userId).roles().realmLevel().add(List.of(adminRole));
                 LOG.info("Assigned tenant-admin role to user {}", userId);
@@ -544,9 +542,9 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Repair an existing realm: ensure all default roles exist, the operio-backend client
-     * has full scope allowed so realm roles appear in JWT access tokens, and backfill
-     * tenant-admin for users who were registered before role assignment was added.
+     * Repair an existing realm: ensure all default roles exist, the operio-backend client has full
+     * scope allowed so realm roles appear in JWT access tokens, and backfill tenant-admin for users
+     * who were registered before role assignment was added.
      */
     public void repairRealm(String tenantId) {
         LOG.info("Repairing realm configuration for tenant '{}'", tenantId);
@@ -564,8 +562,7 @@ public class KeycloakRealmProvisioner {
         createDefaultRoles(realmResource);
 
         // Ensure operio-backend client has fullScopeAllowed
-        List<ClientRepresentation> clients =
-                realmResource.clients().findByClientId(operioClientId);
+        List<ClientRepresentation> clients = realmResource.clients().findByClientId(operioClientId);
         if (!clients.isEmpty()) {
             ClientRepresentation client = clients.get(0);
             if (!Boolean.TRUE.equals(client.isFullScopeAllowed())) {
@@ -596,9 +593,9 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Backfills the {@code tenant_id} user attribute for users registered before the
-     * JWT-embedded tenant_id feature. For the shared "operio" realm, derives tenant_id
-     * from the username; for per-tenant realms, uses the tenantId directly.
+     * Backfills the {@code tenant_id} user attribute for users registered before the JWT-embedded
+     * tenant_id feature. For the shared "operio" realm, derives tenant_id from the username; for
+     * per-tenant realms, uses the tenantId directly.
      */
     private void backfillTenantIdAttribute(
             RealmResource realmResource, UserRepresentation user, String realmTenantId) {
@@ -630,9 +627,9 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Derives a tenant ID from a username using the same algorithm as
-     * {@code TenantIdDeriver.derive()}: lowercase, replace non-alphanumeric with underscore,
-     * strip leading digits, max 63 chars.
+     * Derives a tenant ID from a username using the same algorithm as {@code
+     * TenantIdDeriver.derive()}: lowercase, replace non-alphanumeric with underscore, strip leading
+     * digits, max 63 chars.
      */
     private static String deriveTenantId(String username) {
         if (username == null || username.isBlank()) return null;

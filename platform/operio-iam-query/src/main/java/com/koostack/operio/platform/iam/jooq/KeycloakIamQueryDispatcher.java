@@ -198,8 +198,7 @@ public class KeycloakIamQueryDispatcher
 
     @Override
     public List<AccessTokenInfo> listAccessTokens(String tenantId) {
-        return dispatch(
-                new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
+        return dispatch(new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
     }
 
     @Override
@@ -212,8 +211,7 @@ public class KeycloakIamQueryDispatcher
     public AccessTokenInfo getAccessToken(String tenantId, String tokenPrefix) {
         // Implemented by listing tokens for the tenant and filtering by prefix
         List<AccessTokenInfo> tokens =
-                dispatch(
-                        new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
+                dispatch(new ListAccessTokensQueryActuator.ListAccessTokensQuery(tenantId, null));
         return tokens.stream()
                 .filter(t -> tokenPrefix.equals(t.tokenPrefix()))
                 .findFirst()

@@ -35,8 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Unified IAM endpoints for managing users, organizations, access tokens, and authentication in
- * the single Keycloak realm ({@code operio}).
+ * Unified IAM endpoints for managing users, organizations, access tokens, and authentication in the
+ * single Keycloak realm ({@code operio}).
  *
  * <p>User registration optionally creates a Keycloak Organization (tenant) and provisions Redis
  * infrastructure via the {@link RegisterUserOrchestrator}. Organization membership determines
@@ -536,9 +536,9 @@ public class PlatformIamResource {
             operationId = "createAccessToken",
             summary = "Create a personal access token",
             description =
-                    "Creates a personal access token with the caller's current Keycloak roles "
-                            + "snapshotted at creation time. The plaintext token is returned once — "
-                            + "store it securely. Maximum expiration: 90 days.")
+                    "Creates a personal access token with the caller's current Keycloak roles"
+                        + " snapshotted at creation time. The plaintext token is returned once —"
+                        + " store it securely. Maximum expiration: 90 days.")
     public Response createAccessToken(
             @Context SecurityContext sc, @Valid CreateAccessTokenRequest request) {
         requireCqrs();
@@ -573,8 +573,7 @@ public class PlatformIamResource {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(
                             ErrorResponse.of(
-                                    "validation_error",
-                                    "expiresAt must be within 90 days"))
+                                    "validation_error", "expiresAt must be within 90 days"))
                     .build();
         }
 
@@ -637,8 +636,7 @@ public class PlatformIamResource {
             description = "Revokes a personal access token by its prefix identifier.")
     public Response revokeAccessToken(
             @Context SecurityContext sc,
-            @Parameter(description = "Token prefix (e.g. cveil_a8Kx3mNp)")
-                    @PathParam("tokenPrefix")
+            @Parameter(description = "Token prefix (e.g. cveil_a8Kx3mNp)") @PathParam("tokenPrefix")
                     String tokenPrefix) {
         requireCqrs();
         requireAuthenticated(sc);
@@ -656,9 +654,7 @@ public class PlatformIamResource {
 
             if (!result.success()) {
                 return Response.status(Response.Status.NOT_FOUND)
-                        .entity(
-                                ErrorResponse.of(
-                                        "not_found", "Token not found or already revoked"))
+                        .entity(ErrorResponse.of("not_found", "Token not found or already revoked"))
                         .build();
             }
             return Response.ok(MessageResponse.of("Access token revoked")).build();
@@ -757,11 +753,15 @@ public class PlatformIamResource {
 
             var orgs =
                     result.organizations().stream()
-                            .map(o -> {
-                                boolean isAdmin = result.roles().contains("org-admin:" + o.orgName())
-                                        || result.roles().contains(Roles.SUPER_ADMIN);
-                                return new OrgMembership(o.orgId(), o.orgName(), o.displayName(), isAdmin);
-                            })
+                            .map(
+                                    o -> {
+                                        boolean isAdmin =
+                                                result.roles().contains("org-admin:" + o.orgName())
+                                                        || result.roles()
+                                                                .contains(Roles.SUPER_ADMIN);
+                                        return new OrgMembership(
+                                                o.orgId(), o.orgName(), o.displayName(), isAdmin);
+                                    })
                             .toList();
 
             return Response.ok(

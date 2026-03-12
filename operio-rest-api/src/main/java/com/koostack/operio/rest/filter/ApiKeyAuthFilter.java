@@ -329,6 +329,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      * database.
      *
      * <p>Flow:
+     *
      * <ol>
      *   <li>Fast-reject malformed tokens via CRC32 checksum validation
      *   <li>Compute SHA-256 hash of the raw token
@@ -368,15 +369,18 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                     tokenInfo.tokenPrefix(),
                     tokenInfo.status());
             abortUnauthorized(
-                    ctx, "Access token is " + tokenInfo.status() + " (" + tokenInfo.tokenPrefix() + ")");
+                    ctx,
+                    "Access token is " + tokenInfo.status() + " (" + tokenInfo.tokenPrefix() + ")");
             return;
         }
 
         // Validate expiration
         if (tokenInfo.expiresAt().isBefore(Instant.now())) {
-            LOG.debug("Access token {} has expired at {}", tokenInfo.tokenPrefix(), tokenInfo.expiresAt());
-            abortUnauthorized(
-                    ctx, "Access token has expired (" + tokenInfo.tokenPrefix() + ")");
+            LOG.debug(
+                    "Access token {} has expired at {}",
+                    tokenInfo.tokenPrefix(),
+                    tokenInfo.expiresAt());
+            abortUnauthorized(ctx, "Access token has expired (" + tokenInfo.tokenPrefix() + ")");
             return;
         }
 
@@ -398,8 +402,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                         token,
                         null,
                         roles,
-                        Map.of("token_prefix", tokenInfo.tokenPrefix(),
-                               "token_name", tokenInfo.name()),
+                        Map.of(
+                                "token_prefix", tokenInfo.tokenPrefix(),
+                                "token_name", tokenInfo.name()),
                         tokenInfo.tenantId(),
                         "access-token");
 
@@ -459,8 +464,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 String issuer = extractJsonStringValue(payload, "iss");
                 if (issuer != null && issuer.contains("/realms/")) {
                     String realmName =
-                            issuer.substring(
-                                    issuer.lastIndexOf("/realms/") + "/realms/".length());
+                            issuer.substring(issuer.lastIndexOf("/realms/") + "/realms/".length());
                     if ("operio".equals(realmName)) {
                         // Shared platform realm — derive tenant from username
                         String username = extractJsonStringValue(payload, "preferred_username");

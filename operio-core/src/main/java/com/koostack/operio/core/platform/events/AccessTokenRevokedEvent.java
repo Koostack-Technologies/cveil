@@ -8,5 +8,4 @@ import com.koostack.operio.core.event.DomainEvent;
  * @param tenantId the tenant the token was scoped to
  * @param tokenPrefix the visible prefix identifying the revoked token
  */
-public record AccessTokenRevokedEvent(String tenantId, String tokenPrefix)
-        implements DomainEvent {}
+public record AccessTokenRevokedEvent(String tenantId, String tokenPrefix) implements DomainEvent {}

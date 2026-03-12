@@ -1,7 +1,6 @@
 package com.koostack.operio.rest.auth;
 
 import com.koostack.operio.core.models.IdentityContext;
-
 import java.util.Map;
 import java.util.Set;
 
@@ -22,10 +21,10 @@ import java.util.Set;
  *
  * <ul>
  *   <li>{@code tenant-admin} → all API roles ({@code consent:read/write}, {@code admin:read/write})
- *       plus {@code tenant-write} and {@code tenant-read}</li>
+ *       plus {@code tenant-write} and {@code tenant-read}
  *   <li>{@code tenant-write} → {@code consent:read/write}, {@code admin:read/write}, {@code
- *       tenant-read}</li>
- *   <li>{@code tenant-read} → {@code consent:read}, {@code admin:read}</li>
+ *       tenant-read}
+ *   <li>{@code tenant-read} → {@code consent:read}, {@code admin:read}
  * </ul>
  *
  * <h2>Roles</h2>
@@ -113,19 +112,29 @@ public final class Roles {
     // -- Enforcement helpers --------------------------------------------
 
     /**
-     * Maps tenant-scoped roles to the API roles they imply. API key roles
-     * ({@code consent:*}, {@code admin:*}) are atomic and don't imply others.
+     * Maps tenant-scoped roles to the API roles they imply. API key roles ({@code consent:*},
+     * {@code admin:*}) are atomic and don't imply others.
      */
-    private static final Map<String, Set<String>> ROLE_HIERARCHY = Map.of(
-            TENANT_ADMIN, Set.of(CONSENT_READ, CONSENT_WRITE, ADMIN_READ, ADMIN_WRITE,
-                    TENANT_WRITE, TENANT_READ),
-            TENANT_WRITE, Set.of(CONSENT_READ, CONSENT_WRITE, ADMIN_READ, ADMIN_WRITE,
-                    TENANT_READ),
-            TENANT_READ, Set.of(CONSENT_READ, ADMIN_READ));
+    private static final Map<String, Set<String>> ROLE_HIERARCHY =
+            Map.of(
+                    TENANT_ADMIN,
+                            Set.of(
+                                    CONSENT_READ,
+                                    CONSENT_WRITE,
+                                    ADMIN_READ,
+                                    ADMIN_WRITE,
+                                    TENANT_WRITE,
+                                    TENANT_READ),
+                    TENANT_WRITE,
+                            Set.of(
+                                    CONSENT_READ,
+                                    CONSENT_WRITE,
+                                    ADMIN_READ,
+                                    ADMIN_WRITE,
+                                    TENANT_READ),
+                    TENANT_READ, Set.of(CONSENT_READ, ADMIN_READ));
 
-    /**
-     * Checks whether the caller has the given role directly or via hierarchy.
-     */
+    /** Checks whether the caller has the given role directly or via hierarchy. */
     private static boolean hasEffectiveRole(
             jakarta.ws.rs.core.SecurityContext ctx, String requiredRole) {
         if (ctx.isUserInRole(requiredRole)) {

@@ -233,7 +233,8 @@ public final class IamDtos {
             java.util.List<OrgMembership> organizations) {}
 
     /** Lightweight org membership included in /me response. */
-    public record OrgMembership(String orgId, String orgName, String displayName, boolean isAdmin) {}
+    public record OrgMembership(
+            String orgId, String orgName, String displayName, boolean isAdmin) {}
 
     /** Request body for {@code PUT /me}. */
     public record UpdateProfileRequest(

@@ -83,14 +83,20 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
 
         if (!"active".equalsIgnoreCase(accessToken.status())) {
             throw new OperioAuthException(
-                    "Access token is " + accessToken.status()
-                            + " (prefix: " + accessToken.tokenPrefix() + ")");
+                    "Access token is "
+                            + accessToken.status()
+                            + " (prefix: "
+                            + accessToken.tokenPrefix()
+                            + ")");
         }
 
         if (accessToken.expiresAt().isBefore(Instant.now())) {
             throw new OperioAuthException(
-                    "Access token has expired (prefix: " + accessToken.tokenPrefix()
-                            + ", expired at: " + accessToken.expiresAt() + ")");
+                    "Access token has expired (prefix: "
+                            + accessToken.tokenPrefix()
+                            + ", expired at: "
+                            + accessToken.expiresAt()
+                            + ")");
         }
 
         Set<String> roles;
@@ -109,8 +115,9 @@ public class ApiKeyTokenVerifier implements TokenValidationService<Void> {
                 token,
                 null,
                 roles,
-                Map.of("token_prefix", accessToken.tokenPrefix(),
-                       "token_name", accessToken.name()),
+                Map.of(
+                        "token_prefix", accessToken.tokenPrefix(),
+                        "token_name", accessToken.name()),
                 accessToken.tenantId(),
                 "access-token");
     }

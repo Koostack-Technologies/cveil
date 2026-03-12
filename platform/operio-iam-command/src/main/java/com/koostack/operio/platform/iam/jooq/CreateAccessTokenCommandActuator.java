@@ -75,8 +75,7 @@ public class CreateAccessTokenCommandActuator
             ps.setString(4, command.tenantId());
             ps.setString(5, command.roles());
             ps.setTimestamp(
-                    6,
-                    command.expiresAt() != null ? Timestamp.from(command.expiresAt()) : null);
+                    6, command.expiresAt() != null ? Timestamp.from(command.expiresAt()) : null);
             ps.setString(7, command.createdBy());
             ps.executeUpdate();
         } catch (Exception e) {
