@@ -56,9 +56,12 @@ CREATE TABLE platform_iam.role_assignment (
     tenant_id       VARCHAR(255),              -- NULL = platform-scope assignment
     role_id         VARCHAR(100)  NOT NULL REFERENCES platform_iam.role_definition(role_id) ON DELETE CASCADE,
     granted_by      VARCHAR(255)  NOT NULL,
-    granted_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, COALESCE(tenant_id, ''), role_id)
+    granted_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Unique constraint using COALESCE to treat NULL tenant_id as '' for uniqueness
+CREATE UNIQUE INDEX idx_role_assignment_unique
+    ON platform_iam.role_assignment (user_id, COALESCE(tenant_id, ''), role_id);
 
 CREATE INDEX idx_role_assignment_tenant ON platform_iam.role_assignment(tenant_id, user_id);
 CREATE INDEX idx_role_assignment_user   ON platform_iam.role_assignment(user_id);

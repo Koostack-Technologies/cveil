@@ -9,7 +9,7 @@
 --   operio_consent  — all consent administration tables
 --   operio_event    — unified event store (event, aggregate_snapshot)
 --   operio_metrics  — telemetry table
---   platform_iam    — api_key, refresh_token (tenant-scoped subset)
+--   platform_iam    — access_token, role_assignment (tenant-scoped subset)
 --
 -- Tables NOT covered (platform-global, no tenant_id):
 --   platform_core.tenant, platform_core.plan
@@ -108,26 +108,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA platform_iam
 ALTER DEFAULT PRIVILEGES IN SCHEMA platform_iam
     GRANT USAGE ON SEQUENCES TO operio_app;
 
--- RLS on api_key (has tenant_id)
-ALTER TABLE platform_iam.api_key ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_iam.api_key FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_iam.api_key
+-- RLS on access_token (has tenant_id)
+ALTER TABLE platform_iam.access_token ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_iam.access_token FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON platform_iam.access_token
     USING (tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
--- RLS on refresh_token (has tenant_id)
-ALTER TABLE platform_iam.refresh_token ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_iam.refresh_token FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_iam.refresh_token
-    USING (tenant_id = current_setting('app.tenant_id', true))
-    WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
-
--- RLS on tenant_workspace_link (has tenant_id)
-ALTER TABLE platform_iam.tenant_workspace_link ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_iam.tenant_workspace_link FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_iam.tenant_workspace_link
-    USING (tenant_id = current_setting('app.tenant_id', true))
-    WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
+-- RLS on role_assignment (has tenant_id — NULL means platform-scope)
+ALTER TABLE platform_iam.role_assignment ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_iam.role_assignment FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON platform_iam.role_assignment
+    USING (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id', true))
+    WITH CHECK (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id', true));
 
 -- ============================================================================
 -- 6. Grant platform-global schema access (no RLS — admin operations)
