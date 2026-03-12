@@ -115,7 +115,7 @@
                 var res = await fetch('/api/v1/platform/iam/me');
                 var me = await res.json();
                 var org = (me.organizations || []).find(function(o) { return o.orgId === ORG_ID; });
-                IS_ADMIN = org ? org.isAdmin : false;
+                IS_ADMIN = org ? (org.isAdmin || (org.roles && org.roles.indexOf('org-admin') >= 0)) : false;
             } catch (e) {
                 IS_ADMIN = false;
             }
@@ -156,13 +156,37 @@
                         + '<div>'
                         + '<p class="text-white text-sm">' + escHtml(m.username || m.email) + '</p>'
                         + '<p class="text-gray-500 text-xs">' + escHtml(m.email || '') + '</p>'
-                        + '</div></div>'
+                        + '</div>'
+                        + '<div id="roles-' + escHtml(m.userId) + '" class="flex gap-1 ml-2"></div>'
+                        + '</div>'
                         + removeBtn
                         + '</div>';
                 }).join('') + '</div>';
+
+                // Fetch roles for each member
+                members.forEach(function(m) {
+                    loadMemberRoles(m.userId);
+                });
             } catch (err) {
                 container.innerHTML = '<p class="text-red-400 text-sm">Failed to load members.</p>';
             }
+        }
+
+        async function loadMemberRoles(userId) {
+            var container = document.getElementById('roles-' + userId);
+            if (!container) return;
+            try {
+                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + encodeURIComponent(userId) + '/roles');
+                if (!res.ok) return;
+                var assignments = await res.json();
+                if (Array.isArray(assignments) && assignments.length > 0) {
+                    container.innerHTML = assignments.map(function(a) {
+                        return '<span class="inline-block px-2 py-0.5 rounded-full bg-cv-600/20 text-cv-400 text-xs font-medium">' + escHtml(a.roleId) + '</span>';
+                    }).join('');
+                } else {
+                    container.innerHTML = '<span class="inline-block px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-400 text-xs font-medium">member</span>';
+                }
+            } catch (e) { /* ignore */ }
         }
 
         // Invite member

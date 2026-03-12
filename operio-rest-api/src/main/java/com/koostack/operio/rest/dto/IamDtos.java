@@ -169,6 +169,7 @@ public final class IamDtos {
     public record AccessTokenResponse(
             String tokenPrefix,
             String name,
+            String tenantId,
             String roles,
             String status,
             Instant expiresAt,
@@ -180,6 +181,7 @@ public final class IamDtos {
             return new AccessTokenResponse(
                     t.tokenPrefix(),
                     t.name(),
+                    t.tenantId(),
                     t.roles(),
                     t.status(),
                     t.expiresAt(),

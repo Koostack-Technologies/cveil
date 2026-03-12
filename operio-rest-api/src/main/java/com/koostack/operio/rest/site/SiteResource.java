@@ -308,7 +308,7 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", "member")
+                .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
                 .data("activeNav", "overview");
     }
@@ -340,11 +340,14 @@ public class SiteResource {
                         ? username.substring(0, 1).toUpperCase()
                         : "U";
 
+        // Resolve roles from DB permissions framework
+        String rolesDisplay = resolveRolesDisplay(payload);
+
         return account.data("username", username)
                 .data("email", email)
                 .data("fullName", fullName)
                 .data("tenantId", tenantId)
-                .data("roles", "member")
+                .data("roles", rolesDisplay)
                 .data("initial", initial)
                 .data("activeNav", "account");
     }
@@ -379,7 +382,7 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", "member")
+                .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
                 .data("activeNav", "governance");
     }
@@ -413,7 +416,7 @@ public class SiteResource {
         return consent.data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", "member")
+                .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
                 .data("activeNav", "consent");
     }
@@ -474,7 +477,7 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", "member")
+                .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
                 .data("activeNav", "account");
     }
@@ -508,6 +511,25 @@ public class SiteResource {
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /** Resolve the user's display roles from the DB permissions framework. */
+    private String resolveRolesDisplay(String jwtPayload) {
+        String sub = extractJsonString(jwtPayload, "sub");
+        String username = extractJsonString(jwtPayload, "preferred_username");
+        if (username == null) username = sub;
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        if (sub != null && tenantId != null && cqrs.isPermissionServiceAvailable()) {
+            try {
+                Set<String> dbRoles = cqrs.permissionService().resolveRoles(sub, tenantId);
+                if (!dbRoles.isEmpty()) {
+                    return String.join(", ", dbRoles);
+                }
+            } catch (Exception e) {
+                LOG.debug("Could not resolve DB roles for template, falling back", e);
+            }
+        }
+        return "member";
+    }
 
     /**
      * Minimal JSON string extractor — avoids pulling in a JSON library for a single use case. Finds
