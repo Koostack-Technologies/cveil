@@ -1,14 +1,10 @@
-mod cli;
-mod config;
-mod actor;
-mod server;
-mod graph;
-mod sse;
-mod client;
-mod daemon;
-
 use clap::Parser;
 use tracing_subscriber::{EnvFilter, fmt};
+
+use cveil_cli::cli;
+use cveil_cli::client;
+use cveil_cli::config;
+use cveil_cli::daemon;
 
 #[tokio::main]
 async fn main() {
