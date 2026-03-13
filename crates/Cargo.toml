@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "cveil-sdk-core",
+    "cveil-cli",
 ]
 
 [workspace.package]
