@@ -19,12 +19,72 @@ import type {
   SdkStatus,
   DecisionEntry,
   ConsentGraphPage,
+  MessageResponse,
+  ApiErrorBody,
+  ConsentScope,
+  GrantRequest,
+  RevokeRequest,
+  BatchGrantRequest,
+  BatchRevokeRequest,
+  BatchConsentResponse,
+  EvaluateConsentRequest,
+  EvaluateConsentResponse,
+  SubjectConsentView,
+  ConsentLedgerEntry,
+  SubjectView,
+  RegisterSubjectRequest,
+  UpdateSubjectRequest,
+  SubjectDataExport,
+  DsarDeletionReceipt,
+  PurposeView,
+  RegisterPurposeRequest,
+  AddPurposePolicyRequest,
+  LinkPurposeRegulationRequest,
+  RegulationView,
+  RegisterRegulationRequest,
+  JurisdictionView,
+  RegisterJurisdictionRequest,
+  UpdateJurisdictionRequest,
+  AddJurisdictionToRegulationRequest,
+  FieldView,
+  RegisterFieldRequest,
+  EntityView,
+  RegisterEntityRequest,
+  UpdateEntityRequest,
+  CategoryView,
+  RegisterCategoryRequest,
+  UpdateCategoryRequest,
+  AssignFieldCategoryRequest,
 } from "./types.js";
 
 const DEFAULT_GRAPH_PAGE_SIZE = 100;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_JITTER_MS = 500;
+
+/** Error thrown when an API request fails. */
+export class CveilApiError extends Error {
+  readonly status: number;
+  readonly retryable: boolean;
+  readonly requestId: string | null;
+  readonly retryAfter: number | null;
+  readonly errorCode: string;
+
+  constructor(
+    status: number,
+    body: ApiErrorBody | null,
+    fallbackMessage?: string
+  ) {
+    const msg = body?.message ?? fallbackMessage ?? `HTTP ${status}`;
+    super(msg);
+    this.name = "CveilApiError";
+    this.status = status;
+    this.retryable = body?.retryable ?? status >= 500;
+    this.requestId = body?.requestId ?? null;
+    this.retryAfter = body?.retryAfter ?? null;
+    this.errorCode = body?.error ?? "unknown";
+  }
+}
 
 export class CveilClient {
   private bridge!: WasmBridge;
@@ -531,6 +591,612 @@ export class CveilClient {
   private ensureInitialized(): void {
     if (!this._initialized) {
       throw new Error("CveilClient not initialized — call CveilClient.create()");
+    }
+  }
+
+  // ─── HTTP Helper ──────────────────────────────────────────────
+
+  /**
+   * Generic HTTP request helper with auth, JSON serialization, and error mapping.
+   */
+  private async httpRequest<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    this.ensureInitialized();
+    const url = new URL(path, this.config.apiBaseUrl);
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.config.apiToken}`,
+      Accept: "application/json",
+    };
+
+    const init: RequestInit = { method, headers };
+
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url.toString(), init);
+
+    if (!response.ok) {
+      let errorBody: ApiErrorBody | null = null;
+      try {
+        errorBody = (await response.json()) as ApiErrorBody;
+      } catch {
+        // response body wasn't JSON
+      }
+      throw new CveilApiError(response.status, errorBody, response.statusText);
+    }
+
+    const text = await response.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
+  }
+
+  // ─── Consent Operations ───────────────────────────────────────
+
+  /** Grant consent for a single scope. Optimistically updates the local decision cache. */
+  async grant(request: GrantRequest): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/subjects/consent/grant",
+      request
+    );
+    this.optimisticIngest(request.subject, request.scope, "GRANT", request.expiresAt);
+    return result;
+  }
+
+  /** Revoke consent for a single scope. Optimistically updates the local decision cache. */
+  async revoke(request: RevokeRequest): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/subjects/consent/revoke",
+      request
+    );
+    this.optimisticIngest(request.subject, request.scope, "REVOKE");
+    return result;
+  }
+
+  /** Batch grant consent (up to 1000 entries). Optimistically updates cache for succeeded entries. */
+  async grantAll(request: BatchGrantRequest): Promise<BatchConsentResponse> {
+    const result = await this.httpRequest<BatchConsentResponse>(
+      "POST",
+      "/api/v1/subjects/consent/grant-all",
+      request
+    );
+    const failedIndices = new Set(result.errors.map((e) => e.index));
+    for (let i = 0; i < request.grants.length; i++) {
+      if (!failedIndices.has(i)) {
+        const entry = request.grants[i];
+        this.optimisticIngest(request.subject, entry.scope, "GRANT", entry.expiresAt);
+      }
+    }
+    return result;
+  }
+
+  /** Batch revoke consent (up to 1000 entries). Optimistically updates cache for succeeded entries. */
+  async revokeAll(request: BatchRevokeRequest): Promise<BatchConsentResponse> {
+    const result = await this.httpRequest<BatchConsentResponse>(
+      "POST",
+      "/api/v1/subjects/consent/revoke-all",
+      request
+    );
+    const failedIndices = new Set(result.errors.map((e) => e.index));
+    for (let i = 0; i < request.revokes.length; i++) {
+      if (!failedIndices.has(i)) {
+        this.optimisticIngest(request.subject, request.revokes[i].scope, "REVOKE");
+      }
+    }
+    return result;
+  }
+
+  /** Evaluate consent for a set of scopes against the backend. */
+  async evaluateConsent(
+    subject: string,
+    request: EvaluateConsentRequest
+  ): Promise<EvaluateConsentResponse> {
+    return this.httpRequest<EvaluateConsentResponse>(
+      "POST",
+      `/api/v1/subjects/${encodeURIComponent(subject)}/evaluate`,
+      request
+    );
+  }
+
+  /** Get a subject's consent summary. */
+  async getSubjectSummary(subject: string): Promise<SubjectConsentView> {
+    return this.httpRequest<SubjectConsentView>(
+      "GET",
+      `/api/v1/subjects/${encodeURIComponent(subject)}/summary`
+    );
+  }
+
+  /** Get a subject's consent history. */
+  async getSubjectHistory(subject: string): Promise<ConsentLedgerEntry[]> {
+    return this.httpRequest<ConsentLedgerEntry[]>(
+      "GET",
+      `/api/v1/subjects/${encodeURIComponent(subject)}/history`
+    );
+  }
+
+  /**
+   * Build a policy name from a consent scope and ingest it into the WASM decision cache.
+   * This makes the next mask() call reflect the change immediately.
+   */
+  private optimisticIngest(
+    subject: string,
+    scope: ConsentScope,
+    action: "GRANT" | "REVOKE",
+    expiresAt?: string | null
+  ): void {
+    const policyName = this.scopeToPolicyName(scope);
+    if (!policyName) return;
+
+    const decisions: DecisionEntry[] = [
+      {
+        policyName,
+        action,
+        expiresAt: expiresAt ? new Date(expiresAt).getTime() : null,
+      },
+    ];
+    const wasm = this.bridge.exports;
+    this.bridge.call2(
+      wasm.cveil_ingest_decisions,
+      subject,
+      JSON.stringify(decisions)
+    );
+  }
+
+  /** Derive the policy name from a ConsentScope (mirrors backend naming). */
+  private scopeToPolicyName(scope: ConsentScope): string | null {
+    if (scope.fieldName && scope.entityName && scope.purposeName) {
+      return `FIELD:${scope.entityName}/${scope.fieldName}:${scope.purposeName}`;
+    }
+    if (scope.category && scope.purposeName) {
+      return `CAT:${scope.category}:${scope.purposeName}`;
+    }
+    return null;
+  }
+
+  // ─── Subject Operations ───────────────────────────────────────
+
+  /** List all registered subjects. */
+  async listSubjects(): Promise<SubjectView[]> {
+    return this.httpRequest<SubjectView[]>("GET", "/api/v1/subjects");
+  }
+
+  /** Get a single subject by name. */
+  async getSubject(name: string): Promise<SubjectView> {
+    return this.httpRequest<SubjectView>(
+      "GET",
+      `/api/v1/subjects/${encodeURIComponent(name)}`
+    );
+  }
+
+  /** Register a new subject. */
+  async registerSubject(
+    request: RegisterSubjectRequest
+  ): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/subjects",
+      request
+    );
+  }
+
+  /** Update an existing subject. */
+  async updateSubject(
+    name: string,
+    request: UpdateSubjectRequest
+  ): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "PUT",
+      `/api/v1/subjects/${encodeURIComponent(name)}`,
+      request
+    );
+  }
+
+  /** Remove a subject. */
+  async removeSubject(name: string): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/subjects/${encodeURIComponent(name)}`
+    );
+  }
+
+  /** GDPR Article 20 — export all data for a subject. */
+  async exportSubjectData(subject: string): Promise<SubjectDataExport> {
+    return this.httpRequest<SubjectDataExport>(
+      "GET",
+      `/api/v1/subjects/${encodeURIComponent(subject)}/export`
+    );
+  }
+
+  /** GDPR Article 17 — request deletion of all subject data. */
+  async deleteSubjectData(subject: string): Promise<DsarDeletionReceipt> {
+    return this.httpRequest<DsarDeletionReceipt>(
+      "DELETE",
+      `/api/v1/subjects/${encodeURIComponent(subject)}/audit?confirm=DELETE_${encodeURIComponent(subject)}`
+    );
+  }
+
+  /** Shred the DSAR encryption key for a subject (irreversible). */
+  async shredDsarKey(name: string): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/subjects/${encodeURIComponent(name)}/dsar-key`
+    );
+  }
+
+  // ─── Governance: Purposes ─────────────────────────────────────
+
+  async listPurposes(): Promise<PurposeView[]> {
+    return this.httpRequest<PurposeView[]>(
+      "GET",
+      "/api/v1/governance/purposes"
+    );
+  }
+
+  async getPurpose(name: string): Promise<PurposeView> {
+    return this.httpRequest<PurposeView>(
+      "GET",
+      `/api/v1/governance/purposes/${encodeURIComponent(name)}`
+    );
+  }
+
+  async registerPurpose(
+    request: RegisterPurposeRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/purposes",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removePurpose(name: string): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/governance/purposes/${encodeURIComponent(name)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Governance: Purpose Policies ─────────────────────────────
+
+  async addPurposePolicy(
+    request: AddPurposePolicyRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/purposes/policies",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removePurposePolicy(
+    request: AddPurposePolicyRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      "/api/v1/governance/purposes/policies",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Governance: Purpose ↔ Regulation Links ───────────────────
+
+  async linkPurposeToRegulation(
+    request: LinkPurposeRegulationRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/purposes/regulations",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async unlinkPurposeFromRegulation(
+    purposeName: string,
+    regulationName: string
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/governance/purposes/${encodeURIComponent(purposeName)}/regulations/${encodeURIComponent(regulationName)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Governance: Regulations ──────────────────────────────────
+
+  async listRegulations(): Promise<RegulationView[]> {
+    return this.httpRequest<RegulationView[]>(
+      "GET",
+      "/api/v1/governance/regulations"
+    );
+  }
+
+  async getRegulation(name: string): Promise<RegulationView> {
+    return this.httpRequest<RegulationView>(
+      "GET",
+      `/api/v1/governance/regulations/${encodeURIComponent(name)}`
+    );
+  }
+
+  async registerRegulation(
+    request: RegisterRegulationRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/regulations",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removeRegulation(name: string): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/governance/regulations/${encodeURIComponent(name)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Governance: Jurisdictions ────────────────────────────────
+
+  async listJurisdictions(): Promise<JurisdictionView[]> {
+    return this.httpRequest<JurisdictionView[]>(
+      "GET",
+      "/api/v1/governance/jurisdictions"
+    );
+  }
+
+  async getJurisdiction(name: string): Promise<JurisdictionView> {
+    return this.httpRequest<JurisdictionView>(
+      "GET",
+      `/api/v1/governance/jurisdictions/${encodeURIComponent(name)}`
+    );
+  }
+
+  async registerJurisdiction(
+    request: RegisterJurisdictionRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/jurisdictions",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async updateJurisdiction(
+    name: string,
+    request: UpdateJurisdictionRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "PUT",
+      `/api/v1/governance/jurisdictions/${encodeURIComponent(name)}`,
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removeJurisdiction(name: string): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/governance/jurisdictions/${encodeURIComponent(name)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Governance: Regulation ↔ Jurisdiction Links ──────────────
+
+  async addJurisdictionToRegulation(
+    request: AddJurisdictionToRegulationRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/governance/regulations/jurisdictions",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removeJurisdictionFromRegulation(
+    regulationName: string,
+    jurisdictionName: string
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/governance/regulations/${encodeURIComponent(regulationName)}/jurisdictions/${encodeURIComponent(jurisdictionName)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Catalogue: Fields ────────────────────────────────────────
+
+  async listFields(): Promise<FieldView[]> {
+    return this.httpRequest<FieldView[]>("GET", "/api/v1/catalogue/fields");
+  }
+
+  async registerField(
+    request: RegisterFieldRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/catalogue/fields",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async removeField(
+    entityName: string,
+    fieldName: string
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/catalogue/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Catalogue: Entities ──────────────────────────────────────
+
+  async listEntities(): Promise<EntityView[]> {
+    return this.httpRequest<EntityView[]>(
+      "GET",
+      "/api/v1/catalogue/entities"
+    );
+  }
+
+  async getEntity(name: string): Promise<EntityView> {
+    return this.httpRequest<EntityView>(
+      "GET",
+      `/api/v1/catalogue/entities/${encodeURIComponent(name)}`
+    );
+  }
+
+  async registerEntity(
+    request: RegisterEntityRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/catalogue/entities",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async updateEntity(
+    name: string,
+    request: UpdateEntityRequest
+  ): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "PUT",
+      `/api/v1/catalogue/entities/${encodeURIComponent(name)}`,
+      request
+    );
+  }
+
+  async removeEntity(name: string): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/catalogue/entities/${encodeURIComponent(name)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Catalogue: Categories ────────────────────────────────────
+
+  async listCategories(): Promise<CategoryView[]> {
+    return this.httpRequest<CategoryView[]>(
+      "GET",
+      "/api/v1/catalogue/categories"
+    );
+  }
+
+  async getCategory(name: string): Promise<CategoryView> {
+    return this.httpRequest<CategoryView>(
+      "GET",
+      `/api/v1/catalogue/categories/${encodeURIComponent(name)}`
+    );
+  }
+
+  async registerCategory(
+    request: RegisterCategoryRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/catalogue/categories",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async updateCategory(
+    name: string,
+    request: UpdateCategoryRequest
+  ): Promise<MessageResponse> {
+    return this.httpRequest<MessageResponse>(
+      "PUT",
+      `/api/v1/catalogue/categories/${encodeURIComponent(name)}`,
+      request
+    );
+  }
+
+  async removeCategory(name: string): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/catalogue/categories/${encodeURIComponent(name)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Catalogue: Field ↔ Category Links ────────────────────────
+
+  async assignFieldToCategory(
+    request: AssignFieldCategoryRequest
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "POST",
+      "/api/v1/catalogue/fields/categories",
+      request
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  async unassignFieldFromCategory(
+    entityName: string,
+    fieldName: string,
+    categoryName: string
+  ): Promise<MessageResponse> {
+    const result = await this.httpRequest<MessageResponse>(
+      "DELETE",
+      `/api/v1/catalogue/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}/categories/${encodeURIComponent(categoryName)}`
+    );
+    await this.reloadGraphAfterMutation();
+    return result;
+  }
+
+  // ─── Graph Reload Helper ──────────────────────────────────────
+
+  /**
+   * Reload the full consent graph after a governance/catalogue mutation.
+   * Swallows errors to avoid failing the mutation response — the SSE stream
+   * will pick up the change eventually.
+   */
+  private async reloadGraphAfterMutation(): Promise<void> {
+    try {
+      await this.loadGraph();
+    } catch (err) {
+      console.error("[cveil] Graph reload after mutation failed:", err);
     }
   }
 }

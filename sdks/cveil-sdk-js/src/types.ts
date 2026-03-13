@@ -105,3 +105,289 @@ export interface CveilClientOptions {
   /** Graph page size for initial load. Default: 100. */
   graphPageSize?: number;
 }
+
+// ─── Common Response ────────────────────────────────────────────
+
+/** Generic message response returned by most mutation endpoints. */
+export interface MessageResponse {
+  message: string;
+}
+
+/** Structured error response from the operio API. */
+export interface ApiErrorBody {
+  requestId?: string | null;
+  error: string;
+  message: string;
+  retryable: boolean;
+  retryAfter?: number | null;
+}
+
+// ─── Consent DTOs ───────────────────────────────────────────────
+
+/** A consent scope targeting a specific field, category, or wildcard. */
+export interface ConsentScope {
+  category?: string;
+  fieldName?: string;
+  entityName?: string;
+  purposeName?: string;
+}
+
+/** Grant consent for a single scope. */
+export interface GrantRequest {
+  subject: string;
+  scope: ConsentScope;
+  expiresAt?: string | null;
+}
+
+/** Revoke consent for a single scope. */
+export interface RevokeRequest {
+  subject: string;
+  scope: ConsentScope;
+}
+
+/** Entry in a batch grant/revoke request. */
+export interface BatchConsentEntry {
+  scope: ConsentScope;
+  expiresAt?: string | null;
+}
+
+/** Batch grant consent (up to 1000 entries). */
+export interface BatchGrantRequest {
+  subject: string;
+  grants: BatchConsentEntry[];
+}
+
+/** Batch revoke consent (up to 1000 entries). */
+export interface BatchRevokeRequest {
+  subject: string;
+  revokes: BatchConsentEntry[];
+}
+
+/** Result of a batch consent operation. */
+export interface BatchConsentResponse {
+  succeeded: number;
+  failed: number;
+  errors: BatchItemError[];
+}
+
+export interface BatchItemError {
+  index: number;
+  scope: ConsentScope;
+  message: string;
+}
+
+/** Evaluate consent for a set of scopes (max 100). */
+export interface EvaluateConsentRequest {
+  scopes: ConsentScope[];
+}
+
+/** Detailed evaluation result per scope. */
+export interface DecisionDetail {
+  effectiveStatus: "GRANTED" | "REVOKED" | null;
+  resolvedBy: "FIELD" | "CATEGORY" | "NONE";
+  expiresAt?: string | null;
+}
+
+/** Full evaluation response. */
+export interface EvaluateConsentResponse {
+  subject: string;
+  granted: ConsentScope[];
+  denied: ConsentScope[];
+  reasons: Record<string, string>;
+  details: Record<string, DecisionDetail>;
+}
+
+// ─── Subject DTOs ───────────────────────────────────────────────
+
+export interface SubjectView {
+  subjectId: number;
+  subjectName: string;
+  description: string | null;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface RegisterSubjectRequest {
+  subjectName: string;
+  description?: string;
+}
+
+export interface UpdateSubjectRequest {
+  description: string;
+}
+
+export interface ConsentLedgerEntry {
+  consentLedgerId: number;
+  subjectId: string;
+  policyId: number;
+  purposeName: string;
+  policyType: string;
+  fieldName: string | null;
+  entityName: string | null;
+  categoryName: string | null;
+  action: "GRANT" | "REVOKE" | "EXPIRE";
+  actor: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface SubjectConsentView {
+  subjectId: string;
+  entries: ConsentLedgerEntry[];
+}
+
+export interface SubjectDataExport {
+  subject: string;
+  consent: SubjectConsentView;
+  cachedKeyCount: number;
+  exportedAt: string;
+}
+
+export interface DsarDeletionReceipt {
+  subject: string;
+  deletionRequestId: string;
+  ledgerEntriesRevoked: number;
+  cachedKeysDeleted: number;
+  status: "PENDING_SHRED" | "PARTIAL_FAILURE";
+  completedAt: string;
+}
+
+// ─── Governance DTOs ────────────────────────────────────────────
+
+export interface RegisterPurposeRequest {
+  purposeName: string;
+  description?: string;
+}
+
+export interface PurposeRegulationLink {
+  regulationName: string;
+  lawfulBasis: string | null;
+  onGranted: string | null;
+  onDenied: string | null;
+}
+
+export interface PurposePolicyView {
+  policyId: number;
+  policyType: string;
+  category: { categoryId: number; categoryName: string } | null;
+  field: { fieldId: number; fieldName: string; entityName: string } | null;
+}
+
+export interface PurposeView {
+  purposeId: number;
+  purposeName: string;
+  description: string | null;
+  regulations: PurposeRegulationLink[];
+  policies: PurposePolicyView[];
+}
+
+export interface RegisterRegulationRequest {
+  regulationName: string;
+  description?: string;
+}
+
+export interface RegulationJurisdictionLink {
+  jurisdictionId: number;
+  jurisdictionName: string;
+}
+
+export interface RegulationView {
+  regulationId: number;
+  regulationName: string;
+  description: string | null;
+  activeJurisdictions: RegulationJurisdictionLink[];
+}
+
+export interface RegisterJurisdictionRequest {
+  jurisdictionName: string;
+  description?: string;
+}
+
+export interface UpdateJurisdictionRequest {
+  description: string;
+}
+
+export interface JurisdictionView {
+  jurisdictionId: number;
+  jurisdictionName: string;
+  description: string | null;
+}
+
+export interface LinkPurposeRegulationRequest {
+  purposeName: string;
+  regulationName: string;
+  lawfulBasis?: string;
+  onGranted?: string;
+  onDenied?: string;
+}
+
+export interface AddPurposePolicyRequest {
+  purposeName: string;
+  policyType: string;
+  fieldName?: string;
+  entityName?: string;
+  categoryName?: string;
+}
+
+export interface AddJurisdictionToRegulationRequest {
+  regulationName: string;
+  jurisdictionName: string;
+}
+
+// ─── Catalogue DTOs ─────────────────────────────────────────────
+
+export interface FieldView {
+  fieldId: number;
+  fieldName: string;
+  description: string | null;
+  entity: { entityId: number; entityName: string };
+  categories: { categoryId: number; categoryName: string }[];
+}
+
+export interface RegisterFieldRequest {
+  fieldName: string;
+  entityName: string;
+  description?: string;
+  entityDescription?: string;
+}
+
+export interface EntityView {
+  entityId: number;
+  entityName: string;
+  description: string | null;
+}
+
+export interface RegisterEntityRequest {
+  entityName: string;
+  description?: string;
+}
+
+export interface UpdateEntityRequest {
+  description: string;
+}
+
+export interface CategoryView {
+  categoryId: number;
+  categoryName: string;
+  description: string | null;
+}
+
+export interface RegisterCategoryRequest {
+  categoryName: string;
+  description?: string;
+}
+
+export interface UpdateCategoryRequest {
+  description: string;
+}
+
+export interface AssignFieldCategoryRequest {
+  fieldName: string;
+  entityName: string;
+  categoryName: string;
+  categoryDescription?: string;
+}

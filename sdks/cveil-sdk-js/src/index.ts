@@ -19,8 +19,10 @@
  */
 
 export { CveilClient } from "./client.js";
+export { CveilApiError } from "./client.js";
 export { WasmBridge, CveilWasmError } from "./wasm-bridge.js";
 export type {
+  // Core types
   CveilConfig,
   CveilClientOptions,
   MaskResult,
@@ -33,4 +35,51 @@ export type {
   GraphNode,
   GraphEdge,
   GraphPageInfo,
+  // Common
+  MessageResponse,
+  ApiErrorBody,
+  // Consent
+  ConsentScope,
+  GrantRequest,
+  RevokeRequest,
+  BatchConsentEntry,
+  BatchGrantRequest,
+  BatchRevokeRequest,
+  BatchConsentResponse,
+  BatchItemError,
+  EvaluateConsentRequest,
+  EvaluateConsentResponse,
+  DecisionDetail,
+  // Subject
+  SubjectView,
+  RegisterSubjectRequest,
+  UpdateSubjectRequest,
+  SubjectConsentView,
+  ConsentLedgerEntry,
+  SubjectDataExport,
+  DsarDeletionReceipt,
+  // Governance
+  PurposeView,
+  PurposeRegulationLink,
+  PurposePolicyView,
+  RegisterPurposeRequest,
+  RegulationView,
+  RegulationJurisdictionLink,
+  RegisterRegulationRequest,
+  JurisdictionView,
+  RegisterJurisdictionRequest,
+  UpdateJurisdictionRequest,
+  LinkPurposeRegulationRequest,
+  AddPurposePolicyRequest,
+  AddJurisdictionToRegulationRequest,
+  // Catalogue
+  FieldView,
+  RegisterFieldRequest,
+  EntityView,
+  RegisterEntityRequest,
+  UpdateEntityRequest,
+  CategoryView,
+  RegisterCategoryRequest,
+  UpdateCategoryRequest,
+  AssignFieldCategoryRequest,
 } from "./types.js";
