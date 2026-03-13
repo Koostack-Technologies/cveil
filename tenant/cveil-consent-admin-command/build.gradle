@@ -1,0 +1,21 @@
+plugins {
+    id("buildlogic.java-library-conventions")
+    id("buildlogic.maven-publish")
+}
+
+dependencies {
+    api(project(":cveil-core"))
+    implementation("org.slf4j:slf4j-api:2.0.16")
+
+    // --- Test ----------------------------------------------------------------
+    testImplementation(project(":platform:cveil-platform-event-jooq"))
+    testImplementation(project(":common:cveil-jooq"))
+    testImplementation(project(":common:cveil-redis"))
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.testcontainers:testcontainers:1.20.6")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.6")
+    testImplementation("org.testcontainers:postgresql:1.20.6")
+    testImplementation("org.postgresql:postgresql:42.7.4")
+    testImplementation("redis.clients:jedis:5.2.0")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.12")
+}

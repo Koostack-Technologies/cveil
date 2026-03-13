@@ -1,0 +1,18 @@
+plugins {
+    id("buildlogic.java-library-conventions")
+    id("buildlogic.maven-publish")
+}
+
+// ---------------------------------------------------------------------------
+// Dependencies
+// ---------------------------------------------------------------------------
+dependencies {
+    // --- Runtime / API -------------------------------------------------------
+    api project(':cveil-core')
+    implementation project(":common:cveil-jooq")
+    implementation project(":common:cveil-redis")
+
+    // --- Test ----------------------------------------------------------------
+    testImplementation 'com.h2database:h2:2.2.224'
+    testImplementation 'com.github.fppt:jedis-mock:1.1.4'
+}
