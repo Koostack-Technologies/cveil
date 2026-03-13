@@ -1,18 +1,15 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.FieldDao;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
-
-import org.jooq.DSLContext;
-
-import java.util.List;
-import java.util.Optional;
-
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.FIELD;
 
-/**
- * Read-only repository for the {@code field} table.
- */
+import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.FieldDao;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Field;
+import java.util.List;
+import java.util.Optional;
+import org.jooq.DSLContext;
+
+/** Read-only repository for the {@code field} table. */
 public class FieldRepository {
 
     private final DSLContext dsl;
@@ -30,8 +27,9 @@ public class FieldRepository {
 
     public List<Field> findByName(String fieldName) {
         return dsl.selectFrom(FIELD)
-                  .where(FIELD.FIELD_NAME.eq(fieldName))
-                  .fetchInto(Field.class);
+                .where(FIELD.FIELD_NAME.eq(fieldName))
+                .and(FIELD.TENANT_ID.eq(TenantContext.require()))
+                .fetchInto(Field.class);
     }
 
     public Optional<Field> findByNameAndEntity(String fieldName, Long entityId) {
@@ -43,21 +41,23 @@ public class FieldRepository {
             condition = condition.and(FIELD.ENTITY_ID.isNull());
         }
 
-        return dsl.selectFrom(FIELD)
-                  .where(condition)
-                  .fetchOptionalInto(Field.class);
+        condition = condition.and(FIELD.TENANT_ID.eq(TenantContext.require()));
+
+        return dsl.selectFrom(FIELD).where(condition).fetchOptionalInto(Field.class);
     }
 
     public List<Field> findByEntity(Long entityId) {
         return dsl.selectFrom(FIELD)
-                  .where(FIELD.ENTITY_ID.eq(entityId))
-                  .orderBy(FIELD.FIELD_NAME)
-                  .fetchInto(Field.class);
+                .where(FIELD.ENTITY_ID.eq(entityId))
+                .and(FIELD.TENANT_ID.eq(TenantContext.require()))
+                .orderBy(FIELD.FIELD_NAME)
+                .fetchInto(Field.class);
     }
 
     public List<Field> findAll() {
         return dsl.selectFrom(FIELD)
-                  .orderBy(FIELD.FIELD_NAME)
-                  .fetchInto(Field.class);
+                .where(FIELD.TENANT_ID.eq(TenantContext.require()))
+                .orderBy(FIELD.FIELD_NAME)
+                .fetchInto(Field.class);
     }
 }

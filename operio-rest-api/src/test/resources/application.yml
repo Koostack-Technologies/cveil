@@ -36,6 +36,13 @@ quarkus:
   # Disable DevServices — we manage our own containers via Testcontainers
   devservices:
     enabled: false
+  # CDI / ArC — must mirror production config so generic platform types resolve
+  arc:
+    unremovable-types: com.koostack.operio.core.platform.**
+  index-dependency:
+    operio-core:
+      group-id: com.koostack.operio
+      artifact-id: operio-core
 
 # SmallRye Config: allow operio.test.* substitution variables in the Config
 # Override source without requiring them to map to @ConfigMapping(prefix="operio").
@@ -98,3 +105,10 @@ operio:
   # Individual test classes override via @QuarkusTestResource properties.
   multi-tenant:
     enabled: false
+
+  keycloak:
+    url: ${operio.test.keycloak.url:}
+    admin-username: ${operio.test.keycloak.admin-username:admin}
+    admin-password: ${operio.test.keycloak.admin-password:admin}
+    client-id: operio-backend
+    client-secret: ${operio.test.keycloak.client-secret:}

@@ -2,13 +2,12 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.doReturn;
 
-import com.koostack.operio.core.models.IdentityContext;
-import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.exception.OperioAuthException;
-import com.koostack.operio.core.service.TokenVerifier;
+import com.koostack.operio.core.models.IdentityContext;
+import com.koostack.operio.core.platform.iam.TokenValidationService;
 import com.koostack.operio.rest.config.OperioConfig;
+import com.koostack.operio.rest.config.PlatformCqrsHolder;
 import com.koostack.operio.rest.context.OperioRequestHolder;
 import com.koostack.operio.rest.filter.ApiKeyAuthFilter;
 import com.koostack.operio.rest.lifecycle.BootstrapKeyLifecycleService;
@@ -32,30 +31,30 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link ApiKeyAuthFilter} — the JAX-RS authentication filter
- * that verifies Bearer tokens (API keys and bootstrap key) on every request.
+ * Unit tests for {@link ApiKeyAuthFilter} — the JAX-RS authentication filter that verifies Bearer
+ * tokens (API keys and bootstrap key) on every request.
  *
- * <p>These tests exercise the filter in isolation using Mockito mocks for all
- * CDI-injected dependencies ({@code Operio}, {@code OperioConfig},
- * {@code BootstrapKeyLifecycleService}, {@code OperioRequestHolder}) and a
- * mocked {@link ContainerRequestContext}.
+ * <p>These tests exercise the filter in isolation using Mockito mocks for all CDI-injected
+ * dependencies ({@code Operio}, {@code OperioConfig}, {@code BootstrapKeyLifecycleService}, {@code
+ * OperioRequestHolder}) and a mocked {@link ContainerRequestContext}.
  *
  * <p>Covers:
+ *
  * <ul>
- *   <li>Public paths (health) — filter skips authentication</li>
- *   <li>CORS preflight (OPTIONS) — filter skips authentication</li>
- *   <li>Missing Authorization header → 401</li>
- *   <li>Non-Bearer Authorization header → 401</li>
- *   <li>Empty Bearer token → 401</li>
- *   <li>Valid bootstrap key → super-admin identity with no tenant</li>
- *   <li>Disabled (consumed) bootstrap key → 403 Forbidden</li>
- *   <li>Valid API key (token verifier succeeds) → identity applied</li>
- *   <li>Invalid API key (token verifier rejects) → 401</li>
- *   <li>Token verifier throws unexpected exception → 401</li>
- *   <li>No token verifier configured → 401</li>
- *   <li>Security context role enforcement after auth</li>
- *   <li>X-Forwarded-For / X-Real-IP remote address resolution</li>
- *   <li>User-Agent header pass-through</li>
+ *   <li>Public paths (health) — filter skips authentication
+ *   <li>CORS preflight (OPTIONS) — filter skips authentication
+ *   <li>Missing Authorization header → 401
+ *   <li>Non-Bearer Authorization header → 401
+ *   <li>Empty Bearer token → 401
+ *   <li>Valid bootstrap key → super-admin identity with no tenant
+ *   <li>Disabled (consumed) bootstrap key → 403 Forbidden
+ *   <li>Valid API key (token verifier succeeds) → identity applied
+ *   <li>Invalid API key (token verifier rejects) → 401
+ *   <li>Token verifier throws unexpected exception → 401
+ *   <li>No token verifier configured → 401
+ *   <li>Security context role enforcement after auth
+ *   <li>X-Forwarded-For / X-Real-IP remote address resolution
+ *   <li>User-Agent header pass-through
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -66,30 +65,23 @@ class ApiKeyAuthFilterTest {
     // Mocks
     // -----------------------------------------------------------------------
 
-    @Mock
-    private Operio operio;
+    @Mock private PlatformCqrsHolder cqrsHolder;
 
-    @Mock
-    private BootstrapKeyLifecycleService bootstrapLifecycle;
+    @Mock private BootstrapKeyLifecycleService bootstrapLifecycle;
 
-    @Mock
-    private OperioRequestHolder requestHolder;
+    @Mock private OperioRequestHolder requestHolder;
 
-    @Mock
-    private ContainerRequestContext requestContext;
+    @Mock private ContainerRequestContext requestContext;
 
     @SuppressWarnings("unchecked")
     @Mock
     private Instance<OperioConfig> configInstance;
 
-    @Mock
-    private OperioConfig operioConfig;
+    @Mock private OperioConfig operioConfig;
 
-    @Mock
-    private UriInfo uriInfo;
+    @Mock private UriInfo uriInfo;
 
-    @Mock
-    private SecurityContext securityContext;
+    @Mock private SecurityContext securityContext;
 
     // -----------------------------------------------------------------------
     // System under test
@@ -102,7 +94,7 @@ class ApiKeyAuthFilterTest {
         filter = new ApiKeyAuthFilter();
 
         // Inject mocks into the filter via reflection (simulating CDI @Inject)
-        injectField(filter, "operio", operio);
+        injectField(filter, "cqrsHolder", cqrsHolder);
         injectField(filter, "bootstrapLifecycle", bootstrapLifecycle);
         injectField(filter, "requestHolder", requestHolder);
         injectField(filter, "configInstance", configInstance);
@@ -113,24 +105,18 @@ class ApiKeyAuthFilterTest {
     }
 
     /**
-     * Sets a field value on the target object via reflection, used to
-     * simulate CDI injection for unit testing.
+     * Sets a field value on the target object via reflection, used to simulate CDI injection for
+     * unit testing.
      */
-    private static void injectField(
-        Object target,
-        String fieldName,
-        Object value
-    ) throws Exception {
+    private static void injectField(Object target, String fieldName, Object value)
+            throws Exception {
         Field field = findField(target.getClass(), fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
 
-    /**
-     * Walks the class hierarchy to find a declared field by name.
-     */
-    private static Field findField(Class<?> clazz, String fieldName)
-        throws NoSuchFieldException {
+    /** Walks the class hierarchy to find a declared field by name. */
+    private static Field findField(Class<?> clazz, String fieldName) throws NoSuchFieldException {
         Class<?> current = clazz;
         while (current != null) {
             try {
@@ -140,85 +126,63 @@ class ApiKeyAuthFilterTest {
             }
         }
         throw new NoSuchFieldException(
-            "Field '" +
-                fieldName +
-                "' not found in " +
-                clazz.getName() +
-                " or its superclasses"
-        );
+                "Field '"
+                        + fieldName
+                        + "' not found in "
+                        + clazz.getName()
+                        + " or its superclasses");
     }
 
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
-    /**
-     * Configures the mock request context to return the given path.
-     */
+    /** Configures the mock request context to return the given path. */
     private void givenPath(String path) {
         lenient().when(requestContext.getUriInfo()).thenReturn(uriInfo);
         lenient().when(uriInfo.getPath()).thenReturn(path);
         try {
             lenient()
-                .when(uriInfo.getRequestUri())
-                .thenReturn(new URI("http://localhost:8080/" + path));
-        } catch (Exception ignored) {}
+                    .when(uriInfo.getRequestUri())
+                    .thenReturn(new URI("http://localhost:8080/" + path));
+        } catch (Exception ignored) {
+        }
     }
 
-    /**
-     * Configures the mock request context to return the given HTTP method.
-     */
+    /** Configures the mock request context to return the given HTTP method. */
     private void givenMethod(String method) {
         lenient().when(requestContext.getMethod()).thenReturn(method);
     }
 
-    /**
-     * Configures the Authorization header on the request context.
-     */
+    /** Configures the Authorization header on the request context. */
     private void givenAuthHeader(String value) {
-        lenient()
-            .when(requestContext.getHeaderString("Authorization"))
-            .thenReturn(value);
+        lenient().when(requestContext.getHeaderString("Authorization")).thenReturn(value);
     }
 
-    /**
-     * Sets up a standard non-public GET request with no auth header (default).
-     */
+    /** Sets up a standard non-public GET request with no auth header (default). */
     private void givenAuthenticatedEndpoint(String path) {
         givenPath(path);
         givenMethod("GET");
-        lenient()
-            .when(requestContext.getSecurityContext())
-            .thenReturn(securityContext);
+        lenient().when(requestContext.getSecurityContext()).thenReturn(securityContext);
         lenient().when(securityContext.isSecure()).thenReturn(false);
     }
 
-    /**
-     * Creates an IdentityContext for a tenant user.
-     */
+    /** Creates an IdentityContext for a tenant user. */
     private static IdentityContext tenantIdentity(
-        String subject,
-        String tenantId,
-        Set<String> roles
-    ) {
+            String subject, String tenantId, Set<String> roles) {
         return new IdentityContext(
-            subject,
-            "test-token-" + subject,
-            subject + "@example.com",
-            roles,
-            Map.of(),
-            tenantId,
-            "api-key"
-        );
+                subject,
+                "test-token-" + subject,
+                subject + "@example.com",
+                roles,
+                Map.of(),
+                tenantId,
+                "api-key");
     }
 
-    /**
-     * Captures the Response passed to abortWith().
-     */
+    /** Captures the Response passed to abortWith(). */
     private Response captureAbort() {
-        ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(
-            Response.class
-        );
+        ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
         verify(requestContext).abortWith(captor.capture());
         return captor.getValue();
     }
@@ -266,9 +230,7 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "Quarkus health sub-path (q/health/ready) skips authentication"
-        )
+        @DisplayName("Quarkus health sub-path (q/health/ready) skips authentication")
         void quarkusHealthReadySkipped() throws IOException {
             givenPath("q/health/ready");
             givenMethod("GET");
@@ -279,9 +241,7 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "Quarkus health liveness (q/health/live) skips authentication"
-        )
+        @DisplayName("Quarkus health liveness (q/health/live) skips authentication")
         void quarkusHealthLiveSkipped() throws IOException {
             givenPath("q/health/live");
             givenMethod("GET");
@@ -313,9 +273,7 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "OPTIONS request on platform endpoint skips authentication"
-        )
+        @DisplayName("OPTIONS request on platform endpoint skips authentication")
         void optionsPlatformSkipped() throws IOException {
             givenPath("api/v1/platform/tenants");
             givenMethod("OPTIONS");
@@ -380,13 +338,8 @@ class ApiKeyAuthFilterTest {
             Response abortResponse = captureAbort();
             assertNotNull(abortResponse.getMediaType());
             assertTrue(
-                abortResponse
-                    .getMediaType()
-                    .toString()
-                    .contains("application/json"),
-                "Expected JSON content type but got: " +
-                    abortResponse.getMediaType()
-            );
+                    abortResponse.getMediaType().toString().contains("application/json"),
+                    "Expected JSON content type but got: " + abortResponse.getMediaType());
         }
 
         @Test
@@ -500,9 +453,7 @@ class ApiKeyAuthFilterTest {
         void bootstrapKeyGrantsSuperAdmin() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
@@ -511,19 +462,15 @@ class ApiKeyAuthFilterTest {
 
             // Should populate the request holder with a super-admin identity
             ArgumentCaptor<IdentityContext> identityCaptor =
-                ArgumentCaptor.forClass(IdentityContext.class);
+                    ArgumentCaptor.forClass(IdentityContext.class);
             verify(requestHolder).set(identityCaptor.capture(), any(), any());
 
             IdentityContext identity = identityCaptor.getValue();
             assertEquals("bootstrap-admin", identity.subject());
-            assertNull(
-                identity.tenantId(),
-                "Bootstrap identity should have no tenant"
-            );
+            assertNull(identity.tenantId(), "Bootstrap identity should have no tenant");
             assertTrue(
-                identity.roles().contains("super-admin"),
-                "Bootstrap identity should have super-admin role"
-            );
+                    identity.roles().contains("super-admin"),
+                    "Bootstrap identity should have super-admin role");
             assertEquals("bootstrap-key", identity.provider());
         }
 
@@ -532,16 +479,12 @@ class ApiKeyAuthFilterTest {
         void bootstrapKeySetsSecurityContext() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
             // SecurityContext should be set (setSecurityContext called)
-            verify(requestContext).setSecurityContext(
-                any(SecurityContext.class)
-            );
+            verify(requestContext).setSecurityContext(any(SecurityContext.class));
         }
 
         @Test
@@ -549,16 +492,14 @@ class ApiKeyAuthFilterTest {
         void bootstrapKeyStoresRequestProperty() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
-            verify(requestContext).setProperty(
-                eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
-                any(IdentityContext.class)
-            );
+            verify(requestContext)
+                    .setProperty(
+                            eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
+                            any(IdentityContext.class));
         }
     }
 
@@ -576,13 +517,9 @@ class ApiKeyAuthFilterTest {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
             // isActiveBootstrapKey returns false (key is consumed/disabled)
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(false);
             // isBootstrapKeyValue returns true (it IS the bootstrap key, just disabled)
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
@@ -591,18 +528,12 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "consumed bootstrap key response includes descriptive message"
-        )
+        @DisplayName("consumed bootstrap key response includes descriptive message")
         void consumedBootstrapKeyMessage() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
@@ -615,10 +546,8 @@ class ApiKeyAuthFilterTest {
             String message = (String) body.get("message");
             assertNotNull(message);
             assertTrue(
-                message.contains("disabled") || message.contains("Bootstrap"),
-                "Expected message about disabled bootstrap key but got: " +
-                    message
-            );
+                    message.contains("disabled") || message.contains("Bootstrap"),
+                    "Expected message about disabled bootstrap key but got: " + message);
         }
 
         @Test
@@ -626,12 +555,8 @@ class ApiKeyAuthFilterTest {
         void consumedBootstrapKeyNoHolder() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-secret");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-secret")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("my-bootstrap-secret")).thenReturn(true);
 
             filter.filter(requestContext);
 
@@ -652,24 +577,17 @@ class ApiKeyAuthFilterTest {
         void validApiKeyAuthenticated() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_abc123def456");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_abc123def456")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_abc123def456")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_abc123def456"))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_abc123def456")).thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "alice",
-                "acme_corp",
-                Set.of("admin")
-            );
+            IdentityContext identity = tenantIdentity("alice", "acme_corp", Set.of("admin"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_abc123def456")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_abc123def456")).thenReturn(identity);
 
             filter.filter(requestContext);
 
@@ -685,31 +603,22 @@ class ApiKeyAuthFilterTest {
         void validApiKeySetsSecurityContext() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_valid_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_valid_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_valid_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_valid_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_valid_key")).thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "bob",
-                "beta_co",
-                Set.of("consent-writer")
-            );
+            IdentityContext identity = tenantIdentity("bob", "beta_co", Set.of("consent-writer"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_valid_key")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_valid_key")).thenReturn(identity);
 
             filter.filter(requestContext);
 
             // SecurityContext should be set
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
 
             SecurityContext sc = secCaptor.getValue();
@@ -725,31 +634,21 @@ class ApiKeyAuthFilterTest {
         void validApiKeyStoresProperty() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_prop_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_prop_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_prop_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_prop_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_prop_key")).thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "carol",
-                "gamma_inc",
-                Set.of("reader")
-            );
+            IdentityContext identity = tenantIdentity("carol", "gamma_inc", Set.of("reader"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_prop_key")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_prop_key")).thenReturn(identity);
 
             filter.filter(requestContext);
 
-            verify(requestContext).setProperty(
-                eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
-                eq(identity)
-            );
+            verify(requestContext)
+                    .setProperty(eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY), eq(identity));
         }
 
         @Test
@@ -757,36 +656,22 @@ class ApiKeyAuthFilterTest {
         void validApiKeyMultipleRoles() throws IOException {
             givenAuthenticatedEndpoint("api/v1/admin/fields");
             givenAuthHeader("Bearer opr_live_multi_role");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_multi_role")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_multi_role")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_multi_role")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_multi_role")).thenReturn(false);
 
-            Set<String> roles = Set.of(
-                "admin",
-                "consent-writer",
-                "consent-reader",
-                "audit-viewer"
-            );
-            IdentityContext identity = tenantIdentity(
-                "dave",
-                "delta_llc",
-                roles
-            );
+            Set<String> roles = Set.of("admin", "consent-writer", "consent-reader", "audit-viewer");
+            IdentityContext identity = tenantIdentity("dave", "delta_llc", roles);
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_multi_role")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_multi_role")).thenReturn(identity);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
             SecurityContext sc = secCaptor.getValue();
 
@@ -808,22 +693,19 @@ class ApiKeyAuthFilterTest {
 
         @Test
         @DisplayName("token verifier throws OperioAuthException → 401")
-        void tokenVerifierRejectsToken() throws IOException {
+        void tokenValidationServiceRejectsToken() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_invalid_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_invalid_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_invalid_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_invalid_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_invalid_key")).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_invalid_key")).thenThrow(
-                new OperioAuthException("Invalid or expired API key")
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_invalid_key"))
+                    .thenThrow(new OperioAuthException("Invalid or expired API key"));
 
             filter.filter(requestContext);
 
@@ -832,25 +714,20 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "token verifier throws OperioAuthException → holder NOT populated"
-        )
-        void tokenVerifierRejectsNoHolder() throws IOException {
+        @DisplayName("token verifier throws OperioAuthException → holder NOT populated")
+        void tokenValidationServiceRejectsNoHolder() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_bad_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_bad_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_bad_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_bad_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_bad_key")).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_bad_key")).thenThrow(
-                new OperioAuthException("Key revoked")
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_bad_key"))
+                    .thenThrow(new OperioAuthException("Key revoked"));
 
             filter.filter(requestContext);
 
@@ -862,19 +739,16 @@ class ApiKeyAuthFilterTest {
         void revokedKeyMessage() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_revoked");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_revoked")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_revoked")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_revoked")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_revoked")).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_revoked")).thenThrow(
-                new OperioAuthException("API key has been revoked")
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_revoked"))
+                    .thenThrow(new OperioAuthException("API key has been revoked"));
 
             filter.filter(requestContext);
 
@@ -886,9 +760,8 @@ class ApiKeyAuthFilterTest {
             Map<String, Object> body = (Map<String, Object>) entity;
             String message = (String) body.get("message");
             assertTrue(
-                message.contains("revoked"),
-                "Expected message about revoked key but got: " + message
-            );
+                    message.contains("revoked"),
+                    "Expected message about revoked key but got: " + message);
         }
     }
 
@@ -905,19 +778,16 @@ class ApiKeyAuthFilterTest {
         void unexpectedExceptionReturns401() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_crash_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_crash_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_crash_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_crash_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_crash_key")).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_crash_key")).thenThrow(
-                new RuntimeException("Database connection lost")
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_crash_key"))
+                    .thenThrow(new RuntimeException("Database connection lost"));
 
             filter.filter(requestContext);
 
@@ -930,19 +800,16 @@ class ApiKeyAuthFilterTest {
         void npeReturns401() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_npe_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_npe_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_npe_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_npe_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_npe_key")).thenReturn(false);
 
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_npe_key")).thenThrow(
-                new NullPointerException("Null config")
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_npe_key"))
+                    .thenThrow(new NullPointerException("Null config"));
 
             filter.filter(requestContext);
 
@@ -956,9 +823,8 @@ class ApiKeyAuthFilterTest {
             Map<String, Object> body = (Map<String, Object>) entity;
             String message = (String) body.get("message");
             assertFalse(
-                message.contains("Null config"),
-                "Internal error details should not be leaked to the client"
-            );
+                    message.contains("Null config"),
+                    "Internal error details should not be leaked to the client");
         }
     }
 
@@ -968,22 +834,16 @@ class ApiKeyAuthFilterTest {
 
     @Nested
     @DisplayName("No token verifier configured → 401")
-    class NoTokenVerifier {
+    class NoTokenValidationService {
 
         @Test
-        @DisplayName(
-            "null token verifier → 401 with configuration error message"
-        )
-        void nullTokenVerifier() throws IOException {
+        @DisplayName("null token verifier → 401 with configuration error message")
+        void nullTokenValidationService() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_some_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_some_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_some_key")
-            ).thenReturn(false);
-            when(operio.tokenVerifier()).thenReturn(null);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_some_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_some_key")).thenReturn(false);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(false);
 
             filter.filter(requestContext);
 
@@ -1001,53 +861,34 @@ class ApiKeyAuthFilterTest {
     class RemoteAddressResolution {
 
         @Test
-        @DisplayName(
-            "X-Forwarded-For header is used for remote address (single IP)"
-        )
+        @DisplayName("X-Forwarded-For header is used for remote address (single IP)")
         void xForwardedForSingleIp() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
-            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(
-                "203.0.113.42"
-            );
-            when(requestContext.getHeaderString("User-Agent")).thenReturn(
-                "TestAgent/1.0"
-            );
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
+            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn("203.0.113.42");
+            when(requestContext.getHeaderString("User-Agent")).thenReturn("TestAgent/1.0");
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
+            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(String.class);
             verify(requestHolder).set(any(), addrCaptor.capture(), any());
             assertEquals("203.0.113.42", addrCaptor.getValue());
         }
 
         @Test
-        @DisplayName(
-            "X-Forwarded-For with multiple IPs uses the first (client IP)"
-        )
+        @DisplayName("X-Forwarded-For with multiple IPs uses the first (client IP)")
         void xForwardedForMultipleIps() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
-            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(
-                "203.0.113.42, 10.0.0.1, 172.16.0.1"
-            );
-            when(requestContext.getHeaderString("User-Agent")).thenReturn(
-                "TestAgent/1.0"
-            );
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
+            when(requestContext.getHeaderString("X-Forwarded-For"))
+                    .thenReturn("203.0.113.42, 10.0.0.1, 172.16.0.1");
+            when(requestContext.getHeaderString("User-Agent")).thenReturn("TestAgent/1.0");
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
+            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(String.class);
             verify(requestHolder).set(any(), addrCaptor.capture(), any());
             assertEquals("203.0.113.42", addrCaptor.getValue());
         }
@@ -1057,24 +898,14 @@ class ApiKeyAuthFilterTest {
         void xRealIpFallback() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
-            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(
-                null
-            );
-            when(requestContext.getHeaderString("X-Real-IP")).thenReturn(
-                "198.51.100.7"
-            );
-            when(requestContext.getHeaderString("User-Agent")).thenReturn(
-                "TestAgent/1.0"
-            );
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
+            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(null);
+            when(requestContext.getHeaderString("X-Real-IP")).thenReturn("198.51.100.7");
+            when(requestContext.getHeaderString("User-Agent")).thenReturn("TestAgent/1.0");
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
+            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(String.class);
             verify(requestHolder).set(any(), addrCaptor.capture(), any());
             assertEquals("198.51.100.7", addrCaptor.getValue());
         }
@@ -1084,28 +915,16 @@ class ApiKeyAuthFilterTest {
         void noProxyHeaders() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
-            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(
-                null
-            );
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
+            when(requestContext.getHeaderString("X-Forwarded-For")).thenReturn(null);
             when(requestContext.getHeaderString("X-Real-IP")).thenReturn(null);
             when(requestContext.getHeaderString("User-Agent")).thenReturn(null);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
-            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
-            verify(requestHolder).set(
-                any(),
-                addrCaptor.capture(),
-                uaCaptor.capture()
-            );
+            ArgumentCaptor<String> addrCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(String.class);
+            verify(requestHolder).set(any(), addrCaptor.capture(), uaCaptor.capture());
             assertNull(addrCaptor.getValue());
             assertNull(uaCaptor.getValue());
         }
@@ -1124,18 +943,14 @@ class ApiKeyAuthFilterTest {
         void userAgentPassedToHolder() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
             lenient()
-                .when(requestContext.getHeaderString("User-Agent"))
-                .thenReturn("OperioSDK/2.1 Java/21");
+                    .when(requestContext.getHeaderString("User-Agent"))
+                    .thenReturn("OperioSDK/2.1 Java/21");
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
+            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(String.class);
             verify(requestHolder).set(any(), any(), uaCaptor.capture());
             assertEquals("OperioSDK/2.1 Java/21", uaCaptor.getValue());
         }
@@ -1145,18 +960,12 @@ class ApiKeyAuthFilterTest {
         void nullUserAgent() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
-            lenient()
-                .when(requestContext.getHeaderString("User-Agent"))
-                .thenReturn(null);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
+            lenient().when(requestContext.getHeaderString("User-Agent")).thenReturn(null);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(
-                String.class
-            );
+            ArgumentCaptor<String> uaCaptor = ArgumentCaptor.forClass(String.class);
             verify(requestHolder).set(any(), any(), uaCaptor.capture());
             assertNull(uaCaptor.getValue());
         }
@@ -1171,21 +980,16 @@ class ApiKeyAuthFilterTest {
     class SecurityContextRoleEnforcement {
 
         @Test
-        @DisplayName(
-            "bootstrap identity has super-admin role in SecurityContext"
-        )
+        @DisplayName("bootstrap identity has super-admin role in SecurityContext")
         void bootstrapHasSuperAdminRole() throws IOException {
             givenAuthenticatedEndpoint("api/v1/platform/tenants");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
 
             SecurityContext sc = secCaptor.getValue();
@@ -1199,73 +1003,53 @@ class ApiKeyAuthFilterTest {
         void tenantKeyDoesNotHaveSuperAdmin() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
             givenAuthHeader("Bearer opr_live_tenant_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_tenant_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_tenant_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_tenant_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_tenant_key")).thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "alice",
-                "acme_corp",
-                Set.of("consent-writer")
-            );
+            IdentityContext identity =
+                    tenantIdentity("alice", "acme_corp", Set.of("consent-writer"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_tenant_key")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_tenant_key")).thenReturn(identity);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
 
             SecurityContext sc = secCaptor.getValue();
             assertTrue(sc.isUserInRole("consent-writer"));
             assertFalse(
-                sc.isUserInRole("super-admin"),
-                "Tenant API key should NOT have super-admin role"
-            );
+                    sc.isUserInRole("super-admin"),
+                    "Tenant API key should NOT have super-admin role");
         }
 
         @Test
-        @DisplayName(
-            "SecurityContext.getUserPrincipal() returns correct subject"
-        )
+        @DisplayName("SecurityContext.getUserPrincipal() returns correct subject")
         void principalReturnsSubject() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_principal_key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey(
-                    "opr_live_principal_key"
-                )
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_principal_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_principal_key"))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_principal_key"))
+                    .thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "eve",
-                "echo_corp",
-                Set.of("reader")
-            );
+            IdentityContext identity = tenantIdentity("eve", "echo_corp", Set.of("reader"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(
-                tokenVerifier.verifyToken("opr_live_principal_key")
-            ).thenReturn(identity);
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_principal_key")).thenReturn(identity);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
 
             SecurityContext sc = secCaptor.getValue();
@@ -1274,21 +1058,16 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "SecurityContext.isUserInRole(null) returns false gracefully"
-        )
+        @DisplayName("SecurityContext.isUserInRole(null) returns false gracefully")
         void nullRoleReturnsFalse() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer my-bootstrap-key");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")
-            ).thenReturn(true);
+            when(bootstrapLifecycle.isActiveBootstrapKey("my-bootstrap-key")).thenReturn(true);
 
             filter.filter(requestContext);
 
-            ArgumentCaptor<SecurityContext> secCaptor = ArgumentCaptor.forClass(
-                SecurityContext.class
-            );
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
             verify(requestContext).setSecurityContext(secCaptor.capture());
 
             SecurityContext sc = secCaptor.getValue();
@@ -1369,30 +1148,20 @@ class ApiKeyAuthFilterTest {
     class TokenWhitespaceHandling {
 
         @Test
-        @DisplayName(
-            "token with trailing whitespace is trimmed before verification"
-        )
+        @DisplayName("token with trailing whitespace is trimmed before verification")
         void trailingWhitespace() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_padded_key  ");
-            when(
-                bootstrapLifecycle.isActiveBootstrapKey("opr_live_padded_key")
-            ).thenReturn(false);
-            when(
-                bootstrapLifecycle.isBootstrapKeyValue("opr_live_padded_key")
-            ).thenReturn(false);
+            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_padded_key")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_padded_key")).thenReturn(false);
 
-            IdentityContext identity = tenantIdentity(
-                "frank",
-                "foxtrot_inc",
-                Set.of("admin")
-            );
+            IdentityContext identity = tenantIdentity("frank", "foxtrot_inc", Set.of("admin"));
             @SuppressWarnings("unchecked")
-            TokenVerifier<Object> tokenVerifier = mock(TokenVerifier.class);
-            doReturn(tokenVerifier).when(operio).tokenVerifier();
-            when(tokenVerifier.verifyToken("opr_live_padded_key")).thenReturn(
-                identity
-            );
+            TokenValidationService<Object> tokenValidationService =
+                    mock(TokenValidationService.class);
+            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
+            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
+            when(tokenValidationService.verifyToken("opr_live_padded_key")).thenReturn(identity);
 
             filter.filter(requestContext);
 

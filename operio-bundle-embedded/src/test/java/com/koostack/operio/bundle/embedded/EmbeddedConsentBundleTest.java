@@ -2,13 +2,15 @@ package com.koostack.operio.bundle.embedded;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.koostack.operio.core.Operio;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.DecisionDetail;
-import com.koostack.operio.core.Operio;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionService;
 import com.koostack.operio.plugin.consent.caffeine.CaffeineConsentDecisionServiceConfig;
 import com.koostack.operio.plugin.consent.jooq.JooqConsentAdminServiceConfig;
+import com.koostack.operio.plugin.consent.sync.embedded.EmbeddedConsentSyncServiceConfig;
+import com.koostack.operio.plugin.consent.sync.embedded.EmbeddedConsentSyncServiceImpl;
 import com.koostack.operio.plugin.consent.sync.embedded.ReconciliationStrategy;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,9 +37,7 @@ class EmbeddedConsentBundleTest {
 
         @BeforeAll
         void buildOperio() {
-            operio = Operio.builder()
-                .withBundle(new EmbeddedConsentBundle())
-                .build();
+            operio = Operio.builder().withBundle(new EmbeddedConsentBundle()).build();
         }
 
         @Test
@@ -59,30 +59,9 @@ class EmbeddedConsentBundleTest {
         }
 
         @Test
-        @DisplayName("consent admin service is wired")
-        void consentAdminServiceWired() {
-            assertNotNull(operio.consentAdminService());
-        }
-
-        @Test
-        @DisplayName("consent sync service is wired")
-        void consentSyncServiceWired() {
-            assertNotNull(operio.consentSyncService());
-        }
-
-        @Test
-        @DisplayName("hasConsentWriteProvider returns true")
-        void hasWriteProvider() {
-            assertTrue(operio.hasConsentWriteProvider());
-        }
-
-        @Test
         @DisplayName("consent service is a CaffeineConsentDecisionService")
         void consentServiceIsCaffeine() {
-            assertInstanceOf(
-                CaffeineConsentDecisionService.class,
-                operio.consentService()
-            );
+            assertInstanceOf(CaffeineConsentDecisionService.class, operio.consentService());
         }
 
         @Test
@@ -105,24 +84,17 @@ class EmbeddedConsentBundleTest {
 
         @BeforeAll
         void buildOperio() {
-            var jooqConfig = new JooqConsentAdminServiceConfig(
-                "jdbc:h2:mem:embedded_bundle_custom;DB_CLOSE_DELAY=-1",
-                "H2"
-            );
-            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(
-                50_000
-            );
+            var jooqConfig =
+                    new JooqConsentAdminServiceConfig(
+                            "jdbc:h2:mem:embedded_bundle_custom;DB_CLOSE_DELAY=-1", "H2");
+            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(50_000);
 
-            operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        "my-test-app",
-                        jooqConfig,
-                        caffeineConfig,
-                        null
-                    )
-                )
-                .build();
+            operio =
+                    Operio.builder()
+                            .withBundle(
+                                    new EmbeddedConsentBundle(
+                                            "my-test-app", jooqConfig, caffeineConfig, null))
+                            .build();
         }
 
         @Test
@@ -136,8 +108,6 @@ class EmbeddedConsentBundleTest {
         void buildSucceeds() {
             assertNotNull(operio);
             assertNotNull(operio.consentService());
-            assertNotNull(operio.consentAdminService());
-            assertNotNull(operio.consentSyncService());
         }
     }
 
@@ -151,36 +121,34 @@ class EmbeddedConsentBundleTest {
     class InstanceSharing {
 
         private Operio operio;
+        private EmbeddedConsentSyncServiceImpl syncService;
 
         @BeforeAll
         void buildOperio() {
-            operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:embedded_bundle_sharing;DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig()
-                    )
-                )
-                .build();
+            syncService = new EmbeddedConsentSyncServiceImpl();
+            syncService.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:embedded_bundle_sharing;DB_CLOSE_DELAY=-1", "H2"),
+                            new CaffeineConsentDecisionServiceConfig()));
+            operio =
+                    Operio.builder()
+                            .withConsentProvider(syncService.caffeineDecisionService())
+                            .build();
         }
 
         @Test
         @DisplayName("grant through sync is visible through decision service")
         void grantVisibleThroughDecision() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            operio.grantConsent("sharing-user-1", scope);
+            syncService.syncGrant("sharing-user-1", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("sharing-user-1", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("sharing-user-1", Set.of(scope));
 
             assertTrue(
-                response.granted().contains(scope),
-                "Grant via sync should be readable via the decision service"
-            );
+                    response.granted().contains(scope),
+                    "Grant via sync should be readable via the decision service");
         }
 
         @Test
@@ -188,17 +156,15 @@ class EmbeddedConsentBundleTest {
         void revokeVisibleThroughDecision() {
             var scope = ConsentScope.to("PII", "phone", "User", "marketing");
 
-            operio.grantConsent("sharing-user-2", scope);
-            operio.revokeConsent("sharing-user-2", scope);
+            syncService.syncGrant("sharing-user-2", scope, null);
+            syncService.syncRevoke("sharing-user-2", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("sharing-user-2", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("sharing-user-2", Set.of(scope));
 
             assertTrue(
-                response.denied().contains(scope),
-                "Revoke via sync should be readable via the decision service"
-            );
+                    response.denied().contains(scope),
+                    "Revoke via sync should be readable via the decision service");
         }
     }
 
@@ -212,31 +178,30 @@ class EmbeddedConsentBundleTest {
     class EndToEndFlow {
 
         private Operio operio;
+        private EmbeddedConsentSyncServiceImpl syncService;
 
         @BeforeAll
         void buildOperio() {
-            operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:embedded_bundle_e2e;DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig()
-                    )
-                )
-                .build();
+            syncService = new EmbeddedConsentSyncServiceImpl();
+            syncService.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:embedded_bundle_e2e;DB_CLOSE_DELAY=-1", "H2"),
+                            new CaffeineConsentDecisionServiceConfig()));
+            operio =
+                    Operio.builder()
+                            .withConsentProvider(syncService.caffeineDecisionService())
+                            .build();
         }
 
         @Test
         @DisplayName("grant → evaluate → granted")
         void grantThenEvaluate() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            operio.grantConsent("e2e-user-1", scope);
+            syncService.syncGrant("e2e-user-1", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-1", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-1", Set.of(scope));
 
             assertTrue(response.granted().contains(scope));
             assertTrue(response.denied().isEmpty());
@@ -247,15 +212,11 @@ class EmbeddedConsentBundleTest {
         void noConsentThenEvaluate() {
             var scope = ConsentScope.to("PII", "ssn", "User", "marketing");
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-2", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-2", Set.of(scope));
 
             assertTrue(response.denied().contains(scope));
-            assertEquals(
-                "No consent record found",
-                response.reasons().get("ssn")
-            );
+            assertEquals("No consent record found", response.reasons().get("ssn"));
         }
 
         @Test
@@ -263,18 +224,14 @@ class EmbeddedConsentBundleTest {
         void grantRevokeThenEvaluate() {
             var scope = ConsentScope.to("PII", "email", "User", "analytics");
 
-            operio.grantConsent("e2e-user-3", scope);
-            operio.revokeConsent("e2e-user-3", scope);
+            syncService.syncGrant("e2e-user-3", scope, null);
+            syncService.syncRevoke("e2e-user-3", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-3", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-3", Set.of(scope));
 
             assertTrue(response.denied().contains(scope));
-            assertEquals(
-                "Consent explicitly revoked",
-                response.reasons().get("email")
-            );
+            assertEquals("Consent explicitly revoked", response.reasons().get("email"));
         }
 
         @Test
@@ -283,11 +240,10 @@ class EmbeddedConsentBundleTest {
             Instant future = Instant.now().plus(Duration.ofHours(1));
             var scope = ConsentScope.to("PII", "email", "User", "retention");
 
-            operio.grantConsent("e2e-user-4", scope, future);
+            syncService.syncGrant("e2e-user-4", scope, future);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-4", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-4", Set.of(scope));
 
             assertTrue(response.granted().contains(scope));
 
@@ -305,13 +261,13 @@ class EmbeddedConsentBundleTest {
             var phone = ConsentScope.to("PII", "phone", "User", "marketing");
             var ssn = ConsentScope.to("PII", "ssn", "User", "marketing");
 
-            operio.grantConsent("e2e-user-5", email);
-            operio.revokeConsent("e2e-user-5", phone);
+            syncService.syncGrant("e2e-user-5", email, null);
+            syncService.syncRevoke("e2e-user-5", phone, null);
             // ssn has no consent record
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-5", Set.of(email, phone, ssn));
+            ConsentResponse response =
+                    operio.consentService()
+                            .evaluateConsent("e2e-user-5", Set.of(email, phone, ssn));
 
             assertEquals(1, response.granted().size());
             assertTrue(response.granted().contains(email));
@@ -325,14 +281,12 @@ class EmbeddedConsentBundleTest {
         @DisplayName("grants are isolated per subject")
         void subjectIsolation() {
             var scope = ConsentScope.to("PII", "email", "User", "marketing");
-            operio.grantConsent("e2e-user-6", scope);
+            syncService.syncGrant("e2e-user-6", scope, null);
 
-            ConsentResponse r1 = operio
-                .consentService()
-                .evaluateConsent("e2e-user-6", Set.of(scope));
-            ConsentResponse r2 = operio
-                .consentService()
-                .evaluateConsent("e2e-user-7", Set.of(scope));
+            ConsentResponse r1 =
+                    operio.consentService().evaluateConsent("e2e-user-6", Set.of(scope));
+            ConsentResponse r2 =
+                    operio.consentService().evaluateConsent("e2e-user-7", Set.of(scope));
 
             assertTrue(r1.granted().contains(scope));
             assertTrue(r2.denied().contains(scope));
@@ -341,24 +295,14 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("grants are isolated per purpose")
         void purposeIsolation() {
-            var marketing = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var analytics = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "analytics"
-            );
+            var marketing = ConsentScope.to("PII", "email", "User", "marketing");
+            var analytics = ConsentScope.to("PII", "email", "User", "analytics");
 
-            operio.grantConsent("e2e-user-8", marketing);
+            syncService.syncGrant("e2e-user-8", marketing, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-8", Set.of(marketing, analytics));
+            ConsentResponse response =
+                    operio.consentService()
+                            .evaluateConsent("e2e-user-8", Set.of(marketing, analytics));
 
             assertTrue(response.granted().contains(marketing));
             assertTrue(response.denied().contains(analytics));
@@ -367,25 +311,15 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("grants are isolated per entity")
         void entityIsolation() {
-            var userEmail = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            var contactEmail = ConsentScope.to(
-                "PII",
-                "email",
-                "Contact",
-                "marketing"
-            );
+            var userEmail = ConsentScope.to("PII", "email", "User", "marketing");
+            var contactEmail = ConsentScope.to("PII", "email", "Contact", "marketing");
 
-            operio.grantConsent("e2e-user-9", userEmail);
-            operio.revokeConsent("e2e-user-9", contactEmail);
+            syncService.syncGrant("e2e-user-9", userEmail, null);
+            syncService.syncRevoke("e2e-user-9", contactEmail, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-9", Set.of(userEmail, contactEmail));
+            ConsentResponse response =
+                    operio.consentService()
+                            .evaluateConsent("e2e-user-9", Set.of(userEmail, contactEmail));
 
             assertTrue(response.granted().contains(userEmail));
             assertTrue(response.denied().contains(contactEmail));
@@ -395,11 +329,10 @@ class EmbeddedConsentBundleTest {
         @DisplayName("null entity scope works (backward compat)")
         void nullEntityScope() {
             var scope = ConsentScope.to("PII", "zipcode", "marketing");
-            operio.grantConsent("e2e-user-10", scope);
+            syncService.syncGrant("e2e-user-10", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-10", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-10", Set.of(scope));
 
             assertTrue(response.granted().contains(scope));
         }
@@ -409,13 +342,12 @@ class EmbeddedConsentBundleTest {
         void toggleGrantRevokeGrant() {
             var scope = ConsentScope.to("PII", "email", "User", "support");
 
-            operio.grantConsent("e2e-user-11", scope);
-            operio.revokeConsent("e2e-user-11", scope);
-            operio.grantConsent("e2e-user-11", scope);
+            syncService.syncGrant("e2e-user-11", scope, null);
+            syncService.syncRevoke("e2e-user-11", scope, null);
+            syncService.syncGrant("e2e-user-11", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-11", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-11", Set.of(scope));
 
             assertTrue(response.granted().contains(scope));
         }
@@ -423,9 +355,8 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("empty request set returns empty response")
         void emptyRequestSet() {
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-12", Set.of());
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-12", Set.of());
 
             assertTrue(response.granted().isEmpty());
             assertTrue(response.denied().isEmpty());
@@ -436,9 +367,7 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("null request set returns empty response")
         void nullRequestSet() {
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-13", null);
+            ConsentResponse response = operio.consentService().evaluateConsent("e2e-user-13", null);
 
             assertTrue(response.granted().isEmpty());
             assertTrue(response.denied().isEmpty());
@@ -450,11 +379,10 @@ class EmbeddedConsentBundleTest {
             var email = ConsentScope.to("PII", "email", "User", "marketing");
             var phone = ConsentScope.to("PII", "phone", "User", "marketing");
 
-            operio.grantConsent("e2e-user-14", email);
+            syncService.syncGrant("e2e-user-14", email, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-user-14", Set.of(email, phone));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-user-14", Set.of(email, phone));
 
             assertEquals(2, response.details().size());
 
@@ -477,14 +405,13 @@ class EmbeddedConsentBundleTest {
                 String field = "batch_field_" + i;
                 var scope = ConsentScope.to("CAT", field, "Entity", "purpose");
                 if (i % 2 == 0) {
-                    operio.grantConsent("e2e-batch-user", scope);
+                    syncService.syncGrant("e2e-batch-user", scope, null);
                 }
                 scopes.add(scope);
             }
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("e2e-batch-user", scopes);
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("e2e-batch-user", scopes);
 
             assertEquals(50, response.granted().size());
             assertEquals(50, response.denied().size());
@@ -506,17 +433,17 @@ class EmbeddedConsentBundleTest {
             var bundle = new EmbeddedConsentBundle();
             Operio operio = Operio.builder().withBundle(bundle).build();
             assertNotNull(operio.consentService());
-            assertNotNull(operio.consentAdminService());
-            assertNotNull(operio.consentSyncService());
         }
 
         @Test
         @DisplayName("discovery-only constructor builds successfully")
         void discoveryOnly() {
             // null discovery config means no discovery wired
-            var bundle = new EmbeddedConsentBundle(
-                (com.koostack.operio.plugin.discovery.sensitive.annotation.AnnotationDiscoveryConfig) null
-            );
+            var bundle =
+                    new EmbeddedConsentBundle(
+                            (com.koostack.operio.plugin.discovery.sensitive.annotation
+                                            .AnnotationDiscoveryConfig)
+                                    null);
             Operio operio = Operio.builder().withBundle(bundle).build();
             assertNotNull(operio.consentService());
         }
@@ -524,13 +451,10 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("jooq + caffeine config constructor builds successfully")
         void jooqAndCaffeineConfig() {
-            var jooqConfig = new JooqConsentAdminServiceConfig(
-                "jdbc:h2:mem:ctor_test_1;DB_CLOSE_DELAY=-1",
-                "H2"
-            );
-            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(
-                5_000
-            );
+            var jooqConfig =
+                    new JooqConsentAdminServiceConfig(
+                            "jdbc:h2:mem:ctor_test_1;DB_CLOSE_DELAY=-1", "H2");
+            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(5_000);
 
             var bundle = new EmbeddedConsentBundle(jooqConfig, caffeineConfig);
             Operio operio = Operio.builder().withBundle(bundle).build();
@@ -548,17 +472,12 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("appName + jooq + caffeine constructor sets appName")
         void appNameJooqCaffeine() {
-            var jooqConfig = new JooqConsentAdminServiceConfig(
-                "jdbc:h2:mem:ctor_test_2;DB_CLOSE_DELAY=-1",
-                "H2"
-            );
+            var jooqConfig =
+                    new JooqConsentAdminServiceConfig(
+                            "jdbc:h2:mem:ctor_test_2;DB_CLOSE_DELAY=-1", "H2");
             var caffeineConfig = new CaffeineConsentDecisionServiceConfig();
 
-            var bundle = new EmbeddedConsentBundle(
-                "another-app",
-                jooqConfig,
-                caffeineConfig
-            );
+            var bundle = new EmbeddedConsentBundle("another-app", jooqConfig, caffeineConfig);
             Operio operio = Operio.builder().withBundle(bundle).build();
             assertEquals("another-app", operio.appName());
         }
@@ -566,25 +485,15 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("full constructor with all options builds successfully")
         void fullConstructor() {
-            var jooqConfig = new JooqConsentAdminServiceConfig(
-                "jdbc:h2:mem:ctor_test_3;DB_CLOSE_DELAY=-1",
-                "H2"
-            );
-            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(
-                20_000
-            );
+            var jooqConfig =
+                    new JooqConsentAdminServiceConfig(
+                            "jdbc:h2:mem:ctor_test_3;DB_CLOSE_DELAY=-1", "H2");
+            var caffeineConfig = new CaffeineConsentDecisionServiceConfig(20_000);
 
-            var bundle = new EmbeddedConsentBundle(
-                "full-app",
-                jooqConfig,
-                caffeineConfig,
-                null
-            );
+            var bundle = new EmbeddedConsentBundle("full-app", jooqConfig, caffeineConfig, null);
             Operio operio = Operio.builder().withBundle(bundle).build();
             assertEquals("full-app", operio.appName());
             assertNotNull(operio.consentService());
-            assertNotNull(operio.consentAdminService());
-            assertNotNull(operio.consentSyncService());
         }
     }
 
@@ -598,52 +507,48 @@ class EmbeddedConsentBundleTest {
     class BehavioralParity {
 
         private Operio operio;
+        private EmbeddedConsentSyncServiceImpl syncService;
 
         @BeforeAll
         void buildOperio() {
-            operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:embedded_bundle_parity;DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig()
-                    )
-                )
-                .build();
+            syncService = new EmbeddedConsentSyncServiceImpl();
+            syncService.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:embedded_bundle_parity;DB_CLOSE_DELAY=-1", "H2"),
+                            new CaffeineConsentDecisionServiceConfig()));
+            operio =
+                    Operio.builder()
+                            .withConsentProvider(syncService.caffeineDecisionService())
+                            .build();
         }
 
         @Test
         @DisplayName("write path uses sync service (not admin directly)")
         void writePathUsesSyncService() {
-            // If the sync service is wired, grantConsent goes through sync
-            // (which dual-writes to DB + Caffeine). We can verify this by
-            // checking that the consent is readable via the decision service
-            // (which only reads from Caffeine).
+            // If the sync service is wired, syncGrant goes through sync
+            // (which writes to Caffeine). We can verify this by checking
+            // that the consent is readable via the decision service.
             var scope = ConsentScope.to("PII", "email", "User", "parity");
-            operio.grantConsent("parity-user-1", scope);
+            syncService.syncGrant("parity-user-1", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("parity-user-1", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("parity-user-1", Set.of(scope));
 
             assertTrue(
-                response.granted().contains(scope),
-                "If sync is wired correctly, grants flow through " +
-                    "sync → DB + Caffeine, and reads come from Caffeine"
-            );
+                    response.granted().contains(scope),
+                    "If sync is wired correctly, grants flow through "
+                            + "sync → Caffeine, and reads come from Caffeine");
         }
 
         @Test
         @DisplayName("decision details include source and status metadata")
         void decisionDetailsPopulated() {
             var scope = ConsentScope.to("PII", "phone", "User", "parity");
-            operio.grantConsent("parity-user-2", scope);
+            syncService.syncGrant("parity-user-2", scope, null);
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("parity-user-2", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("parity-user-2", Set.of(scope));
 
             DecisionDetail detail = response.details().get(scope);
             assertNotNull(detail, "Every evaluated scope should have a detail");
@@ -655,16 +560,10 @@ class EmbeddedConsentBundleTest {
         @Test
         @DisplayName("denied scopes have reason messages")
         void deniedScopesHaveReasons() {
-            var scope = ConsentScope.to(
-                "PII",
-                "email",
-                "User",
-                "parity-denied"
-            );
+            var scope = ConsentScope.to("PII", "email", "User", "parity-denied");
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("parity-user-3", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("parity-user-3", Set.of(scope));
 
             assertTrue(response.denied().contains(scope));
             assertNotNull(response.reasons().get("email"));
@@ -682,158 +581,67 @@ class EmbeddedConsentBundleTest {
     class AutoRegistrationToggle {
 
         @Test
-        @DisplayName(
-            "withAutoRegisterMetadata(false) causes grant to fail without prior registration"
-        )
-        void disabledAutoRegistrationFailsOnGrant() {
-            Operio operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:bundle_strict_grant_" +
-                                System.nanoTime() +
-                                ";DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withAutoRegisterMetadata(false)
-                )
-                .build();
+        @DisplayName("cache-only mode allows grant regardless of auto-registration setting")
+        void cacheOnlyModeIgnoresAutoRegistration() {
+            // Without an EventService, no command service is created, so
+            // auto-registration is irrelevant — syncGrant only writes to
+            // the Caffeine cache.
+            var syncService = new EmbeddedConsentSyncServiceImpl();
+            syncService.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:bundle_cache_only_"
+                                            + System.nanoTime()
+                                            + ";DB_CLOSE_DELAY=-1",
+                                    "H2"),
+                            new CaffeineConsentDecisionServiceConfig(),
+                            false // autoRegisterMetadata = false
+                            ));
 
-            var scope = ConsentScope.to(
-                "PII",
-                "lastName",
-                "Employee",
-                "reporting"
-            );
+            Operio operio =
+                    Operio.builder()
+                            .withConsentProvider(syncService.caffeineDecisionService())
+                            .build();
 
-            assertThrows(
-                IllegalArgumentException.class,
-                () -> operio.grantConsent("user-1", scope),
-                "Should throw because metadata is not registered and auto-registration is off"
-            );
-        }
-
-        @Test
-        @DisplayName(
-            "withAutoRegisterMetadata(false) causes revoke to fail without prior registration"
-        )
-        void disabledAutoRegistrationFailsOnRevoke() {
-            Operio operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:bundle_strict_revoke_" +
-                                System.nanoTime() +
-                                ";DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withAutoRegisterMetadata(false)
-                )
-                .build();
-
-            var scope = ConsentScope.to(
-                "PII",
-                "lastName",
-                "Employee",
-                "reporting"
-            );
-
-            assertThrows(
-                IllegalArgumentException.class,
-                () -> operio.revokeConsent("user-1", scope),
-                "Should throw because metadata is not registered and auto-registration is off"
-            );
-        }
-
-        @Test
-        @DisplayName(
-            "withAutoRegisterMetadata(true) (default) allows grant without prior registration"
-        )
-        void enabledAutoRegistrationSucceeds() {
-            Operio operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:bundle_auto_reg_" +
-                                System.nanoTime() +
-                                ";DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                    // withAutoRegisterMetadata not called — defaults to true
-                )
-                .build();
-
-            var scope = ConsentScope.to(
-                "PII",
-                "lastName",
-                "Employee",
-                "reporting"
-            );
+            var scope = ConsentScope.to("PII", "lastName", "Employee", "reporting");
 
             assertDoesNotThrow(
-                () -> operio.grantConsent("user-1", scope),
-                "Should succeed because auto-registration creates the metadata"
-            );
+                    () -> syncService.syncGrant("user-1", scope, null),
+                    "Should succeed — cache-only mode always allows grants");
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("user-1", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
 
         @Test
-        @DisplayName(
-            "withAutoRegisterMetadata(false) succeeds when metadata is pre-registered via admin"
-        )
-        void disabledButPreRegisteredSucceeds() {
-            Operio operio = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        new JooqConsentAdminServiceConfig(
-                            "jdbc:h2:mem:bundle_preregistered_" +
-                                System.nanoTime() +
-                                ";DB_CLOSE_DELAY=-1",
-                            "H2"
-                        ),
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withAutoRegisterMetadata(false)
-                )
-                .build();
+        @DisplayName("default auto-registration allows grant without prior registration")
+        void enabledAutoRegistrationSucceeds() {
+            var syncService = new EmbeddedConsentSyncServiceImpl();
+            syncService.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            new JooqConsentAdminServiceConfig(
+                                    "jdbc:h2:mem:bundle_auto_reg_"
+                                            + System.nanoTime()
+                                            + ";DB_CLOSE_DELAY=-1",
+                                    "H2"),
+                            new CaffeineConsentDecisionServiceConfig()
+                            // autoRegisterMetadata defaults to true
+                            ));
 
-            // Pre-register metadata through admin
-            operio.consentAdminService().registerCategory("PII", null);
-            operio
-                .consentAdminService()
-                .registerField("lastName", "Employee", null);
-            operio
-                .consentAdminService()
-                .linkFieldToCategory("lastName", "Employee", "PII");
-            operio.consentAdminService().registerPurpose("reporting", null);
+            Operio operio =
+                    Operio.builder()
+                            .withConsentProvider(syncService.caffeineDecisionService())
+                            .build();
 
-            var scope = ConsentScope.to(
-                "PII",
-                "lastName",
-                "Employee",
-                "reporting"
-            );
+            var scope = ConsentScope.to("PII", "lastName", "Employee", "reporting");
 
-            assertDoesNotThrow(() -> operio.grantConsent("user-1", scope));
+            assertDoesNotThrow(
+                    () -> syncService.syncGrant("user-1", scope, null),
+                    "Should succeed because auto-registration is enabled");
 
-            ConsentResponse response = operio
-                .consentService()
-                .evaluateConsent("user-1", Set.of(scope));
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("user-1", Set.of(scope));
             assertTrue(response.granted().contains(scope));
         }
 
@@ -855,9 +663,7 @@ class EmbeddedConsentBundleTest {
     class ReconcileOnStartup {
 
         @Test
-        @DisplayName(
-            "withReconcileOnStartup() fluent setter returns same bundle for chaining"
-        )
+        @DisplayName("withReconcileOnStartup() fluent setter returns same bundle for chaining")
         void fluentSetterReturnsThis() {
             var bundle = new EmbeddedConsentBundle();
             var returned = bundle.withReconcileOnStartup();
@@ -866,297 +672,112 @@ class EmbeddedConsentBundleTest {
 
         @Test
         @DisplayName(
-            "withReconcileOnStartup(strategy) fluent setter returns same bundle for chaining"
-        )
+                "withReconcileOnStartup(strategy) fluent setter returns same bundle for chaining")
         void fluentSetterWithStrategyReturnsThis() {
             var bundle = new EmbeddedConsentBundle();
-            var returned = bundle.withReconcileOnStartup(
-                ReconciliationStrategy.MERGE
-            );
+            var returned = bundle.withReconcileOnStartup(ReconciliationStrategy.MERGE);
             assertSame(bundle, returned);
-        }
-
-        @Test
-        @DisplayName("startup reconciliation rebuilds cache from DB state")
-        void reconcileOnStartupRebuildsCache() {
-            // Phase 1: build an Operio, write some grants, then discard it
-            // — this leaves the DB populated but the Caffeine cache will be
-            //   lost once we create a new bundle with a fresh Caffeine.
-            String jdbcUrl =
-                "jdbc:h2:mem:reconcile_startup_" +
-                System.nanoTime() +
-                ";DB_CLOSE_DELAY=-1";
-
-            var jooqConfig = new JooqConsentAdminServiceConfig(jdbcUrl, "H2");
-
-            Operio phase1 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                )
-                .build();
-
-            var scope = ConsentScope.to(
-                "PII",
-                "email",
-                "Customer",
-                "marketing"
-            );
-            phase1.grantConsent("user-1", scope);
-
-            // Sanity: grant visible in phase-1 cache
-            ConsentResponse r1 = phase1
-                .consentService()
-                .evaluateConsent("user-1", Set.of(scope));
-            assertTrue(
-                r1.granted().contains(scope),
-                "grant should be visible in phase-1 cache"
-            );
-
-            // Phase 2: new bundle pointing at the same DB, with
-            //   withReconcileOnStartup() — the new Caffeine cache starts
-            //   empty but reconciliation should restore the grant.
-            Operio phase2 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withReconcileOnStartup()
-                )
-                .build();
-
-            ConsentResponse r2 = phase2
-                .consentService()
-                .evaluateConsent("user-1", Set.of(scope));
-            assertTrue(
-                r2.granted().contains(scope),
-                "grant should be visible after startup reconciliation"
-            );
         }
 
         @Test
         @DisplayName("without reconcile-on-startup, new bundle has cold cache")
         void withoutReconcileOnStartupCacheIsCold() {
-            // Same two-phase pattern but WITHOUT withReconcileOnStartup()
-            String jdbcUrl =
-                "jdbc:h2:mem:no_reconcile_" +
-                System.nanoTime() +
-                ";DB_CLOSE_DELAY=-1";
+            // Phase 1: write a grant via the sync service (cache-only,
+            // since no EventService is provided for the command pipeline).
+            String jdbcUrl = "jdbc:h2:mem:no_reconcile_" + System.nanoTime() + ";DB_CLOSE_DELAY=-1";
 
             var jooqConfig = new JooqConsentAdminServiceConfig(jdbcUrl, "H2");
 
-            Operio phase1 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                )
-                .build();
+            var syncService1 = new EmbeddedConsentSyncServiceImpl();
+            syncService1.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            jooqConfig, new CaffeineConsentDecisionServiceConfig()));
 
-            var scope = ConsentScope.to(
-                "PII",
-                "email",
-                "Customer",
-                "marketing"
-            );
-            phase1.grantConsent("user-1", scope);
+            var scope = ConsentScope.to("PII", "email", "Customer", "marketing");
+            syncService1.syncGrant("user-1", scope, null);
 
-            // Phase 2: new bundle, same DB, NO reconciliation
-            Operio phase2 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                    // withReconcileOnStartup() NOT called
-                )
-                .build();
+            // Phase 2: new bundle, same DB, NO reconciliation — the
+            // previous grant was cache-only, so a fresh cache is cold.
+            Operio phase2 =
+                    Operio.builder()
+                            .withBundle(
+                                    new EmbeddedConsentBundle(
+                                            null,
+                                            jooqConfig,
+                                            new CaffeineConsentDecisionServiceConfig(),
+                                            null)
+                                    // withReconcileOnStartup() NOT called
+                                    )
+                            .build();
 
-            ConsentResponse r2 = phase2
-                .consentService()
-                .evaluateConsent("user-1", Set.of(scope));
+            ConsentResponse r2 = phase2.consentService().evaluateConsent("user-1", Set.of(scope));
             assertFalse(
-                r2.granted().contains(scope),
-                "grant should NOT be visible — cache is cold without reconciliation"
-            );
-        }
-
-        @Test
-        @DisplayName("MERGE strategy also restores grants on startup")
-        void mergeStrategyRestoresGrants() {
-            String jdbcUrl =
-                "jdbc:h2:mem:merge_startup_" +
-                System.nanoTime() +
-                ";DB_CLOSE_DELAY=-1";
-
-            var jooqConfig = new JooqConsentAdminServiceConfig(jdbcUrl, "H2");
-
-            Operio phase1 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                )
-                .build();
-
-            var scope = ConsentScope.to("PII", "phone", "Contact", "support");
-            phase1.grantConsent("user-2", scope);
-
-            // Phase 2: reconcile with MERGE
-            Operio phase2 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withReconcileOnStartup(ReconciliationStrategy.MERGE)
-                )
-                .build();
-
-            ConsentResponse r2 = phase2
-                .consentService()
-                .evaluateConsent("user-2", Set.of(scope));
-            assertTrue(
-                r2.granted().contains(scope),
-                "grant should be visible after MERGE reconciliation"
-            );
+                    r2.granted().contains(scope),
+                    "grant should NOT be visible — cache is cold without reconciliation");
         }
 
         @Test
         @DisplayName("null strategy disables startup reconciliation")
         void nullStrategyDisablesReconciliation() {
             String jdbcUrl =
-                "jdbc:h2:mem:null_strategy_" +
-                System.nanoTime() +
-                ";DB_CLOSE_DELAY=-1";
+                    "jdbc:h2:mem:null_strategy_" + System.nanoTime() + ";DB_CLOSE_DELAY=-1";
 
             var jooqConfig = new JooqConsentAdminServiceConfig(jdbcUrl, "H2");
 
-            Operio phase1 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                )
-                .build();
+            // Phase 1: write a grant via the sync service (cache-only)
+            var syncService1 = new EmbeddedConsentSyncServiceImpl();
+            syncService1.configure(
+                    new EmbeddedConsentSyncServiceConfig(
+                            jooqConfig, new CaffeineConsentDecisionServiceConfig()));
 
             var scope = ConsentScope.to("PII", "ssn", "Employee", "compliance");
-            phase1.grantConsent("emp-1", scope);
+            syncService1.syncGrant("emp-1", scope, null);
 
             // Phase 2: explicitly pass null strategy
-            Operio phase2 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withReconcileOnStartup(null)
-                )
-                .build();
+            Operio phase2 =
+                    Operio.builder()
+                            .withBundle(
+                                    new EmbeddedConsentBundle(
+                                                    null,
+                                                    jooqConfig,
+                                                    new CaffeineConsentDecisionServiceConfig(),
+                                                    null)
+                                            .withReconcileOnStartup(null))
+                            .build();
 
-            ConsentResponse r2 = phase2
-                .consentService()
-                .evaluateConsent("emp-1", Set.of(scope));
+            ConsentResponse r2 = phase2.consentService().evaluateConsent("emp-1", Set.of(scope));
             assertFalse(
-                r2.granted().contains(scope),
-                "grant should NOT be visible — null strategy means no reconciliation"
-            );
+                    r2.granted().contains(scope),
+                    "grant should NOT be visible — null strategy means no reconciliation");
         }
 
         @Test
-        @DisplayName(
-            "reconcile-on-startup restores multiple subjects and scopes"
-        )
-        void multiSubjectMultiScopeReconciliation() {
-            String jdbcUrl =
-                "jdbc:h2:mem:multi_reconcile_" +
-                System.nanoTime() +
-                ";DB_CLOSE_DELAY=-1";
+        @DisplayName("reconcile-on-startup on empty DB completes without error")
+        void reconcileOnEmptyDbSucceeds() {
+            // When the DB has no consent data, reconciliation should
+            // complete successfully with zero counts — no error, no crash.
+            Operio operio =
+                    Operio.builder()
+                            .withBundle(
+                                    new EmbeddedConsentBundle(
+                                                    null,
+                                                    new JooqConsentAdminServiceConfig(
+                                                            "jdbc:h2:mem:empty_reconcile_"
+                                                                    + System.nanoTime()
+                                                                    + ";DB_CLOSE_DELAY=-1",
+                                                            "H2"),
+                                                    new CaffeineConsentDecisionServiceConfig(),
+                                                    null)
+                                            .withReconcileOnStartup())
+                            .build();
 
-            var jooqConfig = new JooqConsentAdminServiceConfig(jdbcUrl, "H2");
+            assertNotNull(operio.consentService());
 
-            Operio phase1 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    )
-                )
-                .build();
-
-            var scope1 = ConsentScope.to(
-                "PII",
-                "firstName",
-                "User",
-                "analytics"
-            );
-            var scope2 = ConsentScope.to(
-                "Financial",
-                "accountNum",
-                "Account",
-                "billing"
-            );
-
-            phase1.grantConsent("alice", scope1);
-            phase1.grantConsent("bob", scope2);
-
-            // Phase 2: fresh cache, reconcile on startup
-            Operio phase2 = Operio.builder()
-                .withBundle(
-                    new EmbeddedConsentBundle(
-                        null,
-                        jooqConfig,
-                        new CaffeineConsentDecisionServiceConfig(),
-                        null
-                    ).withReconcileOnStartup()
-                )
-                .build();
-
-            ConsentResponse aliceResult = phase2
-                .consentService()
-                .evaluateConsent("alice", Set.of(scope1));
-            assertTrue(
-                aliceResult.granted().contains(scope1),
-                "alice's grant should be restored"
-            );
-
-            ConsentResponse bobResult = phase2
-                .consentService()
-                .evaluateConsent("bob", Set.of(scope2));
-            assertTrue(
-                bobResult.granted().contains(scope2),
-                "bob's grant should be restored"
-            );
-
-            // Cross-check: alice should NOT have bob's scope
-            ConsentResponse aliceCross = phase2
-                .consentService()
-                .evaluateConsent("alice", Set.of(scope2));
-            assertFalse(
-                aliceCross.granted().contains(scope2),
-                "alice should not have bob's scope"
-            );
+            // Verify the cache is empty (no grants)
+            var scope = ConsentScope.to("PII", "email", "User", "marketing");
+            ConsentResponse response =
+                    operio.consentService().evaluateConsent("any-user", Set.of(scope));
+            assertTrue(response.denied().contains(scope));
         }
     }
 }

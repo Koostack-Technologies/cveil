@@ -4,13 +4,15 @@ plugins {
 }
 
 dependencies {
-    // Public API — exposes ConsentSyncService and core models
+    // Public API — exposes core models
     api(project(":operio-core"))
 
     // Internal delegates — not exposed to consumers
-    implementation(project(":tenant:operio-consent-admin-jooq"))
+    implementation(project(":tenant:operio-consent-admin-jooq-common"))
+    implementation(project(":tenant:operio-consent-admin-command"))
+    implementation(project(":tenant:operio-consent-admin-query-jooq"))
     implementation(project(":plugins:operio-consent-decision-caffeine"))
-    implementation(project(":plugins:operio-jooq-common"))
+    implementation(project(":common:operio-jooq"))
 
     // SLF4J API for catch-and-log error handling
     implementation("org.slf4j:slf4j-api:2.0.16")

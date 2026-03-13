@@ -1,0 +1,54 @@
+{#include base.html}
+{#title}Log In{/title}
+{#content}
+
+    <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 sm:pb-20">
+        <div class="w-full max-w-md">
+
+            <div class="text-center mb-8">
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Welcome back</h1>
+                <p class="text-gray-400">Sign in to your ConsentVeil workspace.</p>
+            </div>
+
+            {#if error}
+            <div class="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>{error}</span>
+                </div>
+            </div>
+            {/if}
+
+            <form method="POST" action="/login" class="space-y-5">
+
+                <div>
+                    <label for="identifier" class="block text-sm font-medium text-gray-300 mb-1.5">Email or Username <span class="text-red-400">*</span></label>
+                    <input type="text" id="identifier" name="identifier" required
+                           value="{identifier ?: ''}"
+                           placeholder="you@company.com or janedoe"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:border-cv-500 focus:ring-1 focus:ring-cv-500 outline-none transition-colors">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password <span class="text-red-400">*</span></label>
+                    <input type="password" id="password" name="password" required
+                           placeholder="Enter your password"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:border-cv-500 focus:ring-1 focus:ring-cv-500 outline-none transition-colors">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-cv-500 text-gray-900 hover:bg-cv-600 px-6 py-3 rounded-lg font-semibold text-base transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] mt-2">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="mt-6 text-center text-sm text-gray-500">
+                Don't have an account?
+                <a href="/signup" class="text-cv-500 hover:text-cv-600 font-medium transition-colors">Sign up</a>
+            </p>
+
+        </div>
+    </main>
+
+{/content}
+{/include}

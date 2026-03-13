@@ -1,0 +1,22 @@
+meta {
+  name: Register Jurisdiction
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/governance/jurisdictions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "jurisdictionName": "EU",
+    "description": "European Union"
+  }
+}

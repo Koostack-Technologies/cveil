@@ -1,0 +1,21 @@
+meta {
+  name: Update Tenant Plan
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/platform/tenants/{{tenantId}}/plan
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{platformToken}}
+}
+
+body:json {
+  {
+    "plan": "pro"
+  }
+}

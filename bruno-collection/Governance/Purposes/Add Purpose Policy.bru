@@ -1,0 +1,25 @@
+meta {
+  name: Add Purpose Policy
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/governance/purposes/policies
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "purposeName": "marketing",
+    "policyType": "FIELD",
+    "fieldName": "email",
+    "entityName": "User",
+    "categoryName": null
+  }
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Update Category
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/catalogue/categories/PII
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "description": "Updated PII category description"
+  }
+}

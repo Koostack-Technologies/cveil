@@ -1,0 +1,15 @@
+meta {
+  name: Get Subject
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/subjects/user-123
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

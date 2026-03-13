@@ -2,9 +2,8 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
@@ -15,7 +14,6 @@ import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -34,9 +32,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Unit tests for Bean Validation annotations on all request DTOs.
  *
- * <p>Uses the Jakarta Validation API directly (no Quarkus container needed)
- * to verify that every request DTO correctly rejects invalid inputs and
- * accepts valid ones.
+ * <p>Uses the Jakarta Validation API directly (no Quarkus container needed) to verify that every
+ * request DTO correctly rejects invalid inputs and accepts valid ones.
  */
 @DisplayName("DTO Bean Validation")
 class DtoValidationTest {
@@ -55,15 +52,13 @@ class DtoValidationTest {
     // -----------------------------------------------------------------------
 
     private static <T> Set<String> violationMessages(Set<ConstraintViolation<T>> violations) {
-        return violations.stream()
-            .map(ConstraintViolation::getMessage)
-            .collect(Collectors.toSet());
+        return violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.toSet());
     }
 
     private static <T> Set<String> violatedProperties(Set<ConstraintViolation<T>> violations) {
         return violations.stream()
-            .map(v -> v.getPropertyPath().toString())
-            .collect(Collectors.toSet());
+                .map(v -> v.getPropertyPath().toString())
+                .collect(Collectors.toSet());
     }
 
     private static ConsentScopeDto validScope() {
@@ -100,8 +95,8 @@ class DtoValidationTest {
             var scope = new ConsentScopeDto(null, "email", null, null);
             var violations = validator.validate(scope);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("category")));
+            assertTrue(
+                    violationMessages(violations).stream().anyMatch(m -> m.contains("category")));
         }
 
         @Test
@@ -122,8 +117,8 @@ class DtoValidationTest {
             var scope = new ConsentScopeDto("PII", null, null, null);
             var violations = validator.validate(scope);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("fieldName")));
+            assertTrue(
+                    violationMessages(violations).stream().anyMatch(m -> m.contains("fieldName")));
         }
 
         @Test
@@ -137,8 +132,7 @@ class DtoValidationTest {
             var scope = new ConsentScopeDto(stringOfLength(256), "email", null, null);
             var violations = validator.validate(scope);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("255")));
+            assertTrue(violationMessages(violations).stream().anyMatch(m -> m.contains("255")));
         }
 
         @Test
@@ -161,10 +155,10 @@ class DtoValidationTest {
 
         @Test
         void maxLengthValues_noViolations() {
-            var scope = new ConsentScopeDto(
-                stringOfLength(255), stringOfLength(255),
-                stringOfLength(255), stringOfLength(255)
-            );
+            var scope =
+                    new ConsentScopeDto(
+                            stringOfLength(255), stringOfLength(255),
+                            stringOfLength(255), stringOfLength(255));
             assertTrue(validator.validate(scope).isEmpty());
         }
     }
@@ -194,8 +188,7 @@ class DtoValidationTest {
             var req = new GrantRequest(null, validScope(), null);
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("subject")));
+            assertTrue(violationMessages(violations).stream().anyMatch(m -> m.contains("subject")));
         }
 
         @Test
@@ -215,8 +208,7 @@ class DtoValidationTest {
             var req = new GrantRequest("user-1", null, null);
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("scope")));
+            assertTrue(violationMessages(violations).stream().anyMatch(m -> m.contains("scope")));
         }
 
         @Test
@@ -225,8 +217,8 @@ class DtoValidationTest {
             var badScope = new ConsentScopeDto("", "email", null, null);
             var req = new GrantRequest("user-1", badScope, null);
             var violations = validator.validate(req);
-            assertFalse(violations.isEmpty(),
-                "Should cascade validation into nested ConsentScopeDto");
+            assertFalse(
+                    violations.isEmpty(), "Should cascade validation into nested ConsentScopeDto");
         }
     }
 
@@ -240,29 +232,29 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RevokeRequest("user-1", validScope(), null);
+            var req = new RevokeRequest("user-1", validScope());
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullSubject_violation() {
-            assertFalse(validator.validate(new RevokeRequest(null, validScope(), null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest(null, validScope())).isEmpty());
         }
 
         @Test
         void blankSubject_violation() {
-            assertFalse(validator.validate(new RevokeRequest("", validScope(), null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest("", validScope())).isEmpty());
         }
 
         @Test
         void nullScope_violation() {
-            assertFalse(validator.validate(new RevokeRequest("user-1", null, null)).isEmpty());
+            assertFalse(validator.validate(new RevokeRequest("user-1", null)).isEmpty());
         }
 
         @Test
         void invalidNestedScope_cascades() {
             var badScope = new ConsentScopeDto(null, null, null, null);
-            var req = new RevokeRequest("user-1", badScope, null);
+            var req = new RevokeRequest("user-1", badScope);
             var violations = validator.validate(req);
             // Should have at least 2 violations: category + fieldName from nested scope
             assertTrue(violations.size() >= 2);
@@ -300,36 +292,35 @@ class DtoValidationTest {
             var req = new BatchGrantRequest("user-1", List.of());
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("empty")));
+            assertTrue(violationMessages(violations).stream().anyMatch(m -> m.contains("empty")));
         }
 
         @Test
         void tooManyGrants_violation() {
-            var entries = IntStream.range(0, 1001)
-                .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
-                .toList();
+            var entries =
+                    IntStream.range(0, 1001)
+                            .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
+                            .toList();
             var req = new BatchGrantRequest("user-1", entries);
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("1000")));
+            assertTrue(violationMessages(violations).stream().anyMatch(m -> m.contains("1000")));
         }
 
         @Test
         void exactlyMaxGrants_noViolations() {
-            var entries = IntStream.range(0, 1000)
-                .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
-                .toList();
+            var entries =
+                    IntStream.range(0, 1000)
+                            .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
+                            .toList();
             var req = new BatchGrantRequest("user-1", entries);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void invalidNestedEntryScope_cascades() {
-            var badEntry = new BatchConsentEntryDto(
-                new ConsentScopeDto(null, "email", null, null), null
-            );
+            var badEntry =
+                    new BatchConsentEntryDto(new ConsentScopeDto(null, "email", null, null), null);
             var req = new BatchGrantRequest("user-1", List.of(badEntry));
             assertFalse(validator.validate(req).isEmpty());
         }
@@ -369,9 +360,10 @@ class DtoValidationTest {
 
         @Test
         void tooManyRevokes_violation() {
-            var entries = IntStream.range(0, 1001)
-                .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
-                .toList();
+            var entries =
+                    IntStream.range(0, 1001)
+                            .mapToObj(i -> new BatchConsentEntryDto(validScope(), null))
+                            .toList();
             assertFalse(validator.validate(new BatchRevokeRequest("user-1", entries)).isEmpty());
         }
 
@@ -392,28 +384,18 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new EvaluateRequest("user-1", Set.of(validScope()));
+            var req = new EvaluateRequest(Set.of(validScope()));
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
-        void nullSubject_violation() {
-            assertFalse(validator.validate(new EvaluateRequest(null, Set.of(validScope()))).isEmpty());
-        }
-
-        @Test
-        void blankSubject_violation() {
-            assertFalse(validator.validate(new EvaluateRequest("", Set.of(validScope()))).isEmpty());
-        }
-
-        @Test
         void nullScopes_violation() {
-            assertFalse(validator.validate(new EvaluateRequest("user-1", null)).isEmpty());
+            assertFalse(validator.validate(new EvaluateRequest(null)).isEmpty());
         }
 
         @Test
         void emptyScopes_violation() {
-            var req = new EvaluateRequest("user-1", Set.of());
+            var req = new EvaluateRequest(Set.of());
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
         }
@@ -421,17 +403,15 @@ class DtoValidationTest {
         @Test
         void invalidNestedScope_cascades() {
             var badScope = new ConsentScopeDto("", "", null, null);
-            var req = new EvaluateRequest("user-1", Set.of(badScope));
+            var req = new EvaluateRequest(Set.of(badScope));
             assertFalse(validator.validate(req).isEmpty());
         }
 
         @Test
         void multipleViolations_allReported() {
-            // null subject + null scopes = at least 2 violations
-            var req = new EvaluateRequest(null, null);
+            var req = new EvaluateRequest(null);
             var violations = validator.validate(req);
-            assertTrue(violations.size() >= 2,
-                "Expected at least 2 violations but got " + violations.size());
+            assertFalse(violations.isEmpty());
         }
     }
 
@@ -445,91 +425,66 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RegisterFieldRequest("email", "User", "User email address");
+            var req = new RegisterFieldRequest("email", "User", "User email address", null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void minimalValid_noViolations() {
             // entityName and description are optional
-            var req = new RegisterFieldRequest("email", null, null);
+            var req = new RegisterFieldRequest("email", null, null, null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullFieldName_violation() {
-            assertFalse(validator.validate(new RegisterFieldRequest(null, null, null)).isEmpty());
+            assertFalse(
+                    validator.validate(new RegisterFieldRequest(null, null, null, null)).isEmpty());
         }
 
         @Test
         void blankFieldName_violation() {
-            assertFalse(validator.validate(new RegisterFieldRequest("  ", null, null)).isEmpty());
+            assertFalse(
+                    validator.validate(new RegisterFieldRequest("  ", null, null, null)).isEmpty());
         }
 
         @Test
         void fieldNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterFieldRequest(stringOfLength(256), null, null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new RegisterFieldRequest(stringOfLength(256), null, null, null))
+                            .isEmpty());
         }
 
         @Test
         void entityNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterFieldRequest("email", stringOfLength(256), null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new RegisterFieldRequest(
+                                            "email", stringOfLength(256), null, null))
+                            .isEmpty());
         }
 
         @Test
         void descriptionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterFieldRequest("email", null, stringOfLength(1001))
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new RegisterFieldRequest(
+                                            "email", null, stringOfLength(1001), null))
+                            .isEmpty());
         }
 
         @Test
         void maxLengthDescription_noViolations() {
-            assertTrue(validator.validate(
-                new RegisterFieldRequest("email", null, stringOfLength(1000))
-            ).isEmpty());
-        }
-    }
-
-    // =======================================================================
-    // RegisterCategoryRequest
-    // =======================================================================
-
-    @Nested
-    @DisplayName("RegisterCategoryRequest")
-    class RegisterCategoryRequestValidation {
-
-        @Test
-        void valid_noViolations() {
-            assertTrue(validator.validate(new RegisterCategoryRequest("PII", "Personally identifiable")).isEmpty());
-        }
-
-        @Test
-        void nullCategoryName_violation() {
-            assertFalse(validator.validate(new RegisterCategoryRequest(null, null)).isEmpty());
-        }
-
-        @Test
-        void blankCategoryName_violation() {
-            assertFalse(validator.validate(new RegisterCategoryRequest("", null)).isEmpty());
-        }
-
-        @Test
-        void categoryNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterCategoryRequest(stringOfLength(256), null)
-            ).isEmpty());
-        }
-
-        @Test
-        void descriptionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterCategoryRequest("PII", stringOfLength(1001))
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(
+                                    new RegisterFieldRequest(
+                                            "email", null, stringOfLength(1000), null))
+                            .isEmpty());
         }
     }
 
@@ -543,7 +498,11 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            assertTrue(validator.validate(new RegisterPurposeRequest("marketing", "For marketing emails")).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(
+                                    new RegisterPurposeRequest("marketing", "For marketing emails"))
+                            .isEmpty());
         }
 
         @Test
@@ -558,9 +517,10 @@ class DtoValidationTest {
 
         @Test
         void purposeNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterPurposeRequest(stringOfLength(256), null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new RegisterPurposeRequest(stringOfLength(256), null))
+                            .isEmpty());
         }
     }
 
@@ -574,155 +534,107 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            var req = new RegisterRegulationRequest(
-                "GDPR", "General Data Protection Regulation",
-                "EU", "EU data protection regulation", "https://gdpr.eu"
-            );
+            var req =
+                    new RegisterRegulationRequest("GDPR", "EU General Data Protection Regulation");
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void minimalValid_noViolations() {
-            // description and url are optional
-            var req = new RegisterRegulationRequest("GDPR", "GDPR Full", "EU", null, null);
+            // description is optional
+            var req = new RegisterRegulationRequest("GDPR", null);
             assertTrue(validator.validate(req).isEmpty());
         }
 
         @Test
         void nullRegulationName_violation() {
-            var req = new RegisterRegulationRequest(null, "Full Name", "EU", null, null);
+            var req = new RegisterRegulationRequest(null, null);
             assertFalse(validator.validate(req).isEmpty());
         }
 
         @Test
         void blankRegulationName_violation() {
-            var req = new RegisterRegulationRequest("", "Full Name", "EU", null, null);
+            var req = new RegisterRegulationRequest("", null);
             assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void nullFullName_violation() {
-            var req = new RegisterRegulationRequest("GDPR", null, "EU", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void blankFullName_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "  ", "EU", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void nullJurisdiction_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "Full Name", null, null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void blankJurisdiction_violation() {
-            var req = new RegisterRegulationRequest("GDPR", "Full Name", "", null, null);
-            assertFalse(validator.validate(req).isEmpty());
-        }
-
-        @Test
-        void allRequiredFieldsNull_multipleViolations() {
-            var req = new RegisterRegulationRequest(null, null, null, null, null);
-            var violations = validator.validate(req);
-            assertTrue(violations.size() >= 3,
-                "Expected at least 3 violations (regulationName, fullName, jurisdiction)");
         }
 
         @Test
         void regulationNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest(stringOfLength(256), "Full", "EU", null, null)
-            ).isEmpty());
-        }
-
-        @Test
-        void fullNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", stringOfLength(501), "EU", null, null)
-            ).isEmpty());
-        }
-
-        @Test
-        void jurisdictionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", stringOfLength(101), null, null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new RegisterRegulationRequest(stringOfLength(256), null))
+                            .isEmpty());
         }
 
         @Test
         void descriptionTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", "EU", stringOfLength(1001), null)
-            ).isEmpty());
-        }
-
-        @Test
-        void urlTooLong_violation() {
-            assertFalse(validator.validate(
-                new RegisterRegulationRequest("GDPR", "Full", "EU", null, stringOfLength(2001))
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new RegisterRegulationRequest("GDPR", stringOfLength(1001)))
+                            .isEmpty());
         }
     }
 
     // =======================================================================
-    // LinkFieldCategoryRequest
+    // AssignFieldCategoryRequest
     // =======================================================================
 
     @Nested
-    @DisplayName("LinkFieldCategoryRequest")
-    class LinkFieldCategoryRequestValidation {
+    @DisplayName("AssignFieldCategoryRequest")
+    class AssignFieldCategoryRequestValidation {
 
         @Test
         void valid_noViolations() {
-            assertTrue(validator.validate(
-                new LinkFieldCategoryRequest("email", "User", "PII")
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(new AssignFieldCategoryRequest("email", "User", "PII", null))
+                            .isEmpty());
         }
 
         @Test
         void validWithoutEntity_noViolations() {
-            assertTrue(validator.validate(
-                new LinkFieldCategoryRequest("email", null, "PII")
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(new AssignFieldCategoryRequest("email", null, "PII", null))
+                            .isEmpty());
         }
 
         @Test
         void nullFieldName_violation() {
-            assertFalse(validator.validate(
-                new LinkFieldCategoryRequest(null, null, "PII")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new AssignFieldCategoryRequest(null, null, "PII", null))
+                            .isEmpty());
         }
 
         @Test
         void blankFieldName_violation() {
-            assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("", null, "PII")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new AssignFieldCategoryRequest("", null, "PII", null))
+                            .isEmpty());
         }
 
         @Test
         void nullCategoryName_violation() {
-            assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("email", null, null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new AssignFieldCategoryRequest("email", null, null, null))
+                            .isEmpty());
         }
 
         @Test
         void blankCategoryName_violation() {
-            assertFalse(validator.validate(
-                new LinkFieldCategoryRequest("email", null, "  ")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new AssignFieldCategoryRequest("email", null, "  ", null))
+                            .isEmpty());
         }
 
         @Test
         void bothRequired_nullBoth_multipleViolations() {
-            var violations = validator.validate(
-                new LinkFieldCategoryRequest(null, null, null)
-            );
+            var violations =
+                    validator.validate(new AssignFieldCategoryRequest(null, null, null, null));
             assertTrue(violations.size() >= 2);
         }
     }
@@ -737,45 +649,62 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            assertTrue(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", "consent")
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(
+                                    new LinkPurposeRegulationRequest(
+                                            "marketing", "GDPR", "consent", null, null))
+                            .isEmpty());
         }
 
         @Test
         void nullPurposeName_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest(null, "GDPR", "consent")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new LinkPurposeRegulationRequest(
+                                            null, "GDPR", "consent", null, null))
+                            .isEmpty());
         }
 
         @Test
         void nullRegulationName_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", null, "consent")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new LinkPurposeRegulationRequest(
+                                            "marketing", null, "consent", null, null))
+                            .isEmpty());
         }
 
         @Test
-        void nullLegalBasis_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", null)
-            ).isEmpty());
+        void nullLawfulBasis_noViolation() {
+            assertTrue(
+                    validator
+                            .validate(
+                                    new LinkPurposeRegulationRequest(
+                                            "marketing", "GDPR", null, null, null))
+                            .isEmpty());
         }
 
         @Test
-        void blankLegalBasis_violation() {
-            assertFalse(validator.validate(
-                new LinkPurposeRegulationRequest("marketing", "GDPR", "")
-            ).isEmpty());
+        void blankLawfulBasis_noViolation() {
+            assertTrue(
+                    validator
+                            .validate(
+                                    new LinkPurposeRegulationRequest(
+                                            "marketing", "GDPR", "", null, null))
+                            .isEmpty());
         }
 
         @Test
         void allNull_multipleViolations() {
-            var violations = validator.validate(
-                new LinkPurposeRegulationRequest(null, null, null)
-            );
-            assertTrue(violations.size() >= 3);
+            var violations =
+                    validator.validate(
+                            new LinkPurposeRegulationRequest(null, null, null, null, null));
+            assertTrue(
+                    violations.size() >= 2,
+                    "Expected at least 2 violations (purposeName, regulationName)");
         }
     }
 
@@ -789,187 +718,131 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            assertTrue(validator.validate(
-                new CreateTenantRequest("acme_corp", "Acme Corp", "pro")
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(
+                                    new CreateTenantRequest("acme_corp", "Acme Corp", "pro", null))
+                            .isEmpty());
         }
 
         @Test
         void validMinimal_noViolations() {
             // displayName is optional
-            assertTrue(validator.validate(
-                new CreateTenantRequest("acme", null, "free")
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(new CreateTenantRequest("acme", null, "free", null))
+                            .isEmpty());
         }
 
         @Test
         void nullTenantId_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest(null, "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest(null, "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void blankTenantId_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("", "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("", "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void tenantIdTooLong_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest(stringOfLength(64), "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new CreateTenantRequest(
+                                            stringOfLength(64), "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void tenantIdMaxLength_noViolations() {
             // 63 chars, starting with letter
             String id = "a" + "x".repeat(62);
-            assertTrue(validator.validate(
-                new CreateTenantRequest(id, null, "free")
-            ).isEmpty());
+            assertTrue(
+                    validator.validate(new CreateTenantRequest(id, null, "free", null)).isEmpty());
         }
 
         @Test
         void tenantIdWithInvalidChars_violation() {
             // contains a hyphen which is not allowed by the pattern
-            var violations = validator.validate(
-                new CreateTenantRequest("acme-corp", "Acme", "free")
-            );
+            var violations =
+                    validator.validate(new CreateTenantRequest("acme-corp", "Acme", "free", null));
             assertFalse(violations.isEmpty());
-            assertTrue(violationMessages(violations).stream()
-                .anyMatch(m -> m.contains("alphanumeric")));
+            assertTrue(
+                    violationMessages(violations).stream()
+                            .anyMatch(m -> m.contains("alphanumeric")));
         }
 
         @Test
         void tenantIdStartsWithNumber_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("1acme", "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("1acme", "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void tenantIdStartsWithUnderscore_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("_acme", "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("_acme", "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void tenantIdWithSpaces_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("acme corp", "Acme", "free")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("acme corp", "Acme", "free", null))
+                            .isEmpty());
         }
 
         @Test
         void tenantIdSingleLetter_noViolations() {
-            assertTrue(validator.validate(
-                new CreateTenantRequest("a", null, "free")
-            ).isEmpty());
+            assertTrue(
+                    validator.validate(new CreateTenantRequest("a", null, "free", null)).isEmpty());
         }
 
         @Test
         void nullPlan_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", null)
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("acme", "Acme", null, null))
+                            .isEmpty());
         }
 
         @Test
         void blankPlan_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", "  ")
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(new CreateTenantRequest("acme", "Acme", "  ", null))
+                            .isEmpty());
         }
 
         @Test
         void planTooLong_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("acme", "Acme", stringOfLength(51))
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new CreateTenantRequest(
+                                            "acme", "Acme", stringOfLength(51), null))
+                            .isEmpty());
         }
 
         @Test
         void displayNameTooLong_violation() {
-            assertFalse(validator.validate(
-                new CreateTenantRequest("acme", stringOfLength(256), "free")
-            ).isEmpty());
-        }
-    }
-
-    // =======================================================================
-    // CreateApiKeyRequest
-    // =======================================================================
-
-    @Nested
-    @DisplayName("CreateApiKeyRequest")
-    class CreateApiKeyRequestValidation {
-
-        @Test
-        void valid_noViolations() {
-            assertTrue(validator.validate(
-                new CreateApiKeyRequest("acme", "admin@acme.com", Set.of("admin", "consent-writer"))
-            ).isEmpty());
-        }
-
-        @Test
-        void validEmptyRoles_noViolations() {
-            // Empty set is allowed (non-null)
-            assertTrue(validator.validate(
-                new CreateApiKeyRequest("acme", "admin@acme.com", Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void nullTenantId_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest(null, "admin@acme.com", Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void blankTenantId_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest("", "admin@acme.com", Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void nullSubject_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest("acme", null, Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void blankSubject_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest("acme", "  ", Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void nullRoles_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest("acme", "admin@acme.com", null)
-            ).isEmpty());
-        }
-
-        @Test
-        void tenantIdTooLong_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest(stringOfLength(64), "admin", Set.of())
-            ).isEmpty());
-        }
-
-        @Test
-        void subjectTooLong_violation() {
-            assertFalse(validator.validate(
-                new CreateApiKeyRequest("acme", stringOfLength(256), Set.of())
-            ).isEmpty());
+            assertFalse(
+                    validator
+                            .validate(
+                                    new CreateTenantRequest(
+                                            "acme", stringOfLength(256), "free", null))
+                            .isEmpty());
         }
     }
 
@@ -983,31 +856,28 @@ class DtoValidationTest {
 
         @Test
         void valid_noViolations() {
-            assertTrue(validator.validate(
-                new BatchConsentEntryDto(validScope(), null)
-            ).isEmpty());
+            assertTrue(validator.validate(new BatchConsentEntryDto(validScope(), null)).isEmpty());
         }
 
         @Test
         void validWithExpiration_noViolations() {
-            assertTrue(validator.validate(
-                new BatchConsentEntryDto(validScope(), Instant.now().plusSeconds(86400))
-            ).isEmpty());
+            assertTrue(
+                    validator
+                            .validate(
+                                    new BatchConsentEntryDto(
+                                            validScope(), Instant.now().plusSeconds(86400)))
+                            .isEmpty());
         }
 
         @Test
         void nullScope_violation() {
-            assertFalse(validator.validate(
-                new BatchConsentEntryDto(null, null)
-            ).isEmpty());
+            assertFalse(validator.validate(new BatchConsentEntryDto(null, null)).isEmpty());
         }
 
         @Test
         void invalidNestedScope_cascades() {
             var badScope = new ConsentScopeDto(null, null, null, null);
-            var violations = validator.validate(
-                new BatchConsentEntryDto(badScope, null)
-            );
+            var violations = validator.validate(new BatchConsentEntryDto(badScope, null));
             // Should cascade: category + fieldName from the nested scope
             assertTrue(violations.size() >= 2);
         }
@@ -1025,8 +895,7 @@ class DtoValidationTest {
         void grantRequestAllNull_reportsMultipleViolations() {
             var req = new GrantRequest(null, null, null);
             var violations = validator.validate(req);
-            assertTrue(violations.size() >= 2,
-                "Expected at least subject + scope violations");
+            assertTrue(violations.size() >= 2, "Expected at least subject + scope violations");
             var properties = violatedProperties(violations);
             assertTrue(properties.contains("subject"));
             assertTrue(properties.contains("scope"));
@@ -1036,13 +905,14 @@ class DtoValidationTest {
         void evaluateRequestDeeplyCascaded_reportsNestedPath() {
             // Valid subject but one scope has null category
             var badScope = new ConsentScopeDto(null, "email", null, null);
-            var req = new EvaluateRequest("user-1", Set.of(badScope));
+            var req = new EvaluateRequest(Set.of(badScope));
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
             // The property path should reference the nested field
             var paths = violatedProperties(violations);
-            assertTrue(paths.stream().anyMatch(p -> p.contains("category")),
-                "Expected violation path to reference 'category' but got: " + paths);
+            assertTrue(
+                    paths.stream().anyMatch(p -> p.contains("category")),
+                    "Expected violation path to reference 'category' but got: " + paths);
         }
 
         @Test
@@ -1053,8 +923,9 @@ class DtoValidationTest {
             var violations = validator.validate(req);
             assertFalse(violations.isEmpty());
             var paths = violatedProperties(violations);
-            assertTrue(paths.stream().anyMatch(p -> p.contains("fieldName")),
-                "Expected violation path to reference 'fieldName' but got: " + paths);
+            assertTrue(
+                    paths.stream().anyMatch(p -> p.contains("fieldName")),
+                    "Expected violation path to reference 'fieldName' but got: " + paths);
         }
     }
 }

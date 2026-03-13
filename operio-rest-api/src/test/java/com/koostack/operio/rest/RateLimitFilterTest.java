@@ -31,45 +31,41 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link RateLimitFilter} — the JAX-RS filter that enforces
- * per-tenant burst and monthly rate limits.
+ * Unit tests for {@link RateLimitFilter} — the JAX-RS filter that enforces per-tenant burst and
+ * monthly rate limits.
  *
  * <p>Covers:
+ *
  * <ul>
- *   <li>Skip: rate limiting unavailable (embedded mode / no Redis)</li>
- *   <li>Skip: unauthenticated request (no identity in holder)</li>
- *   <li>Skip: no tenant ID (bootstrap super-admin)</li>
- *   <li>Burst allowed — request passes through, result stored as property</li>
- *   <li>Burst exceeded — 429 abort with correct headers and JSON body</li>
- *   <li>Monthly allowed — evaluation endpoint passes through</li>
- *   <li>Monthly exceeded — 429 abort with quota-exceeded message</li>
- *   <li>Monthly warning — X-RateLimit-Warning header emitted</li>
- *   <li>Non-evaluation endpoints skip monthly check</li>
- *   <li>Response filter emits rate-limit headers from stored properties</li>
- *   <li>Response filter skips headers when no property stored (skip path)</li>
- *   <li>Response filter skips headers for UNLIMITED results</li>
- *   <li>Evaluation endpoint path matching (various paths)</li>
- *   <li>Abort body shape: error, message, retryAfter</li>
+ *   <li>Skip: rate limiting unavailable (embedded mode / no Redis)
+ *   <li>Skip: unauthenticated request (no identity in holder)
+ *   <li>Skip: no tenant ID (bootstrap super-admin)
+ *   <li>Burst allowed — request passes through, result stored as property
+ *   <li>Burst exceeded — 429 abort with correct headers and JSON body
+ *   <li>Monthly allowed — evaluation endpoint passes through
+ *   <li>Monthly exceeded — 429 abort with quota-exceeded message
+ *   <li>Monthly warning — X-RateLimit-Warning header emitted
+ *   <li>Non-evaluation endpoints skip monthly check
+ *   <li>Response filter emits rate-limit headers from stored properties
+ *   <li>Response filter skips headers when no property stored (skip path)
+ *   <li>Response filter skips headers for UNLIMITED results
+ *   <li>Evaluation endpoint path matching (various paths)
+ *   <li>Abort body shape: error, message, retryAfter
  * </ul>
  */
 @DisplayName("RateLimitFilter")
 @ExtendWith(MockitoExtension.class)
 class RateLimitFilterTest {
 
-    @Mock
-    private OperioRequestHolder requestHolder;
+    @Mock private OperioRequestHolder requestHolder;
 
-    @Mock
-    private RateLimitService rateLimitService;
+    @Mock private RateLimitService rateLimitService;
 
-    @Mock
-    private ContainerRequestContext requestContext;
+    @Mock private ContainerRequestContext requestContext;
 
-    @Mock
-    private ContainerResponseContext responseContext;
+    @Mock private ContainerResponseContext responseContext;
 
-    @Mock
-    private UriInfo uriInfo;
+    @Mock private UriInfo uriInfo;
 
     private RateLimitFilter filter;
 
@@ -84,11 +80,8 @@ class RateLimitFilterTest {
     // Reflection helpers
     // -----------------------------------------------------------------------
 
-    private static void injectField(
-        Object target,
-        String fieldName,
-        Object value
-    ) throws Exception {
+    private static void injectField(Object target, String fieldName, Object value)
+            throws Exception {
         Field field = findField(target.getClass(), fieldName);
         field.setAccessible(true);
         field.set(target, value);
@@ -103,9 +96,7 @@ class RateLimitFilterTest {
                 current = current.getSuperclass();
             }
         }
-        throw new RuntimeException(
-            "Field '" + name + "' not found in " + clazz
-        );
+        throw new RuntimeException("Field '" + name + "' not found in " + clazz);
     }
 
     // -----------------------------------------------------------------------
@@ -114,26 +105,18 @@ class RateLimitFilterTest {
 
     private static IdentityContext tenantIdentity(String tenantId) {
         return new IdentityContext(
-            "user-1",
-            "token-abc",
-            "user@example.com",
-            Set.of("admin"),
-            Map.of(),
-            tenantId,
-            "api-key"
-        );
+                "user-1",
+                "token-abc",
+                "user@example.com",
+                Set.of("admin"),
+                Map.of(),
+                tenantId,
+                "api-key");
     }
 
     private static IdentityContext bootstrapIdentity() {
         return new IdentityContext(
-            "bootstrap-admin",
-            null,
-            null,
-            Set.of("super-admin"),
-            Map.of(),
-            null,
-            "bootstrap"
-        );
+                "bootstrap-admin", null, null, Set.of("super-admin"), Map.of(), null, "bootstrap");
     }
 
     // -----------------------------------------------------------------------
@@ -151,9 +134,7 @@ class RateLimitFilterTest {
     }
 
     private Response captureAbort() {
-        ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(
-            Response.class
-        );
+        ArgumentCaptor<Response> captor = ArgumentCaptor.forClass(Response.class);
         verify(requestContext).abortWith(captor.capture());
         return captor.getValue();
     }
@@ -166,58 +147,50 @@ class RateLimitFilterTest {
 
     private static RateLimitResult burstAllowed(long limit, long remaining) {
         return new RateLimitResult(
-            limit,
-            remaining,
-            Instant.now()
-                .truncatedTo(ChronoUnit.MINUTES)
-                .plus(1, ChronoUnit.MINUTES),
-            false, // burstExceeded
-            false, // warning
-            false, // monthlyExceeded
-            false // subjectLimitExceeded
-        );
+                limit,
+                remaining,
+                Instant.now().truncatedTo(ChronoUnit.MINUTES).plus(1, ChronoUnit.MINUTES),
+                false, // burstExceeded
+                false, // warning
+                false, // monthlyExceeded
+                false // subjectLimitExceeded
+                );
     }
 
     private static RateLimitResult burstExceeded(long limit) {
         return new RateLimitResult(
-            limit,
-            0L,
-            Instant.now()
-                .truncatedTo(ChronoUnit.MINUTES)
-                .plus(1, ChronoUnit.MINUTES),
-            true, // burstExceeded
-            false, // warning
-            false, // monthlyExceeded
-            false // subjectLimitExceeded
-        );
+                limit,
+                0L,
+                Instant.now().truncatedTo(ChronoUnit.MINUTES).plus(1, ChronoUnit.MINUTES),
+                true, // burstExceeded
+                false, // warning
+                false, // monthlyExceeded
+                false // subjectLimitExceeded
+                );
     }
 
-    private static RateLimitResult monthlyAllowed(
-        long limit,
-        long remaining,
-        boolean warning
-    ) {
+    private static RateLimitResult monthlyAllowed(long limit, long remaining, boolean warning) {
         return new RateLimitResult(
-            limit,
-            remaining,
-            Instant.now().plus(15, ChronoUnit.DAYS),
-            false, // burstExceeded
-            warning, // warning
-            false, // monthlyExceeded
-            false // subjectLimitExceeded
-        );
+                limit,
+                remaining,
+                Instant.now().plus(15, ChronoUnit.DAYS),
+                false, // burstExceeded
+                warning, // warning
+                false, // monthlyExceeded
+                false // subjectLimitExceeded
+                );
     }
 
     private static RateLimitResult monthlyExceeded(long limit) {
         return new RateLimitResult(
-            limit,
-            0L,
-            Instant.now().plus(15, ChronoUnit.DAYS),
-            false, // burstExceeded
-            true, // warning
-            true, // monthlyExceeded
-            false // subjectLimitExceeded
-        );
+                limit,
+                0L,
+                Instant.now().plus(15, ChronoUnit.DAYS),
+                false, // burstExceeded
+                true, // warning
+                true, // monthlyExceeded
+                false // subjectLimitExceeded
+                );
     }
 
     // ===================================================================
@@ -279,15 +252,15 @@ class RateLimitFilterTest {
         void skipsBlankTenantId() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             when(requestHolder.isAuthenticated()).thenReturn(true);
-            IdentityContext blankTenant = new IdentityContext(
-                "admin",
-                null,
-                null,
-                Set.of("super-admin"),
-                Map.of(),
-                "   ",
-                "bootstrap"
-            );
+            IdentityContext blankTenant =
+                    new IdentityContext(
+                            "admin",
+                            null,
+                            null,
+                            Set.of("super-admin"),
+                            Map.of(),
+                            "   ",
+                            "bootstrap");
             when(requestHolder.identity()).thenReturn(blankTenant);
 
             filter.filter(requestContext);
@@ -301,15 +274,9 @@ class RateLimitFilterTest {
         void skipsEmptyTenantId() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             when(requestHolder.isAuthenticated()).thenReturn(true);
-            IdentityContext emptyTenant = new IdentityContext(
-                "admin",
-                null,
-                null,
-                Set.of("super-admin"),
-                Map.of(),
-                "",
-                "bootstrap"
-            );
+            IdentityContext emptyTenant =
+                    new IdentityContext(
+                            "admin", null, null, Set.of("super-admin"), Map.of(), "", "bootstrap");
             when(requestHolder.identity()).thenReturn(emptyTenant);
 
             filter.filter(requestContext);
@@ -339,10 +306,7 @@ class RateLimitFilterTest {
             filter.filter(requestContext);
 
             verify(requestContext, never()).abortWith(any());
-            verify(requestContext).setProperty(
-                eq("operio.ratelimit.burst-result"),
-                eq(result)
-            );
+            verify(requestContext).setProperty(eq("operio.ratelimit.burst-result"), eq(result));
         }
 
         @Test
@@ -368,17 +332,12 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(60)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(60));
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            assertEquals(
-                MediaType.APPLICATION_JSON_TYPE,
-                response.getMediaType()
-            );
+            assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
         }
 
         @Test
@@ -394,20 +353,10 @@ class RateLimitFilterTest {
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            assertEquals(
-                "60",
-                response.getHeaderString(RateLimitFilter.HEADER_LIMIT)
-            );
-            assertEquals(
-                "0",
-                response.getHeaderString(RateLimitFilter.HEADER_REMAINING)
-            );
-            assertNotNull(
-                response.getHeaderString(RateLimitFilter.HEADER_RESET)
-            );
-            assertNotNull(
-                response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER)
-            );
+            assertEquals("60", response.getHeaderString(RateLimitFilter.HEADER_LIMIT));
+            assertEquals("0", response.getHeaderString(RateLimitFilter.HEADER_REMAINING));
+            assertNotNull(response.getHeaderString(RateLimitFilter.HEADER_RESET));
+            assertNotNull(response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER));
         }
 
         @Test
@@ -418,9 +367,7 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(60)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(60));
 
             filter.filter(requestContext);
 
@@ -441,22 +388,15 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(60)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(60));
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            String retryAfter = response.getHeaderString(
-                RateLimitFilter.HEADER_RETRY_AFTER
-            );
+            String retryAfter = response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER);
             assertNotNull(retryAfter);
             long retrySeconds = Long.parseLong(retryAfter);
-            assertTrue(
-                retrySeconds >= 1,
-                "Retry-After should be >= 1, got " + retrySeconds
-            );
+            assertTrue(retrySeconds >= 1, "Retry-After should be >= 1, got " + retrySeconds);
         }
 
         @Test
@@ -464,11 +404,9 @@ class RateLimitFilterTest {
         void burstExceededSkipsMonthly() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(60)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(60));
 
             filter.filter(requestContext);
 
@@ -490,21 +428,16 @@ class RateLimitFilterTest {
         void monthlyAllowedPassesThrough() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
             RateLimitResult monthly = monthlyAllowed(10_000, 8_000, false);
             when(rateLimitService.checkMonthly("acme")).thenReturn(monthly);
 
             filter.filter(requestContext);
 
             verify(requestContext, never()).abortWith(any());
-            verify(requestContext).setProperty(
-                eq("operio.ratelimit.monthly-result"),
-                eq(monthly)
-            );
+            verify(requestContext).setProperty(eq("operio.ratelimit.monthly-result"), eq(monthly));
         }
 
         @Test
@@ -512,14 +445,10 @@ class RateLimitFilterTest {
         void monthlyExceededAborts() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyExceeded(10_000)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme")).thenReturn(monthlyExceeded(10_000));
 
             filter.filter(requestContext);
 
@@ -528,33 +457,21 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "monthly exceeded — message says 'Monthly evaluation quota exceeded'"
-        )
+        @DisplayName("monthly exceeded — message says 'Monthly evaluation quota exceeded'")
         @SuppressWarnings("unchecked")
         void monthlyExceededMessage() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyExceeded(10_000)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme")).thenReturn(monthlyExceeded(10_000));
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            Map<String, Object> body = (Map<
-                String,
-                Object
-            >) response.getEntity();
-            assertEquals(
-                "Monthly evaluation quota exceeded",
-                body.get("message")
-            );
+            Map<String, Object> body = (Map<String, Object>) response.getEntity();
+            assertEquals("Monthly evaluation quota exceeded", body.get("message"));
             assertEquals("rate_limit_exceeded", body.get("error"));
         }
 
@@ -563,21 +480,15 @@ class RateLimitFilterTest {
         void monthlyExceededRetryAfter() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyExceeded(10_000)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme")).thenReturn(monthlyExceeded(10_000));
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            assertNotNull(
-                response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER)
-            );
+            assertNotNull(response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER));
         }
 
         @Test
@@ -587,9 +498,7 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
 
             filter.filter(requestContext);
 
@@ -612,18 +521,13 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath(path);
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyAllowed(10_000, 9_000, false)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme"))
+                    .thenReturn(monthlyAllowed(10_000, 9_000, false));
             // Consent write endpoints also trigger subject limit check
             lenient()
-                .when(
-                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
-                )
-                .thenReturn(RateLimitResult.UNLIMITED);
+                    .when(rateLimitService.checkSubjectLimit(eq("acme"), anyString()))
+                    .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -636,9 +540,7 @@ class RateLimitFilterTest {
             givenAuthenticatedTenant("acme");
             givenPath(path);
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
 
             filter.filter(requestContext);
 
@@ -648,37 +550,37 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("/evaluate is an evaluation endpoint")
         void evaluatePath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/evaluate");
+            assertMonthlyChecked("api/v1/subjects/consent/evaluate");
         }
 
         @Test
         @DisplayName("/grant is an evaluation endpoint")
         void grantPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/grant");
+            assertMonthlyChecked("api/v1/subjects/consent/grant");
         }
 
         @Test
         @DisplayName("/revoke is an evaluation endpoint")
         void revokePath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/revoke");
+            assertMonthlyChecked("api/v1/subjects/consent/revoke");
         }
 
         @Test
         @DisplayName("/grant-batch is an evaluation endpoint")
         void grantBatchPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/grant-batch");
+            assertMonthlyChecked("api/v1/subjects/consent/grant-batch");
         }
 
         @Test
         @DisplayName("/revoke-batch is an evaluation endpoint")
         void revokeBatchPath() throws IOException {
-            assertMonthlyChecked("api/v1/consent/revoke-batch");
+            assertMonthlyChecked("api/v1/subjects/consent/revoke-batch");
         }
 
         @Test
         @DisplayName("path with leading slash is recognized")
         void pathWithLeadingSlash() throws IOException {
-            assertMonthlyChecked("/api/v1/consent/evaluate");
+            assertMonthlyChecked("/api/v1/subjects/consent/evaluate");
         }
 
         @Test
@@ -700,19 +602,15 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "/consent/subjects/{id}/summary is NOT an evaluation endpoint"
-        )
+        @DisplayName("/subjects/{id}/summary is NOT an evaluation endpoint")
         void subjectSummaryNotEvaluation() throws IOException {
-            assertMonthlyNotChecked("api/v1/consent/subjects/user-1/summary");
+            assertMonthlyNotChecked("api/v1/subjects/user-1/summary");
         }
 
         @Test
-        @DisplayName(
-            "/consent/subjects/{id}/history is NOT an evaluation endpoint"
-        )
+        @DisplayName("/subjects/{id}/history is NOT an evaluation endpoint")
         void subjectHistoryNotEvaluation() throws IOException {
-            assertMonthlyNotChecked("api/v1/consent/subjects/user-1/history");
+            assertMonthlyNotChecked("api/v1/subjects/user-1/history");
         }
 
         @Test
@@ -734,35 +632,22 @@ class RateLimitFilterTest {
         @DisplayName("emits burst headers from stored property")
         void emitsBurstHeaders() throws IOException {
             RateLimitResult burst = burstAllowed(60, 42);
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
 
             assertEquals("60", headers.getFirst(RateLimitFilter.HEADER_LIMIT));
-            assertEquals(
-                "42",
-                headers.getFirst(RateLimitFilter.HEADER_REMAINING)
-            );
+            assertEquals("42", headers.getFirst(RateLimitFilter.HEADER_REMAINING));
             assertNotNull(headers.getFirst(RateLimitFilter.HEADER_RESET));
         }
 
         @Test
-        @DisplayName(
-            "does not emit headers when no burst result stored (skip path)"
-        )
+        @DisplayName("does not emit headers when no burst result stored (skip path)")
         void noHeadersWhenNoProperty() throws IOException {
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(null);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -775,12 +660,9 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("does not emit headers for UNLIMITED burst result")
         void noHeadersForUnlimited() throws IOException {
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(RateLimitResult.UNLIMITED);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.burst-result"))
+                    .thenReturn(RateLimitResult.UNLIMITED);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -794,20 +676,13 @@ class RateLimitFilterTest {
         void emitsWarningHeader() throws IOException {
             RateLimitResult burst = burstAllowed(60, 55);
             RateLimitResult monthly = monthlyAllowed(10_000, 500, true); // warning=true
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(monthly);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(monthly);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
 
-            assertEquals(
-                "approaching limit",
-                headers.getFirst(RateLimitFilter.HEADER_WARNING)
-            );
+            assertEquals("approaching limit", headers.getFirst(RateLimitFilter.HEADER_WARNING));
         }
 
         @Test
@@ -815,12 +690,8 @@ class RateLimitFilterTest {
         void noWarningWhenNotApproaching() throws IOException {
             RateLimitResult burst = burstAllowed(60, 55);
             RateLimitResult monthly = monthlyAllowed(10_000, 8_000, false);
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(monthly);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(monthly);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -832,12 +703,9 @@ class RateLimitFilterTest {
         @DisplayName("does not emit warning for UNLIMITED monthly result")
         void noWarningForUnlimitedMonthly() throws IOException {
             RateLimitResult burst = burstAllowed(60, 55);
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(RateLimitResult.UNLIMITED);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result"))
+                    .thenReturn(RateLimitResult.UNLIMITED);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -849,12 +717,8 @@ class RateLimitFilterTest {
         @DisplayName("no monthly property stored — no warning header")
         void noMonthlyPropertyNoWarning() throws IOException {
             RateLimitResult burst = burstAllowed(60, 55);
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -866,29 +730,15 @@ class RateLimitFilterTest {
         @DisplayName("reset header is epoch seconds from burst result")
         void resetHeaderIsEpochSeconds() throws IOException {
             Instant resetAt = Instant.ofEpochSecond(1_700_000_000L);
-            RateLimitResult burst = new RateLimitResult(
-                100L,
-                80L,
-                resetAt,
-                false,
-                false,
-                false,
-                false
-            );
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            RateLimitResult burst =
+                    new RateLimitResult(100L, 80L, resetAt, false, false, false, false);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
 
-            assertEquals(
-                "1700000000",
-                headers.getFirst(RateLimitFilter.HEADER_RESET)
-            );
+            assertEquals("1700000000", headers.getFirst(RateLimitFilter.HEADER_RESET));
         }
     }
 
@@ -909,10 +759,7 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("HEADER_REMAINING is X-RateLimit-Remaining")
         void headerRemaining() {
-            assertEquals(
-                "X-RateLimit-Remaining",
-                RateLimitFilter.HEADER_REMAINING
-            );
+            assertEquals("X-RateLimit-Remaining", RateLimitFilter.HEADER_REMAINING);
         }
 
         @Test
@@ -943,9 +790,7 @@ class RateLimitFilterTest {
     class FullLifecycle {
 
         @Test
-        @DisplayName(
-            "admin endpoint: burst under limit → response has headers, no warning"
-        )
+        @DisplayName("admin endpoint: burst under limit → response has headers, no warning")
         void adminUnderLimit() throws IOException {
             // --- Request phase ---
             when(rateLimitService.isAvailable()).thenReturn(true);
@@ -958,39 +803,28 @@ class RateLimitFilterTest {
             filter.filter(requestContext);
 
             verify(requestContext, never()).abortWith(any());
-            verify(requestContext).setProperty(
-                "operio.ratelimit.burst-result",
-                burst
-            );
+            verify(requestContext).setProperty("operio.ratelimit.burst-result", burst);
 
             // --- Response phase ---
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(null);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
 
             assertEquals("60", headers.getFirst(RateLimitFilter.HEADER_LIMIT));
-            assertEquals(
-                "45",
-                headers.getFirst(RateLimitFilter.HEADER_REMAINING)
-            );
+            assertEquals("45", headers.getFirst(RateLimitFilter.HEADER_REMAINING));
             assertNull(headers.getFirst(RateLimitFilter.HEADER_WARNING));
         }
 
         @Test
         @DisplayName(
-            "evaluation endpoint: burst OK + monthly warning → response has warning header"
-        )
+                "evaluation endpoint: burst OK + monthly warning → response has warning header")
         void evaluationWithMonthlyWarning() throws IOException {
             // --- Request phase ---
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
             RateLimitResult burst = burstAllowed(60, 55);
             RateLimitResult monthly = monthlyAllowed(10_000, 500, true);
@@ -1002,31 +836,19 @@ class RateLimitFilterTest {
             verify(requestContext, never()).abortWith(any());
 
             // --- Response phase ---
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn(burst);
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(monthly);
+            when(requestContext.getProperty("operio.ratelimit.burst-result")).thenReturn(burst);
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(monthly);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
 
             assertEquals("60", headers.getFirst(RateLimitFilter.HEADER_LIMIT));
-            assertEquals(
-                "55",
-                headers.getFirst(RateLimitFilter.HEADER_REMAINING)
-            );
-            assertEquals(
-                "approaching limit",
-                headers.getFirst(RateLimitFilter.HEADER_WARNING)
-            );
+            assertEquals("55", headers.getFirst(RateLimitFilter.HEADER_REMAINING));
+            assertEquals("approaching limit", headers.getFirst(RateLimitFilter.HEADER_WARNING));
         }
 
         @Test
-        @DisplayName(
-            "unauthenticated health check → no rate limit activity at all"
-        )
+        @DisplayName("unauthenticated health check → no rate limit activity at all")
         void healthCheckNoRateLimit() throws IOException {
             // --- Request phase ---
             lenient().when(rateLimitService.isAvailable()).thenReturn(true);
@@ -1039,17 +861,11 @@ class RateLimitFilterTest {
 
             // --- Response phase (nothing stored) ---
             lenient()
-                .when(
-                    requestContext.getProperty("operio.ratelimit.burst-result")
-                )
-                .thenReturn(null);
+                    .when(requestContext.getProperty("operio.ratelimit.burst-result"))
+                    .thenReturn(null);
             lenient()
-                .when(
-                    requestContext.getProperty(
-                        "operio.ratelimit.monthly-result"
-                    )
-                )
-                .thenReturn(null);
+                    .when(requestContext.getProperty("operio.ratelimit.monthly-result"))
+                    .thenReturn(null);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -1082,16 +898,11 @@ class RateLimitFilterTest {
     class EdgeCases {
 
         @Test
-        @DisplayName(
-            "property stored as non-RateLimitResult type is ignored in response filter"
-        )
+        @DisplayName("property stored as non-RateLimitResult type is ignored in response filter")
         void wrongPropertyType() throws IOException {
-            when(
-                requestContext.getProperty("operio.ratelimit.burst-result")
-            ).thenReturn("not-a-result");
-            when(
-                requestContext.getProperty("operio.ratelimit.monthly-result")
-            ).thenReturn(42);
+            when(requestContext.getProperty("operio.ratelimit.burst-result"))
+                    .thenReturn("not-a-result");
+            when(requestContext.getProperty("operio.ratelimit.monthly-result")).thenReturn(42);
             MultivaluedMap<String, Object> headers = givenResponseHeaders();
 
             filter.filter(requestContext, responseContext);
@@ -1108,15 +919,15 @@ class RateLimitFilterTest {
             givenPath("api/v1/admin/fields");
 
             // Remaining 0 but burstExceeded=false means exactly at limit, not over
-            RateLimitResult result = new RateLimitResult(
-                60L,
-                0L,
-                Instant.now().plus(1, ChronoUnit.MINUTES),
-                false,
-                false,
-                false,
-                false
-            );
+            RateLimitResult result =
+                    new RateLimitResult(
+                            60L,
+                            0L,
+                            Instant.now().plus(1, ChronoUnit.MINUTES),
+                            false,
+                            false,
+                            false,
+                            false);
             when(rateLimitService.checkBurst("acme")).thenReturn(result);
 
             filter.filter(requestContext);
@@ -1125,26 +936,21 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "UNLIMITED burst result — no properties stored, request passes"
-        )
+        @DisplayName("UNLIMITED burst result — no properties stored, request passes")
         void unlimitedBurstResult() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                RateLimitResult.UNLIMITED
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
             verify(requestContext, never()).abortWith(any());
             // The property is still set (the filter stores whatever checkBurst returns)
-            verify(requestContext).setProperty(
-                eq("operio.ratelimit.burst-result"),
-                eq(RateLimitResult.UNLIMITED)
-            );
+            verify(requestContext)
+                    .setProperty(
+                            eq("operio.ratelimit.burst-result"), eq(RateLimitResult.UNLIMITED));
         }
 
         @Test
@@ -1154,9 +960,7 @@ class RateLimitFilterTest {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("tenant-1");
             givenPath("api/v1/admin/fields");
-            when(rateLimitService.checkBurst("tenant-1")).thenReturn(
-                burstExceeded(30)
-            );
+            when(rateLimitService.checkBurst("tenant-1")).thenReturn(burstExceeded(30));
 
             filter.filter(requestContext);
             verify(requestContext).abortWith(any());
@@ -1166,26 +970,20 @@ class RateLimitFilterTest {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("tenant-2");
             givenPath("api/v1/admin/fields");
-            when(rateLimitService.checkBurst("tenant-2")).thenReturn(
-                burstAllowed(100, 90)
-            );
+            when(rateLimitService.checkBurst("tenant-2")).thenReturn(burstAllowed(100, 90));
 
             filter.filter(requestContext);
             verify(requestContext, never()).abortWith(any());
         }
 
         @Test
-        @DisplayName(
-            "consent path without evaluation segment — no monthly check"
-        )
+        @DisplayName("consent path without evaluation segment — no monthly check")
         void consentNonEvalPath() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/subjects/user-1/summary");
+            givenPath("api/v1/subjects/user-1/summary");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
 
             filter.filter(requestContext);
 
@@ -1193,18 +991,14 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName(
-            "null path from UriInfo does not cause NPE in evaluation check"
-        )
+        @DisplayName("null path from UriInfo does not cause NPE in evaluation check")
         void nullPathHandled() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
             when(requestContext.getUriInfo()).thenReturn(uriInfo);
             when(uriInfo.getPath()).thenReturn(null);
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
 
             // Should not throw NPE — isEvaluationEndpoint handles null
             assertDoesNotThrow(() -> filter.filter(requestContext));
@@ -1225,11 +1019,9 @@ class RateLimitFilterTest {
         void burstAbortsPreventsMonthly() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(60)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(60));
 
             filter.filter(requestContext);
 
@@ -1251,20 +1043,15 @@ class RateLimitFilterTest {
         void grantBatch() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/grant-batch");
+            givenPath("api/v1/subjects/consent/grant-batch");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyAllowed(10_000, 9_000, false)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme"))
+                    .thenReturn(monthlyAllowed(10_000, 9_000, false));
             // grant-batch is also a consent write endpoint → subject limit check
             lenient()
-                .when(
-                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
-                )
-                .thenReturn(RateLimitResult.UNLIMITED);
+                    .when(rateLimitService.checkSubjectLimit(eq("acme"), anyString()))
+                    .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -1277,20 +1064,15 @@ class RateLimitFilterTest {
         void revokeBatch() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/revoke-batch");
+            givenPath("api/v1/subjects/consent/revoke-batch");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
-            when(rateLimitService.checkMonthly("acme")).thenReturn(
-                monthlyAllowed(10_000, 9_000, false)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
+            when(rateLimitService.checkMonthly("acme"))
+                    .thenReturn(monthlyAllowed(10_000, 9_000, false));
             // revoke-batch is also a consent write endpoint → subject limit check
             lenient()
-                .when(
-                    rateLimitService.checkSubjectLimit(eq("acme"), anyString())
-                )
-                .thenReturn(RateLimitResult.UNLIMITED);
+                    .when(rateLimitService.checkSubjectLimit(eq("acme"), anyString()))
+                    .thenReturn(RateLimitResult.UNLIMITED);
 
             filter.filter(requestContext);
 
@@ -1308,43 +1090,25 @@ class RateLimitFilterTest {
 
         @Test
         @DisplayName(
-            "burst abort has Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining=0, X-RateLimit-Reset"
-        )
+                "burst abort has Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining=0,"
+                        + " X-RateLimit-Reset")
         void burstAbortHeaderSet() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/fields");
 
             Instant resetAt = Instant.ofEpochSecond(1_700_000_060L);
-            RateLimitResult burst = new RateLimitResult(
-                100L,
-                0L,
-                resetAt,
-                true,
-                false,
-                false,
-                false
-            );
+            RateLimitResult burst =
+                    new RateLimitResult(100L, 0L, resetAt, true, false, false, false);
             when(rateLimitService.checkBurst("acme")).thenReturn(burst);
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            assertEquals(
-                "100",
-                response.getHeaderString(RateLimitFilter.HEADER_LIMIT)
-            );
-            assertEquals(
-                "0",
-                response.getHeaderString(RateLimitFilter.HEADER_REMAINING)
-            );
-            assertEquals(
-                "1700000060",
-                response.getHeaderString(RateLimitFilter.HEADER_RESET)
-            );
-            assertNotNull(
-                response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER)
-            );
+            assertEquals("100", response.getHeaderString(RateLimitFilter.HEADER_LIMIT));
+            assertEquals("0", response.getHeaderString(RateLimitFilter.HEADER_REMAINING));
+            assertEquals("1700000060", response.getHeaderString(RateLimitFilter.HEADER_RESET));
+            assertNotNull(response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER));
         }
 
         @Test
@@ -1352,66 +1116,39 @@ class RateLimitFilterTest {
         void monthlyAbortHeaderSet() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
-            givenPath("api/v1/consent/evaluate");
+            givenPath("api/v1/subjects/consent/evaluate");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstAllowed(60, 55)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstAllowed(60, 55));
 
             Instant resetAt = Instant.ofEpochSecond(1_700_100_000L);
-            RateLimitResult monthly = new RateLimitResult(
-                10_000L,
-                0L,
-                resetAt,
-                false,
-                true,
-                true,
-                false
-            );
+            RateLimitResult monthly =
+                    new RateLimitResult(10_000L, 0L, resetAt, false, true, true, false);
             when(rateLimitService.checkMonthly("acme")).thenReturn(monthly);
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
             assertEquals(429, response.getStatus());
-            assertEquals(
-                "10000",
-                response.getHeaderString(RateLimitFilter.HEADER_LIMIT)
-            );
-            assertEquals(
-                "0",
-                response.getHeaderString(RateLimitFilter.HEADER_REMAINING)
-            );
-            assertEquals(
-                "1700100000",
-                response.getHeaderString(RateLimitFilter.HEADER_RESET)
-            );
-            assertNotNull(
-                response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER)
-            );
+            assertEquals("10000", response.getHeaderString(RateLimitFilter.HEADER_LIMIT));
+            assertEquals("0", response.getHeaderString(RateLimitFilter.HEADER_REMAINING));
+            assertEquals("1700100000", response.getHeaderString(RateLimitFilter.HEADER_RESET));
+            assertNotNull(response.getHeaderString(RateLimitFilter.HEADER_RETRY_AFTER));
         }
 
         @Test
-        @DisplayName(
-            "abort response entity is an unmodifiable-ish map with 3 keys"
-        )
+        @DisplayName("abort response entity is an unmodifiable-ish map with 3 keys")
         @SuppressWarnings("unchecked")
         void abortEntityShape() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             givenAuthenticatedTenant("acme");
             givenPath("api/v1/admin/categories");
 
-            when(rateLimitService.checkBurst("acme")).thenReturn(
-                burstExceeded(30)
-            );
+            when(rateLimitService.checkBurst("acme")).thenReturn(burstExceeded(30));
 
             filter.filter(requestContext);
 
             Response response = captureAbort();
-            Map<String, Object> entity = (Map<
-                String,
-                Object
-            >) response.getEntity();
+            Map<String, Object> entity = (Map<String, Object>) response.getEntity();
             assertEquals(3, entity.size(), "Entity should have exactly 3 keys");
             assertTrue(entity.containsKey("error"));
             assertTrue(entity.containsKey("message"));

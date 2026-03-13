@@ -1,0 +1,15 @@
+meta {
+  name: Delete Category
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/catalogue/categories/PII
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

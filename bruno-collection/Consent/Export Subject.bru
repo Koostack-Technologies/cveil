@@ -1,0 +1,15 @@
+meta {
+  name: Export Subject (DSAR)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/subjects/user-123/export
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

@@ -2,31 +2,17 @@ package com.koostack.operio.rest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.operio.core.models.ApiKeyInfo;
 import com.koostack.operio.core.models.BatchConsentEntry;
 import com.koostack.operio.core.models.BatchConsentResult;
-import com.koostack.operio.core.models.CategoryInfo;
-import com.koostack.operio.core.models.ConsentAuditEntry;
 import com.koostack.operio.core.models.ConsentResponse;
 import com.koostack.operio.core.models.ConsentScope;
 import com.koostack.operio.core.models.DecisionDetail;
-import com.koostack.operio.core.models.EntityInfo;
-import com.koostack.operio.core.models.FieldInfo;
-import com.koostack.operio.core.models.PolicySummaryEntry;
-import com.koostack.operio.core.models.PurposeInfo;
-import com.koostack.operio.core.models.RegulationInfo;
 import com.koostack.operio.core.models.TenantInfo;
-import com.koostack.operio.rest.dto.AdminDtos.CategoryResponse;
-import com.koostack.operio.rest.dto.AdminDtos.EntityResponse;
-import com.koostack.operio.rest.dto.AdminDtos.FieldResponse;
-import com.koostack.operio.rest.dto.AdminDtos.LinkFieldCategoryRequest;
+import com.koostack.operio.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.PurposeResponse;
-import com.koostack.operio.rest.dto.AdminDtos.RegisterCategoryRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterFieldRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterPurposeRequest;
 import com.koostack.operio.rest.dto.AdminDtos.RegisterRegulationRequest;
-import com.koostack.operio.rest.dto.AdminDtos.RegulationResponse;
 import com.koostack.operio.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.operio.rest.dto.CommonDtos.HealthResponse;
 import com.koostack.operio.rest.dto.CommonDtos.MessageResponse;
@@ -35,17 +21,12 @@ import com.koostack.operio.rest.dto.ConsentDtos.BatchConsentResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchItemErrorDto;
 import com.koostack.operio.rest.dto.ConsentDtos.BatchRevokeRequest;
-import com.koostack.operio.rest.dto.ConsentDtos.ConsentAuditEntryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.DecisionDetailDto;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateRequest;
 import com.koostack.operio.rest.dto.ConsentDtos.EvaluateResponse;
 import com.koostack.operio.rest.dto.ConsentDtos.GrantRequest;
-import com.koostack.operio.rest.dto.ConsentDtos.PolicySummaryDto;
 import com.koostack.operio.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.operio.rest.dto.ConsentScopeDto;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyCreatedResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.ApiKeyResponse;
-import com.koostack.operio.rest.dto.PlatformDtos.CreateApiKeyRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.operio.rest.dto.PlatformDtos.TenantResponse;
 import java.time.Instant;
@@ -58,17 +39,18 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for all REST API DTO types — verifying that {@code fromModel()}
- * and {@code toModel()} mappings correctly round-trip between the REST
- * representation and the framework-agnostic {@code operio-core} models.
+ * Unit tests for all REST API DTO types — verifying that {@code fromModel()} and {@code toModel()}
+ * mappings correctly round-trip between the REST representation and the framework-agnostic {@code
+ * operio-core} models.
  *
  * <p>Covers:
+ *
  * <ul>
- *   <li>{@link ConsentScopeDto} — toModel / fromModel round-trip</li>
- *   <li>{@link ConsentDtos} — grant, revoke, batch, evaluate, audit, summary DTOs</li>
- *   <li>{@link PlatformDtos} — tenant and API key DTOs</li>
- *   <li>{@link AdminDtos} — field, category, entity, purpose, regulation DTOs</li>
- *   <li>{@link CommonDtos} — health, error, and message response DTOs</li>
+ *   <li>{@link ConsentScopeDto} — toModel / fromModel round-trip
+ *   <li>{@link ConsentDtos} — grant, revoke, batch, evaluate DTOs
+ *   <li>{@link PlatformDtos} — tenant and API key DTOs
+ *   <li>{@link AdminDtos} — field, category, entity, purpose, regulation DTOs
+ *   <li>{@link CommonDtos} — health, error, and message response DTOs
  * </ul>
  */
 @DisplayName("DTO Mapping Tests")
@@ -85,12 +67,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("toModel() converts all fields correctly")
         void toModel() {
-            ConsentScopeDto dto = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
+            ConsentScopeDto dto = new ConsentScopeDto("PII", "email", "User", "marketing");
             ConsentScope scope = dto.toModel();
 
             assertEquals("PII", scope.category());
@@ -102,12 +79,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("fromModel() converts all fields correctly")
         void fromModel() {
-            ConsentScope scope = new ConsentScope(
-                "HEALTH",
-                "diagnosis",
-                "Patient",
-                "treatment"
-            );
+            ConsentScope scope = new ConsentScope("HEALTH", "diagnosis", "Patient", "treatment");
             ConsentScopeDto dto = ConsentScopeDto.fromModel(scope);
 
             assertEquals("HEALTH", dto.category());
@@ -119,15 +91,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("round-trip: toModel → fromModel preserves all fields")
         void roundTrip() {
-            ConsentScopeDto original = new ConsentScopeDto(
-                "PII",
-                "ssn",
-                "Employee",
-                "payroll"
-            );
-            ConsentScopeDto roundTripped = ConsentScopeDto.fromModel(
-                original.toModel()
-            );
+            ConsentScopeDto original = new ConsentScopeDto("PII", "ssn", "Employee", "payroll");
+            ConsentScopeDto roundTripped = ConsentScopeDto.fromModel(original.toModel());
 
             assertEquals(original.category(), roundTripped.category());
             assertEquals(original.fieldName(), roundTripped.fieldName());
@@ -138,15 +103,9 @@ class DtoMappingTest {
         @Test
         @DisplayName("round-trip: fromModel → toModel preserves all fields")
         void reverseRoundTrip() {
-            ConsentScope original = new ConsentScope(
-                "FINANCIAL",
-                "account_number",
-                "Account",
-                "audit"
-            );
-            ConsentScope roundTripped = ConsentScopeDto.fromModel(
-                original
-            ).toModel();
+            ConsentScope original =
+                    new ConsentScope("FINANCIAL", "account_number", "Account", "audit");
+            ConsentScope roundTripped = ConsentScopeDto.fromModel(original).toModel();
 
             assertEquals(original.category(), roundTripped.category());
             assertEquals(original.fieldName(), roundTripped.fieldName());
@@ -157,72 +116,47 @@ class DtoMappingTest {
         @Test
         @DisplayName("handles null entityName (entity-less field)")
         void nullEntityName() {
-            ConsentScopeDto dto = new ConsentScopeDto(
-                "PII",
-                "email",
-                null,
-                "marketing"
-            );
+            ConsentScopeDto dto = new ConsentScopeDto("PII", "email", null, "marketing");
             ConsentScope scope = dto.toModel();
 
             assertEquals("PII", scope.category());
             assertEquals("email", scope.fieldName());
-            assertNull(scope.entityName());
+            assertEquals(ConsentScope.WILDCARD, scope.entityName());
             assertEquals("marketing", scope.purposeName());
 
             ConsentScopeDto backToDto = ConsentScopeDto.fromModel(scope);
-            assertNull(backToDto.entityName());
+            assertEquals(ConsentScope.WILDCARD, backToDto.entityName());
         }
 
         @Test
         @DisplayName("handles null purposeName")
         void nullPurposeName() {
-            ConsentScopeDto dto = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                null
-            );
+            ConsentScopeDto dto = new ConsentScopeDto("PII", "email", "User", null);
             ConsentScope scope = dto.toModel();
 
-            assertNull(scope.purposeName());
+            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
 
             ConsentScopeDto backToDto = ConsentScopeDto.fromModel(scope);
-            assertNull(backToDto.purposeName());
+            assertEquals(ConsentScope.WILDCARD, backToDto.purposeName());
         }
 
         @Test
         @DisplayName("handles all-null optional fields")
         void allNullOptionals() {
-            ConsentScopeDto dto = new ConsentScopeDto(
-                "PII",
-                "email",
-                null,
-                null
-            );
+            ConsentScopeDto dto = new ConsentScopeDto("PII", "email", null, null);
             ConsentScope scope = dto.toModel();
 
             assertEquals("PII", scope.category());
             assertEquals("email", scope.fieldName());
-            assertNull(scope.entityName());
-            assertNull(scope.purposeName());
+            assertEquals(ConsentScope.WILDCARD, scope.entityName());
+            assertEquals(ConsentScope.WILDCARD, scope.purposeName());
         }
 
         @Test
         @DisplayName("record equality for identical scopes")
         void recordEquality() {
-            ConsentScopeDto a = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            ConsentScopeDto b = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
+            ConsentScopeDto a = new ConsentScopeDto("PII", "email", "User", "marketing");
+            ConsentScopeDto b = new ConsentScopeDto("PII", "email", "User", "marketing");
             assertEquals(a, b);
             assertEquals(a.hashCode(), b.hashCode());
         }
@@ -230,18 +164,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("record inequality for different scopes")
         void recordInequality() {
-            ConsentScopeDto a = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
-            ConsentScopeDto b = new ConsentScopeDto(
-                "PII",
-                "phone",
-                "User",
-                "marketing"
-            );
+            ConsentScopeDto a = new ConsentScopeDto("PII", "email", "User", "marketing");
+            ConsentScopeDto b = new ConsentScopeDto("PII", "phone", "User", "marketing");
             assertNotEquals(a, b);
         }
     }
@@ -257,12 +181,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("GrantRequest holds all fields")
         void grantRequestFields() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
+            ConsentScopeDto scope = new ConsentScopeDto("PII", "email", "User", "marketing");
             Instant expiresAt = Instant.now().plus(30, ChronoUnit.DAYS);
             GrantRequest req = new GrantRequest("user-123", scope, expiresAt);
 
@@ -274,12 +193,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("GrantRequest with null expiresAt (no expiration)")
         void grantRequestNullExpiry() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                null
-            );
+            ConsentScopeDto scope = new ConsentScopeDto("PII", "email", "User", null);
             GrantRequest req = new GrantRequest("user-456", scope, null);
 
             assertNull(req.expiresAt());
@@ -288,32 +202,11 @@ class DtoMappingTest {
         @Test
         @DisplayName("RevokeRequest holds all fields")
         void revokeRequestFields() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "analytics"
-            );
-            Instant expiresAt = Instant.now().plus(7, ChronoUnit.DAYS);
-            RevokeRequest req = new RevokeRequest("user-789", scope, expiresAt);
+            ConsentScopeDto scope = new ConsentScopeDto("PII", "email", "User", "analytics");
+            RevokeRequest req = new RevokeRequest("user-789", scope);
 
             assertEquals("user-789", req.subject());
             assertEquals(scope, req.scope());
-            assertEquals(expiresAt, req.expiresAt());
-        }
-
-        @Test
-        @DisplayName("RevokeRequest with null expiresAt (permanent revocation)")
-        void revokeRequestNullExpiry() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "HEALTH",
-                "diagnosis",
-                null,
-                null
-            );
-            RevokeRequest req = new RevokeRequest("patient-001", scope, null);
-
-            assertNull(req.expiresAt());
         }
     }
 
@@ -328,17 +221,9 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchConsentEntryDto.toModel() converts correctly")
         void batchEntryToModel() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "PII",
-                "email",
-                "User",
-                "marketing"
-            );
+            ConsentScopeDto scope = new ConsentScopeDto("PII", "email", "User", "marketing");
             Instant expiresAt = Instant.now().plus(90, ChronoUnit.DAYS);
-            BatchConsentEntryDto dto = new BatchConsentEntryDto(
-                scope,
-                expiresAt
-            );
+            BatchConsentEntryDto dto = new BatchConsentEntryDto(scope, expiresAt);
 
             BatchConsentEntry model = dto.toModel();
 
@@ -352,12 +237,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchConsentEntryDto.toModel() with null expiresAt")
         void batchEntryToModelNullExpiry() {
-            ConsentScopeDto scope = new ConsentScopeDto(
-                "PII",
-                "ssn",
-                null,
-                null
-            );
+            ConsentScopeDto scope = new ConsentScopeDto("PII", "ssn", null, null);
             BatchConsentEntryDto dto = new BatchConsentEntryDto(scope, null);
 
             BatchConsentEntry model = dto.toModel();
@@ -367,16 +247,13 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchGrantRequest holds subject and entries")
         void batchGrantRequest() {
-            List<BatchConsentEntryDto> entries = List.of(
-                new BatchConsentEntryDto(
-                    new ConsentScopeDto("PII", "email", "User", null),
-                    null
-                ),
-                new BatchConsentEntryDto(
-                    new ConsentScopeDto("PII", "phone", "User", null),
-                    Instant.now().plus(30, ChronoUnit.DAYS)
-                )
-            );
+            List<BatchConsentEntryDto> entries =
+                    List.of(
+                            new BatchConsentEntryDto(
+                                    new ConsentScopeDto("PII", "email", "User", null), null),
+                            new BatchConsentEntryDto(
+                                    new ConsentScopeDto("PII", "phone", "User", null),
+                                    Instant.now().plus(30, ChronoUnit.DAYS)));
             BatchGrantRequest req = new BatchGrantRequest("user-100", entries);
 
             assertEquals("user-100", req.subject());
@@ -386,16 +263,11 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchRevokeRequest holds subject and entries")
         void batchRevokeRequest() {
-            List<BatchConsentEntryDto> entries = List.of(
-                new BatchConsentEntryDto(
-                    new ConsentScopeDto("PII", "email", "User", null),
-                    null
-                )
-            );
-            BatchRevokeRequest req = new BatchRevokeRequest(
-                "user-200",
-                entries
-            );
+            List<BatchConsentEntryDto> entries =
+                    List.of(
+                            new BatchConsentEntryDto(
+                                    new ConsentScopeDto("PII", "email", "User", null), null));
+            BatchRevokeRequest req = new BatchRevokeRequest("user-200", entries);
 
             assertEquals("user-200", req.subject());
             assertEquals(1, req.revokes().size());
@@ -415,23 +287,10 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchConsentResponse.fromModel() maps partial failure")
         void batchResponseFromModelPartialFailure() {
-            ConsentScope failedScope = new ConsentScope(
-                "PII",
-                "email",
-                "User",
-                null
-            );
+            ConsentScope failedScope = new ConsentScope("PII", "email", "User", null);
             BatchConsentResult.BatchItemError itemError =
-                new BatchConsentResult.BatchItemError(
-                    1,
-                    failedScope,
-                    "Field not registered"
-                );
-            BatchConsentResult model = new BatchConsentResult(
-                2,
-                1,
-                List.of(itemError)
-            );
+                    new BatchConsentResult.BatchItemError(1, failedScope, "Field not registered");
+            BatchConsentResult model = new BatchConsentResult(2, 1, List.of(itemError));
 
             BatchConsentResponse dto = BatchConsentResponse.fromModel(model);
 
@@ -448,26 +307,15 @@ class DtoMappingTest {
         @Test
         @DisplayName("BatchConsentResponse.fromModel() maps all-failure result")
         void batchResponseFromModelAllFailure() {
-            ConsentScope scope1 = new ConsentScope(
-                "PII",
-                "email",
-                "User",
-                null
-            );
-            ConsentScope scope2 = new ConsentScope(
-                "PII",
-                "phone",
-                "User",
-                null
-            );
-            BatchConsentResult model = new BatchConsentResult(
-                0,
-                2,
-                List.of(
-                    new BatchConsentResult.BatchItemError(0, scope1, "Error 1"),
-                    new BatchConsentResult.BatchItemError(1, scope2, "Error 2")
-                )
-            );
+            ConsentScope scope1 = new ConsentScope("PII", "email", "User", null);
+            ConsentScope scope2 = new ConsentScope("PII", "phone", "User", null);
+            BatchConsentResult model =
+                    new BatchConsentResult(
+                            0,
+                            2,
+                            List.of(
+                                    new BatchConsentResult.BatchItemError(0, scope1, "Error 1"),
+                                    new BatchConsentResult.BatchItemError(1, scope2, "Error 2")));
 
             BatchConsentResponse dto = BatchConsentResponse.fromModel(model);
 
@@ -488,56 +336,39 @@ class DtoMappingTest {
     class EvaluateTests {
 
         @Test
-        @DisplayName("EvaluateRequest holds subject and scopes")
+        @DisplayName("EvaluateRequest holds scopes")
         void evaluateRequest() {
-            Set<ConsentScopeDto> scopes = Set.of(
-                new ConsentScopeDto("PII", "email", "User", null),
-                new ConsentScopeDto("PII", "phone", "User", null)
-            );
-            EvaluateRequest req = new EvaluateRequest("user-300", scopes);
+            Set<ConsentScopeDto> scopes =
+                    Set.of(
+                            new ConsentScopeDto("PII", "email", "User", null),
+                            new ConsentScopeDto("PII", "phone", "User", null));
+            EvaluateRequest req = new EvaluateRequest(scopes);
 
-            assertEquals("user-300", req.subject());
             assertEquals(2, req.scopes().size());
         }
 
         @Test
-        @DisplayName(
-            "EvaluateResponse.fromModel() maps granted and denied scopes"
-        )
+        @DisplayName("EvaluateResponse.fromModel() maps granted and denied scopes")
         void evaluateResponseFromModel() {
-            ConsentScope grantedScope = new ConsentScope(
-                "PII",
-                "email",
-                "User",
-                null
-            );
-            ConsentScope deniedScope = new ConsentScope(
-                "PII",
-                "ssn",
-                "User",
-                null
-            );
+            ConsentScope grantedScope = new ConsentScope("PII", "email", "User", null);
+            ConsentScope deniedScope = new ConsentScope("PII", "ssn", "User", null);
 
-            DecisionDetail grantedDetail = new DecisionDetail(
-                grantedScope,
-                "GRANTED",
-                "FIELD",
-                null
-            );
-            DecisionDetail deniedDetail = new DecisionDetail(
-                deniedScope,
-                "REVOKED",
-                "FIELD",
-                Instant.now().plus(30, ChronoUnit.DAYS)
-            );
+            DecisionDetail grantedDetail =
+                    new DecisionDetail(grantedScope, "GRANTED", "FIELD", null);
+            DecisionDetail deniedDetail =
+                    new DecisionDetail(
+                            deniedScope,
+                            "REVOKED",
+                            "FIELD",
+                            Instant.now().plus(30, ChronoUnit.DAYS));
 
-            ConsentResponse model = new ConsentResponse(
-                "user-400",
-                Set.of(grantedScope),
-                Set.of(deniedScope),
-                Map.of("ssn", "Consent revoked for SSN"),
-                Map.of(grantedScope, grantedDetail, deniedScope, deniedDetail)
-            );
+            ConsentResponse model =
+                    new ConsentResponse(
+                            "user-400",
+                            Set.of(grantedScope),
+                            Set.of(deniedScope),
+                            Map.of("ssn", "Consent revoked for SSN"),
+                            Map.of(grantedScope, grantedDetail, deniedScope, deniedDetail));
 
             EvaluateResponse dto = EvaluateResponse.fromModel(model);
 
@@ -546,20 +377,10 @@ class DtoMappingTest {
             assertEquals(1, dto.denied().size());
 
             // Check granted contains the email scope
-            assertTrue(
-                dto
-                    .granted()
-                    .stream()
-                    .anyMatch(s -> "email".equals(s.fieldName()))
-            );
+            assertTrue(dto.granted().stream().anyMatch(s -> "email".equals(s.fieldName())));
 
             // Check denied contains the ssn scope
-            assertTrue(
-                dto
-                    .denied()
-                    .stream()
-                    .anyMatch(s -> "ssn".equals(s.fieldName()))
-            );
+            assertTrue(dto.denied().stream().anyMatch(s -> "ssn".equals(s.fieldName())));
 
             // Check reasons
             assertEquals("Consent revoked for SSN", dto.reasons().get("ssn"));
@@ -571,13 +392,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("EvaluateResponse.fromModel() maps empty granted/denied")
         void evaluateResponseEmpty() {
-            ConsentResponse model = new ConsentResponse(
-                "user-500",
-                Set.of(),
-                Set.of(),
-                Map.of(),
-                Map.of()
-            );
+            ConsentResponse model =
+                    new ConsentResponse("user-500", Set.of(), Set.of(), Map.of(), Map.of());
 
             EvaluateResponse dto = EvaluateResponse.fromModel(model);
 
@@ -593,12 +409,7 @@ class DtoMappingTest {
         void decisionDetailFromModel() {
             Instant expiresAt = Instant.now().plus(60, ChronoUnit.DAYS);
             ConsentScope scope = new ConsentScope("PII", "email", "User", null);
-            DecisionDetail model = new DecisionDetail(
-                scope,
-                "GRANTED",
-                "CATEGORY",
-                expiresAt
-            );
+            DecisionDetail model = new DecisionDetail(scope, "GRANTED", "CATEGORY", expiresAt);
 
             DecisionDetailDto dto = DecisionDetailDto.fromModel(model);
 
@@ -611,12 +422,7 @@ class DtoMappingTest {
         @DisplayName("DecisionDetailDto.fromModel() handles null expiresAt")
         void decisionDetailNullExpiry() {
             ConsentScope scope = new ConsentScope("PII", "phone", "User", null);
-            DecisionDetail model = new DecisionDetail(
-                scope,
-                "REVOKED",
-                "FIELD",
-                null
-            );
+            DecisionDetail model = new DecisionDetail(scope, "REVOKED", "FIELD", null);
             DecisionDetailDto dto = DecisionDetailDto.fromModel(model);
 
             assertEquals("REVOKED", dto.effectiveStatus());
@@ -625,168 +431,14 @@ class DtoMappingTest {
         }
 
         @Test
-        @DisplayName(
-            "DecisionDetailDto.fromModel() handles null effectiveStatus (no consent)"
-        )
+        @DisplayName("DecisionDetailDto.fromModel() handles null effectiveStatus (no consent)")
         void decisionDetailNullStatus() {
             ConsentScope scope = new ConsentScope("PII", "ssn", "User", null);
-            DecisionDetail model = new DecisionDetail(
-                scope,
-                null,
-                "NONE",
-                null
-            );
+            DecisionDetail model = new DecisionDetail(scope, null, "NONE", null);
             DecisionDetailDto dto = DecisionDetailDto.fromModel(model);
 
             assertNull(dto.effectiveStatus());
             assertEquals("NONE", dto.resolvedBy());
-        }
-    }
-
-    // =======================================================================
-    // ConsentDtos — Subject Summary and History
-    // =======================================================================
-
-    @Nested
-    @DisplayName("ConsentDtos — Subject Summary and History")
-    class SubjectSummaryHistoryTests {
-
-        @Test
-        @DisplayName("PolicySummaryDto.fromModel() maps all fields")
-        void policySummaryFromModel() {
-            Instant expiresAt = Instant.now().plus(90, ChronoUnit.DAYS);
-            Instant createdAt = Instant.now().minus(1, ChronoUnit.DAYS);
-            PolicySummaryEntry model = new PolicySummaryEntry(
-                "user-600",
-                "email",
-                "User",
-                "PII",
-                "marketing",
-                "GRANTED",
-                expiresAt,
-                createdAt
-            );
-
-            PolicySummaryDto dto = PolicySummaryDto.fromModel(model);
-
-            assertEquals("user-600", dto.subject());
-            assertEquals("email", dto.fieldName());
-            assertEquals("User", dto.entityName());
-            assertEquals("PII", dto.categoryName());
-            assertEquals("marketing", dto.purposeName());
-            assertEquals("GRANTED", dto.status());
-            assertEquals(expiresAt, dto.expiresAt());
-            assertEquals(createdAt, dto.createdAt());
-        }
-
-        @Test
-        @DisplayName(
-            "PolicySummaryDto.fromModel() handles null optional fields"
-        )
-        void policySummaryNullOptionals() {
-            PolicySummaryEntry model = new PolicySummaryEntry(
-                "user-700",
-                "email",
-                null,
-                null,
-                null,
-                "GRANTED",
-                null,
-                Instant.now()
-            );
-
-            PolicySummaryDto dto = PolicySummaryDto.fromModel(model);
-
-            assertNull(dto.entityName());
-            assertNull(dto.categoryName());
-            assertNull(dto.purposeName());
-            assertNull(dto.expiresAt());
-        }
-
-        @Test
-        @DisplayName("ConsentAuditEntryDto.fromModel() maps all fields")
-        void auditEntryFromModel() {
-            Instant expiresAt = Instant.now().plus(30, ChronoUnit.DAYS);
-            Instant timestamp = Instant.now();
-            ConsentAuditEntry model = new ConsentAuditEntry(
-                "user-800",
-                "email",
-                "User",
-                "PII",
-                "marketing",
-                "GRANTED",
-                expiresAt,
-                "admin@acme.com",
-                "192.168.1.1",
-                "OperioSDK/1.0",
-                Map.of("source", "api"),
-                timestamp
-            );
-
-            ConsentAuditEntryDto dto = ConsentAuditEntryDto.fromModel(model);
-
-            assertEquals("user-800", dto.subject());
-            assertEquals("email", dto.fieldName());
-            assertEquals("User", dto.entityName());
-            assertEquals("PII", dto.categoryName());
-            assertEquals("marketing", dto.purposeName());
-            assertEquals("GRANTED", dto.action());
-            assertEquals(expiresAt, dto.expiresAt());
-            assertEquals("admin@acme.com", dto.actor());
-            assertEquals("192.168.1.1", dto.ipAddress());
-            assertEquals(timestamp, dto.timestamp());
-        }
-
-        @Test
-        @DisplayName(
-            "ConsentAuditEntryDto.fromModel() handles null optional fields"
-        )
-        void auditEntryNullOptionals() {
-            ConsentAuditEntry model = new ConsentAuditEntry(
-                "user-900",
-                "email",
-                null,
-                null,
-                null,
-                "REVOKED",
-                null,
-                null,
-                null,
-                null,
-                Map.of(),
-                Instant.now()
-            );
-
-            ConsentAuditEntryDto dto = ConsentAuditEntryDto.fromModel(model);
-
-            assertNull(dto.entityName());
-            assertNull(dto.categoryName());
-            assertNull(dto.purposeName());
-            assertNull(dto.expiresAt());
-            assertNull(dto.actor());
-            assertNull(dto.ipAddress());
-        }
-
-        @Test
-        @DisplayName("ConsentAuditEntryDto preserves REVOKED action")
-        void auditEntryRevokedAction() {
-            ConsentAuditEntry model = new ConsentAuditEntry(
-                "user-950",
-                "ssn",
-                "Employee",
-                "PII",
-                "payroll",
-                "REVOKED",
-                null,
-                "hr@company.com",
-                "10.0.0.1",
-                "Browser/1.0",
-                Map.of(),
-                Instant.now()
-            );
-
-            ConsentAuditEntryDto dto = ConsentAuditEntryDto.fromModel(model);
-            assertEquals("REVOKED", dto.action());
         }
     }
 
@@ -801,11 +453,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("CreateTenantRequest holds all fields")
         void createTenantRequest() {
-            CreateTenantRequest req = new CreateTenantRequest(
-                "acme_corp",
-                "Acme Corp",
-                "pro"
-            );
+            CreateTenantRequest req =
+                    new CreateTenantRequest("acme_corp", "Acme Corp", "pro", null);
 
             assertEquals("acme_corp", req.tenantId());
             assertEquals("Acme Corp", req.displayName());
@@ -816,16 +465,9 @@ class DtoMappingTest {
         @DisplayName("TenantResponse.fromModel() maps all fields")
         void tenantResponseFromModel() {
             Instant createdAt = Instant.now().minus(7, ChronoUnit.DAYS);
-            TenantInfo model = new TenantInfo(
-                "acme_corp",
-                "Acme Corporation",
-                "enterprise",
-                "ACTIVE",
-                100_000L,
-                50_000L,
-                1000,
-                createdAt
-            );
+            TenantInfo model =
+                    new TenantInfo(
+                            "acme_corp", "Acme Corporation", "enterprise", "ACTIVE", createdAt);
 
             TenantResponse dto = TenantResponse.fromModel(model);
 
@@ -833,158 +475,28 @@ class DtoMappingTest {
             assertEquals("Acme Corporation", dto.displayName());
             assertEquals("enterprise", dto.plan());
             assertEquals("ACTIVE", dto.status());
-            assertEquals(100_000L, dto.evalLimitMonthly());
-            assertEquals(50_000L, dto.subjectLimit());
-            assertEquals(1000, dto.burstLimitPerMin());
             assertEquals(createdAt, dto.createdAt());
         }
 
         @Test
         @DisplayName("TenantResponse.fromModel() handles free plan defaults")
         void tenantResponseFreePlan() {
-            TenantInfo model = new TenantInfo(
-                "small_co",
-                "Small Co",
-                "free",
-                "ACTIVE",
-                1_000L,
-                100L,
-                60,
-                Instant.now()
-            );
+            TenantInfo model =
+                    new TenantInfo("small_co", "Small Co", "free", "ACTIVE", Instant.now());
 
             TenantResponse dto = TenantResponse.fromModel(model);
 
             assertEquals("free", dto.plan());
-            assertEquals(1_000L, dto.evalLimitMonthly());
-            assertEquals(100L, dto.subjectLimit());
-            assertEquals(60, dto.burstLimitPerMin());
         }
 
         @Test
         @DisplayName("TenantResponse preserves SUSPENDED status")
         void tenantResponseSuspended() {
-            TenantInfo model = new TenantInfo(
-                "bad_co",
-                "Bad Co",
-                "free",
-                "SUSPENDED",
-                0L,
-                0L,
-                0,
-                Instant.now()
-            );
+            TenantInfo model =
+                    new TenantInfo("bad_co", "Bad Co", "free", "SUSPENDED", Instant.now());
 
             TenantResponse dto = TenantResponse.fromModel(model);
             assertEquals("SUSPENDED", dto.status());
-        }
-    }
-
-    // =======================================================================
-    // PlatformDtos — API Key
-    // =======================================================================
-
-    @Nested
-    @DisplayName("PlatformDtos — API Key")
-    class ApiKeyDtoTests {
-
-        @Test
-        @DisplayName("CreateApiKeyRequest holds all fields")
-        void createApiKeyRequest() {
-            CreateApiKeyRequest req = new CreateApiKeyRequest(
-                "acme_corp",
-                "admin@acme.com",
-                Set.of("admin", "consent-writer")
-            );
-
-            assertEquals("acme_corp", req.tenantId());
-            assertEquals("admin@acme.com", req.subject());
-            assertEquals(Set.of("admin", "consent-writer"), req.roles());
-        }
-
-        @Test
-        @DisplayName("CreateApiKeyRequest with empty roles")
-        void createApiKeyRequestEmptyRoles() {
-            CreateApiKeyRequest req = new CreateApiKeyRequest(
-                "acme_corp",
-                "readonly@acme.com",
-                Set.of()
-            );
-
-            assertTrue(req.roles().isEmpty());
-        }
-
-        @Test
-        @DisplayName("ApiKeyCreatedResponse holds all fields including rawKey")
-        void apiKeyCreatedResponse() {
-            ApiKeyCreatedResponse resp = new ApiKeyCreatedResponse(
-                "opr_live_abc123def456ghi789",
-                "opr_live",
-                "acme_corp",
-                "admin@acme.com",
-                Set.of("admin")
-            );
-
-            assertEquals("opr_live_abc123def456ghi789", resp.rawKey());
-            assertEquals("opr_live", resp.keyPrefix());
-            assertEquals("acme_corp", resp.tenantId());
-            assertEquals("admin@acme.com", resp.subject());
-            assertEquals(Set.of("admin"), resp.roles());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() maps all fields")
-        void apiKeyResponseFromModel() {
-            Instant createdAt = Instant.now().minus(1, ChronoUnit.HOURS);
-            ApiKeyInfo model = new ApiKeyInfo(
-                "opr_live",
-                "acme_corp",
-                "admin@acme.com",
-                Set.of("admin", "consent-writer"),
-                "ACTIVE",
-                createdAt
-            );
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-
-            assertEquals("opr_live", dto.keyPrefix());
-            assertEquals("acme_corp", dto.tenantId());
-            assertEquals("admin@acme.com", dto.subject());
-            assertEquals(Set.of("admin", "consent-writer"), dto.roles());
-            assertEquals("ACTIVE", dto.status());
-            assertEquals(createdAt, dto.createdAt());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() preserves REVOKED status")
-        void apiKeyResponseRevoked() {
-            ApiKeyInfo model = new ApiKeyInfo(
-                "opr_live",
-                "acme_corp",
-                "old@acme.com",
-                Set.of("admin"),
-                "REVOKED",
-                Instant.now()
-            );
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-            assertEquals("REVOKED", dto.status());
-        }
-
-        @Test
-        @DisplayName("ApiKeyResponse.fromModel() preserves empty roles")
-        void apiKeyResponseEmptyRoles() {
-            ApiKeyInfo model = new ApiKeyInfo(
-                "opr_live",
-                "acme_corp",
-                "svc@acme.com",
-                Set.of(),
-                "ACTIVE",
-                Instant.now()
-            );
-
-            ApiKeyResponse dto = ApiKeyResponse.fromModel(model);
-            assertTrue(dto.roles().isEmpty());
         }
     }
 
@@ -999,11 +511,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("RegisterFieldRequest holds all fields")
         void registerFieldRequest() {
-            RegisterFieldRequest req = new RegisterFieldRequest(
-                "email",
-                "User",
-                "User email address"
-            );
+            RegisterFieldRequest req =
+                    new RegisterFieldRequest("email", "User", "User email address", null);
 
             assertEquals("email", req.fieldName());
             assertEquals("User", req.entityName());
@@ -1013,42 +522,10 @@ class DtoMappingTest {
         @Test
         @DisplayName("RegisterFieldRequest with null optionals")
         void registerFieldRequestNullOptionals() {
-            RegisterFieldRequest req = new RegisterFieldRequest(
-                "email",
-                null,
-                null
-            );
+            RegisterFieldRequest req = new RegisterFieldRequest("email", null, null, null);
 
             assertNull(req.entityName());
             assertNull(req.description());
-        }
-
-        @Test
-        @DisplayName("FieldResponse.fromModel() maps all fields")
-        void fieldResponseFromModel() {
-            FieldInfo model = new FieldInfo(
-                "email",
-                "User",
-                "User email address"
-            );
-            FieldResponse dto = FieldResponse.fromModel(model);
-
-            assertEquals("email", dto.fieldName());
-            assertEquals("User", dto.entityName());
-            assertEquals("User email address", dto.description());
-        }
-
-        @Test
-        @DisplayName(
-            "FieldResponse.fromModel() handles null entity/description"
-        )
-        void fieldResponseNullOptionals() {
-            FieldInfo model = new FieldInfo("api_token", null, null);
-            FieldResponse dto = FieldResponse.fromModel(model);
-
-            assertEquals("api_token", dto.fieldName());
-            assertNull(dto.entityName());
-            assertNull(dto.description());
         }
     }
 
@@ -1058,78 +535,7 @@ class DtoMappingTest {
 
     @Nested
     @DisplayName("AdminDtos — Category")
-    class CategoryDtoTests {
-
-        @Test
-        @DisplayName("RegisterCategoryRequest holds all fields")
-        void registerCategoryRequest() {
-            RegisterCategoryRequest req = new RegisterCategoryRequest(
-                "PII",
-                "Personally Identifiable Information"
-            );
-
-            assertEquals("PII", req.categoryName());
-            assertEquals(
-                "Personally Identifiable Information",
-                req.description()
-            );
-        }
-
-        @Test
-        @DisplayName("CategoryResponse.fromModel() maps all fields")
-        void categoryResponseFromModel() {
-            CategoryInfo model = new CategoryInfo(
-                "PII",
-                "Personally Identifiable Information"
-            );
-            CategoryResponse dto = CategoryResponse.fromModel(model);
-
-            assertEquals("PII", dto.categoryName());
-            assertEquals(
-                "Personally Identifiable Information",
-                dto.description()
-            );
-        }
-
-        @Test
-        @DisplayName("CategoryResponse.fromModel() handles null description")
-        void categoryResponseNullDescription() {
-            CategoryInfo model = new CategoryInfo("HEALTH", null);
-            CategoryResponse dto = CategoryResponse.fromModel(model);
-
-            assertEquals("HEALTH", dto.categoryName());
-            assertNull(dto.description());
-        }
-    }
-
-    // =======================================================================
-    // AdminDtos — Entity
-    // =======================================================================
-
-    @Nested
-    @DisplayName("AdminDtos — Entity")
-    class EntityDtoTests {
-
-        @Test
-        @DisplayName("EntityResponse.fromModel() maps all fields")
-        void entityResponseFromModel() {
-            EntityInfo model = new EntityInfo("User", "A system user");
-            EntityResponse dto = EntityResponse.fromModel(model);
-
-            assertEquals("User", dto.entityName());
-            assertEquals("A system user", dto.description());
-        }
-
-        @Test
-        @DisplayName("EntityResponse.fromModel() handles null description")
-        void entityResponseNullDescription() {
-            EntityInfo model = new EntityInfo("Patient", null);
-            EntityResponse dto = EntityResponse.fromModel(model);
-
-            assertEquals("Patient", dto.entityName());
-            assertNull(dto.description());
-        }
-    }
+    class CategoryDtoTests {}
 
     // =======================================================================
     // AdminDtos — Purpose
@@ -1142,36 +548,11 @@ class DtoMappingTest {
         @Test
         @DisplayName("RegisterPurposeRequest holds all fields")
         void registerPurposeRequest() {
-            RegisterPurposeRequest req = new RegisterPurposeRequest(
-                "marketing",
-                "Email marketing campaigns"
-            );
+            RegisterPurposeRequest req =
+                    new RegisterPurposeRequest("marketing", "Email marketing campaigns");
 
             assertEquals("marketing", req.purposeName());
             assertEquals("Email marketing campaigns", req.description());
-        }
-
-        @Test
-        @DisplayName("PurposeResponse.fromModel() maps all fields")
-        void purposeResponseFromModel() {
-            PurposeInfo model = new PurposeInfo(
-                "marketing",
-                "Email marketing campaigns"
-            );
-            PurposeResponse dto = PurposeResponse.fromModel(model);
-
-            assertEquals("marketing", dto.purposeName());
-            assertEquals("Email marketing campaigns", dto.description());
-        }
-
-        @Test
-        @DisplayName("PurposeResponse.fromModel() handles null description")
-        void purposeResponseNullDescription() {
-            PurposeInfo model = new PurposeInfo("analytics", null);
-            PurposeResponse dto = PurposeResponse.fromModel(model);
-
-            assertEquals("analytics", dto.purposeName());
-            assertNull(dto.description());
         }
     }
 
@@ -1186,72 +567,19 @@ class DtoMappingTest {
         @Test
         @DisplayName("RegisterRegulationRequest holds all fields")
         void registerRegulationRequest() {
-            RegisterRegulationRequest req = new RegisterRegulationRequest(
-                "GDPR",
-                "General Data Protection Regulation",
-                "EU",
-                "EU data protection regulation",
-                "https://gdpr-info.eu/"
-            );
+            RegisterRegulationRequest req =
+                    new RegisterRegulationRequest("GDPR", "EU data protection regulation");
 
             assertEquals("GDPR", req.regulationName());
-            assertEquals("General Data Protection Regulation", req.fullName());
-            assertEquals("EU", req.jurisdiction());
             assertEquals("EU data protection regulation", req.description());
-            assertEquals("https://gdpr-info.eu/", req.url());
         }
 
         @Test
         @DisplayName("RegisterRegulationRequest with null optionals")
         void registerRegulationRequestNullOptionals() {
-            RegisterRegulationRequest req = new RegisterRegulationRequest(
-                "CCPA",
-                "California Consumer Privacy Act",
-                "US-CA",
-                null,
-                null
-            );
+            RegisterRegulationRequest req = new RegisterRegulationRequest("CCPA", null);
 
             assertNull(req.description());
-            assertNull(req.url());
-        }
-
-        @Test
-        @DisplayName("RegulationResponse.fromModel() maps all fields")
-        void regulationResponseFromModel() {
-            RegulationInfo model = new RegulationInfo(
-                "GDPR",
-                "General Data Protection Regulation",
-                "EU",
-                "EU privacy law",
-                "https://gdpr-info.eu/"
-            );
-
-            RegulationResponse dto = RegulationResponse.fromModel(model);
-
-            assertEquals("GDPR", dto.regulationName());
-            assertEquals("General Data Protection Regulation", dto.fullName());
-            assertEquals("EU", dto.jurisdiction());
-            assertEquals("EU privacy law", dto.description());
-            assertEquals("https://gdpr-info.eu/", dto.url());
-        }
-
-        @Test
-        @DisplayName("RegulationResponse.fromModel() handles null optionals")
-        void regulationResponseNullOptionals() {
-            RegulationInfo model = new RegulationInfo(
-                "HIPAA",
-                "Health Insurance Portability and Accountability Act",
-                "US",
-                null,
-                null
-            );
-
-            RegulationResponse dto = RegulationResponse.fromModel(model);
-
-            assertEquals("HIPAA", dto.regulationName());
-            assertNull(dto.description());
-            assertNull(dto.url());
         }
     }
 
@@ -1264,27 +592,23 @@ class DtoMappingTest {
     class LinkDtoTests {
 
         @Test
-        @DisplayName("LinkFieldCategoryRequest holds all fields")
-        void linkFieldCategoryRequest() {
-            LinkFieldCategoryRequest req = new LinkFieldCategoryRequest(
-                "email",
-                "User",
-                "PII"
-            );
+        @DisplayName("AssignFieldCategoryRequest holds all fields")
+        void assignFieldCategoryRequest() {
+            AssignFieldCategoryRequest req =
+                    new AssignFieldCategoryRequest(
+                            "email", "User", "PII", "Personally Identifiable Information");
 
             assertEquals("email", req.fieldName());
             assertEquals("User", req.entityName());
             assertEquals("PII", req.categoryName());
+            assertEquals("Personally Identifiable Information", req.categoryDescription());
         }
 
         @Test
-        @DisplayName("LinkFieldCategoryRequest with null entityName")
-        void linkFieldCategoryNullEntity() {
-            LinkFieldCategoryRequest req = new LinkFieldCategoryRequest(
-                "api_token",
-                null,
-                "CREDENTIALS"
-            );
+        @DisplayName("AssignFieldCategoryRequest with null entityName")
+        void assignFieldCategoryNullEntity() {
+            AssignFieldCategoryRequest req =
+                    new AssignFieldCategoryRequest("api_token", null, "CREDENTIALS", null);
 
             assertNull(req.entityName());
         }
@@ -1292,15 +616,12 @@ class DtoMappingTest {
         @Test
         @DisplayName("LinkPurposeRegulationRequest holds all fields")
         void linkPurposeRegulationRequest() {
-            LinkPurposeRegulationRequest req = new LinkPurposeRegulationRequest(
-                "marketing",
-                "GDPR",
-                "consent"
-            );
+            LinkPurposeRegulationRequest req =
+                    new LinkPurposeRegulationRequest("marketing", "GDPR", "consent", null, null);
 
             assertEquals("marketing", req.purposeName());
             assertEquals("GDPR", req.regulationName());
-            assertEquals("consent", req.legalBasis());
+            assertEquals("consent", req.lawfulBasis());
         }
     }
 
@@ -1325,9 +646,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("HealthResponse.down(List) has status DOWN and error list")
         void downResponseWithList() {
-            HealthResponse resp = HealthResponse.down(
-                List.of("Redis offline", "DB unreachable")
-            );
+            HealthResponse resp = HealthResponse.down(List.of("Redis offline", "DB unreachable"));
 
             assertEquals("DOWN", resp.status());
             assertEquals(2, resp.errors().size());
@@ -1336,20 +655,13 @@ class DtoMappingTest {
         }
 
         @Test
-        @DisplayName(
-            "HealthResponse.down(String) has status DOWN and single error"
-        )
+        @DisplayName("HealthResponse.down(String) has status DOWN and single error")
         void downResponseWithString() {
-            HealthResponse resp = HealthResponse.down(
-                "Plugin health check failed"
-            );
+            HealthResponse resp = HealthResponse.down("Plugin health check failed");
 
             assertEquals("DOWN", resp.status());
             assertEquals(1, resp.errors().size());
-            assertEquals(
-                "Plugin health check failed",
-                resp.errors().getFirst()
-            );
+            assertEquals("Plugin health check failed", resp.errors().getFirst());
         }
 
         @Test
@@ -1363,9 +675,8 @@ class DtoMappingTest {
         @DisplayName("down(List) creates an unmodifiable copy")
         void downListIsUnmodifiable() {
             HealthResponse resp = HealthResponse.down(List.of("Error"));
-            assertThrows(UnsupportedOperationException.class, () ->
-                resp.errors().add("Another error")
-            );
+            assertThrows(
+                    UnsupportedOperationException.class, () -> resp.errors().add("Another error"));
         }
     }
 
@@ -1380,10 +691,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("ErrorResponse.of() creates non-retryable error")
         void ofNonRetryable() {
-            ErrorResponse resp = ErrorResponse.of(
-                "validation_error",
-                "Bad input"
-            );
+            ErrorResponse resp = ErrorResponse.of("validation_error", "Bad input");
 
             assertNull(resp.requestId());
             assertEquals("validation_error", resp.error());
@@ -1393,14 +701,9 @@ class DtoMappingTest {
         }
 
         @Test
-        @DisplayName(
-            "ErrorResponse.retryable(error, message) creates retryable without retryAfter"
-        )
+        @DisplayName("ErrorResponse.retryable(error, message) creates retryable without retryAfter")
         void retryableWithoutRetryAfter() {
-            ErrorResponse resp = ErrorResponse.retryable(
-                "service_unavailable",
-                "Try later"
-            );
+            ErrorResponse resp = ErrorResponse.retryable("service_unavailable", "Try later");
 
             assertNull(resp.requestId());
             assertEquals("service_unavailable", resp.error());
@@ -1411,14 +714,10 @@ class DtoMappingTest {
 
         @Test
         @DisplayName(
-            "ErrorResponse.retryable(error, message, retryAfter) creates retryable with retryAfter"
-        )
+                "ErrorResponse.retryable(error, message, retryAfter) creates retryable with"
+                        + " retryAfter")
         void retryableWithRetryAfter() {
-            ErrorResponse resp = ErrorResponse.retryable(
-                "rate_limit_exceeded",
-                "Too fast",
-                42L
-            );
+            ErrorResponse resp = ErrorResponse.retryable("rate_limit_exceeded", "Too fast", 42L);
 
             assertNull(resp.requestId());
             assertEquals("rate_limit_exceeded", resp.error());
@@ -1472,11 +771,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("withRequestId() preserves retryable and retryAfter")
         void withRequestIdPreservesRetryable() {
-            ErrorResponse original = ErrorResponse.retryable(
-                "rate_limit_exceeded",
-                "Too fast",
-                42L
-            );
+            ErrorResponse original =
+                    ErrorResponse.retryable("rate_limit_exceeded", "Too fast", 42L);
             ErrorResponse withId = original.withRequestId("req-456");
 
             assertEquals("req-456", withId.requestId());
@@ -1489,9 +785,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("withRequestId(null) sets requestId to null")
         void withRequestIdNull() {
-            ErrorResponse original = ErrorResponse.of("e", "m").withRequestId(
-                "id-1"
-            );
+            ErrorResponse original = ErrorResponse.of("e", "m").withRequestId("id-1");
             ErrorResponse cleared = original.withRequestId(null);
 
             assertNull(cleared.requestId());
@@ -1519,13 +813,9 @@ class DtoMappingTest {
         }
 
         @Test
-        @DisplayName(
-            "withRequestId() on already-populated requestId overwrites"
-        )
+        @DisplayName("withRequestId() on already-populated requestId overwrites")
         void withRequestIdOverwrites() {
-            ErrorResponse first = ErrorResponse.of("e", "m").withRequestId(
-                "old"
-            );
+            ErrorResponse first = ErrorResponse.of("e", "m").withRequestId("old");
             ErrorResponse second = first.withRequestId("new");
 
             assertEquals("new", second.requestId());
@@ -1534,13 +824,8 @@ class DtoMappingTest {
         @Test
         @DisplayName("direct construction with all fields works correctly")
         void directConstruction() {
-            ErrorResponse resp = new ErrorResponse(
-                "req-direct",
-                "test_error",
-                "Test message",
-                true,
-                99L
-            );
+            ErrorResponse resp =
+                    new ErrorResponse("req-direct", "test_error", "Test message", true, 99L);
 
             assertEquals("req-direct", resp.requestId());
             assertEquals("test_error", resp.error());
@@ -1561,9 +846,7 @@ class DtoMappingTest {
         @Test
         @DisplayName("MessageResponse.of() creates message response")
         void ofCreatesResponse() {
-            MessageResponse resp = MessageResponse.of(
-                "Tenant 'acme_corp' deleted"
-            );
+            MessageResponse resp = MessageResponse.of("Tenant 'acme_corp' deleted");
 
             assertEquals("Tenant 'acme_corp' deleted", resp.message());
         }

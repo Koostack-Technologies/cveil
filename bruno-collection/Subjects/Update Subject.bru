@@ -1,0 +1,21 @@
+meta {
+  name: Update Subject
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/subjects/user-123
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "description": "Updated subject description"
+  }
+}

@@ -8,6 +8,7 @@ plugins {
     // Apply the java Plugin to add support for Java.
     java
     id("io.freefair.lombok")
+    id("com.diffplug.spotless")
     // Generate .project/.classpath files so jdtls (Zed/VS Code) auto-discovers subprojects
     eclipse
 }
@@ -41,6 +42,51 @@ java {
     }
 }
 
+spotless {
+    // 1. Java Source Code (.java)
+    java {
+        target("src/**/*.java")
+        targetExclude("**/build/**/*.java")
+
+        // Highly recommended: Use Google Java Format
+        // .aosp() uses 4 spaces instead of 2
+        googleJavaFormat("1.18.1").aosp().reflowLongStrings()
+
+        // Removes unused imports and sorts them
+        removeUnusedImports()
+        formatAnnotations()
+
+        // Basic cleanup
+        trimTrailingWhitespace()
+        endWithNewline()
+
+        // Optional: Add license headers
+        // licenseHeaderFile(rootProject.file("spotless/copyright.java"))
+    }
+
+    // 2. Kotlin Gradle Build Scripts (.gradle.kts)
+    kotlinGradle {
+        target("*.gradle.kts", "build-logic/**/*.gradle.kts")
+
+        // Use ktlint for standard Kotlin script formatting
+
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+
+    // 3. Miscellaneous Files (Markdown, YAML, JSON)
+    format("misc") {
+        target("**/*.md", "**/*.yml", "**/*.json", ".gitignore")
+
+        trimTrailingWhitespace()
+        indentWithSpaces()
+        endWithNewline()
+    }
+
+    // 4. Optimization: Only format files changed since main
+    ratchetFrom("origin/main")
+}
+
 // ScopedValue is a preview feature in Java 21 (JEP 446).  Enable preview
 // features for compilation, test execution, and application runs.
 tasks.withType<JavaCompile>().configureEach {
@@ -66,3 +112,4 @@ tasks.withType<Javadoc>().configureEach {
     opts.addStringOption("Xdoclint:none", "-quiet")
     isFailOnError = false
 }
+

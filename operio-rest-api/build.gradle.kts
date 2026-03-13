@@ -32,12 +32,13 @@ dependencies {
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.22.3"))
 
     // -- Quarkus core ---------------------------------------------------------
-    implementation("io.quarkus:quarkus-rest-jackson")        // RESTEasy Reactive + Jackson
-    implementation("io.quarkus:quarkus-hibernate-validator")  // Bean Validation (JSR 380)
-    implementation("io.quarkus:quarkus-smallrye-health")     // MicroProfile Health
-    implementation("io.quarkus:quarkus-smallrye-openapi")    // OpenAPI spec + Swagger UI
-    implementation("io.quarkus:quarkus-config-yaml")         // YAML config support
-    implementation("io.quarkus:quarkus-scheduler")           // @Scheduled jobs (counter reconciliation)
+    implementation("io.quarkus:quarkus-rest-jackson") // RESTEasy Reactive + Jackson
+    implementation("io.quarkus:quarkus-hibernate-validator") // Bean Validation (JSR 380)
+    implementation("io.quarkus:quarkus-smallrye-health") // MicroProfile Health
+    implementation("io.quarkus:quarkus-smallrye-openapi") // OpenAPI spec + Swagger UI
+    implementation("io.quarkus:quarkus-config-yaml") // YAML config support
+    implementation("io.quarkus:quarkus-scheduler") // @Scheduled jobs
+    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for site pages
 
     // -- Operio core (framework-agnostic) -------------------------------------
     implementation(project(":operio-core"))
@@ -47,12 +48,42 @@ dependencies {
     // when operio.mode=embedded, giving a clear error if the classes are absent.
     // For local IDE development with mode=embedded, add the module to your run
     // configuration's classpath manually or switch to mode=production.
-    compileOnly(project(":operio-bundle-embedded"))
-    implementation(project(":plugins:operio-platform-jooq"))
-    implementation(project(":tenant:operio-consent-admin-jooq"))
-    implementation(project(":plugins:operio-consent-decision-redis"))  // RedisConsentDecisionServiceConfig used by OperioProducers
-    implementation(project(":plugins:operio-jooq-common"))
-    implementation(project(":plugins:operio-redis-common"))
+    // TODO: re-enable once operio-consent-sync-embedded is fixed
+    // compileOnly(project(":operio-bundle-embedded"))
+    implementation(project(":platform:operio-platform-jooq"))
+    implementation(project(":platform:operio-platform-keycloak"))
+    implementation("org.keycloak:keycloak-admin-client:26.0.8")
+    implementation(project(":tenant:operio-authz-keycloak"))
+    implementation(project(":tenant:operio-consent-admin-jooq-common"))
+    implementation(project(":common:operio-jooq"))
+    implementation(project(":common:operio-redis"))
+    implementation(project(":tenant:operio-consent-admin-projection-jooq")) // Admin schema projection handler
+    implementation(project(":tenant:operio-consent-decision-projection-redis")) // Graph projection handler + query service
+    implementation(project(":tenant:operio-consent-admin-command")) // ConsentAdminCommandService
+    implementation(project(":tenant:operio-consent-admin-query-jooq")) // ConsentAdminQueryService
+    implementation(project(":tenant:operio-subject-dsar-jooq")) // JooqSubjectDsarService
+
+    // -- Platform CQRS modules ------------------------------------------------
+    implementation(project(":platform:operio-platform-event-jooq")) // JooqPlatformEventService
+    implementation(project(":platform:operio-core-command")) // JooqCoreCommandService
+    implementation(project(":platform:operio-billing-command")) // JooqBillingCommandService
+    implementation(project(":platform:operio-core-query-jooq")) // JooqCoreQueryService
+    implementation(project(":platform:operio-billing-query-jooq")) // JooqBillingQueryService
+    implementation(project(":platform:operio-core-projection-jooq")) // CoreProjectionHandler
+    implementation(project(":platform:operio-billing-projection-jooq")) // BillingProjectionHandler
+    implementation(project(":platform:operio-iam-command")) // KeycloakIamDispatcher
+    implementation(project(":platform:operio-iam-query")) // JooqIamQueryService
+    implementation(project(":platform:operio-iam-projection-jooq")) // IamProjectionHandler
+    implementation(project(":platform:operio-plan-query-jooq"))
+
+    // platform schemas
+
+    implementation(project(":platform:operio-core-schema")) // Core schema (tenants, subjects, consents, etc.)
+    implementation(project(":platform:operio-iam-schema")) // IAM schema (users,
+    implementation(project(":platform:operio-billing-schema")) // Billing schema (plans, subscriptions, etc.)
+
+    // -- Metrics modules (MetricPublisherService + projections) ----------------
+    implementation(project(":platform:operio-platform-metrics-redis")) // PlatformRedisMetricPublisher + projections
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")
@@ -67,8 +98,10 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.27.3")
     testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.18.0")
+    testImplementation("org.awaitility:awaitility:4.2.2")
     // Embedded bundle + H2 available in tests for embedded-mode coverage
-    testImplementation(project(":operio-bundle-embedded"))
+    // TODO: re-enable once operio-consent-sync-embedded is fixed
+    // testImplementation(project(":operio-bundle-embedded"))
     testRuntimeOnly("com.h2database:h2:2.2.224")
 
     // -- Testcontainers (Postgres + Redis for production-mode integration tests)

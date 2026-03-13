@@ -1,0 +1,15 @@
+meta {
+  name: Subject Summary
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/subjects/user-123/summary
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

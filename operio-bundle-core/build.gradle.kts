@@ -8,12 +8,11 @@ dependencies {
     api(project(":operio-core"))
 
     // The plugins this bundle wires
-    implementation(project(":tenant:operio-consent-admin-jooq"))
-    implementation(project(":plugins:operio-consent-decision-redis"))
-    implementation(project(":plugins:operio-consent-sync"))
-    implementation(project(":plugins:operio-discovery-sensitive-annotation"))
+    implementation(project(":tenant:operio-consent-admin-jooq-common"))
+    implementation(project(":tenant:operio-consent-decision-projection-redis"))
+    implementation(project(":sdk:operio-discovery-sensitive-annotation"))
 
     // Transitive dependencies needed for config type resolution
-    implementation(project(":plugins:operio-jooq-common"))
-    implementation(project(":plugins:operio-redis-common"))
+    implementation(project(":common:operio-jooq"))
+    implementation(project(":common:operio-redis"))
 }

@@ -19,4 +19,5 @@ repositories {
 dependencies {
     // This allows your convention plugins to reference and apply the Lombok plugin
     implementation("io.freefair.gradle:lombok-plugin:8.11")
+    implementation("com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:7.0.2")
 }

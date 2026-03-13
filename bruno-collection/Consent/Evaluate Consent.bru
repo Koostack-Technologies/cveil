@@ -1,0 +1,28 @@
+meta {
+  name: Evaluate Consent
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/subjects/user-123/evaluate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}
+
+body:json {
+  {
+    "scopes": [
+      {
+        "category": "PII",
+        "fieldName": "email",
+        "entityName": "User",
+        "purposeName": "marketing"
+      }
+    ]
+  }
+}

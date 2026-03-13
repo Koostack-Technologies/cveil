@@ -1,0 +1,15 @@
+meta {
+  name: List Purposes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/governance/purposes
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

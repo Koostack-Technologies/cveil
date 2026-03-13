@@ -15,22 +15,57 @@ rootProject.name = "operio"
 include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
 
 include("plugins:operio-audit-slf4j")
-include("tenant:operio-consent-admin-jooq")
-include("tenant:operio-consent-admin-command-jooq")
+include("tenant:operio-consent-admin-jooq-common")
+include("tenant:operio-consent-admin-command")
 include("tenant:operio-consent-admin-query-jooq")
-include("plugins:operio-jooq-common")
-include("plugins:operio-redis-common")
-include("plugins:operio-consent-decision-redis")
-include("plugins:operio-identity-http")
-include("plugins:operio-identity-spring-security")
+include("tenant:operio-subject-dsar-jooq")
+include("common:operio-jooq")
+include("common:operio-keycloak")
+include("common:operio-redis")
+include("sdk:operio-identity-http")
+include("sdk:operio-identity-spring-security")
 include("plugins:operio-masking-jackson")
 include("plugins:operio-resolver-sensitive-annotation")
-include("plugins:operio-consent-sync")
-include("plugins:operio-discovery-sensitive-annotation")
+include("sdk:operio-discovery-sensitive-annotation")
 include("operio-bundle-core")
 include("plugins:operio-consent-decision-caffeine")
 include("plugins:operio-consent-sync-embedded")
 include("operio-bundle-embedded")
-include("plugins:operio-platform-jooq")
-include("plugins:operio-platform-event-jooq")
-include("tenant:operio-tenant-event-jooq")
+include("platform:operio-platform-jooq")
+include("platform:operio-platform-event-jooq")
+include("tenant:operio-consent-admin-projection-jooq")
+include("tenant:operio-consent-decision-projection-redis")
+
+// --- Tenant Authz ---
+include("tenant:operio-authz-keycloak")
+
+// --- Platform Billing ---
+include("platform:operio-billing-schema")
+include("platform:operio-billing-jooq-common")
+include("platform:operio-billing-command")
+include("platform:operio-billing-query-jooq")
+include("platform:operio-billing-projection-jooq")
+
+// --- Platform Core ---
+include("platform:operio-core-schema")
+include("platform:operio-core-jooq-common")
+include("platform:operio-core-command")
+include("platform:operio-core-query-jooq")
+include("platform:operio-core-projection-jooq")
+
+// --- Platform IAM ---
+include("platform:operio-iam-schema")
+include("platform:operio-iam-command")
+include("platform:operio-iam-query")
+include("platform:operio-iam-projection-jooq")
+include("platform:operio-platform-keycloak")
+
+// --- Tenant IAM ---
+// (Tenant IAM modules deleted — merged into platform IAM)
+
+// --- Platform Plan Query ---
+include("platform:operio-plan-query-jooq")
+
+// --- Metrics ---
+include("platform:operio-platform-metrics-redis")
+include("common:operio-metrics-worker")

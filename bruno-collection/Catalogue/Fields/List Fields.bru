@@ -1,0 +1,15 @@
+meta {
+  name: List Fields
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/catalogue/fields
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tenantToken}}
+}

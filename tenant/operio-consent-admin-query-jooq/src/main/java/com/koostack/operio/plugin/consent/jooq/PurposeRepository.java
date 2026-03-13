@@ -1,18 +1,15 @@
 package com.koostack.operio.plugin.consent.jooq;
 
-import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.PurposeDao;
-import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
-
-import org.jooq.DSLContext;
-
-import java.util.List;
-import java.util.Optional;
-
 import static com.koostack.operio.plugin.consent.jooq.generated.Tables.PURPOSE;
 
-/**
- * Read-only repository for the {@code purpose} table.
- */
+import com.koostack.operio.core.models.TenantContext;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.daos.PurposeDao;
+import com.koostack.operio.plugin.consent.jooq.generated.tables.pojos.Purpose;
+import java.util.List;
+import java.util.Optional;
+import org.jooq.DSLContext;
+
+/** Read-only repository for the {@code purpose} table. */
 public class PurposeRepository {
 
     private final DSLContext dsl;
@@ -30,19 +27,22 @@ public class PurposeRepository {
 
     public Optional<Purpose> findByName(String purposeName) {
         return dsl.selectFrom(PURPOSE)
-                  .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
-                  .fetchOptionalInto(Purpose.class);
+                .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
+                .and(PURPOSE.TENANT_ID.eq(TenantContext.require()))
+                .fetchOptionalInto(Purpose.class);
     }
 
     public List<Purpose> findAll() {
         return dsl.selectFrom(PURPOSE)
-                  .orderBy(PURPOSE.PURPOSE_NAME)
-                  .fetchInto(Purpose.class);
+                .where(PURPOSE.TENANT_ID.eq(TenantContext.require()))
+                .orderBy(PURPOSE.PURPOSE_NAME)
+                .fetchInto(Purpose.class);
     }
 
     public Optional<Purpose> findById(Long purposeId) {
         return dsl.selectFrom(PURPOSE)
-                  .where(PURPOSE.PURPOSE_ID.eq(purposeId))
-                  .fetchOptionalInto(Purpose.class);
+                .where(PURPOSE.PURPOSE_ID.eq(purposeId))
+                .and(PURPOSE.TENANT_ID.eq(TenantContext.require()))
+                .fetchOptionalInto(Purpose.class);
     }
 }
