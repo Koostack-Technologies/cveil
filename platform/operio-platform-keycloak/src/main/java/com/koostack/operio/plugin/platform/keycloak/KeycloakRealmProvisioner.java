@@ -233,6 +233,38 @@ public class KeycloakRealmProvisioner {
         }
     }
 
+    /**
+     * Configures SMTP settings on the given realm so Keycloak can send emails (invitations,
+     * password resets, email verification).
+     *
+     * @param realmName the realm to configure
+     * @param host SMTP server host (e.g. smtp.gmail.com)
+     * @param port SMTP port (e.g. "587")
+     * @param from sender email address
+     * @param user SMTP auth username
+     * @param password SMTP auth password (app password for Gmail)
+     */
+    public void configureRealmSmtp(
+            String realmName, String host, String port, String from, String user, String password) {
+        RealmResource realm = adminClient.realm(realmName);
+        RealmRepresentation rep = realm.toRepresentation();
+
+        Map<String, String> smtp = new HashMap<>();
+        smtp.put("host", host);
+        smtp.put("port", port);
+        smtp.put("from", from);
+        smtp.put("fromDisplayName", "Operio");
+        smtp.put("auth", "true");
+        smtp.put("user", user);
+        smtp.put("password", password);
+        smtp.put("starttls", "true");
+        smtp.put("ssl", "false");
+
+        rep.setSmtpServer(smtp);
+        realm.update(rep);
+        LOG.info("SMTP configured on realm '{}' (host={}, from={})", realmName, host, from);
+    }
+
     private void ensurePlatformRootUser(String platformRealmId, String email, String password) {
         RealmResource realm = adminClient.realm(platformRealmId);
 

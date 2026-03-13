@@ -156,7 +156,7 @@ public class RegisterUserOrchestrator
                             dispatcher(DISPATCHER_CORE)
                                     .dispatch(
                                             new CreateTenantCommandActuator.CreateTenantCommand(
-                                                    in.tenantId(), in.username(), "free"));
+                                                    in.tenantId(), in.username(), "free", "user"));
                             ctx.put("tenantCreated", true);
                         },
                         (in, ctx) -> {

@@ -525,6 +525,28 @@ public class OperioProducers {
                                                 + " configured — skipping realm bootstrap");
                             }
 
+                            // Configure SMTP on the realm if credentials are provided
+                            kc.smtpHost()
+                                    .ifPresent(
+                                            smtpHost -> {
+                                                try {
+                                                    provider.configureRealmSmtp(
+                                                            kcConfig.operioRealmName(),
+                                                            smtpHost,
+                                                            kc.smtpPort(),
+                                                            kc.smtpFrom()
+                                                                    .orElse(
+                                                                            kc.smtpUser()
+                                                                                    .orElse("")),
+                                                            kc.smtpUser().orElse(""),
+                                                            kc.smtpPassword().orElse(""));
+                                                } catch (Exception e) {
+                                                    LOG.warn(
+                                                            "Failed to configure SMTP on realm: {}",
+                                                            e.getMessage());
+                                                }
+                                            });
+
                             return (IdpProvider) provider;
                         })
                 .orElseGet(
@@ -1056,7 +1078,7 @@ public class OperioProducers {
             // Wire IAM query with org service (created after Keycloak admin client below)
             iamQuerySvc.configure(
                     new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(
-                            kcIamConfig, platformDataSource));
+                            kcIamConfig, platformDataSource, null, platformDsl));
         } else {
             LOG.warn("Operio REST API: IamQueryService NOT configured — Keycloak not available");
         }
@@ -1143,7 +1165,7 @@ public class OperioProducers {
         if (kcIamConfig != null && orgService != null) {
             iamQuerySvc.configure(
                     new com.koostack.operio.platform.iam.jooq.JooqIamQueryConfig(
-                            kcIamConfig, platformDataSource, orgService));
+                            kcIamConfig, platformDataSource, orgService, platformDsl));
             LOG.info("Operio REST API: IAM query service reconfigured with orgService");
         }
 
@@ -1157,7 +1179,8 @@ public class OperioProducers {
         BillingProjectionHandler billingProjection = new BillingProjectionHandler(platformDsl);
 
         com.koostack.operio.platform.iam.jooq.IamProjectionHandler iamProjection =
-                new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(iamCmdKeycloak);
+                new com.koostack.operio.platform.iam.jooq.IamProjectionHandler(
+                        platformDsl, iamCmdKeycloak);
 
         // TenantManagerService and provisioning pipeline eliminated (Phase 8).
         // Tenant creation is now synchronous via RegisterUserOrchestrator.

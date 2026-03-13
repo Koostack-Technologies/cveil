@@ -22,6 +22,7 @@ public record TenantAggregate(
         String id,
         String displayName,
         String plan,
+        String tenantType,
         String status,
         Long version)
         implements AggregateRoot {
@@ -54,6 +55,7 @@ public record TenantAggregate(
                             e.tenantId(),
                             e.displayName(),
                             e.plan(),
+                            e.tenantType(),
                             "created",
                             1L);
                 }
@@ -65,6 +67,7 @@ public record TenantAggregate(
                             current.id(),
                             e.displayName(),
                             current.plan(),
+                            current.tenantType(),
                             current.status(),
                             current.version() + 1);
                 }
@@ -76,6 +79,7 @@ public record TenantAggregate(
                             current.id(),
                             current.displayName(),
                             e.newPlan(),
+                            current.tenantType(),
                             current.status(),
                             current.version() + 1);
                 }
@@ -86,6 +90,7 @@ public record TenantAggregate(
                             current.id(),
                             current.displayName(),
                             current.plan(),
+                            current.tenantType(),
                             "suspended",
                             current.version() + 1);
                 }
@@ -96,6 +101,7 @@ public record TenantAggregate(
                             current.id(),
                             current.displayName(),
                             current.plan(),
+                            current.tenantType(),
                             "active",
                             current.version() + 1);
                 }
@@ -106,6 +112,7 @@ public record TenantAggregate(
                             current.id(),
                             current.displayName(),
                             current.plan(),
+                            current.tenantType(),
                             "deleted",
                             current.version() + 1);
                 }

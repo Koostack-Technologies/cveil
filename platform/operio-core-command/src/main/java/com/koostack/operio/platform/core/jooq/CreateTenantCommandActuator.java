@@ -28,7 +28,8 @@ public class CreateTenantCommandActuator
         this.eventService = eventService;
     }
 
-    public record CreateTenantCommand(String tenantId, String displayName, String plan) {}
+    public record CreateTenantCommand(
+            String tenantId, String displayName, String plan, String tenantType) {}
 
     @Override
     public Void execute(CreateTenantCommand command) {
@@ -46,7 +47,11 @@ public class CreateTenantCommandActuator
         }
 
         var payload =
-                new TenantCreatedEvent(command.tenantId(), command.displayName(), command.plan());
+                new TenantCreatedEvent(
+                        command.tenantId(),
+                        command.displayName(),
+                        command.plan(),
+                        command.tenantType());
         eventPublisher()
                 .publishEvent(
                         PublishDomainEventInput.of(

@@ -218,6 +218,13 @@ services:
       OPERIO_KEYCLOAK_ROOT_EMAIL: "admin@operio.local"
       OPERIO_KEYCLOAK_ROOT_PASSWORD: "admin"
 
+      # -- SMTP for Keycloak realm emails (invitations, verification) ------
+      OPERIO_KEYCLOAK_SMTP_HOST: "smtp.gmail.com"
+      OPERIO_KEYCLOAK_SMTP_PORT: "587"
+      OPERIO_KEYCLOAK_SMTP_FROM: "koostacktech@gmail.com"
+      OPERIO_KEYCLOAK_SMTP_USER: "koostacktech@gmail.com"
+      OPERIO_KEYCLOAK_SMTP_PASSWORD: "jtlcywxzufwsunsx"
+
       # -- JVM tuning (local dev — generous limits) ------------------------
       JAVA_OPTS: >-
         -XX:+UseZGC

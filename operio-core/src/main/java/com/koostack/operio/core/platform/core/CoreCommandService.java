@@ -11,8 +11,8 @@ import com.koostack.operio.core.spi.Plugin;
  */
 public interface CoreCommandService<T> extends Plugin<T> {
 
-    /** Create a new tenant with the given business identifier, display name, and plan. */
-    void createTenant(String tenantId, String displayName, String plan);
+    /** Create a new tenant with the given business identifier, display name, plan, and type. */
+    void createTenant(String tenantId, String displayName, String plan, String tenantType);
 
     /** Update the display name of an existing tenant. */
     void updateTenantDisplayName(String tenantId, String displayName);

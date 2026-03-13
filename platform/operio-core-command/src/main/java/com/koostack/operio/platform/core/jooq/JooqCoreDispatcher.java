@@ -87,8 +87,10 @@ public class JooqCoreDispatcher
     // -- CoreCommandService delegation (backward compatibility) ----------------
 
     @Override
-    public void createTenant(String tenantId, String displayName, String plan) {
-        dispatch(new CreateTenantCommandActuator.CreateTenantCommand(tenantId, displayName, plan));
+    public void createTenant(String tenantId, String displayName, String plan, String tenantType) {
+        dispatch(
+                new CreateTenantCommandActuator.CreateTenantCommand(
+                        tenantId, displayName, plan, tenantType));
     }
 
     @Override

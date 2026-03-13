@@ -395,6 +395,12 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         return result.clientSecret();
     }
 
+    /** Delegates SMTP configuration to the realm provisioner. */
+    public void configureRealmSmtp(
+            String realmName, String host, String port, String from, String user, String password) {
+        realmProvisioner.configureRealmSmtp(realmName, host, port, from, user, password);
+    }
+
     // -------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------

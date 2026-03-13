@@ -233,6 +233,27 @@ public interface OperioConfig {
         /** Root admin password for the operio realm (used during bootstrap). */
         @WithName("root-password")
         Optional<String> rootPassword();
+
+        /** SMTP server host for sending emails (e.g. smtp.gmail.com). */
+        @WithName("smtp-host")
+        Optional<String> smtpHost();
+
+        /** SMTP server port (default 587 for STARTTLS). */
+        @WithName("smtp-port")
+        @WithDefault("587")
+        String smtpPort();
+
+        /** SMTP sender/from email address. */
+        @WithName("smtp-from")
+        Optional<String> smtpFrom();
+
+        /** SMTP authentication username. */
+        @WithName("smtp-user")
+        Optional<String> smtpUser();
+
+        /** SMTP authentication password (use app password for Gmail). */
+        @WithName("smtp-password")
+        Optional<String> smtpPassword();
     }
 
     /** Database configuration — JDBC URL and jOOQ SQL dialect. */

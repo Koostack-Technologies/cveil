@@ -36,6 +36,8 @@ public class CoreProjectionHandler {
             field(name("redis_acl_user"), String.class);
     private static final org.jooq.Field<String> REDIS_ACL_PASSWORD =
             field(name("redis_acl_password"), String.class);
+    private static final org.jooq.Field<String> TENANT_TYPE =
+            field(name("tenant_type"), String.class);
 
     private final DSLContext dsl;
     private final ObjectMapper mapper;
@@ -80,12 +82,14 @@ public class CoreProjectionHandler {
         String id = node.get("tenantId").asText();
         String displayName = node.get("displayName").asText();
         String plan = node.get("plan").asText();
+        String tenantType = node.get("tenantType").asText();
         OffsetDateTime now = OffsetDateTime.now();
 
         dsl.insertInto(TENANT)
                 .set(TENANT_ID, id)
                 .set(DISPLAY_NAME, displayName)
                 .set(PLAN, plan)
+                .set(TENANT_TYPE, tenantType)
                 .set(STATUS, "created")
                 .set(CREATED_AT, now)
                 .set(UPDATED_AT, now)
@@ -93,6 +97,7 @@ public class CoreProjectionHandler {
                 .doUpdate()
                 .set(DISPLAY_NAME, displayName)
                 .set(PLAN, plan)
+                .set(TENANT_TYPE, tenantType)
                 .set(UPDATED_AT, now)
                 .execute();
     }

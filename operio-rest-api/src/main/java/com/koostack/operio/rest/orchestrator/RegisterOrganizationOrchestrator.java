@@ -213,7 +213,7 @@ public class RegisterOrganizationOrchestrator
                             dispatcher(DISPATCHER_CORE)
                                     .dispatch(
                                             new CreateTenantCommandActuator.CreateTenantCommand(
-                                                    in.orgName(), displayName, in.plan()));
+                                                    in.orgName(), displayName, in.plan(), "org"));
                             ctx.put("tenantCreated", true);
                         },
                         (in, ctx) -> {

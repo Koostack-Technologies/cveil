@@ -85,19 +85,7 @@ public class KeycloakIamQueryDispatcher
         var jwksVerifier = new JwksTokenVerifier();
         DataSource platformDataSource = cfg.platformDataSource();
 
-        // Register all query actuators
-        actuators.put(
-                ListUsersQueryActuator.ListUsersQuery.class,
-                new ListUsersQueryActuator(adminClient, userMapper));
-        actuators.put(
-                GetUserQueryActuator.GetUserQuery.class,
-                new GetUserQueryActuator(adminClient, userMapper));
-        actuators.put(
-                FindUserByEmailQueryActuator.FindUserByEmailQuery.class,
-                new FindUserByEmailQueryActuator(adminClient, userMapper));
-        actuators.put(
-                FindUserByUsernameQueryActuator.FindUserByUsernameQuery.class,
-                new FindUserByUsernameQueryActuator(adminClient, userMapper));
+        // Identity/auth actuators (always Keycloak)
         actuators.put(
                 GetUserRolesQueryActuator.GetUserRolesQuery.class,
                 new GetUserRolesQueryActuator(adminClient, userMapper));
@@ -114,22 +102,28 @@ public class KeycloakIamQueryDispatcher
                 VerifyTokenQueryActuator.VerifyTokenQuery.class,
                 new VerifyTokenQueryActuator(jwksVerifier, config));
 
-        // Organization query actuators
-        var orgService = cfg.orgService();
-        if (orgService != null) {
-            actuators.put(
-                    ListOrganizationsQueryActuator.ListOrganizationsQuery.class,
-                    new ListOrganizationsQueryActuator(orgService));
-            actuators.put(
-                    GetOrganizationQueryActuator.GetOrganizationQuery.class,
-                    new GetOrganizationQueryActuator(orgService));
-            actuators.put(
-                    ListOrgMembersQueryActuator.ListOrgMembersQuery.class,
-                    new ListOrgMembersQueryActuator(orgService));
-            actuators.put(
-                    GetCurrentUserQueryActuator.GetCurrentUserQuery.class,
-                    new GetCurrentUserQueryActuator(adminClient, config, orgService));
-        }
+        // User and organization query actuators (read from local IAM mirror tables)
+        var dsl = cfg.platformDsl();
+        actuators.put(ListUsersQueryActuator.ListUsersQuery.class, new ListUsersQueryActuator(dsl));
+        actuators.put(GetUserQueryActuator.GetUserQuery.class, new GetUserQueryActuator(dsl));
+        actuators.put(
+                FindUserByEmailQueryActuator.FindUserByEmailQuery.class,
+                new FindUserByEmailQueryActuator(dsl));
+        actuators.put(
+                FindUserByUsernameQueryActuator.FindUserByUsernameQuery.class,
+                new FindUserByUsernameQueryActuator(dsl));
+        actuators.put(
+                ListOrganizationsQueryActuator.ListOrganizationsQuery.class,
+                new ListOrganizationsQueryActuator(dsl));
+        actuators.put(
+                GetOrganizationQueryActuator.GetOrganizationQuery.class,
+                new GetOrganizationQueryActuator(dsl));
+        actuators.put(
+                ListOrgMembersQueryActuator.ListOrgMembersQuery.class,
+                new ListOrgMembersQueryActuator(dsl));
+        actuators.put(
+                GetCurrentUserQueryActuator.GetCurrentUserQuery.class,
+                new GetCurrentUserQueryActuator(dsl, adminClient, config));
 
         // Access token query actuators (DB-backed)
         actuators.put(

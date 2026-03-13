@@ -79,6 +79,11 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
                 ChangePasswordCommandActuator.ChangePasswordCommand.class,
                 new ChangePasswordCommandActuator(eventService, kc, keycloakConfig));
 
+        // App-specific profile update (local DB only — no Keycloak side-effect)
+        actuators.put(
+                UpdateUserAppProfileCommandActuator.UpdateUserAppProfileCommand.class,
+                new UpdateUserAppProfileCommandActuator(eventService));
+
         // Access token actuators (DB-backed)
         var platformDs = config.platformDataSource();
         if (platformDs != null) {

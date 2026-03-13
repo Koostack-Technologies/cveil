@@ -763,11 +763,12 @@ public class PlatformIamResource {
                                         new GetCurrentUserQueryActuator.GetCurrentUserQuery(
                                                 userId));
                 boolean isMember =
-                        user.organizations().stream()
-                                .anyMatch(
-                                        o ->
-                                                TenantIdDeriver.derive(o.orgName())
-                                                        .equals(request.tenantId()));
+                        user != null
+                                && user.organizations().stream()
+                                        .anyMatch(
+                                                o ->
+                                                        TenantIdDeriver.derive(o.orgName())
+                                                                .equals(request.tenantId()));
                 if (!isMember) {
                     return Response.status(Response.Status.FORBIDDEN)
                             .entity(
@@ -1001,6 +1002,37 @@ public class PlatformIamResource {
             GetCurrentUserQueryActuator.CurrentUserResult result =
                     cqrs.iamQueryDispatcher()
                             .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+
+            // If the iam_user projection hasn't materialized yet (e.g. right after signup),
+            // return a degraded response built from JWT claims so the frontend doesn't break.
+            if (result == null) {
+                LOG.info(
+                        "iam_user not yet projected for userId={}; returning JWT-based response",
+                        userId);
+                var identity = requestHolder.identity();
+                var claims = identity.claims();
+                String fallbackUsername =
+                        claims.containsKey("preferred_username")
+                                ? String.valueOf(claims.get("preferred_username"))
+                                : identity.email();
+                String fallbackName =
+                        claims.containsKey("name") ? String.valueOf(claims.get("name")) : null;
+                var authzFallback = requestHolder.authorization();
+                Set<String> fallbackRoles =
+                        authzFallback != null ? authzFallback.roles() : Set.of();
+                Set<String> fallbackPerms =
+                        authzFallback != null ? authzFallback.permissions() : Set.of();
+                return Response.ok(
+                                new CurrentUserResponse(
+                                        userId,
+                                        fallbackUsername,
+                                        identity.email(),
+                                        fallbackName,
+                                        fallbackRoles,
+                                        fallbackPerms,
+                                        List.of()))
+                        .build();
+            }
 
             var authz = requestHolder.authorization();
             boolean hasPermSvc = cqrs.isPermissionServiceAvailable();

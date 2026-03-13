@@ -22,7 +22,8 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         UUID aggregateId = UUID.randomUUID();
         AggregateKey key = new AggregateKey(aggregateId, "tenant-lifecycle", tenantId);
 
-        TenantCreatedEvent payload = new TenantCreatedEvent(tenantId, "Acme Corp", "enterprise");
+        TenantCreatedEvent payload =
+                new TenantCreatedEvent(tenantId, "Acme Corp", "enterprise", "user");
         service.publishEvent(
                 PublishDomainEventInput.of(tenantId, CoreEventTypes.TENANT_CREATED, key, payload));
 
@@ -54,7 +55,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
                         tenantId,
                         CoreEventTypes.TENANT_CREATED,
                         key,
-                        new TenantCreatedEvent(tenantId, "Beta Inc", "starter")));
+                        new TenantCreatedEvent(tenantId, "Beta Inc", "starter", "user")));
         service.publishEvent(
                 PublishDomainEventInput.of(
                         tenantId,

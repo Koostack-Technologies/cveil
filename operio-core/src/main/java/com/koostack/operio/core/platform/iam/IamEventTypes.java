@@ -44,5 +44,6 @@ public final class IamEventTypes {
 
     // -- User profile ---------------------------------------------------------
     public static final String USER_PROFILE_UPDATED = "iam.user.profile-updated";
+    public static final String USER_APP_PROFILE_UPDATED = "iam.user.app-profile-updated";
     public static final String PASSWORD_CHANGED = "iam.user.password-changed";
 }
