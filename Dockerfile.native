@@ -1,5 +1,5 @@
 # =============================================================================
-# Operio REST API — Native Image Dockerfile
+# Cveil REST API — Native Image Dockerfile
 #
 # Produces a statically-linked native binary via GraalVM for maximum startup
 # speed (~50ms) and minimal memory footprint (~30MB RSS).  Ideal for
@@ -7,22 +7,22 @@
 # HPA thresholds.
 #
 # Prerequisites:
-#   - The Quarkus Gradle plugin must be enabled in operio-rest-api/build.gradle.kts
+#   - The Quarkus Gradle plugin must be enabled in cveil-rest-api/build.gradle.kts
 #     (enabled now that the project uses Gradle 8.12).
 #   - Alternatively, use the Quarkus CLI: `quarkus build --native --gradle`
 #     and then build only the runtime stage of this Dockerfile.
 #
 # Build:
-#   docker build -t operio-rest-api-native -f Dockerfile.native .
+#   docker build -t cveil-rest-api-native -f Dockerfile.native .
 #
 # Run:
 #   docker run -p 8080:8080 \
-#     -e OPERIO_MODE=production \
-#     -e OPERIO_DB_URL=jdbc:postgresql://db:5432/operio \
-#     -e OPERIO_REDIS_HOST=redis \
-#     -e OPERIO_PLATFORM_DB_URL=jdbc:postgresql://db:5432/operio \
-#     -e OPERIO_BOOTSTRAP_KEY=opr_bootstrap_xxxxxxxxxxxx \
-#     operio-rest-api-native
+#     -e CVEIL_MODE=production \
+#     -e CVEIL_DB_URL=jdbc:postgresql://db:5432/cveil \
+#     -e CVEIL_REDIS_HOST=redis \
+#     -e CVEIL_PLATFORM_DB_URL=jdbc:postgresql://db:5432/cveil \
+#     -e CVEIL_BOOTSTRAP_KEY=opr_bootstrap_xxxxxxxxxxxx \
+#     cveil-rest-api-native
 #
 # =============================================================================
 
@@ -40,12 +40,9 @@ COPY gradle/ gradle/
 COPY build-logic/ build-logic/
 
 # Copy all subproject build files for dependency resolution.
-COPY operio-core/build.gradle.kts operio-core/build.gradle.kts
-COPY operio-rest-api/build.gradle.kts operio-rest-api/build.gradle.kts
-COPY operio-spring-boot-starter/build.gradle.kts operio-spring-boot-starter/build.gradle.kts
-COPY operio-bundle-core/build.gradle.kts operio-bundle-core/build.gradle.kts
-COPY operio-bundle-embedded/build.gradle.kts operio-bundle-embedded/build.gradle.kts
-COPY plugins/ plugins/
+COPY cveil-core/build.gradle.kts cveil-core/build.gradle.kts
+COPY cveil-rest-api/build.gradle.kts cveil-rest-api/build.gradle.kts
+COPY cveil-bundle-core/build.gradle.kts cveil-bundle-core/build.gradle.kts
 
 # Pre-download dependencies (cached unless build files change).
 RUN chmod +x gradlew && \
@@ -62,9 +59,9 @@ COPY . .
 #                                         — required for ScopedValue (preview in Java 21)
 #
 # The native binary is produced at:
-#   operio-rest-api/build/*-runner
+#   cveil-rest-api/build/*-runner
 RUN chmod +x gradlew && \
-    ./gradlew :operio-rest-api:build \
+    ./gradlew :cveil-rest-api:build \
         -Dquarkus.native.enabled=true \
         -Dquarkus.native.container-build=true \
         "-Dquarkus.native.additional-build-args=--enable-preview" \
@@ -86,14 +83,14 @@ RUN chown 1001:root /app && \
     chmod "g+rwX" /app
 
 # -- Copy the native binary ---------------------------------------------------
-COPY --from=build --chown=1001:root /app/operio-rest-api/build/*-runner /app/application
+COPY --from=build --chown=1001:root /app/cveil-rest-api/build/*-runner /app/application
 
 # -- Labels -------------------------------------------------------------------
-LABEL org.opencontainers.image.title="Operio REST API (native)" \
+LABEL org.opencontainers.image.title="Cveil REST API (native)" \
       org.opencontainers.image.description="Multi-tenant consent management platform — Quarkus native image" \
       org.opencontainers.image.vendor="KooStack" \
-      org.opencontainers.image.url="https://github.com/koostack/operio" \
-      org.opencontainers.image.source="https://github.com/koostack/operio" \
+      org.opencontainers.image.url="https://github.com/koostack/cveil" \
+      org.opencontainers.image.source="https://github.com/koostack/cveil" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 # -- Runtime configuration ----------------------------------------------------
@@ -110,7 +107,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 ENV QUARKUS_HTTP_HOST=0.0.0.0 \
     QUARKUS_HTTP_PORT=8080 \
     QUARKUS_VIRTUAL_THREADS_ENABLED=true \
-    OPERIO_MODE=production
+    CVEIL_MODE=production
 
 # Switch to non-root user
 USER 1001

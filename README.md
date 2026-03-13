@@ -1,4 +1,4 @@
-# Operio
+# Cveil
 
 Multi-tenant consent management platform built on Quarkus.
 
@@ -30,7 +30,7 @@ This builds the Quarkus application from source and starts three services:
 
 | Service       | Port | Description                              |
 |---------------|------|------------------------------------------|
-| `operio-api`  | 8080 | Quarkus REST API                         |
+| `cveil-api`  | 8080 | Quarkus REST API                         |
 | `postgres`    | 5432 | PostgreSQL 16 with TLS                   |
 | `redis`       | 6379 | Redis 7 with TLS                         |
 
@@ -85,32 +85,32 @@ Create three services in your Railway project:
 
 1. **PostgreSQL** — use Railway's managed Postgres plugin
 2. **Redis** — use Railway's managed Redis plugin
-3. **Operio API** — deploy from this repository
+3. **Cveil API** — deploy from this repository
 
 ### Environment Variables
 
-Set the following environment variables on the Operio API service. Railway's managed Postgres and Redis provide connection details via template variables.
+Set the following environment variables on the Cveil API service. Railway's managed Postgres and Redis provide connection details via template variables.
 
 | Variable | Value | Notes |
 |---|---|---|
-| `OPERIO_MODE` | `production` | Required for tenant management |
-| `OPERIO_APP_NAME` | `operio` | Application identifier |
-| `OPERIO_DB_URL` | `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` | Consent database |
-| `OPERIO_DB_DIALECT` | `POSTGRES` | |
-| `OPERIO_DB_USERNAME` | `${{Postgres.PGUSER}}` | |
-| `OPERIO_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` | |
-| `OPERIO_DB_SSL_MODE` | `require` | Railway Postgres uses TLS |
-| `OPERIO_PLATFORM_DB_URL` | `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` | Platform database (same DB, different schemas) |
-| `OPERIO_PLATFORM_DB_DIALECT` | `POSTGRES` | |
-| `OPERIO_PLATFORM_DB_USERNAME` | `${{Postgres.PGUSER}}` | |
-| `OPERIO_PLATFORM_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` | |
-| `OPERIO_PLATFORM_DB_SSL_MODE` | `require` | |
-| `OPERIO_REDIS_HOST` | `${{Redis.REDISHOST}}` | |
-| `OPERIO_REDIS_PORT` | `${{Redis.REDISPORT}}` | |
-| `OPERIO_REDIS_PASSWORD` | `${{Redis.REDISPASSWORD}}` | |
-| `OPERIO_REDIS_TLS_ENABLED` | `true` | Railway Redis uses TLS |
-| `OPERIO_REDIS_TLS_VERIFY_PEER` | `false` | Railway uses internal certs |
-| `OPERIO_BOOTSTRAP_KEY` | *(generate a strong random value)* | Delete after creating your first API key |
+| `CVEIL_MODE` | `production` | Required for tenant management |
+| `CVEIL_APP_NAME` | `cveil` | Application identifier |
+| `CVEIL_DB_URL` | `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` | Consent database |
+| `CVEIL_DB_DIALECT` | `POSTGRES` | |
+| `CVEIL_DB_USERNAME` | `${{Postgres.PGUSER}}` | |
+| `CVEIL_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` | |
+| `CVEIL_DB_SSL_MODE` | `require` | Railway Postgres uses TLS |
+| `CVEIL_PLATFORM_DB_URL` | `jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}` | Platform database (same DB, different schemas) |
+| `CVEIL_PLATFORM_DB_DIALECT` | `POSTGRES` | |
+| `CVEIL_PLATFORM_DB_USERNAME` | `${{Postgres.PGUSER}}` | |
+| `CVEIL_PLATFORM_DB_PASSWORD` | `${{Postgres.PGPASSWORD}}` | |
+| `CVEIL_PLATFORM_DB_SSL_MODE` | `require` | |
+| `CVEIL_REDIS_HOST` | `${{Redis.REDISHOST}}` | |
+| `CVEIL_REDIS_PORT` | `${{Redis.REDISPORT}}` | |
+| `CVEIL_REDIS_PASSWORD` | `${{Redis.REDISPASSWORD}}` | |
+| `CVEIL_REDIS_TLS_ENABLED` | `true` | Railway Redis uses TLS |
+| `CVEIL_REDIS_TLS_VERIFY_PEER` | `false` | Railway uses internal certs |
+| `CVEIL_BOOTSTRAP_KEY` | *(generate a strong random value)* | Delete after creating your first API key |
 | `PORT` | `8080` | Railway injects this; Quarkus listens on it |
 | `QUARKUS_HTTP_PORT` | `${{PORT}}` | Bind to Railway's assigned port |
 | `QUARKUS_HTTP_HOST` | `0.0.0.0` | Accept connections from the Railway proxy |
@@ -133,7 +133,7 @@ Set the health check path in Railway's service settings. The endpoint returns `2
 
 1. Deploy the service and wait for it to become healthy.
 2. Create your first tenant using the bootstrap key (same curl as local dev, but using your Railway domain).
-3. **Delete the `OPERIO_BOOTSTRAP_KEY` environment variable** after creating your first real API key — the bootstrap key is only needed for initial setup.
+3. **Delete the `CVEIL_BOOTSTRAP_KEY` environment variable** after creating your first real API key — the bootstrap key is only needed for initial setup.
 
 ---
 

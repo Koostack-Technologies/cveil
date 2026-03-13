@@ -1,0 +1,125 @@
+package com.koostack.cveil.rest.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+/**
+ * Request and response DTOs for the admin schema endpoints ({@code /api/v1/admin}).
+ *
+ * <p>Response types are the aggregate view models from cveil-core (FieldView, PurposeView,
+ * RegulationView) — returned directly as JSON. This class contains only request DTOs.
+ */
+public final class AdminDtos {
+
+    private AdminDtos() {}
+
+    // ===================================================================
+    // Entity
+    // ===================================================================
+
+    public record RegisterEntityRequest(
+            @NotBlank(message = "entityName must not be blank") @Size(max = 255) String entityName,
+            @Size(max = 1000) String description) {}
+
+    public record UpdateEntityRequest(@Size(max = 1000) String description) {}
+
+    // ===================================================================
+    // Category
+    // ===================================================================
+
+    public record RegisterCategoryRequest(
+            @NotBlank(message = "categoryName must not be blank") @Size(max = 255) String categoryName,
+            @Size(max = 1000) String description) {}
+
+    public record UpdateCategoryRequest(@Size(max = 1000) String description) {}
+
+    // ===================================================================
+    // Field
+    // ===================================================================
+
+    public record RegisterFieldRequest(
+            @NotBlank(message = "fieldName must not be blank") @Size(max = 255) String fieldName,
+            @Size(max = 255) String entityName,
+            @Size(max = 1000) String description,
+            @Size(max = 1000) String entityDescription) {}
+
+    // ===================================================================
+    // Purpose
+    // ===================================================================
+
+    public record RegisterPurposeRequest(
+            @NotBlank(message = "purposeName must not be blank") @Size(max = 255) String purposeName,
+            @Size(max = 1000) String description) {}
+
+    public record AddPurposePolicyRequest(
+            @NotBlank(message = "purposeName must not be blank") @Size(max = 255) String purposeName,
+            @NotBlank(message = "policyType must not be blank") @Size(max = 20) String policyType,
+            @Size(max = 255) String fieldName,
+            @Size(max = 255) String entityName,
+            @Size(max = 255) String categoryName) {}
+
+    public record RemovePurposePolicyRequest(
+            @NotBlank(message = "purposeName must not be blank") @Size(max = 255) String purposeName,
+            @NotBlank(message = "policyType must not be blank") @Size(max = 20) String policyType,
+            @Size(max = 255) String fieldName,
+            @Size(max = 255) String entityName,
+            @Size(max = 255) String categoryName) {}
+
+    // ===================================================================
+    // Regulation
+    // ===================================================================
+
+    public record RegisterRegulationRequest(
+            @NotBlank(message = "regulationName must not be blank") @Size(max = 255) String regulationName,
+            @Size(max = 1000) String description) {}
+
+    public record AddJurisdictionRequest(
+            @NotBlank(message = "regulationName must not be blank") @Size(max = 255) String regulationName,
+            @NotBlank(message = "jurisdictionName must not be blank") @Size(max = 255) String jurisdictionName,
+            @Size(max = 1000) String description) {}
+
+    public record RemoveJurisdictionRequest(
+            @NotBlank(message = "regulationName must not be blank") @Size(max = 255) String regulationName,
+            @NotBlank(message = "jurisdictionName must not be blank") @Size(max = 255) String jurisdictionName) {}
+
+    // ===================================================================
+    // Jurisdiction
+    // ===================================================================
+
+    public record RegisterJurisdictionRequest(
+            @NotBlank(message = "jurisdictionName must not be blank") @Size(max = 255) String jurisdictionName,
+            @Size(max = 1000) String description) {}
+
+    public record UpdateJurisdictionRequest(@Size(max = 1000) String description) {}
+
+    // ===================================================================
+    // Link — Field ↔ Category
+    // ===================================================================
+
+    public record AssignFieldCategoryRequest(
+            @NotBlank(message = "fieldName must not be blank") @Size(max = 255) String fieldName,
+            @Size(max = 255) String entityName,
+            @NotBlank(message = "categoryName must not be blank") @Size(max = 255) String categoryName,
+            @Size(max = 1000) String categoryDescription) {}
+
+    // ===================================================================
+    // Link — Purpose ↔ Regulation
+    // ===================================================================
+
+    public record LinkPurposeRegulationRequest(
+            @NotBlank(message = "purposeName must not be blank") @Size(max = 255) String purposeName,
+            @NotBlank(message = "regulationName must not be blank") @Size(max = 255) String regulationName,
+            @Size(max = 255) String lawfulBasis,
+            @Size(max = 50) String onGranted,
+            @Size(max = 50) String onDenied) {}
+
+    // ===================================================================
+    // Subject
+    // ===================================================================
+
+    public record RegisterSubjectRequest(
+            @NotBlank(message = "subjectName must not be blank") @Size(max = 255) String subjectName,
+            @Size(max = 1000) String description) {}
+
+    public record UpdateSubjectRequest(@Size(max = 1000) String description) {}
+}

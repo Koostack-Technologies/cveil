@@ -1,0 +1,114 @@
+# =============================================================================
+# Cveil REST API — Test Configuration (Quarkus)
+#
+# This configuration is loaded during @QuarkusTest integration tests.
+# It runs in PRODUCTION mode against real Postgres and Redis instances
+# provided by Testcontainers.
+#
+# The CveilTestResourceManager (a QuarkusTestResourceLifecycleManager)
+# starts Postgres and Redis containers before the Quarkus app boots and
+# injects connection details as system properties.  The ${...} placeholders
+# below are resolved from those injected properties at startup.
+#
+# WHY PRODUCTION MODE?
+# --------------------
+# Testing only in embedded mode (H2 + Caffeine) hides entire categories
+# of bugs: Flyway migration failures on real Postgres, jOOQ identifier
+# case-sensitivity, Redis consent decision wiring, tenant schema routing,
+# HikariCP credential handling, etc.  These are exactly the bugs that
+# previously slipped through because the test suite was 100% Mockito unit
+# tests with zero container startup.
+# =============================================================================
+
+quarkus:
+  http:
+    port: 0 # random port — avoids conflicts in CI
+    test-port: 0 # RestAssured discovers the actual port automatically
+  log:
+    level: WARN
+    category:
+      "com.koostack.cveil":
+        level: INFO
+      "org.flywaydb":
+        level: INFO
+      "org.testcontainers":
+        level: INFO
+  # Disable DevServices — we manage our own containers via Testcontainers
+  devservices:
+    enabled: false
+  # CDI / ArC — must mirror production config so generic platform types resolve
+  arc:
+    unremovable-types: com.koostack.cveil.core.platform.**
+  index-dependency:
+    cveil-core:
+      group-id: com.koostack.cveil
+      artifact-id: cveil-core
+
+# SmallRye Config: allow cveil.test.* substitution variables in the Config
+# Override source without requiring them to map to @ConfigMapping(prefix="cveil").
+smallrye:
+  config:
+    mapping:
+      validate-unknown: false
+
+# =============================================================================
+# Cveil SDK — production mode against Testcontainers Postgres + Redis
+#
+# All ${cveil.test.*} properties are injected by CveilTestResourceManager
+# before the Quarkus container boots.  If a test does NOT use the resource
+# manager (e.g. pure unit tests), these placeholders remain unresolved —
+# which is fine because CveilProducers is never instantiated in that case.
+#
+# TLS Configuration for Tests:
+# ---------------------------
+# Tests default to plaintext (tls-enabled=false, ssl-mode=disable) for
+# simplicity. To test TLS configurations, set:
+#   - cveil.db.ssl-mode=require
+#   - cveil.redis.tls-enabled=true
+# These tests require CveilTestResourceManager to be extended with TLS
+# certificate provisioning (see RedisTlsIntegrationIT and PostgresSslIT).
+# =============================================================================
+cveil:
+  mode: production
+  app-name: cveil-integration-test
+
+  db:
+    url: ${cveil.test.db.url:jdbc:postgresql://localhost:5432/cveil_test}
+    dialect: POSTGRES
+    username: ${cveil.test.db.username:cveil_test}
+    password: ${cveil.test.db.password:cveil_test}
+    ssl-mode: ${cveil.test.db.ssl-mode:disable}
+    ssl-cert-path: ${cveil.test.db.ssl-cert-path:}
+    ssl-key-path: ${cveil.test.db.ssl-key-path:}
+
+  redis:
+    host: ${cveil.test.redis.host:localhost}
+    port: ${cveil.test.redis.port:6379}
+    tls-enabled: ${cveil.test.redis.tls-enabled:false}
+    tls-ca-cert-path: ${cveil.test.redis.tls-ca-cert-path:}
+    tls-verify-peer: ${cveil.test.redis.tls-verify-peer:true}
+
+  platform-db:
+    url: ${cveil.test.platform-db.url:jdbc:postgresql://localhost:5432/cveil_test}
+    dialect: POSTGRES
+    username: ${cveil.test.platform-db.username:cveil_test}
+    password: ${cveil.test.platform-db.password:cveil_test}
+    ssl-mode: ${cveil.test.platform-db.ssl-mode:disable}
+    ssl-cert-path: ${cveil.test.platform-db.ssl-cert-path:}
+    ssl-key-path: ${cveil.test.platform-db.ssl-key-path:}
+
+  super-admin:
+    bootstrap-key: test-bootstrap-key-for-integration-tests
+    force-bootstrap: true
+
+  # Multi-tenant isolation — disabled by default for tests.
+  # Individual test classes override via @QuarkusTestResource properties.
+  multi-tenant:
+    enabled: false
+
+  keycloak:
+    url: ${cveil.test.keycloak.url:}
+    admin-username: ${cveil.test.keycloak.admin-username:admin}
+    admin-password: ${cveil.test.keycloak.admin-password:admin}
+    client-id: cveil-backend
+    client-secret: ${cveil.test.keycloak.client-secret:}

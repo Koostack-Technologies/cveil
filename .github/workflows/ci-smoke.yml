@@ -1,8 +1,8 @@
 # =============================================================================
-# Operio REST API — CI Smoke Test
+# Cveil REST API — CI Smoke Test
 #
 # End-to-end smoke test that builds the Docker image, starts the full
-# Docker Compose stack (Postgres + Redis + Operio API), waits for the
+# Docker Compose stack (Postgres + Redis + Cveil API), waits for the
 # health endpoint to report UP, and exercises the core platform and
 # consent endpoints using the bootstrap key and a freshly-created API key.
 #
@@ -60,7 +60,7 @@ jobs:
       # -------------------------------------------------------------------
       - name: Build Docker image
         run: |
-          docker compose build operio-api
+          docker compose build cveil-api
         env:
           DOCKER_BUILDKIT: 1
           COMPOSE_DOCKER_CLI_BUILD: 1
@@ -94,7 +94,7 @@ jobs:
           echo "❌ Health endpoint did not become ready within $((max_attempts * 5))s"
           echo ""
           echo "=== Container logs ==="
-          docker compose logs operio-api --tail 200
+          docker compose logs cveil-api --tail 200
           exit 1
 
       # -------------------------------------------------------------------
@@ -436,8 +436,8 @@ jobs:
           echo "  Docker Compose container logs"
           echo "========================================="
           echo ""
-          echo "=== operio-api ==="
-          docker compose logs operio-api --tail 300 2>&1 || true
+          echo "=== cveil-api ==="
+          docker compose logs cveil-api --tail 300 2>&1 || true
           echo ""
           echo "=== postgres ==="
           docker compose logs postgres --tail 50 2>&1 || true

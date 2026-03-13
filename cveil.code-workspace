@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "cveil-core"
+		},
+		{
+			"path": "cveil-spring-boot-starter"
+		},
+		{
+			"path": "build-logic"
+		}
+	],
+	"settings": {
+		"java.compile.nullAnalysis.mode": "automatic",
+		"java.configuration.updateBuildConfiguration": "interactive",
+		"files.exclude": {
+			"cveil-core": true,
+			"cveil-spring-boot-starter": true,
+			"build-logic": true
+		}
+	}
+}

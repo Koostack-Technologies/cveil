@@ -1,0 +1,3 @@
+# Default target removed — cveil-cli needs native target.
+# Use `cargo build -p cveil-sdk-core --target wasm32-wasip1` for WASM builds.
+# Use `cargo build -p cveil-cli` for native builds.

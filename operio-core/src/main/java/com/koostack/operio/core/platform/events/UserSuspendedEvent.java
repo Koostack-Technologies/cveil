@@ -1,5 +1,0 @@
-package com.koostack.operio.core.platform.events;
-
-import com.koostack.operio.core.event.DomainEvent;
-
-public record UserSuspendedEvent(String realmId, String userId) implements DomainEvent {}

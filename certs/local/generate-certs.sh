@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Generate self-signed TLS certificates for local Operio development.
+# Generate self-signed TLS certificates for local Cveil development.
 #
 # Creates a local CA, then issues server certificates for PostgreSQL and Redis
 # with the Docker Compose service hostnames as SANs.
@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "==> Generating Operio local development TLS certificates..."
+echo "==> Generating Cveil local development TLS certificates..."
 
 # ---- Local Certificate Authority -------------------------------------------
 if [ ! -f ca.key ]; then
@@ -28,7 +28,7 @@ fi
 
 echo "  Generating CA certificate..."
 openssl req -new -x509 -key ca.key -out ca.crt -days 3650 \
-    -subj "/CN=Operio Local Dev CA/O=KooStack/OU=Development" 2>/dev/null
+    -subj "/CN=Cveil Local Dev CA/O=KooStack/OU=Development" 2>/dev/null
 
 # ---- PostgreSQL server certificate -----------------------------------------
 echo "  Generating PostgreSQL server certificate..."

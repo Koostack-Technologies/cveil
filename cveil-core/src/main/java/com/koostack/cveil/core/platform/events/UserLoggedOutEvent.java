@@ -1,0 +1,6 @@
+package com.koostack.cveil.core.platform.events;
+
+import com.koostack.cveil.core.event.DomainEvent;
+
+/** Published when a platform user's session is terminated (refresh token revoked). */
+public record UserLoggedOutEvent(String realmId, String userId) implements DomainEvent {}
