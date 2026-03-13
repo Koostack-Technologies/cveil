@@ -14,7 +14,7 @@ pub enum StaleMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SdkConfig {
-    /// Base URL of the operio REST API (e.g., "https://api.operio.example.com").
+    /// Base URL of the cveil REST API (e.g., "https://api.cveil.example.com").
     pub api_base_url: String,
 
     /// API token (`cveil_...`) for authentication.

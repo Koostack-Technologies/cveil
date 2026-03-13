@@ -16,7 +16,7 @@ plugins.withId("java") {
                 pom {
                     name.set(project.name)
                     description.set(project.provider { project.description })
-                    url.set("https://github.com/koostacktech/operio")
+                    url.set("https://github.com/koostacktech/cveil")
                     licenses {
                         license {
                             name.set("The Apache License, Version 2.0")
@@ -31,9 +31,9 @@ plugins.withId("java") {
                         }
                     }
                     scm {
-                        connection.set("scm:git:git://github.com/koostacktech/operio.git")
-                        developerConnection.set("scm:git:ssh://github.com/koostacktech/operio.git")
-                        url.set("https://github.com/koostacktech/operio")
+                        connection.set("scm:git:git://github.com/koostacktech/cveil.git")
+                        developerConnection.set("scm:git:ssh://github.com/koostacktech/cveil.git")
+                        url.set("https://github.com/koostacktech/cveil")
                     }
                 }
             }

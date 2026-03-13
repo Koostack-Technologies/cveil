@@ -1,9 +1,9 @@
 # =============================================================================
-# Operio REST API — Local Development Docker Compose
+# Cveil REST API — Local Development Docker Compose
 #
-# Spins up the full Operio stack for local development and testing:
+# Spins up the full Cveil stack for local development and testing:
 #
-#   - operio-api:  Quarkus REST API (built from source)
+#   - cveil-api:  Quarkus REST API (built from source)
 #   - postgres:    PostgreSQL 16 with TLS (consent + platform schemas)
 #   - redis:       Redis 7 with TLS (consent decision cache + rate limiting)
 #
@@ -38,7 +38,7 @@
 #
 # =============================================================================
 
-name: operio
+name: cveil
 
 services:
   # ---------------------------------------------------------------------------
@@ -67,16 +67,16 @@ services:
           -c ssl_key_file=/tmp/pg-certs/server.key \
           -c ssl_ca_file=/tmp/pg-certs/ca.crt
     environment:
-      POSTGRES_DB: operio
-      POSTGRES_USER: operio
-      POSTGRES_PASSWORD: operio_local_dev
+      POSTGRES_DB: cveil
+      POSTGRES_USER: cveil
+      POSTGRES_PASSWORD: cveil_local_dev
       POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./certs/local:/certs-src:ro
       - ./docker/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U operio -d operio"]
+      test: ["CMD-SHELL", "pg_isready -U cveil -d cveil"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -133,10 +133,10 @@ services:
     command: start-dev
     environment:
       KC_DB: postgres
-      KC_DB_URL: "jdbc:postgresql://postgres:5432/operio"
+      KC_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
       KC_DB_SCHEMA: keycloak
-      KC_DB_USERNAME: operio
-      KC_DB_PASSWORD: operio_local_dev
+      KC_DB_USERNAME: cveil
+      KC_DB_PASSWORD: cveil_local_dev
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
@@ -154,9 +154,9 @@ services:
       start_period: 60s
 
   # ---------------------------------------------------------------------------
-  # Operio REST API — Quarkus application
+  # Cveil REST API — Quarkus application
   # ---------------------------------------------------------------------------
-  operio-api:
+  cveil-api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -179,51 +179,51 @@ services:
       QUARKUS_VIRTUAL_THREADS_ENABLED: "true"
 
       # -- CORS (allow local dashboard development) ------------------------
-      OPERIO_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+      CVEIL_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
 
-      # -- Operio SDK configuration ----------------------------------------
-      OPERIO_MODE: "production"
-      OPERIO_APP_NAME: "operio-local"
+      # -- Cveil SDK configuration ----------------------------------------
+      CVEIL_MODE: "production"
+      CVEIL_APP_NAME: "cveil-local"
 
       # -- Consent database (jOOQ admin + sync layer) ----------------------
-      OPERIO_DB_URL: "jdbc:postgresql://postgres:5432/operio"
-      OPERIO_DB_DIALECT: "POSTGRES"
-      OPERIO_DB_USERNAME: "operio"
-      OPERIO_DB_PASSWORD: "operio_local_dev"
-      OPERIO_DB_SSL_MODE: "require"
+      CVEIL_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
+      CVEIL_DB_DIALECT: "POSTGRES"
+      CVEIL_DB_USERNAME: "cveil"
+      CVEIL_DB_PASSWORD: "cveil_local_dev"
+      CVEIL_DB_SSL_MODE: "require"
 
       # -- Platform database (tenant management, API keys) -----------------
-      OPERIO_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/operio"
-      OPERIO_PLATFORM_DB_DIALECT: "POSTGRES"
-      OPERIO_PLATFORM_DB_USERNAME: "operio"
-      OPERIO_PLATFORM_DB_PASSWORD: "operio_local_dev"
-      OPERIO_PLATFORM_DB_SSL_MODE: "require"
+      CVEIL_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
+      CVEIL_PLATFORM_DB_DIALECT: "POSTGRES"
+      CVEIL_PLATFORM_DB_USERNAME: "cveil"
+      CVEIL_PLATFORM_DB_PASSWORD: "cveil_local_dev"
+      CVEIL_PLATFORM_DB_SSL_MODE: "require"
 
       # -- Redis (consent decision cache + rate limiting) ------------------
-      OPERIO_REDIS_HOST: "redis"
-      OPERIO_REDIS_PORT: "6379"
-      OPERIO_REDIS_TLS_ENABLED: "true"
-      OPERIO_REDIS_TLS_CA_CERT_PATH: "/certs/ca.crt"
-      OPERIO_REDIS_TLS_VERIFY_PEER: "true"
+      CVEIL_REDIS_HOST: "redis"
+      CVEIL_REDIS_PORT: "6379"
+      CVEIL_REDIS_TLS_ENABLED: "true"
+      CVEIL_REDIS_TLS_CA_CERT_PATH: "/certs/ca.crt"
+      CVEIL_REDIS_TLS_VERIFY_PEER: "true"
 
       # -- Bootstrap key (local development only!) -------------------------
-      OPERIO_BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
-      OPERIO_FORCE_BOOTSTRAP: "false"
+      CVEIL_BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
+      CVEIL_FORCE_BOOTSTRAP: "false"
 
       # -- Keycloak (identity provider) ------------------------------------
-      OPERIO_KEYCLOAK_URL: "http://keycloak:8080"
-      OPERIO_KEYCLOAK_ADMIN_USERNAME: "admin"
-      OPERIO_KEYCLOAK_ADMIN_PASSWORD: "admin"
-      OPERIO_KEYCLOAK_CLIENT_ID: "operio-backend"
-      OPERIO_KEYCLOAK_ROOT_EMAIL: "admin@operio.local"
-      OPERIO_KEYCLOAK_ROOT_PASSWORD: "admin"
+      CVEIL_KEYCLOAK_URL: "http://keycloak:8080"
+      CVEIL_KEYCLOAK_ADMIN_USERNAME: "admin"
+      CVEIL_KEYCLOAK_ADMIN_PASSWORD: "admin"
+      CVEIL_KEYCLOAK_CLIENT_ID: "cveil-backend"
+      CVEIL_KEYCLOAK_ROOT_EMAIL: "admin@cveil.local"
+      CVEIL_KEYCLOAK_ROOT_PASSWORD: "admin"
 
       # -- SMTP for Keycloak realm emails (invitations, verification) ------
-      OPERIO_KEYCLOAK_SMTP_HOST: "smtp.gmail.com"
-      OPERIO_KEYCLOAK_SMTP_PORT: "587"
-      OPERIO_KEYCLOAK_SMTP_FROM: "koostacktech@gmail.com"
-      OPERIO_KEYCLOAK_SMTP_USER: "koostacktech@gmail.com"
-      OPERIO_KEYCLOAK_SMTP_PASSWORD: "jtlcywxzufwsunsx"
+      CVEIL_KEYCLOAK_SMTP_HOST: "smtp.gmail.com"
+      CVEIL_KEYCLOAK_SMTP_PORT: "587"
+      CVEIL_KEYCLOAK_SMTP_FROM: "koostacktech@gmail.com"
+      CVEIL_KEYCLOAK_SMTP_USER: "koostacktech@gmail.com"
+      CVEIL_KEYCLOAK_SMTP_PASSWORD: "jtlcywxzufwsunsx"
 
       # -- JVM tuning (local dev — generous limits) ------------------------
       JAVA_OPTS: >-
@@ -232,7 +232,7 @@ services:
         -Xmx1g
         --enable-preview
         -Dquarkus.log.level=INFO
-        -Dquarkus.log.category."com.koostack.operio".level=DEBUG
+        -Dquarkus.log.category."com.koostack.cveil".level=DEBUG
     volumes:
       - ./certs/local:/certs:ro
     healthcheck:

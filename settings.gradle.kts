@@ -11,61 +11,61 @@ pluginManagement {
     includeBuild("build-logic")
 }
 
-rootProject.name = "operio"
-include("operio-spring-boot-starter", "operio-core", "operio-rest-api")
+rootProject.name = "cveil"
+include("cveil-spring-boot-starter", "cveil-core", "cveil-rest-api")
 
-include("plugins:operio-audit-slf4j")
-include("tenant:operio-consent-admin-jooq-common")
-include("tenant:operio-consent-admin-command")
-include("tenant:operio-consent-admin-query-jooq")
-include("tenant:operio-subject-dsar-jooq")
-include("common:operio-jooq")
-include("common:operio-keycloak")
-include("common:operio-redis")
-include("sdk:operio-identity-http")
-include("sdk:operio-identity-spring-security")
-include("plugins:operio-masking-jackson")
-include("plugins:operio-resolver-sensitive-annotation")
-include("sdk:operio-discovery-sensitive-annotation")
-include("operio-bundle-core")
-include("plugins:operio-consent-decision-caffeine")
-include("plugins:operio-consent-sync-embedded")
-include("operio-bundle-embedded")
-include("platform:operio-platform-jooq")
-include("platform:operio-platform-event-jooq")
-include("tenant:operio-consent-admin-projection-jooq")
-include("tenant:operio-consent-decision-projection-redis")
+include("plugins:cveil-audit-slf4j")
+include("tenant:cveil-consent-admin-jooq-common")
+include("tenant:cveil-consent-admin-command")
+include("tenant:cveil-consent-admin-query-jooq")
+include("tenant:cveil-subject-dsar-jooq")
+include("common:cveil-jooq")
+include("common:cveil-keycloak")
+include("common:cveil-redis")
+include("sdk:cveil-identity-http")
+include("sdk:cveil-identity-spring-security")
+include("plugins:cveil-masking-jackson")
+include("plugins:cveil-resolver-sensitive-annotation")
+include("sdk:cveil-discovery-sensitive-annotation")
+include("cveil-bundle-core")
+include("plugins:cveil-consent-decision-caffeine")
+include("plugins:cveil-consent-sync-embedded")
+include("cveil-bundle-embedded")
+include("platform:cveil-platform-jooq")
+include("platform:cveil-platform-event-jooq")
+include("tenant:cveil-consent-admin-projection-jooq")
+include("tenant:cveil-consent-decision-projection-redis")
 
 // --- Tenant Authz ---
-include("tenant:operio-authz-keycloak")
+include("tenant:cveil-authz-keycloak")
 
 // --- Platform Billing ---
-include("platform:operio-billing-schema")
-include("platform:operio-billing-jooq-common")
-include("platform:operio-billing-command")
-include("platform:operio-billing-query-jooq")
-include("platform:operio-billing-projection-jooq")
+include("platform:cveil-billing-schema")
+include("platform:cveil-billing-jooq-common")
+include("platform:cveil-billing-command")
+include("platform:cveil-billing-query-jooq")
+include("platform:cveil-billing-projection-jooq")
 
 // --- Platform Core ---
-include("platform:operio-core-schema")
-include("platform:operio-core-jooq-common")
-include("platform:operio-core-command")
-include("platform:operio-core-query-jooq")
-include("platform:operio-core-projection-jooq")
+include("platform:cveil-core-schema")
+include("platform:cveil-core-jooq-common")
+include("platform:cveil-core-command")
+include("platform:cveil-core-query-jooq")
+include("platform:cveil-core-projection-jooq")
 
 // --- Platform IAM ---
-include("platform:operio-iam-schema")
-include("platform:operio-iam-command")
-include("platform:operio-iam-query")
-include("platform:operio-iam-projection-jooq")
-include("platform:operio-platform-keycloak")
+include("platform:cveil-iam-schema")
+include("platform:cveil-iam-command")
+include("platform:cveil-iam-query")
+include("platform:cveil-iam-projection-jooq")
+include("platform:cveil-platform-keycloak")
 
 // --- Tenant IAM ---
 // (Tenant IAM modules deleted — merged into platform IAM)
 
 // --- Platform Plan Query ---
-include("platform:operio-plan-query-jooq")
+include("platform:cveil-plan-query-jooq")
 
 // --- Metrics ---
-include("platform:operio-platform-metrics-redis")
-include("common:operio-metrics-worker")
+include("platform:cveil-platform-metrics-redis")
+include("common:cveil-metrics-worker")

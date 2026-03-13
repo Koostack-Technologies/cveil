@@ -1,4 +1,4 @@
-//! Core data models mirroring the operio consent graph types.
+//! Core data models mirroring the cveil consent graph types.
 
 pub mod types;
 

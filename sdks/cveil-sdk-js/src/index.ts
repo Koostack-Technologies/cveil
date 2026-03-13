@@ -7,7 +7,7 @@
  *
  * const client = await CveilClient.create({
  *   config: {
- *     apiBaseUrl: "https://api.operio.example.com",
+ *     apiBaseUrl: "https://api.cveil.example.com",
  *     apiToken: "cveil_your_token_here",
  *     defaultJurisdiction: "EU",
  *   },

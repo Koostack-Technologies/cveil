@@ -4,7 +4,7 @@
 
 /** SDK configuration — matches the Rust SdkConfig (camelCase JSON). */
 export interface CveilConfig {
-  /** Base URL of the operio REST API (e.g., "https://api.operio.example.com"). */
+  /** Base URL of the cveil REST API (e.g., "https://api.cveil.example.com"). */
   apiBaseUrl: string;
   /** API token — must start with "cveil_". */
   apiToken: string;
@@ -113,7 +113,7 @@ export interface MessageResponse {
   message: string;
 }
 
-/** Structured error response from the operio API. */
+/** Structured error response from the cveil API. */
 export interface ApiErrorBody {
   requestId?: string | null;
   error: string;

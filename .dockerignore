@@ -1,5 +1,5 @@
 # =============================================================================
-# Operio REST API — Docker Build Context Exclusions
+# Cveil REST API — Docker Build Context Exclusions
 #
 # Keep the Docker build context lean by excluding everything that is not
 # needed to compile the project inside the build stage.  A smaller context

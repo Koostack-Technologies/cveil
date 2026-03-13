@@ -3,7 +3,7 @@
  *
  * Handles:
  * - WASM module loading and initialization
- * - Paginated graph ingestion from the operio REST API
+ * - Paginated graph ingestion from the cveil REST API
  * - SSE connection for real-time cache invalidation
  * - Automatic reconnection with exponential backoff
  * - Consent decision fetching on cache miss
