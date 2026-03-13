@@ -1,0 +1,34 @@
+{
+  "name": "@cveil/sdk-js",
+  "version": "0.1.0",
+  "description": "JavaScript/Node.js facade for cveil-sdk-core WASM consent masking engine",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "wasm/",
+    "README.md"
+  ],
+  "scripts": {
+    "build:wasm": "cd ../../crates && cargo build --release && cp target/wasm32-wasip1/release/cveil_sdk_core.wasm ../sdks/cveil-sdk-js/wasm/",
+    "build:ts": "tsc",
+    "build": "npm run build:wasm && npm run build:ts",
+    "test": "node --experimental-wasi-unstable-preview1 --test dist/tests/",
+    "clean": "rm -rf dist/"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
