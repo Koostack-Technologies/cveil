@@ -383,9 +383,7 @@ impl GraphStore {
 
     /// Total number of edges in the graph.
     pub fn edge_count(&self) -> usize {
-        self.edge_props.len()
-            + self.out_edges.values().map(|s| s.len()).sum::<usize>()
-                .saturating_sub(self.edge_props.len())
+        self.out_edges.values().map(|s| s.len()).sum::<usize>()
     }
 
     /// Remove a specific node and cascade-delete its edges.

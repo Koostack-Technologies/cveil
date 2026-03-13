@@ -32,11 +32,13 @@ fn redact_all(value: &Value) -> Value {
 fn redact_up_to_last_4(value: &Value) -> Value {
     match value {
         Value::String(s) => {
-            if s.len() <= 4 {
+            let char_count = s.chars().count();
+            if char_count <= 4 {
                 Value::String("****".to_string())
             } else {
-                let masked_len = s.len() - 4;
-                let masked = format!("{}{}", "*".repeat(masked_len), &s[s.len() - 4..]);
+                let visible_start = char_count - 4;
+                let last4: String = s.chars().skip(visible_start).collect();
+                let masked = format!("{}{}", "*".repeat(visible_start), last4);
                 Value::String(masked)
             }
         }
@@ -79,10 +81,18 @@ fn redact_local(value: &Value) -> Value {
     }
 }
 
-/// Simple hex encoding (avoids adding a crate dependency).
+/// Hex encoding using a lookup table (avoids format! per byte).
 mod hex {
+    const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
+        let bytes = bytes.as_ref();
+        let mut out = String::with_capacity(bytes.len() * 2);
+        for &b in bytes {
+            out.push(HEX_CHARS[(b >> 4) as usize] as char);
+            out.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+        }
+        out
     }
 }
 
@@ -201,6 +211,24 @@ mod tests {
     fn redact_up_to_last_4_number_falls_back() {
         let v = Value::from(42);
         assert_eq!(apply_mask(&v, MaskingType::RedactUpToLast4), Value::from(0));
+    }
+
+    #[test]
+    fn redact_up_to_last_4_multibyte_utf8() {
+        // "a🎉bcde" = 1 ASCII + 1 emoji (4 bytes) + 4 ASCII = 6 chars
+        let v = Value::String("a🎉bcde".into());
+        let result = apply_mask(&v, MaskingType::RedactUpToLast4);
+        // Last 4 chars are "bcde", first 2 chars masked
+        assert_eq!(result, Value::String("**bcde".into()));
+    }
+
+    #[test]
+    fn redact_up_to_last_4_all_emoji() {
+        // 5 emoji chars, each 4 bytes = 20 bytes
+        let v = Value::String("🎉🎊🎋🎍🎎".into());
+        let result = apply_mask(&v, MaskingType::RedactUpToLast4);
+        // Last 4 chars visible, first 1 masked
+        assert_eq!(result, Value::String("*🎊🎋🎍🎎".into()));
     }
 
     #[test]

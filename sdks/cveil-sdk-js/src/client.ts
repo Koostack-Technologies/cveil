@@ -61,6 +61,7 @@ const DEFAULT_GRAPH_PAGE_SIZE = 100;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_JITTER_MS = 500;
+const SSE_BUFFER_MAX_BYTES = 1_048_576; // 1 MB safety limit
 
 /** Error thrown when an API request fails. */
 export class CveilApiError extends Error {
@@ -134,10 +135,6 @@ export class CveilClient {
 
   private resolveWasmPath(): string {
     if (this.options.wasmPath) return this.options.wasmPath;
-    // Default: look relative to the package
-    const { fileURLToPath } = await_import("node:url");
-    const { dirname, join } = await_import("node:path");
-    // Fallback to common locations
     return new URL("../wasm/cveil_sdk_core.wasm", import.meta.url).pathname;
   }
 
@@ -466,6 +463,12 @@ export class CveilClient {
 
         buffer += decoder.decode(value, { stream: true });
 
+        // Safety: abort if buffer grows beyond limit (malformed stream)
+        if (buffer.length > SSE_BUFFER_MAX_BYTES) {
+          console.error("[cveil] SSE buffer exceeded limit, aborting stream");
+          break;
+        }
+
         // Parse SSE events from buffer
         const events = buffer.split("\n\n");
         buffer = events.pop() ?? ""; // Keep incomplete event in buffer
@@ -474,6 +477,9 @@ export class CveilClient {
           this.processSSEEvent(event);
         }
       }
+
+      // Flush any trailing bytes from the TextDecoder
+      buffer += decoder.decode();
     } finally {
       reader.releaseLock();
     }
@@ -484,18 +490,20 @@ export class CveilClient {
 
   private processSSEEvent(raw: string): void {
     let eventType = "";
-    let data = "";
+    const dataLines: string[] = [];
 
     for (const line of raw.split("\n")) {
       if (line.startsWith("event:")) {
         eventType = line.slice(6).trim();
       } else if (line.startsWith("data:")) {
-        data += line.slice(5).trim();
+        dataLines.push(line.slice(5).trimStart());
       } else if (line.startsWith(":")) {
-        // Comment (keep-alive), ignore
-        return;
+        // Comment line (keep-alive) — skip this line, not the entire event
+        continue;
       }
     }
+
+    const data = dataLines.join("\n");
 
     if (eventType === "cache-invalidation" && data) {
       try {
@@ -561,6 +569,9 @@ export class CveilClient {
 
   private handleSSEDisconnect(): void {
     if (!this.abortController) return; // Already shutting down
+
+    // Prevent stacking timers from rapid disconnects
+    if (this.reconnectTimer) return;
 
     const wasm = this.bridge.exports;
     this.bridge.call0(wasm.cveil_sse_disconnected);
@@ -1198,21 +1209,5 @@ export class CveilClient {
     } catch (err) {
       console.error("[cveil] Graph reload after mutation failed:", err);
     }
-  }
-}
-
-/** Helper to avoid top-level await for dynamic imports. */
-function await_import(mod: string): any {
-  // These are sync requires that work in Node.js ESM
-  switch (mod) {
-    case "node:url":
-      return { fileURLToPath: (u: string) => new URL(u).pathname };
-    case "node:path":
-      return {
-        dirname: (p: string) => p.split("/").slice(0, -1).join("/"),
-        join: (...parts: string[]) => parts.join("/"),
-      };
-    default:
-      throw new Error(`Unknown module: ${mod}`);
   }
 }

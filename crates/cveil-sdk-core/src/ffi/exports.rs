@@ -233,15 +233,18 @@ pub fn cveil_mask_batch(
     let arr: Vec<Value> =
         serde_json::from_str(json_array).map_err(|e| format!("Invalid JSON array: {e}"))?;
 
-    let mut results = Vec::with_capacity(arr.len());
-    for item in &arr {
-        let item_json = serde_json::to_string(item).map_err(|e| e.to_string())?;
-        let masked_json = cveil_mask(subject, entity, &item_json, purpose)?;
-        let masked: Value = serde_json::from_str(&masked_json).map_err(|e| e.to_string())?;
-        results.push(masked);
-    }
-
-    Ok(serde_json::to_string(&results).map_err(|e| e.to_string())?)
+    with_sdk(|sdk| {
+        let jurisdiction = sdk.config.default_jurisdiction.clone();
+        let mut results = Vec::with_capacity(arr.len());
+        for item in &arr {
+            let item_json = serde_json::to_string(item).map_err(|e| e.to_string())?;
+            let masked_json = do_mask(sdk, subject, entity, &item_json, purpose, &jurisdiction)?;
+            let masked: Value =
+                serde_json::from_str(&masked_json).map_err(|e| e.to_string())?;
+            results.push(masked);
+        }
+        Ok(serde_json::to_string(&results).map_err(|e| e.to_string())?)
+    })
 }
 
 /// Direct consent evaluation — returns per-field MaskingType resolution without masking.

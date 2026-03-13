@@ -75,9 +75,14 @@ pub extern "C" fn cveil_dealloc(ptr: *mut u8, size: usize) {
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-unsafe fn str_from_wasm(ptr: *const u8, len: usize) -> &'static str {
+/// Reconstruct a `&str` from a WASM (ptr, len) pair.
+///
+/// # Safety
+/// `ptr` must point to `len` valid bytes inside WASM linear memory.
+/// Invalid UTF-8 is replaced with U+FFFD rather than causing UB.
+unsafe fn str_from_wasm(ptr: *const u8, len: usize) -> String {
     let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
-    unsafe { std::str::from_utf8_unchecked(slice) }
+    String::from_utf8_lossy(slice).into_owned()
 }
 
 fn call_and_store(result: Result<String, String>) -> i32 {
@@ -98,13 +103,13 @@ fn call_and_store(result: Result<String, String>) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn cveil_init(config_ptr: *const u8, config_len: usize) -> i32 {
     let config_json = unsafe { str_from_wasm(config_ptr, config_len) };
-    call_and_store(exports::cveil_init(config_json))
+    call_and_store(exports::cveil_init(&config_json))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn cveil_ingest_graph_page(page_ptr: *const u8, page_len: usize) -> i32 {
     let page_json = unsafe { str_from_wasm(page_ptr, page_len) };
-    call_and_store(exports::cveil_ingest_graph_page(page_json))
+    call_and_store(exports::cveil_ingest_graph_page(&page_json))
 }
 
 #[unsafe(no_mangle)]
@@ -116,7 +121,7 @@ pub extern "C" fn cveil_ingest_decisions(
 ) -> i32 {
     let subject = unsafe { str_from_wasm(subject_ptr, subject_len) };
     let decisions_json = unsafe { str_from_wasm(decisions_ptr, decisions_len) };
-    call_and_store(exports::cveil_ingest_decisions(subject, decisions_json))
+    call_and_store(exports::cveil_ingest_decisions(&subject, &decisions_json))
 }
 
 #[unsafe(no_mangle)]
@@ -134,7 +139,7 @@ pub extern "C" fn cveil_mask(
     let entity = unsafe { str_from_wasm(entity_ptr, entity_len) };
     let payload = unsafe { str_from_wasm(payload_ptr, payload_len) };
     let purpose = unsafe { str_from_wasm(purpose_ptr, purpose_len) };
-    call_and_store(exports::cveil_mask(subject, entity, payload, purpose))
+    call_and_store(exports::cveil_mask(&subject, &entity, &payload, &purpose))
 }
 
 #[unsafe(no_mangle)]
@@ -156,7 +161,7 @@ pub extern "C" fn cveil_mask_with_jurisdiction(
     let purpose = unsafe { str_from_wasm(purpose_ptr, purpose_len) };
     let jurisdiction = unsafe { str_from_wasm(jurisdiction_ptr, jurisdiction_len) };
     call_and_store(exports::cveil_mask_with_jurisdiction(
-        subject, entity, payload, purpose, jurisdiction,
+        &subject, &entity, &payload, &purpose, &jurisdiction,
     ))
 }
 
@@ -175,7 +180,7 @@ pub extern "C" fn cveil_mask_batch(
     let entity = unsafe { str_from_wasm(entity_ptr, entity_len) };
     let array = unsafe { str_from_wasm(array_ptr, array_len) };
     let purpose = unsafe { str_from_wasm(purpose_ptr, purpose_len) };
-    call_and_store(exports::cveil_mask_batch(subject, entity, array, purpose))
+    call_and_store(exports::cveil_mask_batch(&subject, &entity, &array, &purpose))
 }
 
 #[unsafe(no_mangle)]
@@ -193,13 +198,13 @@ pub extern "C" fn cveil_evaluate(
     let entity = unsafe { str_from_wasm(entity_ptr, entity_len) };
     let fields = unsafe { str_from_wasm(fields_ptr, fields_len) };
     let purpose = unsafe { str_from_wasm(purpose_ptr, purpose_len) };
-    call_and_store(exports::cveil_evaluate(subject, entity, fields, purpose))
+    call_and_store(exports::cveil_evaluate(&subject, &entity, &fields, &purpose))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn cveil_process_invalidation(event_ptr: *const u8, event_len: usize) -> i32 {
     let event_json = unsafe { str_from_wasm(event_ptr, event_len) };
-    call_and_store(exports::cveil_process_invalidation(event_json))
+    call_and_store(exports::cveil_process_invalidation(&event_json))
 }
 
 #[unsafe(no_mangle)]
