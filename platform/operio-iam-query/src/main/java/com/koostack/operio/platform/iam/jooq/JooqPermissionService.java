@@ -453,8 +453,7 @@ public class JooqPermissionService implements PermissionService {
 
     /** Validates the role exists and is assignable (not super-admin or other non-assignable). */
     private void validateRoleAssignable(String roleId) {
-        String sql =
-                "SELECT is_assignable FROM platform_iam.role_definition WHERE role_id = ?";
+        String sql = "SELECT is_assignable FROM platform_iam.role_definition WHERE role_id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, roleId);

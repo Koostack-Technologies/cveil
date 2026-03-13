@@ -842,6 +842,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.startsWith("dashboard/account")
                 || normalized.startsWith("dashboard/governance")
                 || normalized.startsWith("dashboard/consent")
+                || normalized.startsWith("dashboard/catalogue")
                 || normalized.startsWith("dashboard/organizations/"));
     }
 

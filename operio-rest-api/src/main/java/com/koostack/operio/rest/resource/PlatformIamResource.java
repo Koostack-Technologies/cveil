@@ -767,7 +767,7 @@ public class PlatformIamResource {
                                 .anyMatch(
                                         o ->
                                                 TenantIdDeriver.derive(o.orgName())
-                                                                .equals(request.tenantId()));
+                                                        .equals(request.tenantId()));
                 if (!isMember) {
                     return Response.status(Response.Status.FORBIDDEN)
                             .entity(
@@ -1144,16 +1144,16 @@ public class PlatformIamResource {
     }
 
     /**
-     * Require that the caller has org:member:manage in the specified org's tenant,
-     * not just in their active tenant. Prevents cross-org privilege escalation.
+     * Require that the caller has org:member:manage in the specified org's tenant, not just in
+     * their active tenant. Prevents cross-org privilege escalation.
      */
     private void requireOrgAdmin(SecurityContext sc, String orgName) {
         requirePermissionInOrg(orgName, Permissions.ORG_MEMBER_MANAGE);
     }
 
     /**
-     * Require that the caller has org:read in the specified org's tenant,
-     * not just in their active tenant. Prevents cross-org privilege escalation.
+     * Require that the caller has org:read in the specified org's tenant, not just in their active
+     * tenant. Prevents cross-org privilege escalation.
      */
     private void requireOrgMember(SecurityContext sc, String orgId) {
         String orgName = resolveOrgName(orgId);

@@ -55,6 +55,8 @@ public class SiteResource {
 
     @Inject Template consent;
 
+    @Inject Template catalogue;
+
     @Inject
     @io.quarkus.qute.Location("org-detail.html")
     Template orgDetail;
@@ -143,14 +145,9 @@ public class SiteResource {
 
             var command =
                     new RegisterUserOrchestrator.RegisterUserCommand(
-                            REALM,
-                            username,
-                            email,
-                            fullName,
+                            REALM, username, email, fullName,
                             Set.of(), // KC roles empty — DB-backed roles are authoritative
-                            false,
-                            password,
-                            tenantId);
+                            false, password, tenantId);
 
             RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
 
@@ -385,6 +382,41 @@ public class SiteResource {
                 .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
                 .data("activeNav", "governance");
+    }
+
+    @GET
+    @Path("dashboard/catalogue")
+    @Produces(MediaType.TEXT_HTML)
+    public Object cataloguePage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return catalogue
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", resolveRolesDisplay(payload))
+                .data("initial", initial)
+                .data("activeNav", "catalogue");
     }
 
     @GET
