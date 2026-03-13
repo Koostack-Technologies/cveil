@@ -42,10 +42,7 @@ COPY build-logic/ build-logic/
 # Copy all subproject build files for dependency resolution.
 COPY cveil-core/build.gradle.kts cveil-core/build.gradle.kts
 COPY cveil-rest-api/build.gradle.kts cveil-rest-api/build.gradle.kts
-COPY cveil-spring-boot-starter/build.gradle.kts cveil-spring-boot-starter/build.gradle.kts
 COPY cveil-bundle-core/build.gradle.kts cveil-bundle-core/build.gradle.kts
-COPY cveil-bundle-embedded/build.gradle.kts cveil-bundle-embedded/build.gradle.kts
-COPY plugins/ plugins/
 
 # Pre-download dependencies (cached unless build files change).
 RUN chmod +x gradlew && \

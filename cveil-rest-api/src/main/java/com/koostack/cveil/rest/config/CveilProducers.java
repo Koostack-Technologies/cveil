@@ -86,23 +86,12 @@ import redis.clients.jedis.JedisPooled;
  *       platform_iam.api_key} projection table
  * </ul>
  *
- * <h2>Embedded mode ({@code cveil.mode=embedded})</h2>
- *
- * <ul>
- *   <li>{@link EmbeddedConsentBundle} — H2 in-memory + Caffeine cache, zero external infrastructure
- *       (ideal for local dev and testing)
- *   <li>Platform CQRS services and token verifier are <strong>not</strong> wired — embedded mode
- *       has no multi-tenant management
- * </ul>
- *
  * <h2>Produced beans</h2>
  *
  * <ul>
  *   <li>{@link Cveil} — the primary entry point for consent operations
  *   <li>{@link CoreQueryService}, {@link CoreCommandService}, etc. — CQRS platform services
- *       (production only; {@code null} in embedded mode)
- *   <li>{@link TokenValidationService} — bearer token verification (production only; {@code null}
- *       in embedded mode)
+ *   <li>{@link TokenValidationService} — bearer token verification
  * </ul>
  *
  * <p>All three beans are {@code @ApplicationScoped} singletons — created once at startup and shared
@@ -110,7 +99,6 @@ import redis.clients.jedis.JedisPooled;
  *
  * @see CveilConfig
  * @see CoreConsentBundle
- * @see EmbeddedConsentBundle
  */
 @ApplicationScoped
 public class CveilProducers {
@@ -118,7 +106,6 @@ public class CveilProducers {
     private static final Logger LOG = LoggerFactory.getLogger(CveilProducers.class);
 
     private static final String MODE_PRODUCTION = "production";
-    private static final String MODE_EMBEDDED = "embedded";
 
     // -- Platform CQRS services (set during tenantService() production init) --
     @SuppressWarnings("rawtypes")
@@ -1268,7 +1255,7 @@ public class CveilProducers {
     /**
      * Creates the appropriate consent bundle based on the deployment mode.
      *
-     * @param mode the deployment mode ({@code "production"} or {@code "embedded"})
+     * @param mode the deployment mode ({@code "production"})
      * @return the consent bundle
      * @throws IllegalStateException if the mode is unknown or required configuration is missing
      */
@@ -1276,14 +1263,11 @@ public class CveilProducers {
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
             return createCoreConsentBundle();
         }
-        if (MODE_EMBEDDED.equalsIgnoreCase(mode)) {
-            return createEmbeddedConsentBundle();
-        }
         throw new IllegalStateException(
                 "Unknown cveil.mode: '"
                         + mode
                         + "'. "
-                        + "Valid values are 'production' and 'embedded'.");
+                        + "Valid value is 'production'.");
     }
 
     /**
@@ -1460,52 +1444,6 @@ public class CveilProducers {
 
         return new TenantAwareJedisProvider(
                 redis.host(), redis.port(), adminPool, lookup, tlsConfig);
-    }
-
-    /**
-     * Creates an {@code EmbeddedConsentBundle} (H2 + Caffeine) for local development and testing.
-     *
-     * <p>Uses default H2 in-memory settings. The application name (if configured) is set on the
-     * {@link Cveil.Builder} after the bundle is applied — see {@link #cveil()} — rather than
-     * passed to the bundle constructor, avoiding a compile-time dependency on {@code
-     * AnnotationDiscoveryConfig}.
-     *
-     * <p><strong>Reflection-based loading:</strong> The embedded bundle is loaded via {@link
-     * Class#forName} so that the {@code cveil-bundle-embedded} module is not required on the
-     * production runtime classpath. The production Docker image ships without the embedded bundle
-     * (and without the H2 JDBC driver). If someone starts the API with {@code cveil.mode=embedded}
-     * but the module is not on the classpath, a clear error message is thrown explaining how to fix
-     * it.
-     *
-     * @return the embedded consent bundle
-     * @throws IllegalStateException if the embedded bundle classes are not on the classpath
-     */
-    private PluginBundle createEmbeddedConsentBundle() {
-        LOG.info(
-                "Cveil REST API: configuring EmbeddedConsentBundle "
-                        + "(H2 + Caffeine, appName={})",
-                config.appName().filter(n -> !n.isBlank()).orElse("<default>"));
-
-        try {
-            Class<?> cls =
-                    Class.forName("com.koostack.cveil.bundle.embedded.EmbeddedConsentBundle");
-            return (PluginBundle) cls.getDeclaredConstructor().newInstance();
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException(
-                    "cveil.mode=embedded requires the cveil-bundle-embedded "
-                            + "module and the H2 JDBC driver on the runtime classpath. "
-                            + "The production Docker image does not include these "
-                            + "dependencies. Either switch to cveil.mode=production "
-                            + "(recommended for deployed environments) or add "
-                            + "cveil-bundle-embedded as a runtime dependency.",
-                    e);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(
-                    "Failed to instantiate EmbeddedConsentBundle via reflection. "
-                            + "This is likely a classpath or version mismatch — ensure "
-                            + "cveil-bundle-embedded is compatible with this API version.",
-                    e);
-        }
     }
 
     // -----------------------------------------------------------------------

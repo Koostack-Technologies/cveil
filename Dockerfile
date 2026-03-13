@@ -45,10 +45,7 @@ COPY build-logic/ build-logic/
 # files change but build files don't.
 COPY cveil-core/build.gradle.kts cveil-core/build.gradle.kts
 COPY cveil-rest-api/build.gradle.kts cveil-rest-api/build.gradle.kts
-COPY cveil-spring-boot-starter/build.gradle.kts cveil-spring-boot-starter/build.gradle.kts
 COPY cveil-bundle-core/build.gradle.kts cveil-bundle-core/build.gradle.kts
-COPY cveil-bundle-embedded/build.gradle.kts cveil-bundle-embedded/build.gradle.kts
-COPY plugins/ plugins/
 
 # Pre-download dependencies (cached unless build files change).
 # The `dependencies` task resolves all configurations without compiling.

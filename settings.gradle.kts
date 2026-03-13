@@ -12,9 +12,8 @@ pluginManagement {
 }
 
 rootProject.name = "cveil"
-include("cveil-spring-boot-starter", "cveil-core", "cveil-rest-api")
+include("cveil-core", "cveil-rest-api")
 
-include("plugins:cveil-audit-slf4j")
 include("tenant:cveil-consent-admin-jooq-common")
 include("tenant:cveil-consent-admin-command")
 include("tenant:cveil-consent-admin-query-jooq")
@@ -22,15 +21,9 @@ include("tenant:cveil-subject-dsar-jooq")
 include("common:cveil-jooq")
 include("common:cveil-keycloak")
 include("common:cveil-redis")
-include("sdk:cveil-identity-http")
-include("sdk:cveil-identity-spring-security")
-include("plugins:cveil-masking-jackson")
-include("plugins:cveil-resolver-sensitive-annotation")
-include("sdk:cveil-discovery-sensitive-annotation")
+include("common:cveil-discovery-sensitive-annotation")
 include("cveil-bundle-core")
-include("plugins:cveil-consent-decision-caffeine")
-include("plugins:cveil-consent-sync-embedded")
-include("cveil-bundle-embedded")
+
 include("platform:cveil-platform-jooq")
 include("platform:cveil-platform-event-jooq")
 include("tenant:cveil-consent-admin-projection-jooq")

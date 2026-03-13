@@ -40,9 +40,6 @@ import java.util.Optional;
  * <ul>
  *   <li>{@code production} — wires {@code CoreConsentBundle} (Postgres + Redis) and platform CQRS
  *       services / {@code ApiKeyTokenVerifier} for multi-tenant cloud deployment.
- *   <li>{@code embedded} — wires {@code EmbeddedConsentBundle} (H2 + Caffeine) for local
- *       development and testing. Platform admin and token verifier are not wired (no tenant
- *       management in embedded mode).
  * </ul>
  *
  * <h2>CDI Injection Guidelines</h2>
