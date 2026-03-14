@@ -126,8 +126,10 @@ impl DaemonConfig {
         if self.api_token.is_empty() {
             return Err("apiToken must not be empty".into());
         }
-        if !self.api_token.starts_with("cveil_") {
-            return Err("apiToken must start with 'cveil_'".into());
+        if !is_valid_token_format(&self.api_token) {
+            return Err(
+                "apiToken must be a cveil personal access token (cveil_...) or a JWT".into(),
+            );
         }
         if self.default_jurisdiction.is_empty() {
             return Err("defaultJurisdiction must not be empty".into());
@@ -142,6 +144,17 @@ impl DaemonConfig {
             ));
         }
         Ok(())
+    }
+
+    /// Returns the detected token type for logging purposes.
+    pub fn token_type(&self) -> &'static str {
+        if self.api_token.starts_with("cveil_") {
+            "personal-access-token"
+        } else if is_jwt(&self.api_token) {
+            "jwt"
+        } else {
+            "unknown"
+        }
     }
 
     /// Produce the JSON config string that cveil_init() expects.
@@ -182,6 +195,17 @@ pub fn run_config_show(args: ConfigArgs) -> i32 {
             1
         }
     }
+}
+
+/// Check if the token has a valid format — either a `cveil_` PAT or a JWT.
+fn is_valid_token_format(token: &str) -> bool {
+    token.starts_with("cveil_") || is_jwt(token)
+}
+
+/// Check if the token looks like a JWT (three dot-separated base64url segments).
+fn is_jwt(token: &str) -> bool {
+    let parts: Vec<&str> = token.splitn(4, '.').collect();
+    parts.len() == 3 && parts.iter().all(|p| !p.is_empty())
 }
 
 #[cfg(test)]
@@ -269,6 +293,73 @@ mod tests {
     }
 
     #[test]
+    fn accepts_jwt_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = write_config(
+            tmp.path(),
+            r#"{
+                "apiBaseUrl": "https://api.example.com",
+                "apiToken": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSIsInRlbmFudF9pZCI6InQxIn0.signature",
+                "defaultJurisdiction": "EU"
+            }"#,
+        );
+        let start = StartArgs {
+            config: path.to_str().unwrap().to_string(),
+            socket: None,
+            daemonize: false,
+            pid_file: String::new(),
+            log_level: None,
+        };
+        let config = DaemonConfig::load(&start).unwrap();
+        assert!(config.api_token.contains('.'));
+        assert_eq!(config.token_type(), "jwt");
+    }
+
+    #[test]
+    fn accepts_pat_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = write_config(
+            tmp.path(),
+            r#"{
+                "apiBaseUrl": "https://api.example.com",
+                "apiToken": "cveil_test123",
+                "defaultJurisdiction": "EU"
+            }"#,
+        );
+        let start = StartArgs {
+            config: path.to_str().unwrap().to_string(),
+            socket: None,
+            daemonize: false,
+            pid_file: String::new(),
+            log_level: None,
+        };
+        let config = DaemonConfig::load(&start).unwrap();
+        assert_eq!(config.token_type(), "personal-access-token");
+    }
+
+    #[test]
+    fn rejects_invalid_token_format() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = write_config(
+            tmp.path(),
+            r#"{
+                "apiBaseUrl": "https://api.example.com",
+                "apiToken": "some-random-string",
+                "defaultJurisdiction": "EU"
+            }"#,
+        );
+        let start = StartArgs {
+            config: path.to_str().unwrap().to_string(),
+            socket: None,
+            daemonize: false,
+            pid_file: String::new(),
+            log_level: None,
+        };
+        let err = DaemonConfig::load(&start).unwrap_err();
+        assert!(err.contains("apiToken"));
+    }
+
+    #[test]
     fn missing_config_errors() {
         let start = StartArgs {
             config: "/nonexistent/path.json".into(),
@@ -279,6 +370,17 @@ mod tests {
         };
         let err = DaemonConfig::load(&start).unwrap_err();
         assert!(err.contains("not found"));
+    }
+
+    #[test]
+    fn is_jwt_detects_jwt_format() {
+        assert!(super::is_jwt("a.b.c"));
+        assert!(super::is_jwt("eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1In0.sig"));
+        assert!(!super::is_jwt("cveil_test123"));
+        assert!(!super::is_jwt("no-dots-here"));
+        assert!(!super::is_jwt("one.dot"));
+        assert!(!super::is_jwt("too.many.dots.here"));
+        assert!(!super::is_jwt("..empty"));
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub async fn run_daemon(start: StartArgs) -> i32 {
         api = %config.api_base_url,
         jurisdiction = %config.default_jurisdiction,
         socket = %config.socket_path,
+        token_type = %config.token_type(),
         "Starting cveil daemon"
     );
 
