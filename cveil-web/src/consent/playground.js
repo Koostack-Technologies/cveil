@@ -374,13 +374,13 @@ function renderDecisions() {
             `<option value="${mt}" ${mt === effectiveMask ? 'selected' : ''}>${mt}</option>`
         ).join('');
 
-        return `<tr class="border-t border-gray-700/50">
-            <td class="px-3 py-2 font-mono text-xs text-gray-300">${esc(d.path)}</td>
+        return `<tr class="border-t border-gray-200">
+            <td class="px-3 py-2 font-mono text-xs text-gray-600">${esc(d.path)}</td>
             <td class="px-3 py-2">${statusBadge}</td>
-            <td class="px-3 py-2 text-xs text-gray-400">${esc(d.resolvedBy)}</td>
+            <td class="px-3 py-2 text-xs text-gray-500">${esc(d.resolvedBy)}</td>
             <td class="px-3 py-2">
                 <select id="pg-override-${CSS.escape(d.path)}" onchange="remask()"
-                    class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-300 focus:border-cv-500 focus:outline-none">
+                    class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700 focus:border-cv-500 focus:outline-none">
                     ${overrideOpts}
                 </select>
             </td>
@@ -462,6 +462,6 @@ function showPlaygroundMsg(text, isError) {
     const el = document.getElementById('playground-msg');
     if (!el) return;
     if (!text) { el.className = 'hidden'; el.textContent = ''; return; }
-    el.className = `text-xs px-3 py-2 rounded ${isError ? 'bg-red-900/30 text-red-400' : 'bg-gray-800 text-gray-400'}`;
+    el.className = `text-xs px-3 py-2 rounded ${isError ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`;
     el.textContent = text;
 }

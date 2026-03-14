@@ -34,6 +34,8 @@ public class SiteResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SiteResource.class);
     private static final String REALM = "cveil";
+    /** Cache-buster token — changes on every application restart / redeploy. */
+    private static final String BUILD_VERSION = Long.toHexString(System.currentTimeMillis());
 
     @Inject Template index;
 
@@ -381,7 +383,8 @@ public class SiteResource {
                 .data("tenantId", tenantId)
                 .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
-                .data("activeNav", "governance");
+                .data("activeNav", "governance")
+                .data("v", BUILD_VERSION);
     }
 
     @GET
@@ -416,7 +419,8 @@ public class SiteResource {
                 .data("tenantId", tenantId)
                 .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
-                .data("activeNav", "catalogue");
+                .data("activeNav", "catalogue")
+                .data("v", BUILD_VERSION);
     }
 
     @GET
@@ -450,7 +454,8 @@ public class SiteResource {
                 .data("tenantId", tenantId)
                 .data("roles", resolveRolesDisplay(payload))
                 .data("initial", initial)
-                .data("activeNav", "consent");
+                .data("activeNav", "consent")
+                .data("v", BUILD_VERSION);
     }
 
     @GET
