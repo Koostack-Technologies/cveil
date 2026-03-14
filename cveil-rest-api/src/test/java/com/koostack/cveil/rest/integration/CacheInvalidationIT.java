@@ -81,7 +81,7 @@ public class CacheInvalidationIT {
             } catch (Exception e) {
                 if (e.getMessage() != null && e.getMessage().contains("already exists")) {
                     // Tenant already exists — just login
-                    String email = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+                    String email = TENANT_ID.replace("_", "-") + "@cveil-test.com";
                     accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
                 } else {
                     throw e;
@@ -161,7 +161,7 @@ public class CacheInvalidationIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    {"entityName": "CiEntity", "description": "d"}
+                    {"entityName": "ci_entity", "description": "d"}
                     """)
                     .post("/api/v1/catalogue/entities")
                     .then()
@@ -180,7 +180,7 @@ public class CacheInvalidationIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    {"fieldName": "ci_field", "entityName": "CiEntity", "description": "d"}
+                    {"fieldName": "ci_field", "entityName": "ci_entity", "description": "d"}
                     """)
                     .post("/api/v1/catalogue/fields")
                     .then()
@@ -285,7 +285,7 @@ public class CacheInvalidationIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    {"fieldName": "ci_field", "entityName": "CiEntity", "categoryName": "CiCategory"}
+                    {"fieldName": "ci_field", "entityName": "ci_entity", "categoryName": "CiCategory"}
                     """)
                     .post("/api/v1/catalogue/fields/categories")
                     .then()
@@ -307,7 +307,7 @@ public class CacheInvalidationIT {
                     .body(
                             """
                     {"purposeName": "ci_purpose", "policyType": "field",
-                         "fieldName": "ci_field", "entityName": "CiEntity", "categoryName": "CiCategory"}
+                         "fieldName": "ci_field", "entityName": "ci_entity", "categoryName": "CiCategory"}
                     """)
                     .post("/api/v1/governance/purposes/policies")
                     .then()
@@ -344,7 +344,7 @@ public class CacheInvalidationIT {
                             """
                     {"subject": "ci-subject-1",
                      "scope": {"category": "CiCategory", "fieldName": "ci_field",
-                               "entityName": "CiEntity", "purposeName": "ci_purpose"}}
+                               "entityName": "ci_entity", "purposeName": "ci_purpose"}}
                     """)
                     .post("/api/v1/subjects/consent/grant")
                     .then()
@@ -365,7 +365,7 @@ public class CacheInvalidationIT {
                             """
                     {"subject": "ci-subject-1",
                      "scope": {"category": "CiCategory", "fieldName": "ci_field",
-                               "entityName": "CiEntity", "purposeName": "ci_purpose"}}
+                               "entityName": "ci_entity", "purposeName": "ci_purpose"}}
                     """)
                     .post("/api/v1/subjects/consent/revoke")
                     .then()
@@ -480,7 +480,7 @@ public class CacheInvalidationIT {
 
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("{\"entityName\": \"SseEntity\", \"description\": \"sse\"}")
+                    .body("{\"entityName\": \"sse_entity\", \"description\": \"sse\"}")
                     .post("/api/v1/catalogue/entities")
                     .then()
                     .statusCode(anyOf(is(200), is(201)));
@@ -512,7 +512,7 @@ public class CacheInvalidationIT {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
-                            "{\"fieldName\": \"sse_field\", \"entityName\": \"SseEntity\","
+                            "{\"fieldName\": \"sse_field\", \"entityName\": \"sse_entity\","
                                     + " \"description\": \"f\"}")
                     .post("/api/v1/catalogue/fields")
                     .then()
@@ -526,7 +526,7 @@ public class CacheInvalidationIT {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
-                            "{\"fieldName\": \"sse_field\", \"entityName\": \"SseEntity\","
+                            "{\"fieldName\": \"sse_field\", \"entityName\": \"sse_entity\","
                                     + " \"categoryName\": \"SseCategory\"}")
                     .post("/api/v1/catalogue/fields/categories")
                     .then()
@@ -544,7 +544,7 @@ public class CacheInvalidationIT {
                     .contentType(ContentType.JSON)
                     .body(
                             "{\"purposeName\": \"sse_purpose\", \"policyType\": \"field\","
-                                + " \"fieldName\": \"sse_field\", \"entityName\": \"SseEntity\","
+                                + " \"fieldName\": \"sse_field\", \"entityName\": \"sse_entity\","
                                 + " \"categoryName\": \"SseCategory\"}")
                     .post("/api/v1/governance/purposes/policies")
                     .then()
@@ -576,7 +576,7 @@ public class CacheInvalidationIT {
                             "{\"subject\": \"sse-subject\","
                                     + " \"scope\": {\"category\": \"SseCategory\","
                                     + " \"fieldName\": \"sse_field\","
-                                    + " \"entityName\": \"SseEntity\","
+                                    + " \"entityName\": \"sse_entity\","
                                     + " \"purposeName\": \"sse_purpose\"}}")
                     .post("/api/v1/subjects/consent/grant")
                     .then()

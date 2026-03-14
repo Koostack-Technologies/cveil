@@ -1,3 +1,5 @@
 package com.koostack.cveil.core.models;
 
-public record EntityView(long entityId, String entityName, String description) {}
+import java.util.UUID;
+
+public record EntityView(UUID entityId, String entityName, String description) {}

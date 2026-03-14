@@ -2,12 +2,13 @@ package com.koostack.cveil.core.models;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record SubjectConsentView(String subjectId, List<ConsentLedgerEntryView> entries) {
     public record ConsentLedgerEntryView(
-            long consentLedgerId,
+            UUID consentLedgerId,
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

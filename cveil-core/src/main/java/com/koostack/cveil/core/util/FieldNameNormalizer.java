@@ -51,7 +51,8 @@ public final class FieldNameNormalizer {
                 // Insert underscore before uppercase if:
                 //   1. Not at the start
                 //   2. Previous char was lowercase (camelCase boundary)
-                //   3. Or previous char was uppercase but next is lowercase (acronym end: "HTMLParser" → "html_parser")
+                //   3. Or previous char was uppercase but next is lowercase (acronym end:
+                // "HTMLParser" → "html_parser")
                 if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '_') {
                     boolean prevLower = Character.isLowerCase(prev);
                     boolean nextLower =

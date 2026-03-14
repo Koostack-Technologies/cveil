@@ -70,7 +70,7 @@ class DsarTenantIsolationIT {
             assertThat(accessTokenA).isNotBlank();
         } catch (Exception e) {
             if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                String email = TENANT_A.replace("_", "-") + "-admin@cveil-test.com";
+                String email = TENANT_A.replace("_", "-") + "@cveil-test.com";
                 accessTokenA = IntegrationTestSupport.loginUser(email, "Test1234!");
             } else {
                 throw e;
@@ -92,7 +92,7 @@ class DsarTenantIsolationIT {
             assertThat(accessTokenB).isNotBlank();
         } catch (Exception e) {
             if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                String email = TENANT_B.replace("_", "-") + "-admin@cveil-test.com";
+                String email = TENANT_B.replace("_", "-") + "@cveil-test.com";
                 accessTokenB = IntegrationTestSupport.loginUser(email, "Test1234!");
             } else {
                 throw e;
@@ -124,7 +124,7 @@ class DsarTenantIsolationIT {
                                                             "governance_probe",
                                                             "scope",
                                                             buildScope(
-                                                                    "email", "User", "marketing")))
+                                                                    "email", "user", "marketing")))
                                             .post("/api/v1/subjects/consent/grant")
                                             .then()
                                             .statusCode(200));
@@ -141,7 +141,7 @@ class DsarTenantIsolationIT {
     void testExportTenantIsolation() {
         String subject = "export_isolation_1";
 
-        grantConsent(accessTokenA, subject, "email", "User", "marketing");
+        grantConsent(accessTokenA, subject, "email", "user", "marketing");
 
         // Await async projection of consent ledger entry
         org.awaitility.Awaitility.await()
@@ -168,8 +168,8 @@ class DsarTenantIsolationIT {
     void testDeleteTenantIsolation() {
         String subject = "delete_isolation_1";
 
-        grantConsent(accessTokenA, subject, "phone", "User", "analytics");
-        grantConsent(accessTokenB, subject, "phone", "User", "analytics");
+        grantConsent(accessTokenA, subject, "phone", "user", "analytics");
+        grantConsent(accessTokenB, subject, "phone", "user", "analytics");
 
         // Await consent visible in both tenants before deleting
         org.awaitility.Awaitility.await()
@@ -202,7 +202,7 @@ class DsarTenantIsolationIT {
     void testDsarAuditPerTenant() {
         String subject = "audit_isolation_1";
 
-        grantConsent(accessTokenA, subject, "email", "User", "sales");
+        grantConsent(accessTokenA, subject, "email", "user", "sales");
         String confirmToken = "DELETE_" + subject;
         DsarDeletionReceipt receipt = deleteSubject(accessTokenA, subject, confirmToken);
 
@@ -221,7 +221,7 @@ class DsarTenantIsolationIT {
 
         given().header("Authorization", auth)
                 .contentType(ContentType.JSON)
-                .body(Map.of("entityName", "User", "description", "User entity"))
+                .body(Map.of("entityName", "user", "description", "User entity"))
                 .post("/api/v1/catalogue/entities")
                 .then()
                 .statusCode(anyOf(is(200), is(201)));
@@ -241,7 +241,7 @@ class DsarTenantIsolationIT {
                                     "fieldName",
                                     fieldName,
                                     "entityName",
-                                    "User",
+                                    "user",
                                     "description",
                                     fieldName + " field"))
                     .post("/api/v1/catalogue/fields")
@@ -257,7 +257,7 @@ class DsarTenantIsolationIT {
                                     "fieldName",
                                     fieldName,
                                     "entityName",
-                                    "User",
+                                    "user",
                                     "categoryName",
                                     "PII"))
                     .post("/api/v1/catalogue/fields/categories")
@@ -303,7 +303,7 @@ class DsarTenantIsolationIT {
                                         "purposeName", purpose,
                                         "policyType", "field",
                                         "fieldName", fieldName,
-                                        "entityName", "User",
+                                        "entityName", "user",
                                         "categoryName", "PII"))
                         .post("/api/v1/governance/purposes/policies")
                         .then()

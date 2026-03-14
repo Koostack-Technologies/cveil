@@ -269,24 +269,59 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
     // -----------------------------------------------------------------------
 
     /**
+     * Maximum number of attempts to resolve tenant Redis ACL credentials before giving up. This
+     * handles the race condition where tenant events arrive at projections before the
+     * REDIS_PROVISIONED event has been projected to the platform_core.tenant table.
+     */
+    private static final int CREDENTIAL_LOOKUP_MAX_ATTEMPTS = 30;
+
+    /** Interval between credential lookup retry attempts. */
+    private static final long CREDENTIAL_LOOKUP_RETRY_MS = 1_000;
+
+    /**
      * Creates a new {@link JedisPooled} for the given tenant, authenticated with the tenant's Redis
      * ACL credentials.
+     *
+     * <p>Because tenant events may arrive at projections before the {@code REDIS_PROVISIONED} event
+     * has been projected (eventual consistency), this method retries the credential lookup with
+     * backoff before giving up.
      *
      * <p>This method is called at most once per tenant via {@link
      * ConcurrentHashMap#computeIfAbsent}.
      *
      * @param tenantId the tenant identifier
      * @return a connected, authenticated {@link JedisPooled}
-     * @throws IllegalStateException if credentials cannot be resolved
+     * @throws IllegalStateException if credentials cannot be resolved after all retries
      */
     private JedisPooled createTenantPool(String tenantId) {
         TenantRedisCredentials credentials = credentialLookup.lookup(tenantId);
 
         if (credentials == null) {
+            log.info(
+                    "Redis ACL credentials not yet available for tenant '{}' — "
+                            + "waiting for REDIS_PROVISIONED projection (up to {}s)",
+                    tenantId,
+                    CREDENTIAL_LOOKUP_MAX_ATTEMPTS * CREDENTIAL_LOOKUP_RETRY_MS / 1_000);
+            for (int attempt = 1;
+                    attempt < CREDENTIAL_LOOKUP_MAX_ATTEMPTS && credentials == null;
+                    attempt++) {
+                try {
+                    Thread.sleep(CREDENTIAL_LOOKUP_RETRY_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                credentials = credentialLookup.lookup(tenantId);
+            }
+        }
+
+        if (credentials == null) {
             throw new IllegalStateException(
                     "No Redis ACL credentials found for tenant '"
                             + tenantId
-                            + "'. The tenant may have been provisioned before per-tenant "
+                            + "' after "
+                            + CREDENTIAL_LOOKUP_MAX_ATTEMPTS
+                            + " attempts. The tenant may have been provisioned before per-tenant "
                             + "Redis ACL isolation was enabled (redis_acl_password column "
                             + "is NULL). Run TenantManager.reprovisionRedisAcl() or "
                             + "manually set the credentials for this tenant.");

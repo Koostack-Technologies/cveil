@@ -8,6 +8,7 @@ import com.koostack.cveil.plugin.consent.jooq.generated.tables.pojos.FieldCatego
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jooq.DSLContext;
 
 /**
@@ -39,12 +40,12 @@ public class FieldCategoryRepository {
     /**
      * Returns every category assignment for the given field.
      *
-     * @param fieldId the field identifier
+     * @param fieldUuid the field identifier
      * @return all join rows for that field, possibly empty
      */
-    public List<FieldCategory> findByField(Long fieldId) {
+    public List<FieldCategory> findByField(UUID fieldUuid) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
                 .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(FieldCategory.class);
     }
@@ -52,12 +53,12 @@ public class FieldCategoryRepository {
     /**
      * Returns every field assignment for the given category.
      *
-     * @param categoryId the category identifier
+     * @param categoryUuid the category identifier
      * @return all join rows for that category, possibly empty
      */
-    public List<FieldCategory> findByCategory(Long categoryId) {
+    public List<FieldCategory> findByCategory(UUID categoryUuid) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .where(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
                 .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchInto(FieldCategory.class);
     }
@@ -65,14 +66,14 @@ public class FieldCategoryRepository {
     /**
      * Looks up the specific link between a field and a category.
      *
-     * @param fieldId the field identifier
-     * @param categoryId the category identifier
+     * @param fieldUuid the field identifier
+     * @param categoryUuid the category identifier
      * @return the matching join row, or empty if the link does not exist
      */
-    public Optional<FieldCategory> findByFieldAndCategory(Long fieldId, Long categoryId) {
+    public Optional<FieldCategory> findByFieldAndCategory(UUID fieldUuid, UUID categoryUuid) {
         return dsl.selectFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
                 .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                 .fetchOptionalInto(FieldCategory.class);
     }
@@ -85,7 +86,7 @@ public class FieldCategoryRepository {
     public List<FieldCategory> findAll() {
         return dsl.selectFrom(FIELD_CATEGORY)
                 .where(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
-                .orderBy(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
+                .orderBy(FIELD_CATEGORY.FIELD_UUID, FIELD_CATEGORY.CATEGORY_UUID)
                 .fetchInto(FieldCategory.class);
     }
 
@@ -98,21 +99,25 @@ public class FieldCategoryRepository {
      *
      * <p>Uses an {@code INSERT ... ON CONFLICT DO NOTHING} so the call is safely idempotent.
      *
-     * @param fieldId the field to link
-     * @param categoryId the category to link
+     * @param fieldUuid the field to link
+     * @param categoryUuid the category to link
      * @param actor the identity performing the operation (may be {@code null})
      */
-    public void link(Long fieldId, Long categoryId, String actor) {
+    public void link(UUID fieldUuid, UUID categoryUuid, String actor) {
         LocalDateTime now = LocalDateTime.now();
 
         dsl.insertInto(FIELD_CATEGORY)
-                .set(FIELD_CATEGORY.FIELD_ID, fieldId)
-                .set(FIELD_CATEGORY.CATEGORY_ID, categoryId)
+                .set(FIELD_CATEGORY.TENANT_ID, TenantContext.require())
+                .set(FIELD_CATEGORY.FIELD_UUID, fieldUuid)
+                .set(FIELD_CATEGORY.CATEGORY_UUID, categoryUuid)
                 .set(FIELD_CATEGORY.CREATED_AT, now)
                 .set(FIELD_CATEGORY.CREATED_BY, actor)
                 .set(FIELD_CATEGORY.UPDATED_AT, now)
                 .set(FIELD_CATEGORY.UPDATED_BY, actor)
-                .onConflict(FIELD_CATEGORY.FIELD_ID, FIELD_CATEGORY.CATEGORY_ID)
+                .onConflict(
+                        FIELD_CATEGORY.TENANT_ID,
+                        FIELD_CATEGORY.FIELD_UUID,
+                        FIELD_CATEGORY.CATEGORY_UUID)
                 .doNothing()
                 .execute();
     }
@@ -122,35 +127,37 @@ public class FieldCategoryRepository {
      *
      * <p>If the link does not exist this is a no-op.
      *
-     * @param fieldId the field to unlink
-     * @param categoryId the category to unlink
+     * @param fieldUuid the field to unlink
+     * @param categoryUuid the category to unlink
      */
-    public void unlink(Long fieldId, Long categoryId) {
+    public void unlink(UUID fieldUuid, UUID categoryUuid) {
         dsl.deleteFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
                 .execute();
     }
 
     /**
      * Removes all category assignments for the given field.
      *
-     * @param fieldId the field whose links should be removed
+     * @param fieldUuid the field whose links should be removed
      * @return the number of rows deleted
      */
-    public int unlinkAllByField(Long fieldId) {
-        return dsl.deleteFrom(FIELD_CATEGORY).where(FIELD_CATEGORY.FIELD_ID.eq(fieldId)).execute();
+    public int unlinkAllByField(UUID fieldUuid) {
+        return dsl.deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
+                .execute();
     }
 
     /**
      * Removes all field assignments for the given category.
      *
-     * @param categoryId the category whose links should be removed
+     * @param categoryUuid the category whose links should be removed
      * @return the number of rows deleted
      */
-    public int unlinkAllByCategory(Long categoryId) {
+    public int unlinkAllByCategory(UUID categoryUuid) {
         return dsl.deleteFrom(FIELD_CATEGORY)
-                .where(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
+                .where(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
                 .execute();
     }
 }

@@ -60,7 +60,9 @@ public class PlatformIamResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
-    @Inject @Named("consentDispatcher") CommandDispatcher consentDispatcher;
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
 
     @Inject CveilRequestHolder requestHolder;
 
@@ -101,6 +103,7 @@ public class PlatformIamResource {
                         request.username(),
                         request.email(),
                         request.fullName(),
+                        request.displayName(),
                         Set.of(), // KC roles empty — DB-backed roles are authoritative
                         request.temporaryPassword(),
                         request.password(),

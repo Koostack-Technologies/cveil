@@ -30,7 +30,7 @@ public class GetJurisdictionQueryActuator
                 .map(
                         j ->
                                 new JurisdictionView(
-                                        j.getJurisdictionId(),
+                                        j.getJurisdictionUuid(),
                                         j.getJurisdictionName(),
                                         j.getDescription()));
     }

@@ -1,9 +1,10 @@
 package com.koostack.cveil.core.models;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public record SubjectView(
-        long subjectId,
+        UUID subjectId,
         String subjectName,
         String description,
         Instant createdAt,

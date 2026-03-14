@@ -9,7 +9,6 @@ import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
 import com.koostack.cveil.core.tenant.consent.aggregates.FieldAggregate;
 import com.koostack.cveil.core.tenant.consent.events.FieldRegisteredEvent;
-import com.koostack.cveil.core.util.FieldNameNormalizer;
 import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;

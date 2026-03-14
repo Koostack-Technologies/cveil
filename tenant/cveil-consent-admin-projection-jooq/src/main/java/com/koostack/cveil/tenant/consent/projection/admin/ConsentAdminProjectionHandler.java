@@ -8,14 +8,17 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.koostack.cveil.core.event.models.TenantEvent;
 import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
+import com.koostack.cveil.core.tenant.consent.aggregates.*;
 import com.koostack.cveil.plugin.consent.jooq.generated.enums.ConsentAction;
 import com.koostack.cveil.plugin.consent.jooq.generated.enums.MaskingType;
 import com.koostack.cveil.plugin.consent.jooq.generated.enums.PolicyType;
 import com.koostack.cveil.plugin.event.jooq.StreamEventHandler;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.UUID;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +30,10 @@ import org.slf4j.LoggerFactory;
  * <p>Handles events for all 8 aggregates: Entity, Category, Field, Purpose, Regulation,
  * Jurisdiction, SubjectConsent, and DSAR. All writes are idempotent (upsert or delete) and routed
  * to the correct per-tenant schema via {@link TenantContext}.
+ *
+ * <p>All FK references use deterministic UUIDs derived from aggregate {@code deriveId()} methods,
+ * enabling pure writes with zero lookups. Consent ledger entries use the policy UUID carried
+ * directly on the event, also avoiding any lookups.
  */
 public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
@@ -49,6 +56,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
      * lifetime without manual cleanup.
      */
     private static final ScopedValue<DSLContext> TX_DSL = ScopedValue.newInstance();
+
+    /**
+     * Scoped stream message ID — bound per-event so handler methods can derive deterministic UUIDs
+     * for projection rows that don't have a domain aggregate key (e.g. consent_ledger,
+     * dsar_audit_log). Using the stream messageId guarantees replay-safe, idempotent UUIDs.
+     */
+    private static final ScopedValue<String> EVENT_MSG_ID = ScopedValue.newInstance();
 
     public ConsentAdminProjectionHandler(DSLContext dsl) {
         this.dsl = dsl;
@@ -81,6 +95,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                         dsl.transaction(
                                 txConfig -> {
                                     ScopedValue.where(TX_DSL, txConfig.dsl())
+                                            .where(EVENT_MSG_ID, messageId)
                                             .run(() -> dispatch(eventType, node));
                                 });
                     } catch (Exception e) {
@@ -98,6 +113,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     /** Returns the transactional DSL if inside a transaction, otherwise the root DSL. */
     private DSLContext activeDsl() {
         return TX_DSL.isBound() ? TX_DSL.get() : dsl;
+    }
+
+    /** Returns the current event's stream message ID (bound per-event via ScopedValue). */
+    private String eventMessageId() {
+        return EVENT_MSG_ID.get();
+    }
+
+    /** Derives a deterministic UUID v3 (MD5) from the given key string. */
+    private static UUID deriveUuid(String key) {
+        return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));
     }
 
     private void dispatch(String eventType, JsonNode node) {
@@ -170,9 +195,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID entityUuid = EntityAggregate.deriveId(entityName);
 
         activeDsl()
                 .insertInto(ENTITY)
+                .set(ENTITY.ENTITY_UUID, entityUuid)
                 .set(ENTITY.TENANT_ID, tid)
                 .set(ENTITY.ENTITY_NAME, entityName)
                 .set(ENTITY.DESCRIPTION, description)
@@ -192,38 +219,31 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleEntityRemoved(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String tid = TenantContext.require();
+        UUID entityUuid = EntityAggregate.deriveId(entityName);
 
-        Long entityId = resolveEntityId(entityName);
-        if (entityId != null) {
-            // Remove field_category links for all fields of this entity
-            activeDsl()
-                    .deleteFrom(FIELD_CATEGORY)
-                    .where(
-                            FIELD_CATEGORY
-                                    .TENANT_ID
-                                    .eq(tid)
-                                    .and(
-                                            FIELD_CATEGORY.FIELD_ID.in(
-                                                    activeDsl()
-                                                            .select(FIELD.FIELD_ID)
-                                                            .from(FIELD)
-                                                            .where(
-                                                                    FIELD.ENTITY_ID
-                                                                            .eq(entityId)
-                                                                            .and(
-                                                                                    FIELD.TENANT_ID
-                                                                                            .eq(
-                                                                                                    tid))))))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(FIELD)
-                    .where(FIELD.ENTITY_ID.eq(entityId).and(FIELD.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        // Remove field_category links for all fields of this entity
+        activeDsl()
+                .deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.TENANT_ID.eq(tid))
+                .and(
+                        FIELD_CATEGORY.FIELD_UUID.in(
+                                activeDsl()
+                                        .select(FIELD.FIELD_UUID)
+                                        .from(FIELD)
+                                        .where(FIELD.ENTITY_UUID.eq(entityUuid))
+                                        .and(FIELD.TENANT_ID.eq(tid))))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(FIELD)
+                .where(FIELD.ENTITY_UUID.eq(entityUuid))
+                .and(FIELD.TENANT_ID.eq(tid))
+                .execute();
 
         activeDsl()
                 .deleteFrom(ENTITY)
-                .where(ENTITY.ENTITY_NAME.eq(entityName).and(ENTITY.TENANT_ID.eq(tid)))
+                .where(ENTITY.ENTITY_UUID.eq(entityUuid))
+                .and(ENTITY.TENANT_ID.eq(tid))
                 .execute();
     }
 
@@ -236,9 +256,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
 
         activeDsl()
                 .insertInto(CATEGORY)
+                .set(CATEGORY.CATEGORY_UUID, categoryUuid)
                 .set(CATEGORY.TENANT_ID, tid)
                 .set(CATEGORY.CATEGORY_NAME, categoryName)
                 .set(CATEGORY.DESCRIPTION, description)
@@ -258,22 +280,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleCategoryRemoved(JsonNode node) {
         String categoryName = node.get("categoryName").asText();
         String tid = TenantContext.require();
+        UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
 
-        Long categoryId = resolveCategoryId(categoryName);
-        if (categoryId != null) {
-            activeDsl()
-                    .deleteFrom(FIELD_CATEGORY)
-                    .where(
-                            FIELD_CATEGORY
-                                    .CATEGORY_ID
-                                    .eq(categoryId)
-                                    .and(FIELD_CATEGORY.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(tid))
+                .execute();
 
         activeDsl()
                 .deleteFrom(CATEGORY)
-                .where(CATEGORY.CATEGORY_NAME.eq(categoryName).and(CATEGORY.TENANT_ID.eq(tid)))
+                .where(CATEGORY.CATEGORY_UUID.eq(categoryUuid))
+                .and(CATEGORY.TENANT_ID.eq(tid))
                 .execute();
     }
 
@@ -286,9 +304,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID jurisdictionUuid = JurisdictionAggregate.deriveId(jurisdictionName);
 
         activeDsl()
                 .insertInto(JURISDICTION)
+                .set(JURISDICTION.JURISDICTION_UUID, jurisdictionUuid)
                 .set(JURISDICTION.TENANT_ID, tid)
                 .set(JURISDICTION.JURISDICTION_NAME, jurisdictionName)
                 .set(JURISDICTION.DESCRIPTION, description)
@@ -308,26 +328,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleJurisdictionRemoved(JsonNode node) {
         String jurisdictionName = node.get("jurisdictionName").asText();
         String tid = TenantContext.require();
+        UUID jurisdictionUuid = JurisdictionAggregate.deriveId(jurisdictionName);
 
-        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
-        if (jurisdictionId != null) {
-            activeDsl()
-                    .deleteFrom(REGULATION_JURISDICTION)
-                    .where(
-                            REGULATION_JURISDICTION
-                                    .JURISDICTION_ID
-                                    .eq(jurisdictionId)
-                                    .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.JURISDICTION_UUID.eq(jurisdictionUuid))
+                .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid))
+                .execute();
 
         activeDsl()
                 .deleteFrom(JURISDICTION)
-                .where(
-                        JURISDICTION
-                                .JURISDICTION_NAME
-                                .eq(jurisdictionName)
-                                .and(JURISDICTION.TENANT_ID.eq(tid)))
+                .where(JURISDICTION.JURISDICTION_UUID.eq(jurisdictionUuid))
+                .and(JURISDICTION.TENANT_ID.eq(tid))
                 .execute();
     }
 
@@ -342,10 +354,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String entityDescription = textOrNull(node, "entityDescription");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID entityUuid = EntityAggregate.deriveId(entityName);
+        UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
 
         // Upsert entity (auto-create if needed)
         activeDsl()
                 .insertInto(ENTITY)
+                .set(ENTITY.ENTITY_UUID, entityUuid)
                 .set(ENTITY.TENANT_ID, tid)
                 .set(ENTITY.ENTITY_NAME, entityName)
                 .set(ENTITY.DESCRIPTION, entityDescription)
@@ -356,23 +371,17 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(ENTITY.UPDATED_AT, now)
                 .execute();
 
-        Long entityId = resolveEntityId(entityName);
-        if (entityId == null) {
-            log.warn(
-                    "Entity '{}' not found after upsert — skipping field registration", entityName);
-            return;
-        }
-
-        // Upsert field
+        // Upsert field with direct UUID FK to entity
         activeDsl()
                 .insertInto(FIELD)
+                .set(FIELD.FIELD_UUID, fieldUuid)
                 .set(FIELD.TENANT_ID, tid)
                 .set(FIELD.FIELD_NAME, fieldName)
-                .set(FIELD.ENTITY_ID, entityId)
+                .set(FIELD.ENTITY_UUID, entityUuid)
                 .set(FIELD.DESCRIPTION, description)
                 .set(FIELD.CREATED_AT, now)
                 .set(FIELD.UPDATED_AT, now)
-                .onConflict(FIELD.TENANT_ID, FIELD.FIELD_NAME, FIELD.ENTITY_ID)
+                .onConflict(FIELD.TENANT_ID, FIELD.FIELD_NAME, FIELD.ENTITY_UUID)
                 .doUpdate()
                 .set(FIELD.DESCRIPTION, description)
                 .set(FIELD.UPDATED_AT, now)
@@ -385,64 +394,53 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
 
-        Long entityId = resolveEntityId(entityName);
-        if (entityId != null) {
-            activeDsl()
-                    .update(FIELD)
-                    .set(FIELD.DESCRIPTION, description)
-                    .set(FIELD.UPDATED_AT, now)
-                    .where(FIELD.FIELD_NAME.eq(fieldName))
-                    .and(FIELD.ENTITY_ID.eq(entityId))
-                    .and(FIELD.TENANT_ID.eq(tid))
-                    .execute();
-        }
+        activeDsl()
+                .update(FIELD)
+                .set(FIELD.DESCRIPTION, description)
+                .set(FIELD.UPDATED_AT, now)
+                .where(FIELD.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD.TENANT_ID.eq(tid))
+                .execute();
     }
 
     private void handleFieldRemoved(JsonNode node) {
         String entityName = node.get("entityName").asText();
         String fieldName = node.get("fieldName").asText();
         String tid = TenantContext.require();
+        UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
 
-        Long fieldId = resolveFieldId(entityName, fieldName);
-        if (fieldId != null) {
-            // FK order: consent_ledger → policy → field_category → field
-            activeDsl()
-                    .deleteFrom(CONSENT_LEDGER)
-                    .where(
-                            CONSENT_LEDGER
-                                    .TENANT_ID
-                                    .eq(tid)
-                                    .and(
-                                            CONSENT_LEDGER.POLICY_ID.in(
-                                                    activeDsl()
-                                                            .select(POLICY.POLICY_ID)
-                                                            .from(POLICY)
-                                                            .where(
-                                                                    POLICY.FIELD_ID
-                                                                            .eq(fieldId)
-                                                                            .and(
-                                                                                    POLICY.TENANT_ID
-                                                                                            .eq(
-                                                                                                    tid))))))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(POLICY)
-                    .where(POLICY.FIELD_ID.eq(fieldId).and(POLICY.TENANT_ID.eq(tid)))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(FIELD_CATEGORY)
-                    .where(
-                            FIELD_CATEGORY
-                                    .FIELD_ID
-                                    .eq(fieldId)
-                                    .and(FIELD_CATEGORY.TENANT_ID.eq(tid)))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(FIELD)
-                    .where(FIELD.FIELD_ID.eq(fieldId).and(FIELD.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        // FK order: consent_ledger → policy → field_category → field
+        activeDsl()
+                .deleteFrom(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.TENANT_ID.eq(tid))
+                .and(
+                        CONSENT_LEDGER.POLICY_UUID.in(
+                                activeDsl()
+                                        .select(POLICY.POLICY_UUID)
+                                        .from(POLICY)
+                                        .where(POLICY.FIELD_UUID.eq(fieldUuid))
+                                        .and(POLICY.TENANT_ID.eq(tid))))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(POLICY)
+                .where(POLICY.FIELD_UUID.eq(fieldUuid))
+                .and(POLICY.TENANT_ID.eq(tid))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(tid))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(FIELD)
+                .where(FIELD.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD.TENANT_ID.eq(tid))
+                .execute();
     }
 
     private void handleFieldCategoryAssigned(JsonNode node) {
@@ -452,10 +450,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String categoryDescription = textOrNull(node, "categoryDescription");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
+        UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
 
         // Auto-create category if needed
         activeDsl()
                 .insertInto(CATEGORY)
+                .set(CATEGORY.CATEGORY_UUID, categoryUuid)
                 .set(CATEGORY.TENANT_ID, tid)
                 .set(CATEGORY.CATEGORY_NAME, categoryName)
                 .set(CATEGORY.DESCRIPTION, categoryDescription)
@@ -466,29 +467,21 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(CATEGORY.UPDATED_AT, now)
                 .execute();
 
-        Long fieldId = resolveFieldId(entityName, fieldName);
-        Long categoryId = resolveCategoryId(categoryName);
-
-        if (fieldId == null || categoryId == null) {
-            log.warn(
-                    "Cannot assign category '{}' to field '{}/{}' — not found",
-                    categoryName,
-                    entityName,
-                    fieldName);
-            return;
-        }
-
+        // Direct insert with UUID FKs
         activeDsl()
                 .insertInto(FIELD_CATEGORY)
+                .set(
+                        FIELD_CATEGORY.FIELD_CATEGORY_UUID,
+                        deriveUuid("consent-field-category:" + fieldUuid + ":" + categoryUuid))
                 .set(FIELD_CATEGORY.TENANT_ID, tid)
-                .set(FIELD_CATEGORY.FIELD_ID, fieldId)
-                .set(FIELD_CATEGORY.CATEGORY_ID, categoryId)
+                .set(FIELD_CATEGORY.FIELD_UUID, fieldUuid)
+                .set(FIELD_CATEGORY.CATEGORY_UUID, categoryUuid)
                 .set(FIELD_CATEGORY.CREATED_AT, now)
                 .set(FIELD_CATEGORY.UPDATED_AT, now)
                 .onConflict(
                         FIELD_CATEGORY.TENANT_ID,
-                        FIELD_CATEGORY.FIELD_ID,
-                        FIELD_CATEGORY.CATEGORY_ID)
+                        FIELD_CATEGORY.FIELD_UUID,
+                        FIELD_CATEGORY.CATEGORY_UUID)
                 .doNothing()
                 .execute();
     }
@@ -498,18 +491,15 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String fieldName = node.get("fieldName").asText();
         String categoryName = node.get("categoryName").asText();
         String tid = TenantContext.require();
+        UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
+        UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
 
-        Long fieldId = resolveFieldId(entityName, fieldName);
-        Long categoryId = resolveCategoryId(categoryName);
-
-        if (fieldId != null && categoryId != null) {
-            activeDsl()
-                    .deleteFrom(FIELD_CATEGORY)
-                    .where(FIELD_CATEGORY.FIELD_ID.eq(fieldId))
-                    .and(FIELD_CATEGORY.CATEGORY_ID.eq(categoryId))
-                    .and(FIELD_CATEGORY.TENANT_ID.eq(tid))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(FIELD_CATEGORY)
+                .where(FIELD_CATEGORY.FIELD_UUID.eq(fieldUuid))
+                .and(FIELD_CATEGORY.CATEGORY_UUID.eq(categoryUuid))
+                .and(FIELD_CATEGORY.TENANT_ID.eq(tid))
+                .execute();
     }
 
     // -----------------------------------------------------------------------
@@ -521,9 +511,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
 
         activeDsl()
                 .insertInto(PURPOSE)
+                .set(PURPOSE.PURPOSE_UUID, purposeUuid)
                 .set(PURPOSE.TENANT_ID, tid)
                 .set(PURPOSE.PURPOSE_NAME, purposeName)
                 .set(PURPOSE.DESCRIPTION, description)
@@ -543,46 +535,37 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handlePurposeRemoved(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
         String tid = TenantContext.require();
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
 
-        Long purposeId = resolvePurposeId(purposeName);
-        if (purposeId != null) {
-            // FK order: consent_ledger → policy → purpose_regulation → purpose
-            activeDsl()
-                    .deleteFrom(CONSENT_LEDGER)
-                    .where(
-                            CONSENT_LEDGER
-                                    .TENANT_ID
-                                    .eq(tid)
-                                    .and(
-                                            CONSENT_LEDGER.POLICY_ID.in(
-                                                    activeDsl()
-                                                            .select(POLICY.POLICY_ID)
-                                                            .from(POLICY)
-                                                            .where(
-                                                                    POLICY.PURPOSE_ID
-                                                                            .eq(purposeId)
-                                                                            .and(
-                                                                                    POLICY.TENANT_ID
-                                                                                            .eq(
-                                                                                                    tid))))))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(POLICY)
-                    .where(POLICY.PURPOSE_ID.eq(purposeId).and(POLICY.TENANT_ID.eq(tid)))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(PURPOSE_REGULATION)
-                    .where(
-                            PURPOSE_REGULATION
-                                    .PURPOSE_ID
-                                    .eq(purposeId)
-                                    .and(PURPOSE_REGULATION.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        // FK order: consent_ledger → policy → purpose_regulation → purpose
+        activeDsl()
+                .deleteFrom(CONSENT_LEDGER)
+                .where(CONSENT_LEDGER.TENANT_ID.eq(tid))
+                .and(
+                        CONSENT_LEDGER.POLICY_UUID.in(
+                                activeDsl()
+                                        .select(POLICY.POLICY_UUID)
+                                        .from(POLICY)
+                                        .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                                        .and(POLICY.TENANT_ID.eq(tid))))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(POLICY)
+                .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                .and(POLICY.TENANT_ID.eq(tid))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(PURPOSE_REGULATION)
+                .where(PURPOSE_REGULATION.PURPOSE_UUID.eq(purposeUuid))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(tid))
+                .execute();
 
         activeDsl()
                 .deleteFrom(PURPOSE)
-                .where(PURPOSE.PURPOSE_NAME.eq(purposeName).and(PURPOSE.TENANT_ID.eq(tid)))
+                .where(PURPOSE.PURPOSE_UUID.eq(purposeUuid))
+                .and(PURPOSE.TENANT_ID.eq(tid))
                 .execute();
     }
 
@@ -599,23 +582,18 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
             onDenied = "REDACT_ALL";
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
-
-        Long purposeId = resolvePurposeId(purposeName);
-        Long regulationId = resolveRegulationId(regulationName);
-
-        if (purposeId == null || regulationId == null) {
-            log.warn(
-                    "Cannot link purpose '{}' to regulation '{}' — not found",
-                    purposeName,
-                    regulationName);
-            return;
-        }
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
 
         activeDsl()
                 .insertInto(PURPOSE_REGULATION)
+                .set(
+                        PURPOSE_REGULATION.PURPOSE_REGULATION_UUID,
+                        deriveUuid(
+                                "consent-purpose-regulation:" + purposeUuid + ":" + regulationUuid))
                 .set(PURPOSE_REGULATION.TENANT_ID, tid)
-                .set(PURPOSE_REGULATION.PURPOSE_ID, purposeId)
-                .set(PURPOSE_REGULATION.REGULATION_ID, regulationId)
+                .set(PURPOSE_REGULATION.PURPOSE_UUID, purposeUuid)
+                .set(PURPOSE_REGULATION.REGULATION_UUID, regulationUuid)
                 .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
                 .set(PURPOSE_REGULATION.ON_GRANTED, MaskingType.lookupLiteral(onGranted))
                 .set(PURPOSE_REGULATION.ON_DENIED, MaskingType.lookupLiteral(onDenied))
@@ -623,8 +601,8 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(PURPOSE_REGULATION.UPDATED_AT, now)
                 .onConflict(
                         PURPOSE_REGULATION.TENANT_ID,
-                        PURPOSE_REGULATION.PURPOSE_ID,
-                        PURPOSE_REGULATION.REGULATION_ID)
+                        PURPOSE_REGULATION.PURPOSE_UUID,
+                        PURPOSE_REGULATION.REGULATION_UUID)
                 .doUpdate()
                 .set(PURPOSE_REGULATION.LAWFUL_BASIS, lawfulBasis)
                 .set(PURPOSE_REGULATION.ON_GRANTED, MaskingType.lookupLiteral(onGranted))
@@ -636,18 +614,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handlePurposeRegulationUnlinked(JsonNode node) {
         String purposeName = node.get("purposeName").asText();
         String regulationName = node.get("regulationName").asText();
+        String tid = TenantContext.require();
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
 
-        Long purposeId = resolvePurposeId(purposeName);
-        Long regulationId = resolveRegulationId(regulationName);
-
-        if (purposeId != null && regulationId != null) {
-            activeDsl()
-                    .deleteFrom(PURPOSE_REGULATION)
-                    .where(PURPOSE_REGULATION.PURPOSE_ID.eq(purposeId))
-                    .and(PURPOSE_REGULATION.REGULATION_ID.eq(regulationId))
-                    .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(PURPOSE_REGULATION)
+                .where(PURPOSE_REGULATION.PURPOSE_UUID.eq(purposeUuid))
+                .and(PURPOSE_REGULATION.REGULATION_UUID.eq(regulationUuid))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(tid))
+                .execute();
     }
 
     private void handlePurposePolicyAdded(JsonNode node) {
@@ -658,49 +634,46 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String categoryName = textOrNull(node, "categoryName");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
-
-        Long purposeId = resolvePurposeId(purposeName);
-        if (purposeId == null) {
-            log.warn("Purpose '{}' not found — cannot add policy", purposeName);
-            return;
-        }
-
-        Long fieldId = null;
-        Long categoryId = null;
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
 
         if ("FIELD".equals(policyType)) {
-            fieldId = resolveFieldId(entityName, fieldName);
-            if (fieldId == null) {
-                log.warn("Field '{}/{}' not found — cannot add policy", entityName, fieldName);
-                return;
-            }
+            UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
             activeDsl()
                     .insertInto(POLICY)
+                    .set(
+                            POLICY.POLICY_UUID,
+                            deriveUuid(
+                                    "consent-policy:"
+                                            + purposeName
+                                            + ":FIELD:"
+                                            + entityName
+                                            + ":"
+                                            + fieldName))
                     .set(POLICY.TENANT_ID, tid)
-                    .set(POLICY.PURPOSE_ID, purposeId)
-                    .set(POLICY.FIELD_ID, fieldId)
+                    .set(POLICY.PURPOSE_UUID, purposeUuid)
+                    .set(POLICY.FIELD_UUID, fieldUuid)
                     .set(POLICY.POLICY_TYPE, PolicyType.lookupLiteral(policyType))
                     .set(POLICY.CREATED_AT, now)
                     .set(POLICY.UPDATED_AT, now)
-                    .onConflict(POLICY.TENANT_ID, POLICY.PURPOSE_ID, POLICY.FIELD_ID)
+                    .onConflict(POLICY.TENANT_ID, POLICY.PURPOSE_UUID, POLICY.FIELD_UUID)
                     .doUpdate()
                     .set(POLICY.UPDATED_AT, now)
                     .execute();
         } else if ("CATEGORY".equals(policyType)) {
-            categoryId = resolveCategoryId(categoryName);
-            if (categoryId == null) {
-                log.warn("Category '{}' not found — cannot add policy", categoryName);
-                return;
-            }
+            UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
             activeDsl()
                     .insertInto(POLICY)
+                    .set(
+                            POLICY.POLICY_UUID,
+                            deriveUuid(
+                                    "consent-policy:" + purposeName + ":CATEGORY:" + categoryName))
                     .set(POLICY.TENANT_ID, tid)
-                    .set(POLICY.PURPOSE_ID, purposeId)
-                    .set(POLICY.CATEGORY_ID, categoryId)
+                    .set(POLICY.PURPOSE_UUID, purposeUuid)
+                    .set(POLICY.CATEGORY_UUID, categoryUuid)
                     .set(POLICY.POLICY_TYPE, PolicyType.lookupLiteral(policyType))
                     .set(POLICY.CREATED_AT, now)
                     .set(POLICY.UPDATED_AT, now)
-                    .onConflict(POLICY.TENANT_ID, POLICY.PURPOSE_ID, POLICY.CATEGORY_ID)
+                    .onConflict(POLICY.TENANT_ID, POLICY.PURPOSE_UUID, POLICY.CATEGORY_UUID)
                     .doUpdate()
                     .set(POLICY.UPDATED_AT, now)
                     .execute();
@@ -717,81 +690,53 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String entityName = textOrNull(node, "entityName");
         String categoryName = textOrNull(node, "categoryName");
         String tid = TenantContext.require();
-
-        Long purposeId = resolvePurposeId(purposeName);
-        if (purposeId == null) return;
+        UUID purposeUuid = PurposeAggregate.deriveId(purposeName);
 
         if ("FIELD".equals(policyType)) {
-            Long fieldId = resolveFieldId(entityName, fieldName);
-            if (fieldId != null) {
-                // Delete consent_ledger entries referencing this policy first
-                activeDsl()
-                        .deleteFrom(CONSENT_LEDGER)
-                        .where(
-                                CONSENT_LEDGER
-                                        .TENANT_ID
-                                        .eq(tid)
-                                        .and(
-                                                CONSENT_LEDGER.POLICY_ID.in(
-                                                        activeDsl()
-                                                                .select(POLICY.POLICY_ID)
-                                                                .from(POLICY)
-                                                                .where(
-                                                                        POLICY.PURPOSE_ID
-                                                                                .eq(purposeId)
-                                                                                .and(
-                                                                                        POLICY
-                                                                                                .FIELD_ID
-                                                                                                .eq(
-                                                                                                        fieldId))
-                                                                                .and(
-                                                                                        POLICY
-                                                                                                .TENANT_ID
-                                                                                                .eq(
-                                                                                                        tid))))))
-                        .execute();
-                activeDsl()
-                        .deleteFrom(POLICY)
-                        .where(POLICY.PURPOSE_ID.eq(purposeId))
-                        .and(POLICY.FIELD_ID.eq(fieldId))
-                        .and(POLICY.TENANT_ID.eq(tid))
-                        .execute();
-            }
+            UUID fieldUuid = FieldAggregate.deriveId(entityName, fieldName);
+
+            // Delete consent_ledger entries referencing this policy first
+            activeDsl()
+                    .deleteFrom(CONSENT_LEDGER)
+                    .where(CONSENT_LEDGER.TENANT_ID.eq(tid))
+                    .and(
+                            CONSENT_LEDGER.POLICY_UUID.in(
+                                    activeDsl()
+                                            .select(POLICY.POLICY_UUID)
+                                            .from(POLICY)
+                                            .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                                            .and(POLICY.FIELD_UUID.eq(fieldUuid))
+                                            .and(POLICY.TENANT_ID.eq(tid))))
+                    .execute();
+
+            activeDsl()
+                    .deleteFrom(POLICY)
+                    .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                    .and(POLICY.FIELD_UUID.eq(fieldUuid))
+                    .and(POLICY.TENANT_ID.eq(tid))
+                    .execute();
         } else if ("CATEGORY".equals(policyType)) {
-            Long categoryId = resolveCategoryId(categoryName);
-            if (categoryId != null) {
-                activeDsl()
-                        .deleteFrom(CONSENT_LEDGER)
-                        .where(
-                                CONSENT_LEDGER
-                                        .TENANT_ID
-                                        .eq(tid)
-                                        .and(
-                                                CONSENT_LEDGER.POLICY_ID.in(
-                                                        activeDsl()
-                                                                .select(POLICY.POLICY_ID)
-                                                                .from(POLICY)
-                                                                .where(
-                                                                        POLICY.PURPOSE_ID
-                                                                                .eq(purposeId)
-                                                                                .and(
-                                                                                        POLICY
-                                                                                                .CATEGORY_ID
-                                                                                                .eq(
-                                                                                                        categoryId))
-                                                                                .and(
-                                                                                        POLICY
-                                                                                                .TENANT_ID
-                                                                                                .eq(
-                                                                                                        tid))))))
-                        .execute();
-                activeDsl()
-                        .deleteFrom(POLICY)
-                        .where(POLICY.PURPOSE_ID.eq(purposeId))
-                        .and(POLICY.CATEGORY_ID.eq(categoryId))
-                        .and(POLICY.TENANT_ID.eq(tid))
-                        .execute();
-            }
+            UUID categoryUuid = CategoryAggregate.deriveId(categoryName);
+
+            activeDsl()
+                    .deleteFrom(CONSENT_LEDGER)
+                    .where(CONSENT_LEDGER.TENANT_ID.eq(tid))
+                    .and(
+                            CONSENT_LEDGER.POLICY_UUID.in(
+                                    activeDsl()
+                                            .select(POLICY.POLICY_UUID)
+                                            .from(POLICY)
+                                            .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                                            .and(POLICY.CATEGORY_UUID.eq(categoryUuid))
+                                            .and(POLICY.TENANT_ID.eq(tid))))
+                    .execute();
+
+            activeDsl()
+                    .deleteFrom(POLICY)
+                    .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
+                    .and(POLICY.CATEGORY_UUID.eq(categoryUuid))
+                    .and(POLICY.TENANT_ID.eq(tid))
+                    .execute();
         }
     }
 
@@ -804,9 +749,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
 
         activeDsl()
                 .insertInto(REGULATION)
+                .set(REGULATION.REGULATION_UUID, regulationUuid)
                 .set(REGULATION.TENANT_ID, tid)
                 .set(REGULATION.REGULATION_NAME, regulationName)
                 .set(REGULATION.DESCRIPTION, description)
@@ -826,34 +773,24 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleRegulationRemoved(JsonNode node) {
         String regulationName = node.get("regulationName").asText();
         String tid = TenantContext.require();
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
 
-        Long regulationId = resolveRegulationId(regulationName);
-        if (regulationId != null) {
-            activeDsl()
-                    .deleteFrom(REGULATION_JURISDICTION)
-                    .where(
-                            REGULATION_JURISDICTION
-                                    .REGULATION_ID
-                                    .eq(regulationId)
-                                    .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid)))
-                    .execute();
-            activeDsl()
-                    .deleteFrom(PURPOSE_REGULATION)
-                    .where(
-                            PURPOSE_REGULATION
-                                    .REGULATION_ID
-                                    .eq(regulationId)
-                                    .and(PURPOSE_REGULATION.TENANT_ID.eq(tid)))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.REGULATION_UUID.eq(regulationUuid))
+                .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid))
+                .execute();
+
+        activeDsl()
+                .deleteFrom(PURPOSE_REGULATION)
+                .where(PURPOSE_REGULATION.REGULATION_UUID.eq(regulationUuid))
+                .and(PURPOSE_REGULATION.TENANT_ID.eq(tid))
+                .execute();
 
         activeDsl()
                 .deleteFrom(REGULATION)
-                .where(
-                        REGULATION
-                                .REGULATION_NAME
-                                .eq(regulationName)
-                                .and(REGULATION.TENANT_ID.eq(tid)))
+                .where(REGULATION.REGULATION_UUID.eq(regulationUuid))
+                .and(REGULATION.TENANT_ID.eq(tid))
                 .execute();
     }
 
@@ -863,16 +800,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
-
-        Long regulationId = resolveRegulationId(regulationName);
-        if (regulationId == null) {
-            log.warn("Regulation '{}' not found — cannot add jurisdiction", regulationName);
-            return;
-        }
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
+        UUID jurisdictionUuid = JurisdictionAggregate.deriveId(jurisdictionName);
 
         // Upsert jurisdiction
         activeDsl()
                 .insertInto(JURISDICTION)
+                .set(JURISDICTION.JURISDICTION_UUID, jurisdictionUuid)
                 .set(JURISDICTION.TENANT_ID, tid)
                 .set(JURISDICTION.JURISDICTION_NAME, jurisdictionName)
                 .set(JURISDICTION.DESCRIPTION, description)
@@ -883,21 +817,25 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(JURISDICTION.UPDATED_AT, now)
                 .execute();
 
-        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
-        if (jurisdictionId == null) return;
-
-        // Link regulation ↔ jurisdiction
+        // Link regulation ↔ jurisdiction with direct UUID FKs
         activeDsl()
                 .insertInto(REGULATION_JURISDICTION)
+                .set(
+                        REGULATION_JURISDICTION.REGULATION_JURISDICTION_UUID,
+                        deriveUuid(
+                                "consent-regulation-jurisdiction:"
+                                        + regulationUuid
+                                        + ":"
+                                        + jurisdictionUuid))
                 .set(REGULATION_JURISDICTION.TENANT_ID, tid)
-                .set(REGULATION_JURISDICTION.REGULATION_ID, regulationId)
-                .set(REGULATION_JURISDICTION.JURISDICTION_ID, jurisdictionId)
+                .set(REGULATION_JURISDICTION.REGULATION_UUID, regulationUuid)
+                .set(REGULATION_JURISDICTION.JURISDICTION_UUID, jurisdictionUuid)
                 .set(REGULATION_JURISDICTION.CREATED_AT, now)
                 .set(REGULATION_JURISDICTION.UPDATED_AT, now)
                 .onConflict(
                         REGULATION_JURISDICTION.TENANT_ID,
-                        REGULATION_JURISDICTION.REGULATION_ID,
-                        REGULATION_JURISDICTION.JURISDICTION_ID)
+                        REGULATION_JURISDICTION.REGULATION_UUID,
+                        REGULATION_JURISDICTION.JURISDICTION_UUID)
                 .doNothing()
                 .execute();
     }
@@ -905,18 +843,16 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
     private void handleRegulationJurisdictionRemoved(JsonNode node) {
         String regulationName = node.get("regulationName").asText();
         String jurisdictionName = node.get("jurisdictionName").asText();
+        String tid = TenantContext.require();
+        UUID regulationUuid = RegulationAggregate.deriveId(regulationName);
+        UUID jurisdictionUuid = JurisdictionAggregate.deriveId(jurisdictionName);
 
-        Long regulationId = resolveRegulationId(regulationName);
-        Long jurisdictionId = resolveJurisdictionId(jurisdictionName);
-
-        if (regulationId != null && jurisdictionId != null) {
-            activeDsl()
-                    .deleteFrom(REGULATION_JURISDICTION)
-                    .where(REGULATION_JURISDICTION.REGULATION_ID.eq(regulationId))
-                    .and(REGULATION_JURISDICTION.JURISDICTION_ID.eq(jurisdictionId))
-                    .and(REGULATION_JURISDICTION.TENANT_ID.eq(TenantContext.require()))
-                    .execute();
-        }
+        activeDsl()
+                .deleteFrom(REGULATION_JURISDICTION)
+                .where(REGULATION_JURISDICTION.REGULATION_UUID.eq(regulationUuid))
+                .and(REGULATION_JURISDICTION.JURISDICTION_UUID.eq(jurisdictionUuid))
+                .and(REGULATION_JURISDICTION.TENANT_ID.eq(tid))
+                .execute();
     }
 
     // -----------------------------------------------------------------------
@@ -928,9 +864,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         String description = textOrNull(node, "description");
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         String tid = TenantContext.require();
+        UUID subjectUuid = SubjectAggregate.deriveId(subjectName);
 
         activeDsl()
                 .insertInto(SUBJECT)
+                .set(SUBJECT.SUBJECT_UUID, subjectUuid)
                 .set(SUBJECT.TENANT_ID, tid)
                 .set(SUBJECT.SUBJECT_NAME, subjectName)
                 .set(SUBJECT.DESCRIPTION, description)
@@ -992,9 +930,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         insertConsentLedger(node, "EXPIRE");
     }
 
+    /**
+     * Inserts a consent ledger entry. The event carries the policy UUID directly, so we use a
+     * straight INSERT rather than an INSERT…SELECT lookup.
+     */
     private void insertConsentLedger(JsonNode node, String action) {
         String subjectId = node.get("subjectId").asText();
-        long policyId = node.get("policyId").asLong();
+        String policyIdText = textOrNull(node, "policyId");
         String actor = textOrNull(node, "actor");
         String ipAddress = textOrNull(node, "ipAddress");
         String userAgent = textOrNull(node, "userAgent");
@@ -1003,10 +945,21 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         ConsentAction consentAction = ConsentAction.lookupLiteral(action);
         String tid = TenantContext.require();
 
+        if (policyIdText == null) {
+            log.warn(
+                    "Consent {} event for subject '{}' has no policyId — skipping",
+                    action,
+                    subjectId);
+            return;
+        }
+        UUID policyUuid = UUID.fromString(policyIdText);
+
         // Ensure the subject row exists (consent events may arrive before the
         // SUBJECT_REGISTERED projection when both are published in quick succession).
+        UUID subjectUuid = SubjectAggregate.deriveId(subjectId);
         activeDsl()
                 .insertInto(SUBJECT)
+                .set(SUBJECT.SUBJECT_UUID, subjectUuid)
                 .set(SUBJECT.TENANT_ID, tid)
                 .set(SUBJECT.SUBJECT_NAME, subjectId)
                 .set(SUBJECT.CREATED_AT, now)
@@ -1017,8 +970,11 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         activeDsl()
                 .insertInto(CONSENT_LEDGER)
+                .set(
+                        CONSENT_LEDGER.CONSENT_LEDGER_UUID,
+                        deriveUuid("consent-ledger:" + eventMessageId()))
                 .set(CONSENT_LEDGER.TENANT_ID, tid)
-                .set(CONSENT_LEDGER.POLICY_ID, policyId)
+                .set(CONSENT_LEDGER.POLICY_UUID, policyUuid)
                 .set(CONSENT_LEDGER.SUBJECT_ID, subjectId)
                 .set(CONSENT_LEDGER.ACTION, consentAction)
                 .set(CONSENT_LEDGER.ACTOR, actor)
@@ -1026,6 +982,8 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(CONSENT_LEDGER.USER_AGENT, userAgent)
                 .set(CONSENT_LEDGER.CREATED_AT, now)
                 .set(CONSENT_LEDGER.EXPIRES_AT, expiresAt)
+                .onConflict(CONSENT_LEDGER.CONSENT_LEDGER_UUID)
+                .doNothing()
                 .execute();
     }
 
@@ -1047,13 +1005,13 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                                 org.jooq
                                         .impl
                                         .DSL
-                                        .partitionBy(CONSENT_LEDGER.POLICY_ID)
+                                        .partitionBy(CONSENT_LEDGER.POLICY_UUID)
                                         .orderBy(CONSENT_LEDGER.CREATED_AT.desc()))
                         .as("rn");
 
         var ranked =
                 activeDsl()
-                        .select(CONSENT_LEDGER.POLICY_ID, CONSENT_LEDGER.ACTION, rn)
+                        .select(CONSENT_LEDGER.POLICY_UUID, CONSENT_LEDGER.ACTION, rn)
                         .from(CONSENT_LEDGER)
                         .where(CONSENT_LEDGER.SUBJECT_ID.eq(subjectId))
                         .and(CONSENT_LEDGER.TENANT_ID.eq(tid))
@@ -1061,18 +1019,21 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
         var latestGranted =
                 activeDsl()
-                        .select(ranked.field(CONSENT_LEDGER.POLICY_ID))
+                        .select(ranked.field(CONSENT_LEDGER.POLICY_UUID))
                         .from(ranked)
                         .where(ranked.field("rn", Integer.class).eq(1))
                         .and(ranked.field(CONSENT_LEDGER.ACTION).eq(ConsentAction.GRANT))
-                        .fetchInto(Long.class);
+                        .fetchInto(UUID.class);
 
         // Fan out one REVOKE row per active grant
-        for (Long policyId : latestGranted) {
+        for (UUID policyUuid : latestGranted) {
             activeDsl()
                     .insertInto(CONSENT_LEDGER)
+                    .set(
+                            CONSENT_LEDGER.CONSENT_LEDGER_UUID,
+                            deriveUuid("consent-ledger:" + eventMessageId() + ":" + policyUuid))
                     .set(CONSENT_LEDGER.TENANT_ID, tid)
-                    .set(CONSENT_LEDGER.POLICY_ID, policyId)
+                    .set(CONSENT_LEDGER.POLICY_UUID, policyUuid)
                     .set(CONSENT_LEDGER.SUBJECT_ID, subjectId)
                     .set(CONSENT_LEDGER.ACTION, ConsentAction.REVOKE)
                     .set(CONSENT_LEDGER.ACTOR, actor)
@@ -1080,6 +1041,8 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                     .set(CONSENT_LEDGER.USER_AGENT, userAgent)
                     .set(CONSENT_LEDGER.CREATED_AT, now)
                     .set(CONSENT_LEDGER.EXPIRES_AT, (LocalDateTime) null)
+                    .onConflict(CONSENT_LEDGER.CONSENT_LEDGER_UUID)
+                    .doNothing()
                     .execute();
         }
     }
@@ -1119,6 +1082,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
         // Record the DSAR action
         activeDsl()
                 .insertInto(DSAR_AUDIT_LOG)
+                .set(DSAR_AUDIT_LOG.DSAR_AUDIT_UUID, deriveUuid("consent-dsar:" + eventMessageId()))
                 .set(DSAR_AUDIT_LOG.TENANT_ID, tid)
                 .set(DSAR_AUDIT_LOG.SUBJECT_ID, subjectId)
                 .set(DSAR_AUDIT_LOG.DELETION_REQUEST_ID, deletionRequestId)
@@ -1128,76 +1092,9 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .set(DSAR_AUDIT_LOG.IP_ADDRESS, ipAddress)
                 .set(DSAR_AUDIT_LOG.USER_AGENT, userAgent)
                 .set(DSAR_AUDIT_LOG.CREATED_AT, now)
+                .onConflict(DSAR_AUDIT_LOG.DSAR_AUDIT_UUID)
+                .doNothing()
                 .execute();
-    }
-
-    // -----------------------------------------------------------------------
-    // ID Resolution Helpers
-    // -----------------------------------------------------------------------
-
-    private Long resolveEntityId(String entityName) {
-        if (entityName == null) return null;
-        return activeDsl()
-                .select(ENTITY.ENTITY_ID)
-                .from(ENTITY)
-                .where(ENTITY.ENTITY_NAME.eq(entityName))
-                .and(ENTITY.TENANT_ID.eq(TenantContext.require()))
-                .fetchOneInto(Long.class);
-    }
-
-    private Long resolveFieldId(String entityName, String fieldName) {
-        if (entityName == null || fieldName == null) return null;
-        String tid = TenantContext.require();
-        return activeDsl()
-                .select(FIELD.FIELD_ID)
-                .from(FIELD)
-                .join(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
-                .where(FIELD.FIELD_NAME.eq(fieldName))
-                .and(ENTITY.ENTITY_NAME.eq(entityName))
-                .and(FIELD.TENANT_ID.eq(tid))
-                .and(ENTITY.TENANT_ID.eq(tid))
-                .fetchOneInto(Long.class);
-    }
-
-    private Long resolveCategoryId(String categoryName) {
-        if (categoryName == null) return null;
-        return activeDsl()
-                .select(CATEGORY.CATEGORY_ID)
-                .from(CATEGORY)
-                .where(CATEGORY.CATEGORY_NAME.eq(categoryName))
-                .and(CATEGORY.TENANT_ID.eq(TenantContext.require()))
-                .fetchOneInto(Long.class);
-    }
-
-    private Long resolvePurposeId(String purposeName) {
-        if (purposeName == null) return null;
-        return activeDsl()
-                .select(PURPOSE.PURPOSE_ID)
-                .from(PURPOSE)
-                .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
-                .and(PURPOSE.TENANT_ID.eq(TenantContext.require()))
-                .fetchOneInto(Long.class);
-    }
-
-    private Long resolveRegulationId(String regulationName) {
-        if (regulationName == null) return null;
-        return activeDsl()
-                .select(REGULATION.REGULATION_ID)
-                .from(REGULATION)
-                .where(REGULATION.REGULATION_NAME.eq(regulationName))
-                .and(REGULATION.TENANT_ID.eq(TenantContext.require()))
-                .fetchOneInto(Long.class);
-    }
-
-    private Long resolveJurisdictionId(String jurisdictionName) {
-        if (jurisdictionName == null) return null;
-        return activeDsl()
-                .select(JURISDICTION.JURISDICTION_ID)
-                .from(JURISDICTION)
-                .where(JURISDICTION.JURISDICTION_NAME.eq(jurisdictionName))
-                .and(JURISDICTION.TENANT_ID.eq(TenantContext.require()))
-                .fetchOneInto(Long.class);
     }
 
     // -----------------------------------------------------------------------

@@ -30,7 +30,7 @@ public class GetCategoryQueryActuator
                 .map(
                         c ->
                                 new CategoryView(
-                                        c.getCategoryId(),
+                                        c.getCategoryUuid(),
                                         c.getCategoryName(),
                                         c.getDescription()));
     }

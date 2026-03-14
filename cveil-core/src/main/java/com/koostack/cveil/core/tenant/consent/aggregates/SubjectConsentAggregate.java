@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -105,7 +106,7 @@ public record SubjectConsentAggregate(
     /** Upsert a ledger entry by policy_id. */
     public SubjectConsentAggregate withEntry(LedgerEntry entry) {
         var updated = new ArrayList<>(entries);
-        updated.removeIf(e -> e.policyId() == entry.policyId());
+        updated.removeIf(e -> Objects.equals(e.policyId(), entry.policyId()));
         updated.add(entry);
         return new SubjectConsentAggregate(
                 tenantId, aggregateId, subjectId, List.copyOf(updated), version);
@@ -134,7 +135,7 @@ public record SubjectConsentAggregate(
     }
 
     public record LedgerEntry(
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

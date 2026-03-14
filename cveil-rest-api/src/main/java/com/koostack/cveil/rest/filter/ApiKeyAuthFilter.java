@@ -687,8 +687,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         // -- Resolve permissions from DB --
+        // Skip DB resolution for bootstrap-key auth — its super-admin role is
+        // authoritative and there is no corresponding DB user.
         AuthorizationContext authz = null;
-        if (cqrsHolder.isPermissionServiceAvailable() && effectiveIdentity.subject() != null) {
+        boolean skipDbResolution = BOOTSTRAP_PROVIDER.equals(effectiveIdentity.provider());
+        if (!skipDbResolution
+                && cqrsHolder.isPermissionServiceAvailable()
+                && effectiveIdentity.subject() != null) {
             try {
                 PermissionService permSvc = cqrsHolder.permissionService();
                 Set<String> roles = permSvc.resolveRoles(effectiveIdentity.subject(), activeTenant);

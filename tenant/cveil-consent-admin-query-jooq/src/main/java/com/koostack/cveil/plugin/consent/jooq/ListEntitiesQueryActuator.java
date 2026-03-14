@@ -21,7 +21,7 @@ public class ListEntitiesQueryActuator
     @Override
     public List<EntityView> execute(ListEntitiesQuery query) {
         return entityRepository.findAll().stream()
-                .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()))
+                .map(e -> new EntityView(e.getEntityUuid(), e.getEntityName(), e.getDescription()))
                 .toList();
     }
 

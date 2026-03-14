@@ -27,7 +27,7 @@ public class RevokeConsentCommandActuator
 
     public record RevokeConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

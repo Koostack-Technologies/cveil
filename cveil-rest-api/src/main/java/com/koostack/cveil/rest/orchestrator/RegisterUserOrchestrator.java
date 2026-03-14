@@ -60,6 +60,7 @@ public class RegisterUserOrchestrator
      * @param username the user's unique login name
      * @param email the user's email address
      * @param fullName the user's display name (nullable)
+     * @param displayName the tenant display name (nullable — falls back to username)
      * @param roles initial roles to assign (nullable)
      * @param temporaryPassword if true, user must change password on first login
      * @param password the user's initial password (nullable)
@@ -70,10 +71,34 @@ public class RegisterUserOrchestrator
             String username,
             String email,
             String fullName,
+            String displayName,
             Set<String> roles,
             boolean temporaryPassword,
             String password,
-            String tenantId) {}
+            String tenantId) {
+
+        /** Backward-compatible constructor without displayName. */
+        public RegisterUserCommand(
+                String realmId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                boolean temporaryPassword,
+                String password,
+                String tenantId) {
+            this(
+                    realmId,
+                    username,
+                    email,
+                    fullName,
+                    null,
+                    roles,
+                    temporaryPassword,
+                    password,
+                    tenantId);
+        }
+    }
 
     public record RegisterUserResult(
             String username,
@@ -139,11 +164,13 @@ public class RegisterUserOrchestrator
                                     dispatcher(DISPATCHER_IAM).dispatch(cmd);
                             ctx.put("userResult", result);
                             ctx.put("keycloakUserId", result.keycloakUserId());
+                            ctx.put("userPreExisting", result.preExisting());
                         },
                         (in, ctx) -> {
                             try {
                                 String kcUserId = ctx.get("keycloakUserId");
-                                if (kcUserId != null) {
+                                Boolean preExisting = ctx.get("userPreExisting");
+                                if (kcUserId != null && !Boolean.TRUE.equals(preExisting)) {
                                     dispatcher(DISPATCHER_IAM)
                                             .dispatch(
                                                     new DeleteUserCommandActuator.DeleteUserCommand(
@@ -160,10 +187,17 @@ public class RegisterUserOrchestrator
                 SagaStep.of(
                         "create-tenant",
                         (in, ctx) -> {
+                            String tenantDisplayName =
+                                    in.displayName() != null && !in.displayName().isBlank()
+                                            ? in.displayName()
+                                            : in.username();
                             dispatcher(DISPATCHER_CORE)
                                     .dispatch(
                                             new CreateTenantCommandActuator.CreateTenantCommand(
-                                                    in.tenantId(), in.username(), "free", "user"));
+                                                    in.tenantId(),
+                                                    tenantDisplayName,
+                                                    "free",
+                                                    "user"));
                             ctx.put("tenantCreated", true);
                         },
                         (in, ctx) -> {

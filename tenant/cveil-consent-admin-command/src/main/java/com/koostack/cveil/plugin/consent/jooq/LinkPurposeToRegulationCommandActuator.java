@@ -52,7 +52,16 @@ public class LinkPurposeToRegulationCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
+        PurposeAggregate current = null;
+        try {
+            current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
+        } catch (Exception e) {
+            LOG.warn(
+                    "Could not hydrate purpose '{}' — snapshot will be partial: {}",
+                    command.purposeName(),
+                    e.getMessage());
+            LOG.debug("Hydration failure details for purpose '{}':", command.purposeName(), e);
+        }
 
         // Build regulation links — replace existing entry for this regulation
         List<PurposeSnapshot.RegulationLinkSnapshot> regs = new ArrayList<>();

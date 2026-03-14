@@ -1,9 +1,10 @@
 package com.koostack.cveil.core.models;
 
 import java.util.List;
+import java.util.UUID;
 
 public record PurposeView(
-        long purposeId,
+        UUID purposeId,
         String purposeName,
         String description,
         List<RegulationLinkView> regulations,
@@ -12,9 +13,9 @@ public record PurposeView(
             String regulationName, String lawfulBasis, String onGranted, String onDenied) {}
 
     public record PolicyView(
-            long policyId, String policyType, CategoryRef category, FieldRef field) {}
+            UUID policyId, String policyType, CategoryRef category, FieldRef field) {}
 
-    public record CategoryRef(long categoryId, String categoryName) {}
+    public record CategoryRef(UUID categoryId, String categoryName) {}
 
-    public record FieldRef(long fieldId, String fieldName, String entityName) {}
+    public record FieldRef(UUID fieldId, String fieldName, String entityName) {}
 }

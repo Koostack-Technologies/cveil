@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -144,8 +145,7 @@ class RbacTest {
             void wrongRoleThrows() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                        CveilAuthException.class, () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
             }
 
             @Test
@@ -298,8 +298,7 @@ class RbacTest {
             void writeDoesNotImplyRead() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                        CveilAuthException.class, () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
             }
 
             @Test
@@ -344,8 +343,7 @@ class RbacTest {
                 SecurityContext ctx =
                         securityContextWith(Set.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
+                        CveilAuthException.class, () -> Roles.requireRole(ctx, Roles.CONSENT_READ));
                 assertThrows(
                         CveilAuthException.class,
                         () -> Roles.requireRole(ctx, Roles.CONSENT_WRITE));
@@ -413,9 +411,9 @@ class RbacTest {
                                 Object input = inv.getArgument(0);
                                 if (input.getClass().getSimpleName().equals("FindPolicyQuery")) {
                                     return new PurposeView.PolicyView(
-                                            1L,
+                                            UUID.randomUUID(),
                                             "CATEGORY",
-                                            new PurposeView.CategoryRef(1L, "pii"),
+                                            new PurposeView.CategoryRef(UUID.randomUUID(), "pii"),
                                             null);
                                 }
                                 if (input.getClass()

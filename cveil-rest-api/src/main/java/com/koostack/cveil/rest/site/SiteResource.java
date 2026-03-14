@@ -36,6 +36,7 @@ public class SiteResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SiteResource.class);
     private static final String REALM = "cveil";
+
     /** Cache-buster token — changes on every application restart / redeploy. */
     private static final String BUILD_VERSION = Long.toHexString(System.currentTimeMillis());
 
@@ -67,7 +68,9 @@ public class SiteResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
-    @Inject @Named("consentDispatcher") CommandDispatcher consentDispatcher;
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
 
     @Context HttpHeaders httpHeaders;
 

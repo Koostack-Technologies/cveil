@@ -28,7 +28,7 @@ public class GrantConsentCommandActuator
 
     public record GrantConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

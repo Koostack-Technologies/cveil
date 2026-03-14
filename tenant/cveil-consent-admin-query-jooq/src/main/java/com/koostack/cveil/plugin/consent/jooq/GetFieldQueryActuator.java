@@ -36,7 +36,7 @@ public class GetFieldQueryActuator
                 .flatMap(
                         entity ->
                                 fieldRepository.findByNameAndEntity(
-                                        query.fieldName(), entity.getEntityId()))
+                                        query.fieldName(), entity.getEntityUuid()))
                 .map(mapper::toFieldView)
                 .orElse(null);
     }

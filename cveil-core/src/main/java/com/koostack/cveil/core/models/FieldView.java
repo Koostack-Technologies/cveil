@@ -1,14 +1,15 @@
 package com.koostack.cveil.core.models;
 
 import java.util.List;
+import java.util.UUID;
 
 public record FieldView(
-        long fieldId,
+        UUID fieldId,
         String fieldName,
         String description,
         EntityView entity,
         List<CategoryView> categories) {
-    public record EntityView(long entityId, String entityName) {}
+    public record EntityView(UUID entityId, String entityName) {}
 
-    public record CategoryView(long categoryId, String categoryName) {}
+    public record CategoryView(UUID categoryId, String categoryName) {}
 }

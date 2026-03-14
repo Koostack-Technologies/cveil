@@ -51,8 +51,8 @@ class ConsentResourceIT {
     private static final Duration EVALUATE_TIMEOUT = Duration.ofSeconds(60);
 
     // Catalogue items
-    private static final String ENTITY_USER = "User";
-    private static final String ENTITY_PATIENT = "Patient";
+    private static final String ENTITY_USER = "user";
+    private static final String ENTITY_PATIENT = "patient";
     private static final String CATEGORY_PII = "PII";
     private static final String CATEGORY_HEALTH = "HEALTH";
     private static final String FIELD_EMAIL = "email";

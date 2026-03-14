@@ -32,7 +32,9 @@ public class ConsentLedgerRepository {
         var rn =
                 DSL.rowNumber()
                         .over(
-                                DSL.partitionBy(CONSENT_LEDGER.SUBJECT_ID, CONSENT_LEDGER.POLICY_ID)
+                                DSL.partitionBy(
+                                                CONSENT_LEDGER.SUBJECT_ID,
+                                                CONSENT_LEDGER.POLICY_UUID)
                                         .orderBy(CONSENT_LEDGER.CREATED_AT.desc()))
                         .as("rn");
 
@@ -51,15 +53,15 @@ public class ConsentLedgerRepository {
                 .select(CATEGORY.CATEGORY_NAME)
                 .from(latest)
                 .join(POLICY)
-                .on(latest.field(CONSENT_LEDGER.POLICY_ID).eq(POLICY.POLICY_ID))
+                .on(latest.field(CONSENT_LEDGER.POLICY_UUID).eq(POLICY.POLICY_UUID))
                 .join(PURPOSE)
-                .on(POLICY.PURPOSE_ID.eq(PURPOSE.PURPOSE_ID))
+                .on(POLICY.PURPOSE_UUID.eq(PURPOSE.PURPOSE_UUID))
                 .leftJoin(FIELD)
-                .on(POLICY.FIELD_ID.eq(FIELD.FIELD_ID))
+                .on(POLICY.FIELD_UUID.eq(FIELD.FIELD_UUID))
                 .leftJoin(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
+                .on(FIELD.ENTITY_UUID.eq(ENTITY.ENTITY_UUID))
                 .leftJoin(CATEGORY)
-                .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
+                .on(POLICY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
                 .where(latest.field("rn", Integer.class).eq(1))
                 .fetch();
     }
@@ -72,7 +74,7 @@ public class ConsentLedgerRepository {
         var rn =
                 DSL.rowNumber()
                         .over(
-                                DSL.partitionBy(CONSENT_LEDGER.POLICY_ID)
+                                DSL.partitionBy(CONSENT_LEDGER.POLICY_UUID)
                                         .orderBy(CONSENT_LEDGER.CREATED_AT.desc()))
                         .as("rn");
 
@@ -92,15 +94,15 @@ public class ConsentLedgerRepository {
                 .select(CATEGORY.CATEGORY_NAME)
                 .from(latest)
                 .join(POLICY)
-                .on(latest.field(CONSENT_LEDGER.POLICY_ID).eq(POLICY.POLICY_ID))
+                .on(latest.field(CONSENT_LEDGER.POLICY_UUID).eq(POLICY.POLICY_UUID))
                 .join(PURPOSE)
-                .on(POLICY.PURPOSE_ID.eq(PURPOSE.PURPOSE_ID))
+                .on(POLICY.PURPOSE_UUID.eq(PURPOSE.PURPOSE_UUID))
                 .leftJoin(FIELD)
-                .on(POLICY.FIELD_ID.eq(FIELD.FIELD_ID))
+                .on(POLICY.FIELD_UUID.eq(FIELD.FIELD_UUID))
                 .leftJoin(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
+                .on(FIELD.ENTITY_UUID.eq(ENTITY.ENTITY_UUID))
                 .leftJoin(CATEGORY)
-                .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
+                .on(POLICY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
                 .where(latest.field("rn", Integer.class).eq(1))
                 .fetch();
     }
@@ -116,7 +118,9 @@ public class ConsentLedgerRepository {
         var rn =
                 DSL.rowNumber()
                         .over(
-                                DSL.partitionBy(CONSENT_LEDGER.SUBJECT_ID, CONSENT_LEDGER.POLICY_ID)
+                                DSL.partitionBy(
+                                                CONSENT_LEDGER.SUBJECT_ID,
+                                                CONSENT_LEDGER.POLICY_UUID)
                                         .orderBy(CONSENT_LEDGER.CREATED_AT.desc()))
                         .as("rn");
 
@@ -135,15 +139,15 @@ public class ConsentLedgerRepository {
                 .select(CATEGORY.CATEGORY_NAME)
                 .from(latest)
                 .join(POLICY)
-                .on(latest.field(CONSENT_LEDGER.POLICY_ID).eq(POLICY.POLICY_ID))
+                .on(latest.field(CONSENT_LEDGER.POLICY_UUID).eq(POLICY.POLICY_UUID))
                 .join(PURPOSE)
-                .on(POLICY.PURPOSE_ID.eq(PURPOSE.PURPOSE_ID))
+                .on(POLICY.PURPOSE_UUID.eq(PURPOSE.PURPOSE_UUID))
                 .leftJoin(FIELD)
-                .on(POLICY.FIELD_ID.eq(FIELD.FIELD_ID))
+                .on(POLICY.FIELD_UUID.eq(FIELD.FIELD_UUID))
                 .leftJoin(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
+                .on(FIELD.ENTITY_UUID.eq(ENTITY.ENTITY_UUID))
                 .leftJoin(CATEGORY)
-                .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
+                .on(POLICY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
                 .where(latest.field("rn", Integer.class).eq(1))
                 .and(
                         latest.field(CONSENT_LEDGER.ACTION)

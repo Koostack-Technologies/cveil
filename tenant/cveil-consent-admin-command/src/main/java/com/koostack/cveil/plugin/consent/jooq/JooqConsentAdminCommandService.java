@@ -9,6 +9,7 @@ import com.koostack.cveil.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.cveil.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -527,7 +528,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void grantConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -555,7 +556,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void revokeConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -581,7 +582,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void expireConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

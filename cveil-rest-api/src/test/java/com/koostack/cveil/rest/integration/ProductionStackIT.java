@@ -297,7 +297,7 @@ class ProductionStackIT {
                       "scope": {
                         "category": "PII",
                         "fieldName": "email",
-                        "entityName": "User",
+                        "entityName": "user",
                         "purposeName": "marketing"
                       }
                     }
@@ -425,7 +425,7 @@ class ProductionStackIT {
         @Order(5)
         @DisplayName("Login as tenant user")
         void loginAsTenantUser() {
-            String email = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+            String email = TENANT_ID.replace("_", "-") + "@cveil-test.com";
             accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
             assertNotNull(accessToken, "JWT access token must be returned");
             assertFalse(accessToken.isBlank(), "JWT access token must not be blank");
@@ -463,7 +463,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "email",
-                      "entityName": "User",
+                      "entityName": "user",
                       "description": "User email address"
                     }
                     """)
@@ -484,7 +484,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "ssn",
-                      "entityName": "User",
+                      "entityName": "user",
                       "description": "Social security number"
                     }
                     """)
@@ -504,7 +504,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "diagnosis",
-                      "entityName": "Patient",
+                      "entityName": "patient",
                       "description": "Medical diagnosis"
                     }
                     """)
@@ -671,7 +671,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "email",
-                      "entityName": "User",
+                      "entityName": "user",
                       "categoryName": "PII"
                     }
                     """)
@@ -691,7 +691,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "ssn",
-                      "entityName": "User",
+                      "entityName": "user",
                       "categoryName": "PII"
                     }
                     """)
@@ -711,7 +711,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "diagnosis",
-                      "entityName": "Patient",
+                      "entityName": "patient",
                       "categoryName": "HEALTH"
                     }
                     """)
@@ -775,7 +775,7 @@ class ProductionStackIT {
                       "purposeName": "marketing",
                       "policyType": "field",
                       "fieldName": "email",
-                      "entityName": "User",
+                      "entityName": "user",
                       "categoryName": "PII"
                     }
                     """)
@@ -797,7 +797,7 @@ class ProductionStackIT {
                       "purposeName": "analytics",
                       "policyType": "field",
                       "fieldName": "ssn",
-                      "entityName": "User",
+                      "entityName": "user",
                       "categoryName": "PII"
                     }
                     """)
@@ -819,7 +819,7 @@ class ProductionStackIT {
                       "purposeName": "analytics",
                       "policyType": "field",
                       "fieldName": "diagnosis",
-                      "entityName": "Patient",
+                      "entityName": "patient",
                       "categoryName": "HEALTH"
                     }
                     """)
@@ -914,7 +914,7 @@ class ProductionStackIT {
                                       "scope": {
                                         "category": "PII",
                                         "fieldName": "email",
-                                        "entityName": "User",
+                                        "entityName": "user",
                                         "purposeName": "marketing"
                                       }
                                     }
@@ -946,7 +946,7 @@ class ProductionStackIT {
                                       "scope": {
                                         "category": "PII",
                                         "fieldName": "ssn",
-                                        "entityName": "User",
+                                        "entityName": "user",
                                         "purposeName": "analytics"
                                       }
                                     }
@@ -963,7 +963,7 @@ class ProductionStackIT {
         void evaluateGranted() {
             // Wait for the graph edge before calling evaluate (reads from Redis graph only).
             // Under co-running load (13 ITs), the graph projection can lag >90s.
-            String policyName = "FIELD:User/email:marketing";
+            String policyName = "FIELD:user/email:marketing";
             support.awaitRedisState(
                     () ->
                             support.getEdgeProperties(
@@ -978,7 +978,7 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         }
                       ]
@@ -1000,7 +1000,7 @@ class ProductionStackIT {
                         {
                           "category": "HEALTH",
                           "fieldName": "diagnosis",
-                          "entityName": "Patient",
+                          "entityName": "patient",
                           "purposeName": "analytics"
                         }
                       ]
@@ -1027,13 +1027,13 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         },
                         {
                           "category": "HEALTH",
                           "fieldName": "diagnosis",
-                          "entityName": "Patient",
+                          "entityName": "patient",
                           "purposeName": "analytics"
                         }
                       ]
@@ -1055,7 +1055,7 @@ class ProductionStackIT {
                       "scope": {
                         "category": "PII",
                         "fieldName": "email",
-                        "entityName": "User",
+                        "entityName": "user",
                         "purposeName": "marketing"
                       }
                     }
@@ -1078,7 +1078,7 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         }
                       ]
@@ -1102,7 +1102,7 @@ class ProductionStackIT {
                           "scope": {
                             "category": "PII",
                             "fieldName": "email",
-                            "entityName": "User",
+                            "entityName": "user",
                             "purposeName": "marketing"
                           }
                         }
@@ -1166,7 +1166,7 @@ class ProductionStackIT {
                                           "scope": {
                                             "category": "PII",
                                             "fieldName": "email",
-                                            "entityName": "User",
+                                            "entityName": "user",
                                             "purposeName": "marketing"
                                           }
                                         },
@@ -1174,7 +1174,7 @@ class ProductionStackIT {
                                           "scope": {
                                             "category": "PII",
                                             "fieldName": "ssn",
-                                            "entityName": "User",
+                                            "entityName": "user",
                                             "purposeName": "analytics"
                                           }
                                         },
@@ -1182,7 +1182,7 @@ class ProductionStackIT {
                                           "scope": {
                                             "category": "HEALTH",
                                             "fieldName": "diagnosis",
-                                            "entityName": "Patient",
+                                            "entityName": "patient",
                                             "purposeName": "analytics"
                                           }
                                         }
@@ -1204,7 +1204,7 @@ class ProductionStackIT {
         void evaluateAfterBatchGrant() {
             // Wait for the slowest graph edge (HEALTH/diagnosis) before evaluating.
             // Under co-running load (13 ITs), the graph projection can lag >90s.
-            String policyName = "FIELD:Patient/diagnosis:analytics";
+            String policyName = "FIELD:patient/diagnosis:analytics";
             support.awaitRedisState(
                     () ->
                             support.getEdgeProperties(
@@ -1219,19 +1219,19 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         },
                         {
                           "category": "PII",
                           "fieldName": "ssn",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "analytics"
                         },
                         {
                           "category": "HEALTH",
                           "fieldName": "diagnosis",
-                          "entityName": "Patient",
+                          "entityName": "patient",
                           "purposeName": "analytics"
                         }
                       ]
@@ -1260,7 +1260,7 @@ class ProductionStackIT {
                           "scope": {
                             "category": "PII",
                             "fieldName": "email",
-                            "entityName": "User",
+                            "entityName": "user",
                             "purposeName": "marketing"
                           }
                         },
@@ -1268,7 +1268,7 @@ class ProductionStackIT {
                           "scope": {
                             "category": "HEALTH",
                             "fieldName": "diagnosis",
-                            "entityName": "Patient",
+                            "entityName": "patient",
                             "purposeName": "analytics"
                           }
                         }
@@ -1294,19 +1294,19 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         },
                         {
                           "category": "PII",
                           "fieldName": "ssn",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "analytics"
                         },
                         {
                           "category": "HEALTH",
                           "fieldName": "diagnosis",
-                          "entityName": "Patient",
+                          "entityName": "patient",
                           "purposeName": "analytics"
                         }
                       ]
@@ -1418,7 +1418,7 @@ class ProductionStackIT {
                         {
                           "category": "PII",
                           "fieldName": "email",
-                          "entityName": "User",
+                          "entityName": "user",
                           "purposeName": "marketing"
                         }
                       ]
@@ -1470,7 +1470,7 @@ class ProductionStackIT {
                       "scope": {
                         "category": "PII",
                         "fieldName": "email",
-                        "entityName": "User",
+                        "entityName": "user",
                         "purposeName": "marketing"
                       }
                     }
@@ -1527,7 +1527,7 @@ class ProductionStackIT {
                             """
                     {
                       "fieldName": "",
-                      "entityName": "User"
+                      "entityName": "user"
                     }
                     """)
                     .when()
@@ -1610,7 +1610,7 @@ class ProductionStackIT {
                                       "scope": {
                                         "category": "PII",
                                         "fieldName": "email",
-                                        "entityName": "User",
+                                        "entityName": "user",
                                         "purposeName": "marketing"
                                       }
                                     }
@@ -1627,7 +1627,7 @@ class ProductionStackIT {
                       "scopes": [{
                         "category": "PII",
                         "fieldName": "email",
-                        "entityName": "User",
+                        "entityName": "user",
                         "purposeName": "marketing"
                       }]
                     }

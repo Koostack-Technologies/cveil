@@ -440,7 +440,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     public List<Map<String, Object>> queryFields() {
         return query(
                 "SELECT f.*, e.entity_name FROM field f "
-                        + "JOIN entity e ON f.entity_id = e.entity_id "
+                        + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
                         + "ORDER BY f.field_name");
     }
 
@@ -448,9 +448,9 @@ public class IntegrationTestSupport implements AutoCloseable {
         return query(
                 "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
                         + "FROM field_category fc "
-                        + "JOIN field f ON fc.field_id = f.field_id "
-                        + "JOIN entity e ON f.entity_id = e.entity_id "
-                        + "JOIN category c ON fc.category_id = c.category_id "
+                        + "JOIN field f ON fc.field_uuid = f.field_uuid "
+                        + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                        + "JOIN category c ON fc.category_uuid = c.category_uuid "
                         + "WHERE f.field_name = ? AND e.entity_name = ?",
                 fieldName,
                 entityName);
@@ -734,7 +734,7 @@ public class IntegrationTestSupport implements AutoCloseable {
             String displayName,
             String plan,
             String password) {
-        String username = tenantId.replace("_", "-") + "-admin";
+        String username = tenantId.replace("_", "-");
         String email = username + "@cveil-test.com";
 
         String passwordField = "";
@@ -755,11 +755,17 @@ public class IntegrationTestSupport implements AutoCloseable {
                           "username": "%s",
                           "email": "%s",
                           "fullName": "%s Admin",
+                          "displayName": "%s",
                           "roles": ["super-admin"],
                           "temporaryPassword": false%s
                         }
                         """
-                                        .formatted(username, email, displayName, passwordField))
+                                        .formatted(
+                                                username,
+                                                email,
+                                                displayName,
+                                                displayName,
+                                                passwordField))
                         .when()
                         .post("/api/v1/platform/iam/users");
 
@@ -838,7 +844,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     public static AuthInfo provisionTenantAndLogin(
             String bootstrapKey, String tenantId, String displayName) {
         String password = "Test1234!";
-        String username = tenantId.replace("_", "-") + "-admin";
+        String username = tenantId.replace("_", "-");
         String email = username + "@cveil-test.com";
 
         try {

@@ -110,16 +110,16 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "entityName": "User", "description": "Application user" }
+                    { "entityName": "user", "description": "Application user" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/entities")
                     .then()
                     .statusCode(201)
-                    .body("message", containsString("User"));
+                    .body("message", containsString("user"));
 
             // DB verify
-            support.assertRowExists("entity", "entity_name", "User");
+            support.assertRowExists("entity", "entity_name", "user");
 
             // Event verify
             var events = support.queryEvents("consent-entity", "consent.entity.registered");
@@ -136,7 +136,7 @@ class CatalogueResourceIT {
                     .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(1)))
-                    .body("entityName", hasItem("User"));
+                    .body("entityName", hasItem("user"));
         }
 
         @Test
@@ -145,10 +145,10 @@ class CatalogueResourceIT {
         void getEntity() {
             given().header("Authorization", auth())
                     .when()
-                    .get("/api/v1/catalogue/entities/User")
+                    .get("/api/v1/catalogue/entities/user")
                     .then()
                     .statusCode(200)
-                    .body("entityName", equalTo("User"))
+                    .body("entityName", equalTo("user"))
                     .body("description", equalTo("Application user"));
         }
 
@@ -163,7 +163,7 @@ class CatalogueResourceIT {
                     { "description": "Updated user entity" }
                     """)
                     .when()
-                    .put("/api/v1/catalogue/entities/User")
+                    .put("/api/v1/catalogue/entities/user")
                     .then()
                     .statusCode(200);
 
@@ -172,7 +172,7 @@ class CatalogueResourceIT {
                     "SELECT description FROM entity WHERE entity_name = ?",
                     "description",
                     "Updated user entity",
-                    "User");
+                    "user");
 
             // Event verify
             var events = support.queryEvents("consent-entity", "consent.entity.updated");
@@ -187,14 +187,14 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "entityName": "Patient", "description": "Medical patient" }
+                    { "entityName": "patient", "description": "Medical patient" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/entities")
                     .then()
                     .statusCode(201);
 
-            support.assertRowExists("entity", "entity_name", "Patient");
+            support.assertRowExists("entity", "entity_name", "patient");
         }
 
         @Test
@@ -203,12 +203,12 @@ class CatalogueResourceIT {
         void deletePatient() {
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/entities/Patient")
+                    .delete("/api/v1/catalogue/entities/patient")
                     .then()
                     .statusCode(200);
 
             // DB verify: row removed
-            support.assertRowAbsent("entity", "entity_name", "Patient");
+            support.assertRowAbsent("entity", "entity_name", "patient");
 
             // Event verify
             var events = support.queryEvents("consent-entity", "consent.entity.removed");
@@ -221,7 +221,7 @@ class CatalogueResourceIT {
         void getDeletedEntity() {
             given().header("Authorization", auth())
                     .when()
-                    .get("/api/v1/catalogue/entities/Patient")
+                    .get("/api/v1/catalogue/entities/patient")
                     .then()
                     .statusCode(404);
         }
@@ -262,19 +262,19 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "entityName": "User", "description": "Upserted user" }
+                    { "entityName": "user", "description": "Upserted user" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/entities")
                     .then()
                     .statusCode(201);
 
-            // DB verify: only one User row with updated description (eventually consistent)
+            // DB verify: only one user row with updated description (eventually consistent)
             support.awaitQueryValue(
                     "SELECT description FROM entity WHERE entity_name = ?",
                     "description",
                     "Upserted user",
-                    "User");
+                    "user");
         }
     }
 
@@ -295,22 +295,22 @@ class CatalogueResourceIT {
 
         @Test
         @Order(1)
-        @DisplayName("Register category: PII")
+        @DisplayName("Register category: IT_PII")
         void registerPii() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "categoryName": "PII", "description": "Personal identifiable info" }
+                    { "categoryName": "IT_PII", "description": "Personal identifiable info" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/categories")
                     .then()
                     .statusCode(201)
-                    .body("message", containsString("PII"));
+                    .body("message", containsString("IT_PII"));
 
             // DB verify
-            support.assertRowExists("category", "category_name", "PII");
+            support.assertRowExists("category", "category_name", "IT_PII");
 
             // Event verify
             var events = support.queryEvents("consent-category", "consent.category.registered");
@@ -319,25 +319,25 @@ class CatalogueResourceIT {
 
         @Test
         @Order(2)
-        @DisplayName("Register category: HEALTH")
+        @DisplayName("Register category: IT_HEALTH")
         void registerHealth() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "categoryName": "HEALTH", "description": "Health data" }
+                    { "categoryName": "IT_HEALTH", "description": "Health data" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/categories")
                     .then()
                     .statusCode(201);
 
-            support.assertRowExists("category", "category_name", "HEALTH");
+            support.assertRowExists("category", "category_name", "IT_HEALTH");
         }
 
         @Test
         @Order(3)
-        @DisplayName("List categories includes PII and HEALTH")
+        @DisplayName("List categories includes IT_PII and IT_HEALTH")
         void listCategories() {
             given().header("Authorization", auth())
                     .when()
@@ -345,7 +345,7 @@ class CatalogueResourceIT {
                     .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(2)))
-                    .body("categoryName", hasItems("PII", "HEALTH"));
+                    .body("categoryName", hasItems("IT_PII", "IT_HEALTH"));
         }
 
         @Test
@@ -354,10 +354,10 @@ class CatalogueResourceIT {
         void getCategory() {
             given().header("Authorization", auth())
                     .when()
-                    .get("/api/v1/catalogue/categories/PII")
+                    .get("/api/v1/catalogue/categories/IT_PII")
                     .then()
                     .statusCode(200)
-                    .body("categoryName", equalTo("PII"))
+                    .body("categoryName", equalTo("IT_PII"))
                     .body("description", equalTo("Personal identifiable info"));
         }
 
@@ -369,10 +369,10 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "description": "Updated PII description" }
+                    { "description": "Updated IT_PII description" }
                     """)
                     .when()
-                    .put("/api/v1/catalogue/categories/PII")
+                    .put("/api/v1/catalogue/categories/IT_PII")
                     .then()
                     .statusCode(200);
 
@@ -380,8 +380,8 @@ class CatalogueResourceIT {
             support.awaitQueryValue(
                     "SELECT description FROM category WHERE category_name = ?",
                     "description",
-                    "Updated PII description",
-                    "PII");
+                    "Updated IT_PII description",
+                    "IT_PII");
 
             // Event verify
             var events = support.queryEvents("consent-category", "consent.category.updated");
@@ -390,15 +390,15 @@ class CatalogueResourceIT {
 
         @Test
         @Order(6)
-        @DisplayName("Delete category: HEALTH")
+        @DisplayName("Delete category: IT_HEALTH")
         void deleteHealth() {
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/categories/HEALTH")
+                    .delete("/api/v1/catalogue/categories/IT_HEALTH")
                     .then()
                     .statusCode(200);
 
-            support.assertRowAbsent("category", "category_name", "HEALTH");
+            support.assertRowAbsent("category", "category_name", "IT_HEALTH");
         }
 
         @Test
@@ -407,7 +407,7 @@ class CatalogueResourceIT {
         void getDeletedCategory() {
             given().header("Authorization", auth())
                     .when()
-                    .get("/api/v1/catalogue/categories/HEALTH")
+                    .get("/api/v1/catalogue/categories/IT_HEALTH")
                     .then()
                     .statusCode(404);
         }
@@ -454,7 +454,7 @@ class CatalogueResourceIT {
                             """
                     {
                       "fieldName": "email",
-                      "entityName": "User",
+                      "entityName": "user",
                       "description": "User email address"
                     }
                     """)
@@ -467,10 +467,10 @@ class CatalogueResourceIT {
             // DB verify: field row with correct entity FK (eventually consistent)
             support.awaitQuery(
                     "SELECT f.field_name, e.entity_name FROM field f "
-                            + "JOIN entity e ON f.entity_id = e.entity_id "
-                            + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
+                            + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                            + "WHERE f.field_name = 'email' AND e.entity_name = 'user'",
                     rows -> rows.size() == 1,
-                    "Expected 1 field row for email/User");
+                    "Expected 1 field row for email/user");
 
             // Event verify
             var events = support.queryEvents("consent-field", "consent.field.registered");
@@ -487,7 +487,7 @@ class CatalogueResourceIT {
                             """
                     {
                       "fieldName": "ssn",
-                      "entityName": "User",
+                      "entityName": "user",
                       "description": "Social security number"
                     }
                     """)
@@ -507,7 +507,7 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "entityName": "Patient", "description": "Medical patient" }
+                    { "entityName": "patient", "description": "Medical patient" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/entities")
@@ -525,7 +525,7 @@ class CatalogueResourceIT {
                             """
                     {
                       "fieldName": "diagnosis",
-                      "entityName": "Patient",
+                      "entityName": "patient",
                       "description": "Medical diagnosis"
                     }
                     """)
@@ -552,7 +552,7 @@ class CatalogueResourceIT {
 
         @Test
         @Order(6)
-        @DisplayName("Assign category PII → email")
+        @DisplayName("Assign category IT_PII → email")
         void assignEmailPii() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
@@ -560,26 +560,26 @@ class CatalogueResourceIT {
                             """
                     {
                       "fieldName": "email",
-                      "entityName": "User",
-                      "categoryName": "PII"
+                      "entityName": "user",
+                      "categoryName": "IT_PII"
                     }
                     """)
                     .when()
                     .post("/api/v1/catalogue/fields/categories")
                     .then()
                     .statusCode(200)
-                    .body("message", containsString("PII"));
+                    .body("message", containsString("IT_PII"));
 
             // DB verify: field_category join row (eventually consistent)
             support.awaitQuery(
                     "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
                             + "FROM field_category fc "
-                            + "JOIN field f ON fc.field_id = f.field_id "
-                            + "JOIN entity e ON f.entity_id = e.entity_id "
-                            + "JOIN category c ON fc.category_id = c.category_id "
-                            + "WHERE f.field_name = 'email' AND e.entity_name = 'User'",
-                    rows -> !rows.isEmpty() && "PII".equals(rows.get(0).get("category_name")),
-                    "Expected field_category row for email/User/PII");
+                            + "JOIN field f ON fc.field_uuid = f.field_uuid "
+                            + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                            + "JOIN category c ON fc.category_uuid = c.category_uuid "
+                            + "WHERE f.field_name = 'email' AND e.entity_name = 'user'",
+                    rows -> !rows.isEmpty() && "IT_PII".equals(rows.get(0).get("category_name")),
+                    "Expected field_category row for email/user/IT_PII");
 
             // Event verify
             var events = support.queryEvents("consent-field", "consent.field.category-assigned");
@@ -588,7 +588,7 @@ class CatalogueResourceIT {
 
         @Test
         @Order(7)
-        @DisplayName("Assign category PII → ssn")
+        @DisplayName("Assign category IT_PII → ssn")
         void assignSsnPii() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
@@ -596,8 +596,8 @@ class CatalogueResourceIT {
                             """
                     {
                       "fieldName": "ssn",
-                      "entityName": "User",
-                      "categoryName": "PII"
+                      "entityName": "user",
+                      "categoryName": "IT_PII"
                     }
                     """)
                     .when()
@@ -608,39 +608,39 @@ class CatalogueResourceIT {
             support.awaitQuery(
                     "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
                             + "FROM field_category fc "
-                            + "JOIN field f ON fc.field_id = f.field_id "
-                            + "JOIN entity e ON f.entity_id = e.entity_id "
-                            + "JOIN category c ON fc.category_id = c.category_id "
-                            + "WHERE f.field_name = 'ssn' AND e.entity_name = 'User'",
+                            + "JOIN field f ON fc.field_uuid = f.field_uuid "
+                            + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                            + "JOIN category c ON fc.category_uuid = c.category_uuid "
+                            + "WHERE f.field_name = 'ssn' AND e.entity_name = 'user'",
                     rows -> !rows.isEmpty(),
-                    "Expected field_category row for ssn/User");
+                    "Expected field_category row for ssn/user");
         }
 
         @Test
         @Order(8)
-        @DisplayName("Re-register HEALTH and assign to diagnosis")
+        @DisplayName("Re-register IT_HEALTH and assign to diagnosis")
         void assignDiagnosisHealth() {
-            // Re-register HEALTH (was deleted in CategoryCrud phase)
+            // Re-register IT_HEALTH (was deleted in CategoryCrud phase)
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "categoryName": "HEALTH", "description": "Health data" }
+                    { "categoryName": "IT_HEALTH", "description": "Health data" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/categories")
                     .then()
                     .statusCode(201);
 
-            // Assign HEALTH → diagnosis
+            // Assign IT_HEALTH → diagnosis
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
                     {
                       "fieldName": "diagnosis",
-                      "entityName": "Patient",
-                      "categoryName": "HEALTH"
+                      "entityName": "patient",
+                      "categoryName": "IT_HEALTH"
                     }
                     """)
                     .when()
@@ -651,12 +651,12 @@ class CatalogueResourceIT {
             support.awaitQuery(
                     "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
                             + "FROM field_category fc "
-                            + "JOIN field f ON fc.field_id = f.field_id "
-                            + "JOIN entity e ON f.entity_id = e.entity_id "
-                            + "JOIN category c ON fc.category_id = c.category_id "
-                            + "WHERE f.field_name = 'diagnosis' AND e.entity_name = 'Patient'",
-                    rows -> !rows.isEmpty() && "HEALTH".equals(rows.get(0).get("category_name")),
-                    "Expected field_category row for diagnosis/Patient/HEALTH");
+                            + "JOIN field f ON fc.field_uuid = f.field_uuid "
+                            + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                            + "JOIN category c ON fc.category_uuid = c.category_uuid "
+                            + "WHERE f.field_name = 'diagnosis' AND e.entity_name = 'patient'",
+                    rows -> !rows.isEmpty() && "IT_HEALTH".equals(rows.get(0).get("category_name")),
+                    "Expected field_category row for diagnosis/patient/IT_HEALTH");
         }
 
         @Test
@@ -702,17 +702,17 @@ class CatalogueResourceIT {
                                         (List<Map<String, Object>>) emailField.get("categories");
                                 assertThat(categories).isNotEmpty();
                                 assertThat(categories.stream().map(c -> c.get("categoryName")))
-                                        .contains("PII");
+                                        .contains("IT_PII");
                             });
         }
 
         @Test
         @Order(10)
-        @DisplayName("Unassign category PII from email")
+        @DisplayName("Unassign category IT_PII from email")
         void unassignEmailPii() {
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/fields/User/email/categories/PII")
+                    .delete("/api/v1/catalogue/fields/user/email/categories/IT_PII")
                     .then()
                     .statusCode(200);
 
@@ -722,12 +722,12 @@ class CatalogueResourceIT {
                     .pollInterval(Duration.ofMillis(200))
                     .untilAsserted(
                             () -> {
-                                var links = support.queryFieldCategories("email", "User");
+                                var links = support.queryFieldCategories("email", "user");
                                 assertThat(
                                                 links.stream()
                                                         .filter(
                                                                 l ->
-                                                                        "PII"
+                                                                        "IT_PII"
                                                                                 .equals(
                                                                                         l.get(
                                                                                                 "category_name")))
@@ -748,7 +748,7 @@ class CatalogueResourceIT {
                     .contentType(ContentType.JSON)
                     .body(
                             """
-                    { "fieldName": "", "entityName": "User" }
+                    { "fieldName": "", "entityName": "user" }
                     """)
                     .when()
                     .post("/api/v1/catalogue/fields")
@@ -779,37 +779,37 @@ class CatalogueResourceIT {
             // User entity has email and ssn fields → should fail
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/entities/User")
+                    .delete("/api/v1/catalogue/entities/user")
                     .then()
                     .statusCode(anyOf(is(409), is(400), is(500)));
 
             // DB verify: entity still exists
-            support.assertRowExists("entity", "entity_name", "User");
+            support.assertRowExists("entity", "entity_name", "user");
         }
 
         @Test
         @Order(2)
         @DisplayName("Delete category with assignments → 409")
         void deleteCategoryWithAssignmentsBlocked() {
-            // PII is still assigned to ssn → should fail with integrity error
+            // IT_PII is still assigned to ssn → should fail with integrity error
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/categories/PII")
+                    .delete("/api/v1/catalogue/categories/IT_PII")
                     .then()
                     .statusCode(anyOf(is(409), is(400), is(500)));
 
             // DB verify: category still exists
-            support.assertRowExists("category", "category_name", "PII");
+            support.assertRowExists("category", "category_name", "IT_PII");
         }
 
         @Test
         @Order(3)
-        @DisplayName("Unassign PII from ssn → then delete PII succeeds")
+        @DisplayName("Unassign IT_PII from ssn → then delete IT_PII succeeds")
         void unassignAndDeleteCategory() {
-            // First unassign PII from ssn
+            // First unassign IT_PII from ssn
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/fields/User/ssn/categories/PII")
+                    .delete("/api/v1/catalogue/fields/user/ssn/categories/IT_PII")
                     .then()
                     .statusCode(200);
 
@@ -819,12 +819,12 @@ class CatalogueResourceIT {
                     .pollInterval(Duration.ofMillis(300))
                     .untilAsserted(
                             () -> {
-                                var links = support.queryFieldCategories("ssn", "User");
+                                var links = support.queryFieldCategories("ssn", "user");
                                 assertThat(
                                                 links.stream()
                                                         .filter(
                                                                 l ->
-                                                                        "PII"
+                                                                        "IT_PII"
                                                                                 .equals(
                                                                                         l.get(
                                                                                                 "category_name")))
@@ -832,15 +832,15 @@ class CatalogueResourceIT {
                                         .isEmpty();
                             });
 
-            // Now delete PII category
+            // Now delete IT_PII category
             given().header("Authorization", auth())
                     .when()
-                    .delete("/api/v1/catalogue/categories/PII")
+                    .delete("/api/v1/catalogue/categories/IT_PII")
                     .then()
                     .statusCode(200);
 
             // DB verify: category removed
-            support.assertRowAbsent("category", "category_name", "PII");
+            support.assertRowAbsent("category", "category_name", "IT_PII");
         }
     }
 
@@ -879,7 +879,8 @@ class CatalogueResourceIT {
         @DisplayName("Event table has category events")
         void categoryEventsExist() {
             var events = support.queryEventsByAggregate("consent-category");
-            // We registered PII, HEALTH, updated PII, deleted HEALTH, re-registered HEALTH
+            // We registered IT_PII, IT_HEALTH, updated IT_PII, deleted IT_HEALTH, re-registered
+            // IT_HEALTH
             assertThat(events).hasSizeGreaterThanOrEqualTo(3);
         }
 

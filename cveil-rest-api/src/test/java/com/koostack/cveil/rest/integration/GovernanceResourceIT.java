@@ -39,7 +39,7 @@ class GovernanceResourceIT {
     private static final String TENANT_ID = "governance_it_tenant";
 
     // Catalogue items (registered as prerequisites for policies)
-    private static final String ENTITY_USER = "User";
+    private static final String ENTITY_USER = "user";
     private static final String CATEGORY_PII = "PII";
     private static final String FIELD_EMAIL = "email";
 
@@ -652,9 +652,10 @@ class GovernanceResourceIT {
                                         support.query(
                                                 "SELECT p.policy_type, pu.purpose_name,"
                                                     + " f.field_name FROM policy p JOIN purpose pu"
-                                                    + " ON p.purpose_id = pu.purpose_id JOIN field"
-                                                    + " f ON p.field_id = f.field_id WHERE"
-                                                    + " pu.purpose_name = ? AND f.field_name = ?",
+                                                    + " ON p.purpose_uuid = pu.purpose_uuid JOIN"
+                                                    + " field f ON p.field_uuid = f.field_uuid"
+                                                    + " WHERE pu.purpose_name = ? AND f.field_name"
+                                                    + " = ?",
                                                 PURPOSE_MARKETING,
                                                 FIELD_EMAIL);
                                 assertThat(policies).isNotEmpty();
@@ -697,9 +698,9 @@ class GovernanceResourceIT {
                                 var policies =
                                         support.query(
                                                 "SELECT p.policy_type, c.category_name FROM policy"
-                                                    + " p JOIN purpose pu ON p.purpose_id ="
-                                                    + " pu.purpose_id JOIN category c ON"
-                                                    + " p.category_id = c.category_id WHERE"
+                                                    + " p JOIN purpose pu ON p.purpose_uuid ="
+                                                    + " pu.purpose_uuid JOIN category c ON"
+                                                    + " p.category_uuid = c.category_uuid WHERE"
                                                     + " pu.purpose_name = ? AND c.category_name ="
                                                     + " ?",
                                                 PURPOSE_MARKETING,
@@ -739,8 +740,8 @@ class GovernanceResourceIT {
                                 var before =
                                         support.query(
                                                 "SELECT p.* FROM policy p JOIN purpose pu ON"
-                                                    + " p.purpose_id = pu.purpose_id JOIN field f"
-                                                    + " ON p.field_id = f.field_id WHERE"
+                                                    + " p.purpose_uuid = pu.purpose_uuid JOIN field"
+                                                    + " f ON p.field_uuid = f.field_uuid WHERE"
                                                     + " pu.purpose_name = ? AND f.field_name = ?"
                                                     + " AND p.policy_type::text = 'FIELD'",
                                                 PURPOSE_MARKETING,
@@ -781,8 +782,8 @@ class GovernanceResourceIT {
                                 var policies =
                                         support.query(
                                                 "SELECT p.* FROM policy p JOIN purpose pu ON"
-                                                    + " p.purpose_id = pu.purpose_id JOIN field f"
-                                                    + " ON p.field_id = f.field_id WHERE"
+                                                    + " p.purpose_uuid = pu.purpose_uuid JOIN field"
+                                                    + " f ON p.field_uuid = f.field_uuid WHERE"
                                                     + " pu.purpose_name = ? AND f.field_name = ?"
                                                     + " AND p.policy_type::text = 'FIELD' AND"
                                                     + " pu.tenant_id = ?",
@@ -868,11 +869,11 @@ class GovernanceResourceIT {
                                         support.query(
                                                 "SELECT pr.lawful_basis, pu.purpose_name,"
                                                     + " r.regulation_name FROM purpose_regulation"
-                                                    + " pr JOIN purpose pu ON pr.purpose_id ="
-                                                    + " pu.purpose_id JOIN regulation r ON"
-                                                    + " pr.regulation_id = r.regulation_id WHERE"
-                                                    + " pu.purpose_name = ? AND r.regulation_name ="
-                                                    + " ? AND pu.tenant_id = ?",
+                                                    + " pr JOIN purpose pu ON pr.purpose_uuid ="
+                                                    + " pu.purpose_uuid JOIN regulation r ON"
+                                                    + " pr.regulation_uuid = r.regulation_uuid"
+                                                    + " WHERE pu.purpose_name = ? AND"
+                                                    + " r.regulation_name = ? AND pu.tenant_id = ?",
                                                 PURPOSE_MARKETING,
                                                 REGULATION_GDPR,
                                                 TENANT_ID);
@@ -926,9 +927,9 @@ class GovernanceResourceIT {
                                 var links =
                                         support.query(
                                                 "SELECT * FROM purpose_regulation pr JOIN purpose"
-                                                    + " pu ON pr.purpose_id = pu.purpose_id JOIN"
-                                                    + " regulation r ON pr.regulation_id ="
-                                                    + " r.regulation_id WHERE pu.purpose_name = ?"
+                                                    + " pu ON pr.purpose_uuid = pu.purpose_uuid"
+                                                    + " JOIN regulation r ON pr.regulation_uuid ="
+                                                    + " r.regulation_uuid WHERE pu.purpose_name = ?"
                                                     + " AND r.regulation_name = ? AND pu.tenant_id"
                                                     + " = ?",
                                                 PURPOSE_MARKETING,
@@ -1006,10 +1007,11 @@ class GovernanceResourceIT {
                                                 "SELECT rj.*, r.regulation_name,"
                                                     + " j.jurisdiction_name FROM"
                                                     + " regulation_jurisdiction rj JOIN regulation"
-                                                    + " r ON rj.regulation_id = r.regulation_id"
-                                                    + " JOIN jurisdiction j ON rj.jurisdiction_id ="
-                                                    + " j.jurisdiction_id WHERE r.regulation_name ="
-                                                    + " ? AND j.jurisdiction_name = ?",
+                                                    + " r ON rj.regulation_uuid = r.regulation_uuid"
+                                                    + " JOIN jurisdiction j ON rj.jurisdiction_uuid"
+                                                    + " = j.jurisdiction_uuid WHERE"
+                                                    + " r.regulation_name = ? AND"
+                                                    + " j.jurisdiction_name = ?",
                                                 REGULATION_GDPR,
                                                 JURISDICTION_EU);
                                 assertThat(links).hasSize(1);
@@ -1064,11 +1066,11 @@ class GovernanceResourceIT {
                                 var links =
                                         support.query(
                                                 "SELECT * FROM regulation_jurisdiction rj JOIN"
-                                                        + " regulation r ON rj.regulation_id ="
-                                                        + " r.regulation_id JOIN jurisdiction j ON"
-                                                        + " rj.jurisdiction_id = j.jurisdiction_id"
-                                                        + " WHERE r.regulation_name = ? AND"
-                                                        + " j.jurisdiction_name = ?",
+                                                    + " regulation r ON rj.regulation_uuid ="
+                                                    + " r.regulation_uuid JOIN jurisdiction j ON"
+                                                    + " rj.jurisdiction_uuid = j.jurisdiction_uuid"
+                                                    + " WHERE r.regulation_name = ? AND"
+                                                    + " j.jurisdiction_name = ?",
                                                 REGULATION_GDPR,
                                                 JURISDICTION_EU);
                                 assertThat(links).isEmpty();

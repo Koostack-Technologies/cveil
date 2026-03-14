@@ -29,6 +29,7 @@ public final class IamDtos {
             @NotBlank(message = "username must not be blank") @Size(max = 255) String username,
             @NotBlank(message = "email must not be blank") @Email(message = "email must be a valid email address") @Size(max = 320) String email,
             @Size(max = 255) String fullName,
+            @Size(max = 255) String displayName,
             Set<String> roles,
             boolean temporaryPassword,
             @Size(max = 255) String password) {}
