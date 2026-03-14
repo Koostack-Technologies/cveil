@@ -26,7 +26,18 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build
+# Stage 1a: Build front-end bundle (cveil-web)
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS frontend
+
+WORKDIR /web
+COPY cveil-web/package.json cveil-web/package-lock.json* ./
+RUN npm ci --ignore-scripts
+COPY cveil-web/ .
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 1b: Build Java application
 # -----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jdk AS build
 
@@ -54,6 +65,9 @@ RUN chmod +x gradlew && \
 
 # -- Full source copy & build ------------------------------------------------
 COPY . .
+
+# -- Copy front-end bundle from frontend stage --------------------------------
+COPY --from=frontend /web/dist/cveil-web.iife.js cveil-rest-api/src/main/resources/META-INF/resources/js/cveil-web.iife.js
 
 # Build argument to select the packaging strategy.
 # - "quarkus"  — use `quarkusBuild` (requires Quarkus Gradle plugin enabled)

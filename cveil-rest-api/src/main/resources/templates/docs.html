@@ -23,7 +23,7 @@
                             <h3 class="text-xl font-semibold">Create your Workspace</h3>
                         </div>
                         <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Sign up and create a workspace from the platform dashboard. Each workspace is an isolated tenant with its own database schema and Redis streams.</p>
-                        <div class="ml-0 sm:ml-11 bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                        <div class="ml-0 sm:ml-11 bg-[#0d1117] rounded-sm border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
                             <p><span class="text-gray-500"># Create a workspace via the Platform API</span></p>
                             <p>curl -X POST https://api.cveil.dev/api/v1/platform/tenants \</p>
                             <p class="ml-4">-H "Authorization: Bearer $CVEIL_API_KEY" \</p>
@@ -40,14 +40,14 @@
                         </div>
                         <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Add the Cveil SDK to your Java project via Maven or Gradle.</p>
                         <div class="ml-0 sm:ml-11 grid sm:grid-cols-2 gap-4">
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                            <div class="bg-[#0d1117] rounded-sm border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
                                 <p class="text-gray-500 mb-2">&lt;!-- Maven --&gt;</p>
                                 <p>&lt;dependency&gt;</p>
                                 <p class="ml-2">&lt;groupId&gt;dev.cveil&lt;/groupId&gt;</p>
                                 <p class="ml-2">&lt;artifactId&gt;cveil-sdk&lt;/artifactId&gt;</p>
                                 <p>&lt;/dependency&gt;</p>
                             </div>
-                            <div class="bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                            <div class="bg-[#0d1117] rounded-sm border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
                                 <p class="text-gray-500 mb-2">// Gradle</p>
                                 <p>implementation <span class="text-green-300">"dev.cveil:cveil-sdk"</span></p>
                             </div>
@@ -61,7 +61,7 @@
                             <h3 class="text-xl font-semibold">Record your first consent</h3>
                         </div>
                         <p class="text-gray-400 mb-4 ml-0 sm:ml-11">Grant consent for a subject and purpose. The event is immutably recorded in the audit ledger.</p>
-                        <div class="ml-0 sm:ml-11 bg-[#0d1117] rounded-lg border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                        <div class="ml-0 sm:ml-11 bg-[#0d1117] rounded-sm border border-gray-700 p-4 font-mono text-sm text-gray-300 overflow-x-auto">
                             <p><span class="text-purple-400">import</span> dev.cveil.sdk.Cveil;</p>
                             <br>
                             <p><span class="text-purple-400">var</span> cv = Cveil.builder()</p>
@@ -296,9 +296,9 @@
                     </div>
                 </div>
 
-                <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6 text-center">
+                <div class="bg-gray-800/30 border border-gray-700 rounded p-6 text-center">
                     <p class="text-gray-400 mb-3">For interactive API exploration with request/response examples:</p>
-                    <a href="/api/v1/docs" class="inline-flex items-center gap-2 bg-cv-500 text-gray-900 hover:bg-cv-600 px-6 py-2.5 rounded-lg font-semibold transition-all">
+                    <a href="/api/v1/docs" class="inline-flex items-center gap-2 bg-cv-500 text-gray-900 hover:bg-cv-600 px-6 py-2.5 rounded-sm font-semibold transition-all">
                         Open API Explorer (Swagger UI)
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                     </a>

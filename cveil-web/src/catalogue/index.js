@@ -1,55 +1,16 @@
-const API = '/api/v1/catalogue';
+import {
+    esc, showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
+    activatePanel, closePanel, badge, showMsg, ready,
+} from '../shared/index.js';
 
-// ── Tab switching ──────────────────────────────────────────────
-function showTab(name) {
-    document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('border-cv-500', 'text-cv-500');
-        b.classList.add('border-transparent', 'text-gray-400');
-    });
-    document.getElementById('section-' + name).classList.remove('hidden');
-    const btn = document.getElementById('tab-' + name);
-    btn.classList.add('border-cv-500', 'text-cv-500');
-    btn.classList.remove('border-transparent', 'text-gray-400');
-    window.location.hash = name;
-}
+const api = createApi('/api/v1/catalogue');
 
-// ── Helpers ────────────────────────────────────────────────────
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+let entitiesCache = [];
+let fieldsCache = [];
+let categoriesCache = [];
 
-async function api(path, opts = {}) {
-    const headers = { ...opts.headers };
-    if (opts.body) headers['Content-Type'] = 'application/json';
-    const res = await fetch(API + path, { ...opts, headers });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }));
-        throw new Error(err.message || res.statusText);
-    }
-    if (res.status === 204) return null;
-    return res.json();
-}
-
-function badge(text, color = 'gray') {
-    const colors = {
-        gray: 'bg-gray-700 text-gray-300',
-        teal: 'bg-cv-900/50 text-cv-500 border border-cv-500/30',
-        blue: 'bg-blue-900/50 text-blue-400 border border-blue-500/30',
-        purple: 'bg-purple-900/50 text-purple-400 border border-purple-500/30',
-    };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color] || colors.gray}">${esc(text)}</span>`;
-}
-
-function showMsg(el, text, isError = false) {
-    el.textContent = text;
-    el.className = 'text-sm mt-3 ' + (isError ? 'text-red-400' : 'text-green-400');
-    el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 4000);
-}
-
-// ── Slide-out Panel ────────────────────────────────────────────
+// ── Panel ──────────────────────────────────────────────────────
 function openPanel(type, data) {
-    const overlay = document.getElementById('panel-overlay');
-    const panel = document.getElementById('panel');
     const title = document.getElementById('panel-title');
     const body = document.getElementById('panel-body');
 
@@ -63,33 +24,10 @@ function openPanel(type, data) {
     };
 
     (forms[type] || (() => { body.innerHTML = ''; }))();
-    overlay.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    activatePanel();
 }
-
-function closePanel() {
-    document.getElementById('panel').classList.add('translate-x-full');
-    setTimeout(() => document.getElementById('panel-overlay').classList.add('hidden'), 300);
-}
-
-// ── Delete Modal ───────────────────────────────────────────────
-let pendingDeleteFn = null;
-function confirmDelete(msg, fn) {
-    document.getElementById('delete-modal-msg').textContent = msg;
-    document.getElementById('delete-modal').classList.remove('hidden');
-    pendingDeleteFn = fn;
-}
-function closeDeleteModal() {
-    document.getElementById('delete-modal').classList.add('hidden');
-    pendingDeleteFn = null;
-}
-document.getElementById('delete-modal-confirm').addEventListener('click', async () => {
-    if (pendingDeleteFn) { await pendingDeleteFn(); closeDeleteModal(); }
-});
 
 // ── Entities ───────────────────────────────────────────────────
-let entitiesCache = [];
-
 async function loadEntities() {
     try {
         entitiesCache = await api('/entities');
@@ -170,8 +108,6 @@ function deleteEntity(name) {
 }
 
 // ── Fields ─────────────────────────────────────────────────────
-let fieldsCache = [];
-
 async function loadFields() {
     try {
         fieldsCache = await api('/fields');
@@ -271,8 +207,6 @@ function deleteField(entityName, fieldName) {
 }
 
 // ── Field–Category Management ──────────────────────────────────
-let categoriesCache = [];
-
 async function loadCategories() {
     try {
         categoriesCache = await api('/categories');
@@ -285,6 +219,12 @@ async function loadCategories() {
 
 function fieldCategoriesForm(field) {
     const entityName = field.entity ? field.entity.entityName : '';
+    const existing = new Set((field.categories || []).map(c => c.categoryName));
+    const availableOptions = categoriesCache
+        .filter(c => !existing.has(c.categoryName))
+        .map(c => `<option value="${esc(c.categoryName)}">${esc(c.categoryName)}</option>`)
+        .join('');
+
     return `
         <p class="text-sm text-gray-400 mb-4">Manage categories for field <strong class="text-white">${esc(field.fieldName)}</strong> on entity <strong class="text-white">${esc(entityName)}</strong></p>
         <div id="fc-list" class="space-y-2 mb-6">
@@ -301,23 +241,12 @@ function fieldCategoriesForm(field) {
             <div class="flex gap-2">
                 <select id="fc-select" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
                     <option value="">Select…</option>
+                    ${availableOptions}
                 </select>
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Assign</button>
             </div>
             <span id="fc-msg" class="hidden"></span>
-        </form>
-        <script>
-            (function() {
-                const existing = new Set(${JSON.stringify((field.categories || []).map(c => c.categoryName))});
-                const sel = document.getElementById('fc-select');
-                categoriesCache.filter(c => !existing.has(c.categoryName)).forEach(c => {
-                    const o = document.createElement('option');
-                    o.value = c.categoryName;
-                    o.textContent = c.categoryName;
-                    sel.appendChild(o);
-                });
-            })();
-        </script>`;
+        </form>`;
 }
 
 async function assignFieldCategory(e, entityName, fieldName) {
@@ -414,14 +343,26 @@ function deleteCategory(name) {
 }
 
 // ── Init ───────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    loadEntities();
-    loadFields();
-    loadCategories();
+export function init() {
+    // Expose functions for inline onclick handlers in templates
+    Object.assign(window, {
+        showTab, openPanel, closePanel, closeDeleteModal,
+        saveEntity, deleteEntity,
+        saveField, deleteField,
+        assignFieldCategory, unassignFieldCategory,
+        saveCategory, deleteCategory,
+    });
 
-    // Hash-based tab selection
-    const hash = window.location.hash.replace('#', '');
-    if (['entities', 'fields', 'categories'].includes(hash)) {
-        showTab(hash);
-    }
-});
+    initDeleteModal();
+
+    ready(() => {
+        loadEntities();
+        loadFields();
+        loadCategories();
+
+        const hash = window.location.hash.replace('#', '');
+        if (['entities', 'fields', 'categories'].includes(hash)) {
+            showTab(hash);
+        }
+    });
+}

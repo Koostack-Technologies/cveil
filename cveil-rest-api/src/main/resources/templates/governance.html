@@ -4,22 +4,22 @@
 {#content}
 
     <!-- Sub-navigation tabs -->
-    <div class="border-b border-gray-700 mb-8">
+    <div class="border-b border-gray-200 mb-8">
         <nav class="flex gap-6 -mb-px">
             <button onclick="showTab('jurisdictions')" id="tab-jurisdictions"
                 class="tab-btn pb-3 text-sm font-medium border-b-2 border-cv-500 text-cv-500 transition-colors">
                 Jurisdictions
             </button>
             <button onclick="showTab('regulations')" id="tab-regulations"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
                 Regulations
             </button>
             <button onclick="showTab('purposes')" id="tab-purposes"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
                 Purposes
             </button>
             <button onclick="showTab('policies')" id="tab-policies"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
                 Policies
             </button>
         </nav>
@@ -32,22 +32,23 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Jurisdictions</h2>
-                <p class="text-sm text-gray-400 mt-1">Geographic or legal regions where regulations apply.</p>
+                <p class="text-sm text-gray-500 mt-1">Geographic or legal regions where regulations apply.</p>
             </div>
-            <button onclick="openPanel('jurisdiction-add')" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onclick="openPanel('jurisdiction-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-sm transition-colors">
+                <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Jurisdiction
             </button>
         </div>
-        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        <div class="bg-white shadow-sm border border-gray-200 rounded overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-800/60 text-gray-400 uppercase text-xs tracking-wide">
+                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Name</th>
                         <th class="px-6 py-3">Description</th>
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="jurisdictions-table" class="divide-y divide-gray-700/50">
+                <tbody id="jurisdictions-table" class="divide-y divide-gray-200">
                     <tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
                 </tbody>
             </table>
@@ -61,15 +62,16 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Regulations</h2>
-                <p class="text-sm text-gray-400 mt-1">Legal frameworks such as GDPR, CCPA, HIPAA.</p>
+                <p class="text-sm text-gray-500 mt-1">Legal frameworks such as GDPR, CCPA, HIPAA.</p>
             </div>
-            <button onclick="openPanel('regulation-add')" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onclick="openPanel('regulation-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-sm transition-colors">
+                <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Regulation
             </button>
         </div>
-        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        <div class="bg-white shadow-sm border border-gray-200 rounded overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-800/60 text-gray-400 uppercase text-xs tracking-wide">
+                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Name</th>
                         <th class="px-6 py-3">Description</th>
@@ -77,7 +79,7 @@
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="regulations-table" class="divide-y divide-gray-700/50">
+                <tbody id="regulations-table" class="divide-y divide-gray-200">
                     <tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
                 </tbody>
             </table>
@@ -91,15 +93,16 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Purposes</h2>
-                <p class="text-sm text-gray-400 mt-1">Data processing purposes that require consent.</p>
+                <p class="text-sm text-gray-500 mt-1">Data processing purposes that require consent.</p>
             </div>
-            <button onclick="openPanel('purpose-add')" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onclick="openPanel('purpose-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-sm transition-colors">
+                <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Purpose
             </button>
         </div>
-        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        <div class="bg-white shadow-sm border border-gray-200 rounded overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-800/60 text-gray-400 uppercase text-xs tracking-wide">
+                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Name</th>
                         <th class="px-6 py-3">Description</th>
@@ -108,7 +111,7 @@
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="purposes-table" class="divide-y divide-gray-700/50">
+                <tbody id="purposes-table" class="divide-y divide-gray-200">
                     <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
                 </tbody>
             </table>
@@ -122,15 +125,16 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Policies</h2>
-                <p class="text-sm text-gray-400 mt-1">Field and category mappings linked to purposes.</p>
+                <p class="text-sm text-gray-500 mt-1">Field and category mappings linked to purposes.</p>
             </div>
-            <button onclick="openPanel('policy-add')" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onclick="openPanel('policy-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-sm transition-colors">
+                <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Policy
             </button>
         </div>
-        <div class="bg-gray-800/40 border border-gray-700 rounded-xl overflow-hidden">
+        <div class="bg-white shadow-sm border border-gray-200 rounded overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-800/60 text-gray-400 uppercase text-xs tracking-wide">
+                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Purpose</th>
                         <th class="px-6 py-3">Type</th>
@@ -139,7 +143,7 @@
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="policies-table" class="divide-y divide-gray-700/50">
+                <tbody id="policies-table" class="divide-y divide-gray-200">
                     <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
                 </tbody>
             </table>
@@ -149,11 +153,11 @@
     <!-- ============================================================ -->
     <!-- Slide-out Panel (shared)                                      -->
     <!-- ============================================================ -->
-    <div id="panel-overlay" class="hidden fixed inset-0 z-40 bg-black/50 transition-opacity" onclick="closePanel()"></div>
-    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-gray-900 border-l border-gray-700 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+    <div id="panel-overlay" class="hidden fixed inset-0 z-40 bg-black/30 transition-opacity" onclick="closePanel()"></div>
+    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white border-l border-gray-200 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h3 id="panel-title" class="text-lg font-semibold"></h3>
-            <button onclick="closePanel()" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800/60 transition-colors">
+            <button onclick="closePanel()" class="text-gray-500 hover:text-gray-900 p-1 rounded-sm hover:bg-gray-100 transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
@@ -163,18 +167,19 @@
     <!-- ============================================================ -->
     <!-- Delete Confirmation Modal                                     -->
     <!-- ============================================================ -->
-    <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-            <h3 class="text-lg font-semibold text-white mb-2">Confirm Delete</h3>
-            <p id="delete-modal-msg" class="text-sm text-gray-400 mb-6"></p>
+    <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div class="bg-white border border-gray-200 rounded p-6 max-w-sm w-full mx-4 shadow-lg">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
+            <p id="delete-modal-msg" class="text-sm text-gray-500 mb-6"></p>
             <div class="flex gap-3 justify-end">
-                <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
-                <button id="delete-modal-confirm" class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">Delete</button>
+                <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-sm hover:bg-gray-100 transition-colors">Cancel</button>
+                <button id="delete-modal-confirm" class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-sm transition-colors">Delete</button>
             </div>
         </div>
     </div>
 
-<script src="/js/governance.js"></script>
+<script src="/js/cveil-web.iife.js"></script>
+<script>CveilWeb.governance.init();</script>
 
 {/content}
 {/include}

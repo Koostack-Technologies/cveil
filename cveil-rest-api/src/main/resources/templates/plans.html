@@ -14,7 +14,7 @@
             <!-- Pricing Cards -->
             <div class="grid md:grid-cols-3 gap-8 mb-20">
                 {#for tier in tiers}
-                <div class="relative rounded-2xl border {#if tier.highlighted}border-cv-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
+                <div class="relative rounded-md border {#if tier.highlighted}border-cv-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
                     {#if tier.highlighted}
                     <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-cv-500 text-gray-900 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Most Popular</div>
                     {/if}
@@ -91,7 +91,7 @@
                         </div>
                     </div>
 
-                    <a href="#" class="{#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded-lg font-semibold text-center transition-all">
+                    <a href="#" class="{#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded-sm font-semibold text-center transition-all">
                         {tier.cta}
                     </a>
                 </div>
@@ -99,7 +99,7 @@
             </div>
 
             <!-- Pay As You Go Note -->
-            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-xl p-8 text-center mb-16">
+            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded p-8 text-center mb-16">
                 <h3 class="text-xl font-bold mb-3">Pay as you go, always</h3>
                 <p class="text-gray-400 leading-relaxed">
                     Every plan includes a baseline quota of consent evaluations per month. Go beyond your limit and you're automatically billed at the overage rate — no hard cutoffs, no surprises. Usage resets on the first of each calendar month.

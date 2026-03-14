@@ -1,10 +1,18 @@
-const API = '/api/v1/governance';
+import {
+    esc, showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
+    activatePanel, closePanel, badge, showMsg, ready,
+} from '../shared/index.js';
+
+const api = createApi('/api/v1/governance');
 const CATALOGUE_API = '/api/v1/catalogue';
 
-// Catalogue caches for policy form dropdowns
 let fieldsCache = [];
 let categoriesCache = [];
+let jurisdictionsCache = [];
+let regulationsCache = [];
+let purposesCache = [];
 
+// ── Catalogue data for policy dropdowns ────────────────────────
 async function loadCatalogue() {
     try {
         const [fields, categories] = await Promise.all([
@@ -18,56 +26,8 @@ async function loadCatalogue() {
     }
 }
 
-// ── Tab switching ──────────────────────────────────────────────
-function showTab(name) {
-    document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('border-cv-500', 'text-cv-500');
-        b.classList.add('border-transparent', 'text-gray-400');
-    });
-    document.getElementById('section-' + name).classList.remove('hidden');
-    const btn = document.getElementById('tab-' + name);
-    btn.classList.add('border-cv-500', 'text-cv-500');
-    btn.classList.remove('border-transparent', 'text-gray-400');
-    window.location.hash = name;
-}
-
-// ── Helpers ────────────────────────────────────────────────────
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-async function api(path, opts = {}) {
-    const headers = { ...opts.headers };
-    if (opts.body) headers['Content-Type'] = 'application/json';
-    const res = await fetch(API + path, { ...opts, headers });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }));
-        throw new Error(err.message || res.statusText);
-    }
-    if (res.status === 204) return null;
-    return res.json();
-}
-
-function badge(text, color = 'gray') {
-    const colors = {
-        gray: 'bg-gray-700 text-gray-300',
-        teal: 'bg-cv-900/50 text-cv-500 border border-cv-500/30',
-        blue: 'bg-blue-900/50 text-blue-400 border border-blue-500/30',
-        purple: 'bg-purple-900/50 text-purple-400 border border-purple-500/30',
-    };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color] || colors.gray}">${esc(text)}</span>`;
-}
-
-function showMsg(el, text, isError = false) {
-    el.textContent = text;
-    el.className = 'text-sm mt-3 ' + (isError ? 'text-red-400' : 'text-green-400');
-    el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 4000);
-}
-
-// ── Slide-out Panel ────────────────────────────────────────────
+// ── Panel ──────────────────────────────────────────────────────
 function openPanel(type, data) {
-    const overlay = document.getElementById('panel-overlay');
-    const panel = document.getElementById('panel');
     const title = document.getElementById('panel-title');
     const body = document.getElementById('panel-body');
 
@@ -82,33 +42,10 @@ function openPanel(type, data) {
     };
 
     (forms[type] || (() => { body.innerHTML = ''; }))();
-    overlay.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    activatePanel();
 }
-
-function closePanel() {
-    document.getElementById('panel').classList.add('translate-x-full');
-    setTimeout(() => document.getElementById('panel-overlay').classList.add('hidden'), 300);
-}
-
-// ── Delete Modal ───────────────────────────────────────────────
-let pendingDeleteFn = null;
-function confirmDelete(msg, fn) {
-    document.getElementById('delete-modal-msg').textContent = msg;
-    document.getElementById('delete-modal').classList.remove('hidden');
-    pendingDeleteFn = fn;
-}
-function closeDeleteModal() {
-    document.getElementById('delete-modal').classList.add('hidden');
-    pendingDeleteFn = null;
-}
-document.getElementById('delete-modal-confirm').addEventListener('click', async () => {
-    if (pendingDeleteFn) { await pendingDeleteFn(); closeDeleteModal(); }
-});
 
 // ── Jurisdictions ──────────────────────────────────────────────
-let jurisdictionsCache = [];
-
 async function loadJurisdictions() {
     try {
         jurisdictionsCache = await api('/jurisdictions');
@@ -189,8 +126,6 @@ function deleteJurisdiction(name) {
 }
 
 // ── Regulations ────────────────────────────────────────────────
-let regulationsCache = [];
-
 async function loadRegulations() {
     try {
         regulationsCache = await api('/regulations');
@@ -271,6 +206,12 @@ function deleteRegulation(name) {
 }
 
 function regulationJurisdictionsForm(reg) {
+    const existing = new Set((reg.activeJurisdictions || []).map(j => j.jurisdictionName));
+    const availableOptions = jurisdictionsCache
+        .filter(j => !existing.has(j.jurisdictionName))
+        .map(j => `<option value="${esc(j.jurisdictionName)}">${esc(j.jurisdictionName)}</option>`)
+        .join('');
+
     return `
         <p class="text-sm text-gray-400 mb-4">Manage jurisdictions for <strong class="text-white">${esc(reg.regulationName)}</strong></p>
         <div id="rj-list" class="space-y-2 mb-6">
@@ -287,23 +228,12 @@ function regulationJurisdictionsForm(reg) {
             <div class="flex gap-2">
                 <select id="rj-select" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
                     <option value="">Select…</option>
+                    ${availableOptions}
                 </select>
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Add</button>
             </div>
             <span id="rj-msg" class="hidden"></span>
-        </form>
-        <script>
-            (function() {
-                const existing = new Set(${JSON.stringify((reg.activeJurisdictions || []).map(j => j.jurisdictionName))});
-                const sel = document.getElementById('rj-select');
-                jurisdictionsCache.filter(j => !existing.has(j.jurisdictionName)).forEach(j => {
-                    const o = document.createElement('option');
-                    o.value = j.jurisdictionName;
-                    o.textContent = j.jurisdictionName;
-                    sel.appendChild(o);
-                });
-            })();
-        </script>`;
+        </form>`;
 }
 
 async function addJurisdictionToRegulation(e, regName) {
@@ -331,8 +261,6 @@ async function removeJurisdictionFromRegulation(regName, jurName) {
 }
 
 // ── Purposes ───────────────────────────────────────────────────
-let purposesCache = [];
-
 async function loadPurposes() {
     try {
         purposesCache = await api('/purposes');
@@ -420,6 +348,12 @@ function deletePurpose(name) {
 }
 
 function purposeRegulationsForm(purpose) {
+    const existing = new Set((purpose.regulations || []).map(r => r.regulationName));
+    const availableOptions = regulationsCache
+        .filter(r => !existing.has(r.regulationName))
+        .map(r => `<option value="${esc(r.regulationName)}">${esc(r.regulationName)}</option>`)
+        .join('');
+
     return `
         <p class="text-sm text-gray-400 mb-4">Manage regulation links for <strong class="text-white">${esc(purpose.purposeName)}</strong></p>
         <div id="pr-list" class="space-y-2 mb-6">
@@ -439,6 +373,7 @@ function purposeRegulationsForm(purpose) {
             <div class="space-y-3">
                 <select id="pr-select" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
                     <option value="">Select regulation…</option>
+                    ${availableOptions}
                 </select>
                 <input id="pr-basis" placeholder="Lawful basis (e.g. consent, legitimate_interest)"
                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
@@ -451,19 +386,7 @@ function purposeRegulationsForm(purpose) {
                 <button type="submit" class="w-full px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Link</button>
             </div>
             <span id="pr-msg" class="hidden"></span>
-        </form>
-        <script>
-            (function() {
-                const existing = new Set(${JSON.stringify((purpose.regulations || []).map(r => r.regulationName))});
-                const sel = document.getElementById('pr-select');
-                regulationsCache.filter(r => !existing.has(r.regulationName)).forEach(r => {
-                    const o = document.createElement('option');
-                    o.value = r.regulationName;
-                    o.textContent = r.regulationName;
-                    sel.appendChild(o);
-                });
-            })();
-        </script>`;
+        </form>`;
 }
 
 async function linkPurposeRegulation(e, purposeName) {
@@ -602,7 +525,6 @@ async function addPolicy(e) {
     try {
         await api('/purposes/policies', { method: 'POST', body: JSON.stringify(body) });
         closePanel();
-        // Wait for async projection to process the event before refreshing
         await new Promise(resolve => setTimeout(resolve, 800));
         await loadPurposes();
     } catch (err) { showMsg(msg, err.message, true); }
@@ -625,15 +547,28 @@ async function removePolicy(purposeName, pol) {
 }
 
 // ── Init ───────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    loadJurisdictions();
-    loadRegulations();
-    loadPurposes();
-    loadCatalogue();
+export function init() {
+    Object.assign(window, {
+        showTab, openPanel, closePanel, closeDeleteModal,
+        saveJurisdiction, deleteJurisdiction,
+        saveRegulation, deleteRegulation,
+        addJurisdictionToRegulation, removeJurisdictionFromRegulation,
+        savePurpose, deletePurpose,
+        linkPurposeRegulation, unlinkPurposeRegulation,
+        togglePolicyFields, addPolicy, removePolicy,
+    });
 
-    // Hash-based tab selection
-    const hash = window.location.hash.replace('#', '');
-    if (['jurisdictions', 'regulations', 'purposes', 'policies'].includes(hash)) {
-        showTab(hash);
-    }
-});
+    initDeleteModal();
+
+    ready(() => {
+        loadJurisdictions();
+        loadRegulations();
+        loadPurposes();
+        loadCatalogue();
+
+        const hash = window.location.hash.replace('#', '');
+        if (['jurisdictions', 'regulations', 'purposes', 'policies'].includes(hash)) {
+            showTab(hash);
+        }
+    });
+}

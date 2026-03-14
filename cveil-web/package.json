@@ -1,0 +1,17 @@
+{
+  "name": "@cveil/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cveil dashboard UI — bundled for CDN delivery",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:copy": "vite build && cp dist/cveil-web.iife.js ../cveil-rest-api/src/main/resources/META-INF/resources/js/cveil-web.iife.js",
+    "build:wasm": "cd ../crates && cargo build -p cveil-sdk-core --target wasm32-unknown-unknown --features browser --release && mkdir -p ../sdks/cveil-sdk-js/wasm/browser && cp target/wasm32-unknown-unknown/release/cveil_sdk_core.wasm ../sdks/cveil-sdk-js/wasm/browser/ && cp target/wasm32-unknown-unknown/release/cveil_sdk_core.wasm ../cveil-rest-api/src/main/resources/META-INF/resources/wasm/",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
