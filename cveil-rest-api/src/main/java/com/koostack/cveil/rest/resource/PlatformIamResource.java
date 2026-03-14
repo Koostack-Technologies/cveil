@@ -1,6 +1,7 @@
 package com.koostack.cveil.rest.resource;
 
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdpUser;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
@@ -19,6 +20,7 @@ import com.koostack.cveil.rest.orchestrator.RegisterUserOrchestrator;
 import com.koostack.cveil.rest.orchestrator.UpdateOrganizationOrchestrator;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -58,6 +60,8 @@ public class PlatformIamResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
+    @Inject @Named("consentDispatcher") CommandDispatcher consentDispatcher;
+
     @Inject CveilRequestHolder requestHolder;
 
     // -----------------------------------------------------------------------
@@ -88,7 +92,8 @@ public class PlatformIamResource {
                         cqrs.iamDispatcher(),
                         cqrs.coreDispatcher(),
                         cqrs.billingDispatcher(),
-                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                        consentDispatcher);
 
         var command =
                 new RegisterUserOrchestrator.RegisterUserCommand(
@@ -301,7 +306,8 @@ public class PlatformIamResource {
                         cqrs.iamDispatcher(),
                         cqrs.coreDispatcher(),
                         cqrs.billingDispatcher(),
-                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                        consentDispatcher);
 
         var command =
                 new RegisterOrganizationOrchestrator.RegisterOrgCommand(

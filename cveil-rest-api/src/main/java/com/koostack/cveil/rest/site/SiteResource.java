@@ -1,6 +1,7 @@
 package com.koostack.cveil.rest.site;
 
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.AuthResult;
 import com.koostack.cveil.platform.iam.jooq.AuthenticateCommandActuator;
@@ -12,6 +13,7 @@ import com.koostack.cveil.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import java.net.URI;
@@ -64,6 +66,8 @@ public class SiteResource {
     Template orgDetail;
 
     @Inject PlatformCqrsHolder cqrs;
+
+    @Inject @Named("consentDispatcher") CommandDispatcher consentDispatcher;
 
     @Context HttpHeaders httpHeaders;
 
@@ -143,7 +147,8 @@ public class SiteResource {
                             cqrs.iamDispatcher(),
                             cqrs.coreDispatcher(),
                             cqrs.billingDispatcher(),
-                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
+                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                            consentDispatcher);
 
             var command =
                     new RegisterUserOrchestrator.RegisterUserCommand(

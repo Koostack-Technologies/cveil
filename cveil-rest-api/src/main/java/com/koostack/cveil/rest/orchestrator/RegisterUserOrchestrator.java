@@ -10,6 +10,7 @@ import com.koostack.cveil.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.DeleteUserCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.ProvisionRedisCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.RegisterUserCommandActuator;
+import com.koostack.cveil.plugin.consent.jooq.SeedConsentGovernanceCommandActuator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -29,7 +30,9 @@ import java.util.logging.Logger;
  * <ol>
  *   <li><b>register-user</b> — creates the user in Keycloak. Compensation: deletes the KC user.
  *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes the tenant.
+ *   <li><b>assign-db-roles</b> — assigns tenant-admin role for the personal tenant.
  *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub + ACL user (non-fatal).
+ *   <li><b>seed-consent-governance</b> — seeds default US consent governance data (non-fatal).
  *   <li><b>create-billing-profile</b> — creates billing profile.
  *   <li><b>create-subscription</b> — creates subscription on free plan.
  * </ol>
@@ -44,6 +47,7 @@ public class RegisterUserOrchestrator
     public static final String DISPATCHER_IAM = "iam";
     public static final String DISPATCHER_CORE = "core";
     public static final String DISPATCHER_BILLING = "billing";
+    public static final String DISPATCHER_CONSENT = "consent";
 
     // -----------------------------------------------------------------------
     // Input / Output
@@ -85,24 +89,27 @@ public class RegisterUserOrchestrator
     // -----------------------------------------------------------------------
 
     private final PermissionService permissionService;
+    private final CommandDispatcher consentDispatcher;
 
     public RegisterUserOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher,
-            PermissionService permissionService) {
+            PermissionService permissionService,
+            CommandDispatcher consentDispatcher) {
         registerDispatcher(DISPATCHER_IAM, iamDispatcher);
         registerDispatcher(DISPATCHER_CORE, coreDispatcher);
         registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
         this.permissionService = permissionService;
+        this.consentDispatcher = consentDispatcher;
     }
 
-    /** Backward-compatible constructor for callers without a PermissionService. */
+    /** Backward-compatible constructor for callers without a PermissionService or consent. */
     public RegisterUserOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher) {
-        this(iamDispatcher, coreDispatcher, billingDispatcher, null);
+        this(iamDispatcher, coreDispatcher, billingDispatcher, null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -224,7 +231,30 @@ public class RegisterUserOrchestrator
                             }
                         }));
 
-        // Step 5: Create billing profile
+        // Step 5: Seed default consent governance data (non-fatal)
+        steps.add(
+                SagaStep.of(
+                        "seed-consent-governance",
+                        (in, ctx) -> {
+                            if (consentDispatcher == null) {
+                                LOG.info(
+                                        "Consent dispatcher not available — skipping governance"
+                                                + " seed");
+                                return;
+                            }
+                            try {
+                                consentDispatcher.dispatch(
+                                        new SeedConsentGovernanceCommandActuator
+                                                .SeedConsentGovernanceCommand(in.tenantId()));
+                                ctx.put("consentGovernanceSeeded", true);
+                            } catch (Exception e) {
+                                LOG.warning(
+                                        "Consent governance seed failed (non-fatal): "
+                                                + e.getMessage());
+                            }
+                        }));
+
+        // Step 6: Create billing profile
         steps.add(
                 SagaStep.of(
                         "create-billing-profile",
@@ -237,7 +267,7 @@ public class RegisterUserOrchestrator
                             ctx.put("billingProfileCreated", true);
                         }));
 
-        // Step 6: Create subscription on free plan
+        // Step 7: Create subscription on free plan
         steps.add(
                 SagaStep.of(
                         "create-subscription",

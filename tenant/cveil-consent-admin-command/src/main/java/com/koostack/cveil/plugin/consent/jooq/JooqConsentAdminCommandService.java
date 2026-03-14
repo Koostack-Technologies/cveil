@@ -68,6 +68,7 @@ public class JooqConsentAdminCommandService
     private RevokeAllConsentCommandActuator revokeAllConsentActuator;
     private DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator;
     private ShredSubjectCommandActuator shredSubjectActuator;
+    private SeedConsentGovernanceCommandActuator seedConsentGovernanceActuator;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -248,6 +249,13 @@ public class JooqConsentAdminCommandService
             actuators.put(
                     ShredSubjectCommandActuator.ShredSubjectCommand.class, shredSubjectActuator);
         }
+
+        // Seed governance actuator — dispatches through this service (self-reference)
+        seedConsentGovernanceActuator =
+                new SeedConsentGovernanceCommandActuator(eventService, this);
+        actuators.put(
+                SeedConsentGovernanceCommandActuator.SeedConsentGovernanceCommand.class,
+                seedConsentGovernanceActuator);
 
         LOG.info(
                 "JooqConsentAdminCommandService configured (event-sourced, {} actuators)",
