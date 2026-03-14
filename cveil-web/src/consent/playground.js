@@ -72,9 +72,9 @@ async function initWasm() {
 
         // Initialize SDK core with minimal config
         bridge.call1(w.cveil_init, JSON.stringify({
-            api_base_url: window.location.origin,
-            api_token: '',
-            default_jurisdiction: '',
+            apiBaseUrl: window.location.origin,
+            apiToken: '',
+            defaultJurisdiction: '',
         }));
 
         // Ingest the full consent graph (paginated)
