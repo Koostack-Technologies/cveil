@@ -3,9 +3,9 @@ import { createApi } from '../shared/api.js';
 import { MaskingType, MASKING_TYPES, maskJsonTree, extractFieldPaths } from './masking.js';
 import { WasmBridge } from './wasm-bridge.js';
 
-const catalogueApi = createApi('/api/v1');
-const governanceApi = createApi('/api/v1');
-const consentApi = createApi('/api/v1');
+const catalogueApi = createApi('/api/v1/catalogue');
+const governanceApi = createApi('/api/v1/governance');
+const consentApi = createApi('/api/v1/subjects');
 
 // ── State ──────────────────────────────────────────────────────
 let entities = [];
@@ -82,12 +82,14 @@ async function initWasm() {
         let hasMore = true;
         while (hasMore) {
             const url = cursor
-                ? `/consent/graph?limit=500&after=${encodeURIComponent(cursor)}`
-                : '/consent/graph?limit=500';
-            const page = await consentApi(url);
+                ? `/api/v1/consent/graph?limit=500&cursor=${encodeURIComponent(cursor)}`
+                : '/api/v1/consent/graph?limit=500';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Graph fetch failed');
+            const page = await res.json();
             const result = JSON.parse(bridge.call1(w.cveil_ingest_graph_page, JSON.stringify(page)));
             hasMore = result.hasMore;
-            cursor = page.pageInfo?.endCursor || page.page_info?.end_cursor || null;
+            cursor = page.pageInfo?.nextCursor || null;
             if (!cursor) hasMore = false;
         }
 
@@ -113,7 +115,7 @@ export async function initPlayground() {
             catalogueApi('/entities'),
             governanceApi('/purposes'),
             catalogueApi('/categories'),
-            consentApi('/subjects'),
+            consentApi(''),
             initWasm(),
         ]);
         entities = entRes || [];
@@ -217,7 +219,7 @@ async function evaluateWithWasm(subject, entity, purpose, data, fieldPaths) {
             }));
             try {
                 const evalResult = await consentApi(
-                    `/subjects/${encodeURIComponent(subject)}/evaluate`,
+                    `/${encodeURIComponent(subject)}/evaluate`,
                     { method: 'POST', body: JSON.stringify({ scopes }) },
                 );
                 // Build decision entries for WASM ingestion
@@ -296,7 +298,7 @@ async function evaluateWithRest(subject, entity, purpose, data, fieldPaths) {
         return { fieldName, entityName: entity, purposeName: purpose, category: fieldCatMap[fieldName] || '' };
     });
 
-    const result = await consentApi(`/subjects/${encodeURIComponent(subject)}/evaluate`, {
+    const result = await consentApi(`/${encodeURIComponent(subject)}/evaluate`, {
         method: 'POST',
         body: JSON.stringify({ scopes }),
     });
