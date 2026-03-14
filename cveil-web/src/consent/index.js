@@ -1,6 +1,7 @@
 import {
     esc, showTab as _showTab, confirmDelete, closeDeleteModal, initDeleteModal,
     activatePanel, closePanel, fmtTime, ready,
+    retryUntilChanged, setTableLoading,
 } from '../shared/index.js';
 
 import {
@@ -43,6 +44,20 @@ const ACTION_STYLES = {
 const SUBJECTS_API = '/api/v1/subjects';
 let subjectsCache = [];
 let subjectsLoaded = false;
+
+async function fetchSubjectsList() {
+    const res = await fetch(SUBJECTS_API);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+    return res.json();
+}
+
+async function reloadSubjects() {
+    setTableLoading('subjects-table', true);
+    subjectsCache = await retryUntilChanged(fetchSubjectsList, subjectsCache);
+    subjectsLoaded = true;
+    renderSubjects();
+    setTableLoading('subjects-table', false);
+}
 let currentSubject = null;
 
 // ── Tab switching (consent-specific hooks) ─────────────────────
@@ -413,7 +428,7 @@ function renderLedgerFeed() {
     feed.innerHTML = filtered.map(ev => {
         const style = getActionStyle(ev.action);
         return `
-            <div class="ledger-event flex items-start gap-4 px-5 py-3 hover:bg-gray-800/30 transition-colors">
+            <div class="ledger-event flex items-start gap-4 px-5 py-3 hover:bg-gray-50 transition-colors">
                 <div class="mt-1.5 flex-shrink-0">
                     <span class="block w-2.5 h-2.5 rounded-full ${style.dot}"></span>
                 </div>
@@ -492,8 +507,8 @@ function renderSubjects(filter) {
         return;
     }
     tb.innerHTML = data.map(s => `
-        <tr class="hover:bg-gray-800/30 transition-colors cursor-pointer" onclick="viewSubject('${esc(s.subjectName)}')">
-            <td class="px-6 py-4 font-medium text-white font-mono">${esc(s.subjectName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick="viewSubject('${esc(s.subjectName)}')">
+            <td class="px-6 py-4 font-medium text-gray-900 font-mono">${esc(s.subjectName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(s.description || '—')}</td>
             <td class="px-6 py-4 text-gray-500 text-xs">${fmtTime(s.createdAt)}</td>
             <td class="px-6 py-4 text-right" onclick="event.stopPropagation()">
@@ -655,21 +670,21 @@ function subjectForm(existing) {
         <form onsubmit="saveSubject(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Subject Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Subject Name</label>
                     <input id="pf-sub-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-sub-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Register'}
                 </button>
-                <button type="button" onclick="closeSubjectPanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closeSubjectPanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-sub-msg" class="hidden"></span>
         </form>`;
@@ -697,7 +712,7 @@ async function saveSubject(e, isEdit, origName) {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
         }
         closeSubjectPanel();
-        loadSubjects();
+        await reloadSubjects();
     } catch (err) {
         msg.textContent = err.message;
         msg.className = 'text-sm mt-3 text-red-400';
@@ -710,7 +725,7 @@ function deleteSubject(name) {
         try {
             const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(name)}`, { method: 'DELETE' });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-            loadSubjects();
+            await reloadSubjects();
             if (currentSubject === name) closeSubjectDetail();
         } catch (e) { alert(e.message); }
     });

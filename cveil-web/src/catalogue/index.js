@@ -1,6 +1,7 @@
 import {
     esc, showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
     activatePanel, closePanel, badge, showMsg, ready,
+    retryUntilChanged, setTableLoading,
 } from '../shared/index.js';
 
 const api = createApi('/api/v1/catalogue');
@@ -8,6 +9,28 @@ const api = createApi('/api/v1/catalogue');
 let entitiesCache = [];
 let fieldsCache = [];
 let categoriesCache = [];
+
+// ── Retry-aware reloaders (post-mutation eventual consistency) ──
+async function reloadEntities() {
+    setTableLoading('entities-table', true);
+    entitiesCache = await retryUntilChanged(() => api('/entities'), entitiesCache);
+    renderEntities();
+    setTableLoading('entities-table', false);
+}
+
+async function reloadFields() {
+    setTableLoading('fields-table', true);
+    fieldsCache = await retryUntilChanged(() => api('/fields'), fieldsCache);
+    renderFields();
+    setTableLoading('fields-table', false);
+}
+
+async function reloadCategories() {
+    setTableLoading('categories-table', true);
+    categoriesCache = await retryUntilChanged(() => api('/categories'), categoriesCache);
+    renderCategories();
+    setTableLoading('categories-table', false);
+}
 
 // ── Panel ──────────────────────────────────────────────────────
 function openPanel(type, data) {
@@ -45,8 +68,8 @@ function renderEntities() {
         return;
     }
     tb.innerHTML = entitiesCache.map(e => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(e.entityName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(e.entityName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(e.description || '—')}</td>
             <td class="px-6 py-4 text-right">
                 <button onclick='openPanel("entity-edit", ${JSON.stringify(e).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
@@ -62,21 +85,21 @@ function entityForm(existing) {
         <form onsubmit="saveEntity(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-ent-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-ent-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-ent-msg" class="hidden"></span>
         </form>`;
@@ -94,7 +117,7 @@ async function saveEntity(e, isEdit, origName) {
             await api('/entities', { method: 'POST', body: JSON.stringify({ entityName: name, description: desc }) });
         }
         closePanel();
-        loadEntities();
+        await reloadEntities();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -102,7 +125,7 @@ function deleteEntity(name) {
     confirmDelete(`Delete entity "${name}"? This cannot be undone. Entities with fields must have their fields removed first.`, async () => {
         try {
             await api(`/entities/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadEntities();
+            await reloadEntities();
         } catch (e) { alert(e.message); }
     });
 }
@@ -125,15 +148,15 @@ function renderFields() {
         return;
     }
     tb.innerHTML = fieldsCache.map(f => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(f.fieldName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(f.fieldName)}</td>
             <td class="px-6 py-4 text-gray-400">${f.entity ? esc(f.entity.entityName) : '<span class="text-gray-600">—</span>'}</td>
             <td class="px-6 py-4 text-gray-400">${esc(f.description || '—')}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(f.categories || []).map(c => badge(c.categoryName, 'purple')).join('')}
                     <button onclick='openPanel("field-categories", ${JSON.stringify(f).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-600 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
@@ -150,33 +173,33 @@ function fieldForm() {
         <form onsubmit="saveField(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Field Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Field Name</label>
                     <input id="pf-fld-name" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Entity</label>
+                    <label class="block text-sm text-gray-500 mb-1">Entity</label>
                     <select id="pf-fld-entity" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="">Select entity…</option>
                         ${entityOptions}
                     </select>
                     ${!entitiesCache.length ? '<p class="text-xs text-amber-400 mt-1">No entities registered. Add an entity first.</p>' : ''}
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-fld-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Entity Description <span class="text-gray-600">(optional, used if entity is new)</span></label>
+                    <label class="block text-sm text-gray-500 mb-1">Entity Description <span class="text-gray-600">(optional, used if entity is new)</span></label>
                     <textarea id="pf-fld-ent-desc" rows="2"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">Create</button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-fld-msg" class="hidden"></span>
         </form>`;
@@ -192,8 +215,8 @@ async function saveField(e) {
     try {
         await api('/fields', { method: 'POST', body: JSON.stringify({ fieldName, entityName, description, entityDescription }) });
         closePanel();
-        loadFields();
-        loadEntities();
+        await reloadFields();
+        await reloadEntities();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -201,7 +224,7 @@ function deleteField(entityName, fieldName) {
     confirmDelete(`Delete field "${fieldName}" from entity "${entityName}"? This cannot be undone.`, async () => {
         try {
             await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`, { method: 'DELETE' });
-            loadFields();
+            await reloadFields();
         } catch (e) { alert(e.message); }
     });
 }
@@ -226,20 +249,20 @@ function fieldCategoriesForm(field) {
         .join('');
 
     return `
-        <p class="text-sm text-gray-400 mb-4">Manage categories for field <strong class="text-white">${esc(field.fieldName)}</strong> on entity <strong class="text-white">${esc(entityName)}</strong></p>
+        <p class="text-sm text-gray-500 mb-4">Manage categories for field <strong class="text-gray-900">${esc(field.fieldName)}</strong> on entity <strong class="text-gray-900">${esc(entityName)}</strong></p>
         <div id="fc-list" class="space-y-2 mb-6">
             ${(field.categories || []).map(c => `
-                <div class="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
-                    <span class="text-sm text-white">${esc(c.categoryName)}</span>
+                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <span class="text-sm text-gray-900">${esc(c.categoryName)}</span>
                     <button onclick="unassignFieldCategory('${esc(entityName)}','${esc(field.fieldName)}','${esc(c.categoryName)}')"
                         class="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
                 </div>`).join('') || '<p class="text-sm text-gray-500">No categories assigned.</p>'}
         </div>
-        <hr class="border-gray-700 mb-4">
-        <p class="text-sm text-gray-400 mb-3">Assign a category</p>
+        <hr class="border-gray-200 mb-4">
+        <p class="text-sm text-gray-500 mb-3">Assign a category</p>
         <form onsubmit="assignFieldCategory(event, '${esc(entityName)}', '${esc(field.fieldName)}')">
             <div class="flex gap-2">
-                <select id="fc-select" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                <select id="fc-select" class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                     <option value="">Select…</option>
                     ${availableOptions}
                 </select>
@@ -256,7 +279,7 @@ async function assignFieldCategory(e, entityName, fieldName) {
     try {
         await api('/fields/categories', { method: 'POST', body: JSON.stringify({ fieldName, entityName, categoryName }) });
         closePanel();
-        await loadFields();
+        await reloadFields();
         const updated = fieldsCache.find(f => f.fieldName === fieldName && f.entity && f.entity.entityName === entityName);
         if (updated) openPanel('field-categories', updated);
     } catch (err) { showMsg(document.getElementById('fc-msg'), err.message, true); }
@@ -266,7 +289,7 @@ async function unassignFieldCategory(entityName, fieldName, categoryName) {
     try {
         await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}/categories/${encodeURIComponent(categoryName)}`, { method: 'DELETE' });
         closePanel();
-        await loadFields();
+        await reloadFields();
         const updated = fieldsCache.find(f => f.fieldName === fieldName && f.entity && f.entity.entityName === entityName);
         if (updated) openPanel('field-categories', updated);
     } catch (e) { alert(e.message); }
@@ -280,8 +303,8 @@ function renderCategories() {
         return;
     }
     tb.innerHTML = categoriesCache.map(c => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(c.categoryName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(c.categoryName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(c.description || '—')}</td>
             <td class="px-6 py-4 text-right">
                 <button onclick='openPanel("category-edit", ${JSON.stringify(c).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
@@ -297,21 +320,21 @@ function categoryForm(existing) {
         <form onsubmit="saveCategory(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-cat-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-cat-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-cat-msg" class="hidden"></span>
         </form>`;
@@ -329,7 +352,7 @@ async function saveCategory(e, isEdit, origName) {
             await api('/categories', { method: 'POST', body: JSON.stringify({ categoryName: name, description: desc }) });
         }
         closePanel();
-        loadCategories();
+        await reloadCategories();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -337,7 +360,7 @@ function deleteCategory(name) {
     confirmDelete(`Delete category "${name}"? This cannot be undone. Categories still assigned to fields must be unassigned first.`, async () => {
         try {
             await api(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadCategories();
+            await reloadCategories();
         } catch (e) { alert(e.message); }
     });
 }

@@ -7,3 +7,4 @@ export { badge } from './badge.js';
 export { showMsg } from './message.js';
 export { fmtTime } from './time.js';
 export { ready } from './ready.js';
+export { retryUntilChanged, setTableLoading } from './retry.js';

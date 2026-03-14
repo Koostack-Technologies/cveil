@@ -1,6 +1,7 @@
 import {
     esc, showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
     activatePanel, closePanel, badge, showMsg, ready,
+    retryUntilChanged, setTableLoading,
 } from '../shared/index.js';
 
 const api = createApi('/api/v1/governance');
@@ -24,6 +25,31 @@ async function loadCatalogue() {
     } catch (e) {
         console.warn('Failed to load catalogue data:', e);
     }
+}
+
+// ── Retry-aware reloaders (post-mutation eventual consistency) ──
+async function reloadJurisdictions() {
+    setTableLoading('jurisdictions-table', true);
+    jurisdictionsCache = await retryUntilChanged(() => api('/jurisdictions'), jurisdictionsCache);
+    renderJurisdictions();
+    setTableLoading('jurisdictions-table', false);
+}
+
+async function reloadRegulations() {
+    setTableLoading('regulations-table', true);
+    regulationsCache = await retryUntilChanged(() => api('/regulations'), regulationsCache);
+    renderRegulations();
+    setTableLoading('regulations-table', false);
+}
+
+async function reloadPurposes() {
+    setTableLoading('purposes-table', true);
+    setTableLoading('policies-table', true);
+    purposesCache = await retryUntilChanged(() => api('/purposes'), purposesCache);
+    renderPurposes();
+    renderPolicies();
+    setTableLoading('purposes-table', false);
+    setTableLoading('policies-table', false);
 }
 
 // ── Panel ──────────────────────────────────────────────────────
@@ -112,7 +138,7 @@ async function saveJurisdiction(e, isEdit, origName) {
             await api('/jurisdictions', { method: 'POST', body: JSON.stringify({ jurisdictionName: name, description: desc }) });
         }
         closePanel();
-        loadJurisdictions();
+        await reloadJurisdictions();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -120,7 +146,7 @@ function deleteJurisdiction(name) {
     confirmDelete(`Delete jurisdiction "${name}"? This cannot be undone.`, async () => {
         try {
             await api(`/jurisdictions/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadJurisdictions();
+            await reloadJurisdictions();
         } catch (e) { alert(e.message); }
     });
 }
@@ -192,7 +218,7 @@ async function saveRegulation(e) {
     try {
         await api('/regulations', { method: 'POST', body: JSON.stringify({ regulationName: name, description: desc }) });
         closePanel();
-        loadRegulations();
+        await reloadRegulations();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -200,7 +226,7 @@ function deleteRegulation(name) {
     confirmDelete(`Delete regulation "${name}"? This cannot be undone.`, async () => {
         try {
             await api(`/regulations/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadRegulations();
+            await reloadRegulations();
         } catch (e) { alert(e.message); }
     });
 }
@@ -244,7 +270,7 @@ async function addJurisdictionToRegulation(e, regName) {
     try {
         await api('/regulations/jurisdictions', { method: 'POST', body: JSON.stringify({ regulationName: regName, jurisdictionName: jurName }) });
         closePanel();
-        await loadRegulations();
+        await reloadRegulations();
         const updated = regulationsCache.find(r => r.regulationName === regName);
         if (updated) openPanel('regulation-jurisdictions', updated);
     } catch (err) { showMsg(document.getElementById('rj-msg'), err.message, true); }
@@ -254,7 +280,7 @@ async function removeJurisdictionFromRegulation(regName, jurName) {
     try {
         await api(`/regulations/${encodeURIComponent(regName)}/jurisdictions/${encodeURIComponent(jurName)}`, { method: 'DELETE' });
         closePanel();
-        await loadRegulations();
+        await reloadRegulations();
         const updated = regulationsCache.find(r => r.regulationName === regName);
         if (updated) openPanel('regulation-jurisdictions', updated);
     } catch (e) { alert(e.message); }
@@ -334,7 +360,7 @@ async function savePurpose(e) {
     try {
         await api('/purposes', { method: 'POST', body: JSON.stringify({ purposeName: name, description: desc }) });
         closePanel();
-        loadPurposes();
+        await reloadPurposes();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -342,7 +368,7 @@ function deletePurpose(name) {
     confirmDelete(`Delete purpose "${name}"? This will also remove all linked policies and regulations.`, async () => {
         try {
             await api(`/purposes/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadPurposes();
+            await reloadPurposes();
         } catch (e) { alert(e.message); }
     });
 }
@@ -399,7 +425,7 @@ async function linkPurposeRegulation(e, purposeName) {
     try {
         await api('/purposes/regulations', { method: 'POST', body: JSON.stringify({ purposeName, regulationName: regName, lawfulBasis: basis, onGranted, onDenied }) });
         closePanel();
-        await loadPurposes();
+        await reloadPurposes();
         const updated = purposesCache.find(p => p.purposeName === purposeName);
         if (updated) openPanel('purpose-regulations', updated);
     } catch (err) { showMsg(document.getElementById('pr-msg'), err.message, true); }
@@ -409,7 +435,7 @@ async function unlinkPurposeRegulation(purposeName, regName) {
     try {
         await api(`/purposes/${encodeURIComponent(purposeName)}/regulations/${encodeURIComponent(regName)}`, { method: 'DELETE' });
         closePanel();
-        await loadPurposes();
+        await reloadPurposes();
         const updated = purposesCache.find(p => p.purposeName === purposeName);
         if (updated) openPanel('purpose-regulations', updated);
     } catch (e) { alert(e.message); }
@@ -527,8 +553,7 @@ async function addPolicy(e) {
     try {
         await api('/purposes/policies', { method: 'POST', body: JSON.stringify(body) });
         closePanel();
-        await new Promise(resolve => setTimeout(resolve, 800));
-        await loadPurposes();
+        await reloadPurposes();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
@@ -543,7 +568,7 @@ async function removePolicy(purposeName, pol) {
                 categoryName: pol.category ? pol.category.categoryName : null,
             };
             await api('/purposes/policies', { method: 'DELETE', body: JSON.stringify(body) });
-            loadPurposes();
+            await reloadPurposes();
         } catch (e) { alert(e.message); }
     });
 }
