@@ -57,6 +57,9 @@ public class SeedConsentGovernanceCommandActuator
                     seedPurposes();
                     seedRegulationJurisdictionLinks();
                     seedPurposeRegulationLinks();
+                    seedEntities();
+                    seedFields();
+                    seedFieldCategoryAssignments();
                 });
 
         LOG.info("Consent governance seed completed for tenant: {}", tenantId);
@@ -635,6 +638,182 @@ public class SeedConsentGovernanceCommandActuator
                                         purpose, regulation, lawfulBasis, onGranted, onDenied)),
                 "purpose-regulation",
                 purpose + "→" + regulation);
+    }
+
+    // -----------------------------------------------------------------------
+    // Entities (6)
+    // -----------------------------------------------------------------------
+
+    private void seedEntities() {
+        LOG.debug("Seeding entities...");
+        List<String[]> entities =
+                List.of(
+                        new String[] {"customer", "A customer or client of the organization"},
+                        new String[] {"employee", "An employee or staff member"},
+                        new String[] {"user", "An application or platform user"},
+                        new String[] {"patient", "A healthcare patient (HIPAA-relevant)"},
+                        new String[] {"prospect", "A prospective customer or lead"},
+                        new String[] {"vendor", "A third-party vendor or supplier"});
+
+        for (String[] entity : entities) {
+            dispatchSafe(
+                    () ->
+                            consentDispatcher.dispatch(
+                                    new RegisterEntityCommandActuator.RegisterEntityCommand(
+                                            entity[0], entity[1])),
+                    "entity",
+                    entity[0]);
+        }
+        LOG.debug("Entities seeded: {}", entities.size());
+    }
+
+    // -----------------------------------------------------------------------
+    // Fields (~30) — registered under the __default__ entity
+    // -----------------------------------------------------------------------
+
+    private void seedFields() {
+        LOG.debug("Seeding fields...");
+        // Each entry: { fieldName, description }
+        List<String[]> fields =
+                List.of(
+                        // PII
+                        new String[] {"email", "Email address"},
+                        new String[] {"phone_number", "Phone or mobile number"},
+                        new String[] {"full_name", "Full legal name"},
+                        new String[] {"first_name", "First / given name"},
+                        new String[] {"last_name", "Last / family name"},
+                        new String[] {"date_of_birth", "Date of birth"},
+                        new String[] {"mailing_address", "Mailing or home address"},
+                        // Government ID
+                        new String[] {"ssn", "Social Security Number"},
+                        new String[] {"passport_number", "Passport number"},
+                        new String[] {"drivers_license", "Driver's license number"},
+                        new String[] {"tax_id", "Tax identification number (EIN/TIN)"},
+                        // Financial
+                        new String[] {"credit_card_number", "Credit or debit card number"},
+                        new String[] {"bank_account_number", "Bank account number"},
+                        new String[] {"routing_number", "Bank routing number"},
+                        // Online Identifiers
+                        new String[] {"ip_address", "IP address (v4 or v6)"},
+                        new String[] {"device_id", "Device identifier (IDFA/GAID/UUID)"},
+                        new String[] {"cookie_id", "Browser cookie or tracking identifier"},
+                        new String[] {"browser_fingerprint", "Browser fingerprint hash"},
+                        // PHI (Health)
+                        new String[] {"diagnosis", "Medical diagnosis or condition"},
+                        new String[] {"medication", "Prescribed medication"},
+                        new String[] {"treatment_record", "Medical treatment record"},
+                        new String[] {"insurance_id", "Health insurance plan ID"},
+                        // Sensitive / Special Category
+                        new String[] {"race", "Race or racial origin"},
+                        new String[] {"ethnicity", "Ethnicity or ethnic origin"},
+                        new String[] {"religion", "Religious belief or affiliation"},
+                        new String[] {"sexual_orientation", "Sexual orientation"},
+                        // Employment
+                        new String[] {"salary", "Salary or compensation amount"},
+                        new String[] {"job_title", "Job title or position"},
+                        new String[] {"employee_id", "Internal employee identifier"},
+                        // Geolocation
+                        new String[] {"geolocation", "GPS coordinates or precise location"},
+                        new String[] {"zip_code", "ZIP or postal code"},
+                        // Biometric
+                        new String[] {"biometric_template", "Biometric template (general)"},
+                        new String[] {"facial_scan", "Facial recognition scan data"},
+                        new String[] {"fingerprint", "Fingerprint scan data"},
+                        // Education
+                        new String[] {"student_id", "Student identification number"},
+                        new String[] {"gpa", "Grade point average"},
+                        new String[] {"transcript", "Academic transcript"});
+
+        for (String[] field : fields) {
+            dispatchSafe(
+                    () ->
+                            consentDispatcher.dispatch(
+                                    new RegisterFieldCommandActuator.RegisterFieldCommand(
+                                            field[0], null, field[1], null)),
+                    "field",
+                    field[0]);
+        }
+        LOG.debug("Fields seeded: {}", fields.size());
+    }
+
+    // -----------------------------------------------------------------------
+    // Field → Category assignments
+    // -----------------------------------------------------------------------
+
+    private void seedFieldCategoryAssignments() {
+        LOG.debug("Seeding field→category assignments...");
+        // Each entry: { fieldName, categoryName }
+        List<String[]> assignments =
+                List.of(
+                        // PII fields
+                        new String[] {"email", "PII"},
+                        new String[] {"phone_number", "PII"},
+                        new String[] {"full_name", "PII"},
+                        new String[] {"first_name", "PII"},
+                        new String[] {"last_name", "PII"},
+                        new String[] {"date_of_birth", "PII"},
+                        new String[] {"mailing_address", "PII"},
+                        // Government ID fields → both SENSITIVE_PII and GOVERNMENT_ID
+                        new String[] {"ssn", "SENSITIVE_PII"},
+                        new String[] {"ssn", "GOVERNMENT_ID"},
+                        new String[] {"passport_number", "SENSITIVE_PII"},
+                        new String[] {"passport_number", "GOVERNMENT_ID"},
+                        new String[] {"drivers_license", "SENSITIVE_PII"},
+                        new String[] {"drivers_license", "GOVERNMENT_ID"},
+                        new String[] {"tax_id", "SENSITIVE_PII"},
+                        new String[] {"tax_id", "GOVERNMENT_ID"},
+                        // Financial fields
+                        new String[] {"credit_card_number", "FINANCIAL"},
+                        new String[] {"credit_card_number", "SENSITIVE_PII"},
+                        new String[] {"bank_account_number", "FINANCIAL"},
+                        new String[] {"bank_account_number", "SENSITIVE_PII"},
+                        new String[] {"routing_number", "FINANCIAL"},
+                        // Online Identifiers
+                        new String[] {"ip_address", "ONLINE_IDENTIFIERS"},
+                        new String[] {"device_id", "ONLINE_IDENTIFIERS"},
+                        new String[] {"cookie_id", "ONLINE_IDENTIFIERS"},
+                        new String[] {"browser_fingerprint", "ONLINE_IDENTIFIERS"},
+                        // PHI (Health)
+                        new String[] {"diagnosis", "PHI"},
+                        new String[] {"medication", "PHI"},
+                        new String[] {"treatment_record", "PHI"},
+                        new String[] {"insurance_id", "PHI"},
+                        // Sensitive / Special Category
+                        new String[] {"race", "SENSITIVE_PII"},
+                        new String[] {"ethnicity", "SENSITIVE_PII"},
+                        new String[] {"religion", "SENSITIVE_PII"},
+                        new String[] {"sexual_orientation", "SENSITIVE_PII"},
+                        // Employment
+                        new String[] {"salary", "EMPLOYMENT"},
+                        new String[] {"salary", "FINANCIAL"},
+                        new String[] {"job_title", "EMPLOYMENT"},
+                        new String[] {"employee_id", "EMPLOYMENT"},
+                        new String[] {"employee_id", "PII"},
+                        // Geolocation
+                        new String[] {"geolocation", "GEOLOCATION"},
+                        new String[] {"zip_code", "GEOLOCATION"},
+                        new String[] {"zip_code", "PII"},
+                        // Biometric
+                        new String[] {"biometric_template", "BIOMETRIC"},
+                        new String[] {"facial_scan", "BIOMETRIC"},
+                        new String[] {"fingerprint", "BIOMETRIC"},
+                        // Education
+                        new String[] {"student_id", "EDUCATION"},
+                        new String[] {"student_id", "PII"},
+                        new String[] {"gpa", "EDUCATION"},
+                        new String[] {"transcript", "EDUCATION"});
+
+        for (String[] assignment : assignments) {
+            dispatchSafe(
+                    () ->
+                            consentDispatcher.dispatch(
+                                    new AssignFieldCategoryCommandActuator
+                                            .AssignFieldCategoryCommand(
+                                            assignment[0], null, assignment[1], null)),
+                    "field-category",
+                    assignment[0] + "→" + assignment[1]);
+        }
+        LOG.debug("Field→category assignments seeded: {}", assignments.size());
     }
 
     // -----------------------------------------------------------------------

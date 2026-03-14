@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.cveil.core.models.AggregateRoot;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
 import com.koostack.cveil.core.tenant.consent.events.*;
+import com.koostack.cveil.core.util.FieldNameNormalizer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,11 +35,20 @@ public record FieldAggregate(
     }
 
     public static String normalizeEntityName(String entityName) {
-        return entityName != null && !entityName.isBlank() ? entityName : DEFAULT_ENTITY;
+        if (entityName == null || entityName.isBlank()) return DEFAULT_ENTITY;
+        String normalized = FieldNameNormalizer.toSnakeCase(entityName);
+        return (normalized != null && !normalized.isBlank()) ? normalized : DEFAULT_ENTITY;
+    }
+
+    /** Normalizes a field name to canonical snake_case. */
+    public static String normalizeFieldName(String fieldName) {
+        if (fieldName == null) return null;
+        String normalized = FieldNameNormalizer.toSnakeCase(fieldName);
+        return normalized != null ? normalized : fieldName;
     }
 
     public static UUID deriveId(String entityName, String fieldName) {
-        String key = normalizeEntityName(entityName) + ":" + fieldName;
+        String key = normalizeEntityName(entityName) + ":" + normalizeFieldName(fieldName);
         return UUID.nameUUIDFromBytes(("consent-field:" + key).getBytes(StandardCharsets.UTF_8));
     }
 

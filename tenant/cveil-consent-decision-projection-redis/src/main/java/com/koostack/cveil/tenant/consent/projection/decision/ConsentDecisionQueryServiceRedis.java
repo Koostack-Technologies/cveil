@@ -10,6 +10,7 @@ import com.koostack.cveil.core.models.ConsentScope;
 import com.koostack.cveil.core.models.DecisionDetail;
 import com.koostack.cveil.core.service.ConsentDecisionService;
 import com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService;
+import com.koostack.cveil.core.util.FieldNameNormalizer;
 import com.koostack.cveil.plugin.redis.common.ConsentGraphRedisConfig;
 import com.koostack.cveil.plugin.redis.common.JedisProvider;
 import com.koostack.cveil.plugin.redis.common.RedisContextFactory;
@@ -331,7 +332,13 @@ public class ConsentDecisionQueryServiceRedis
     private static String qualifyField(String entity, String field) {
         String e =
                 (entity != null && !entity.isBlank() && !"*".equals(entity)) ? entity : "_default_";
-        return e + "/" + field;
+        // Normalize entity and field names to snake_case so that
+        // camelCase / PascalCase / SCREAMING_SNAKE_CASE all match the canonical seed data.
+        e = FieldNameNormalizer.normalize(e);
+        if (e == null || e.isBlank()) e = "_default_";
+        String f = FieldNameNormalizer.normalize(field);
+        if (f == null) f = field;
+        return e + "/" + f;
     }
 
     private static String normalizeAction(String action) {

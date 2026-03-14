@@ -9,6 +9,7 @@ import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
 import com.koostack.cveil.core.tenant.consent.aggregates.EntityAggregate;
 import com.koostack.cveil.core.tenant.consent.events.EntityRegisteredEvent;
+import com.koostack.cveil.core.util.FieldNameNormalizer;
 import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -31,14 +32,16 @@ public class RegisterEntityCommandActuator
     public Void execute(RegisterEntityCommand command) {
         Objects.requireNonNull(command.entityName(), "entityName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = EntityAggregate.deriveId(command.entityName());
-        var payload = new EntityRegisteredEvent(command.entityName(), command.description());
+        String normalized = FieldNameNormalizer.normalize(command.entityName());
+        if (normalized == null) normalized = command.entityName();
+        UUID aggregateId = EntityAggregate.deriveId(normalized);
+        var payload = new EntityRegisteredEvent(normalized, command.description());
         AggregateKey key = new AggregateKey(aggregateId, EntityAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()
                 .publishEvent(
                         PublishDomainEventInput.of(
                                 tenantId, ConsentEventTypes.ENTITY_REGISTERED, key, payload));
-        LOG.info("Entity registered: {}", command.entityName());
+        LOG.info("Entity registered: {}", normalized);
         return null;
     }
 

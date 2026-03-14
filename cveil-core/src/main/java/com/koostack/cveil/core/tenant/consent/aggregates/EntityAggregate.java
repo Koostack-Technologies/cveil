@@ -1,6 +1,7 @@
 package com.koostack.cveil.core.tenant.consent.aggregates;
 
 import com.koostack.cveil.core.models.AggregateRoot;
+import com.koostack.cveil.core.util.FieldNameNormalizer;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -17,7 +18,9 @@ public record EntityAggregate(
     }
 
     public static UUID deriveId(String entityName) {
+        String normalized = FieldNameNormalizer.normalize(entityName);
+        if (normalized == null) normalized = entityName;
         return UUID.nameUUIDFromBytes(
-                ("consent-entity:" + entityName).getBytes(StandardCharsets.UTF_8));
+                ("consent-entity:" + normalized).getBytes(StandardCharsets.UTF_8));
     }
 }

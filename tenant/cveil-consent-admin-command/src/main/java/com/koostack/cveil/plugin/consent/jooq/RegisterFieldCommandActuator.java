@@ -9,6 +9,7 @@ import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
 import com.koostack.cveil.core.tenant.consent.aggregates.FieldAggregate;
 import com.koostack.cveil.core.tenant.consent.events.FieldRegisteredEvent;
+import com.koostack.cveil.core.util.FieldNameNormalizer;
 import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -32,12 +33,13 @@ public class RegisterFieldCommandActuator
     public Void execute(RegisterFieldCommand command) {
         Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
         String tenantId = TenantContext.require();
-        String normalized = FieldAggregate.normalizeEntityName(command.entityName());
-        UUID aggregateId = FieldAggregate.deriveId(normalized, command.fieldName());
+        String normalizedEntity = FieldAggregate.normalizeEntityName(command.entityName());
+        String normalizedField = FieldAggregate.normalizeFieldName(command.fieldName());
+        UUID aggregateId = FieldAggregate.deriveId(normalizedEntity, normalizedField);
         var payload =
                 new FieldRegisteredEvent(
-                        normalized,
-                        command.fieldName(),
+                        normalizedEntity,
+                        normalizedField,
                         command.description(),
                         command.entityDescription());
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
@@ -45,7 +47,7 @@ public class RegisterFieldCommandActuator
                 .publishEvent(
                         PublishDomainEventInput.of(
                                 tenantId, ConsentEventTypes.FIELD_REGISTERED, key, payload));
-        LOG.info("Field registered: field={}, entity={}", command.fieldName(), normalized);
+        LOG.info("Field registered: field={}, entity={}", normalizedField, normalizedEntity);
         return null;
     }
 
