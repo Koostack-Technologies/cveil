@@ -60,6 +60,7 @@ public class SeedConsentGovernanceCommandActuator
                     seedEntities();
                     seedFields();
                     seedFieldCategoryAssignments();
+                    seedPurposeCategoryPolicies();
                 });
 
         LOG.info("Consent governance seed completed for tenant: {}", tenantId);
@@ -814,6 +815,120 @@ public class SeedConsentGovernanceCommandActuator
                     assignment[0] + "→" + assignment[1]);
         }
         LOG.debug("Field→category assignments seeded: {}", assignments.size());
+    }
+
+    // -----------------------------------------------------------------------
+    // Purpose → Category policies
+    // -----------------------------------------------------------------------
+
+    private void seedPurposeCategoryPolicies() {
+        LOG.debug("Seeding purpose→category policies...");
+        // Each entry: { purposeName, categoryName }
+        // These define which categories each purpose is allowed to process.
+        List<String[]> policies =
+                List.of(
+                        // marketing — needs PII for outreach, online IDs for ad targeting
+                        new String[] {"marketing", "PII"},
+                        new String[] {"marketing", "ONLINE_IDENTIFIERS"},
+                        new String[] {"marketing", "GEOLOCATION"},
+                        new String[] {"marketing", "INFERRED_DERIVED"},
+                        // analytics — aggregated/pseudonymized usage data
+                        new String[] {"analytics", "ONLINE_IDENTIFIERS"},
+                        new String[] {"analytics", "GEOLOCATION"},
+                        new String[] {"analytics", "BEHAVIORAL"},
+                        new String[] {"analytics", "INFERRED_DERIVED"},
+                        new String[] {"analytics", "DEVICE_TECHNICAL"},
+                        // personalization — tailor UX based on preferences
+                        new String[] {"personalization", "PII"},
+                        new String[] {"personalization", "ONLINE_IDENTIFIERS"},
+                        new String[] {"personalization", "BEHAVIORAL"},
+                        new String[] {"personalization", "INFERRED_DERIVED"},
+                        // service_delivery — core operations
+                        new String[] {"service_delivery", "PII"},
+                        new String[] {"service_delivery", "FINANCIAL"},
+                        new String[] {"service_delivery", "DEVICE_TECHNICAL"},
+                        new String[] {"service_delivery", "COMMUNICATION"},
+                        // payment_processing — transactions
+                        new String[] {"payment_processing", "PII"},
+                        new String[] {"payment_processing", "FINANCIAL"},
+                        // fraud_prevention — security monitoring
+                        new String[] {"fraud_prevention", "PII"},
+                        new String[] {"fraud_prevention", "FINANCIAL"},
+                        new String[] {"fraud_prevention", "ONLINE_IDENTIFIERS"},
+                        new String[] {"fraud_prevention", "GEOLOCATION"},
+                        new String[] {"fraud_prevention", "DEVICE_TECHNICAL"},
+                        new String[] {"fraud_prevention", "BIOMETRIC"},
+                        // legal_compliance — all categories may be needed
+                        new String[] {"legal_compliance", "PII"},
+                        new String[] {"legal_compliance", "SENSITIVE_PII"},
+                        new String[] {"legal_compliance", "FINANCIAL"},
+                        new String[] {"legal_compliance", "PHI"},
+                        new String[] {"legal_compliance", "GOVERNMENT_ID"},
+                        new String[] {"legal_compliance", "EMPLOYMENT"},
+                        new String[] {"legal_compliance", "EDUCATION"},
+                        new String[] {"legal_compliance", "BIOMETRIC"},
+                        new String[] {"legal_compliance", "GEOLOCATION"},
+                        new String[] {"legal_compliance", "ONLINE_IDENTIFIERS"},
+                        new String[] {"legal_compliance", "BEHAVIORAL"},
+                        new String[] {"legal_compliance", "COMMUNICATION"},
+                        new String[] {"legal_compliance", "CHILDREN"},
+                        new String[] {"legal_compliance", "DEVICE_TECHNICAL"},
+                        new String[] {"legal_compliance", "INFERRED_DERIVED"},
+                        // security — protecting systems and data
+                        new String[] {"security", "PII"},
+                        new String[] {"security", "ONLINE_IDENTIFIERS"},
+                        new String[] {"security", "DEVICE_TECHNICAL"},
+                        new String[] {"security", "BIOMETRIC"},
+                        // account_management — user account operations
+                        new String[] {"account_management", "PII"},
+                        new String[] {"account_management", "FINANCIAL"},
+                        new String[] {"account_management", "COMMUNICATION"},
+                        // communications — transactional + promotional messages
+                        new String[] {"communications", "PII"},
+                        new String[] {"communications", "COMMUNICATION"},
+                        // third_party_sharing — data shared externally
+                        new String[] {"third_party_sharing", "PII"},
+                        new String[] {"third_party_sharing", "ONLINE_IDENTIFIERS"},
+                        new String[] {"third_party_sharing", "BEHAVIORAL"},
+                        new String[] {"third_party_sharing", "GEOLOCATION"},
+                        new String[] {"third_party_sharing", "INFERRED_DERIVED"},
+                        // data_sale — sale of personal information (CCPA-relevant)
+                        new String[] {"data_sale", "PII"},
+                        new String[] {"data_sale", "ONLINE_IDENTIFIERS"},
+                        new String[] {"data_sale", "BEHAVIORAL"},
+                        new String[] {"data_sale", "GEOLOCATION"},
+                        new String[] {"data_sale", "INFERRED_DERIVED"},
+                        // research — academic or internal research
+                        new String[] {"research", "PII"},
+                        new String[] {"research", "PHI"},
+                        new String[] {"research", "BEHAVIORAL"},
+                        new String[] {"research", "INFERRED_DERIVED"},
+                        // healthcare_treatment — medical care delivery
+                        new String[] {"healthcare_treatment", "PII"},
+                        new String[] {"healthcare_treatment", "PHI"},
+                        new String[] {"healthcare_treatment", "SENSITIVE_PII"},
+                        new String[] {"healthcare_treatment", "BIOMETRIC"},
+                        // healthcare_operations — insurance, billing, quality
+                        new String[] {"healthcare_operations", "PII"},
+                        new String[] {"healthcare_operations", "PHI"},
+                        new String[] {"healthcare_operations", "FINANCIAL"},
+                        // employment — HR and workforce management
+                        new String[] {"employment", "PII"},
+                        new String[] {"employment", "EMPLOYMENT"},
+                        new String[] {"employment", "FINANCIAL"},
+                        new String[] {"employment", "GOVERNMENT_ID"},
+                        new String[] {"employment", "SENSITIVE_PII"});
+
+        for (String[] policy : policies) {
+            dispatchSafe(
+                    () ->
+                            consentDispatcher.dispatch(
+                                    new AddPurposePolicyCommandActuator.AddPurposePolicyCommand(
+                                            policy[0], "CATEGORY", null, null, policy[1])),
+                    "purpose-category-policy",
+                    policy[0] + "→" + policy[1]);
+        }
+        LOG.debug("Purpose→category policies seeded: {}", policies.size());
     }
 
     // -----------------------------------------------------------------------
