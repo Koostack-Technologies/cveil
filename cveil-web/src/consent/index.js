@@ -605,17 +605,17 @@ async function loadSubjectHistory() {
                             <th class="py-2">Time</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-700/30">
+                    <tbody class="divide-y divide-gray-200">
                         ${entries.map(e => {
                             const style = getActionStyle(e.action);
                             return `
-                            <tr class="hover:bg-gray-800/20">
+                            <tr class="hover:bg-gray-50">
                                 <td class="py-2 pr-4"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
-                                <td class="py-2 pr-4 text-white">${esc(e.purposeName)}</td>
-                                <td class="py-2 pr-4 text-gray-400">${esc(e.policyType === 'FIELD' ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '') : e.categoryName || '')}</td>
+                                <td class="py-2 pr-4 text-gray-900">${esc(e.purposeName)}</td>
+                                <td class="py-2 pr-4 text-gray-600">${esc(e.policyType === 'FIELD' ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '') : e.categoryName || '')}</td>
                                 <td class="py-2 pr-4 text-gray-500">${esc(e.actor || '—')}</td>
-                                <td class="py-2 pr-4 text-gray-600 font-mono">${esc(e.ipAddress || '—')}</td>
-                                <td class="py-2 text-gray-600">${fmtTime(e.createdAt)}</td>
+                                <td class="py-2 pr-4 text-gray-500 font-mono">${esc(e.ipAddress || '—')}</td>
+                                <td class="py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
