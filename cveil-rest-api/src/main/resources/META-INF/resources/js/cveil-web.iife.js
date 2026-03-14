@@ -1,4 +1,4 @@
-var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,a,b)=>a.has(y)||ct("Cannot "+b);var T=(y,a,b)=>(lt(y,a,"read from private field"),b?b.call(y):a.get(y)),dt=(y,a,b)=>a.has(y)?ct("Cannot add the same private member more than once"):a instanceof WeakSet?a.add(y):a.set(y,b),ut=(y,a,b,k)=>(lt(y,a,"write to private field"),k?k.call(y,b):a.set(y,b),b);var E;function a(e){const t=document.createElement("div");return t.textContent=e,t.innerHTML}function b(e){document.querySelectorAll('[id^="section-"]').forEach(n=>n.classList.add("hidden")),document.querySelectorAll(".tab-btn").forEach(n=>{n.classList.remove("border-cv-500","text-cv-500"),n.classList.add("border-transparent","text-gray-400")}),document.getElementById("section-"+e).classList.remove("hidden");const t=document.getElementById("tab-"+e);t.classList.add("border-cv-500","text-cv-500"),t.classList.remove("border-transparent","text-gray-400"),window.location.hash=e}function k(e){return async function(n,s={}){const o={...s.headers};s.body&&(o["Content-Type"]="application/json");const r=await fetch(e+n,{...s,headers:o});if(!r.ok){const c=await r.json().catch(()=>({message:r.statusText}));throw new Error(c.message||r.statusText)}return r.status===204?null:r.json()}}let se=null;function C(e,t){document.getElementById("delete-modal-msg").textContent=e,document.getElementById("delete-modal").classList.remove("hidden"),se=t}function oe(){document.getElementById("delete-modal").classList.add("hidden"),se=null}function ge(){document.getElementById("delete-modal-confirm").addEventListener("click",async()=>{se&&(await se(),oe())})}function me(){const e=document.getElementById("panel-overlay"),t=document.getElementById("panel");e.classList.remove("hidden"),requestAnimationFrame(()=>t.classList.remove("translate-x-full"))}function h(){document.getElementById("panel").classList.add("translate-x-full"),setTimeout(()=>document.getElementById("panel-overlay").classList.add("hidden"),300)}function q(e,t="gray"){const n={gray:"bg-gray-700 text-gray-300",teal:"bg-cv-900/50 text-cv-500 border border-cv-500/30",blue:"bg-blue-900/50 text-blue-400 border border-blue-500/30",purple:"bg-purple-900/50 text-purple-400 border border-purple-500/30"};return`<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${n[t]||n.gray}">${a(e)}</span>`}function j(e,t,n=!1){e.textContent=t,e.className="text-sm mt-3 "+(n?"text-red-400":"text-green-400"),e.classList.remove("hidden"),setTimeout(()=>e.classList.add("hidden"),4e3)}function z(e){return e?new Date(e).toLocaleString(void 0,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—"}function ye(e){document.readyState!=="loading"?e():document.addEventListener("DOMContentLoaded",e)}const N=k("/api/v1/catalogue");let K=[],Y=[],ae=[];function fe(e,t){const n=document.getElementById("panel-title"),s=document.getElementById("panel-body");({"entity-add":()=>{n.textContent="Add Entity",s.innerHTML=Ce()},"entity-edit":()=>{n.textContent="Edit Entity",s.innerHTML=Ce(t)},"field-add":()=>{n.textContent="Add Field",s.innerHTML=ft()},"field-categories":()=>{n.textContent="Manage Categories",s.innerHTML=ht(t)},"category-add":()=>{n.textContent="Add Category",s.innerHTML=Oe()},"category-edit":()=>{n.textContent="Edit Category",s.innerHTML=Oe(t)}}[e]||(()=>{s.innerHTML=""}))(),me()}async function re(){try{K=await N("/entities"),pt()}catch(e){document.getElementById("entities-table").innerHTML=`<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${a(e.message)}</td></tr>`}}function pt(){const e=document.getElementById("entities-table");if(!K.length){e.innerHTML='<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No entities defined yet.</td></tr>';return}e.innerHTML=K.map(t=>`
+var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,a,b)=>a.has(y)||ct("Cannot "+b);var T=(y,a,b)=>(lt(y,a,"read from private field"),b?b.call(y):a.get(y)),dt=(y,a,b)=>a.has(y)?ct("Cannot add the same private member more than once"):a instanceof WeakSet?a.add(y):a.set(y,b),ut=(y,a,b,k)=>(lt(y,a,"write to private field"),k?k.call(y,b):a.set(y,b),b);var E;function a(e){const t=document.createElement("div");return t.textContent=e,t.innerHTML}function b(e){document.querySelectorAll('[id^="section-"]').forEach(n=>n.classList.add("hidden")),document.querySelectorAll(".tab-btn").forEach(n=>{n.classList.remove("border-cv-500","text-cv-500"),n.classList.add("border-transparent","text-gray-500")}),document.getElementById("section-"+e).classList.remove("hidden");const t=document.getElementById("tab-"+e);t.classList.add("border-cv-500","text-cv-500"),t.classList.remove("border-transparent","text-gray-400"),window.location.hash=e}function k(e){return async function(n,s={}){const o={...s.headers};s.body&&(o["Content-Type"]="application/json");const r=await fetch(e+n,{...s,headers:o});if(!r.ok){const c=await r.json().catch(()=>({message:r.statusText}));throw new Error(c.message||r.statusText)}return r.status===204?null:r.json()}}let se=null;function C(e,t){document.getElementById("delete-modal-msg").textContent=e,document.getElementById("delete-modal").classList.remove("hidden"),se=t}function oe(){document.getElementById("delete-modal").classList.add("hidden"),se=null}function ge(){document.getElementById("delete-modal-confirm").addEventListener("click",async()=>{se&&(await se(),oe())})}function me(){const e=document.getElementById("panel-overlay"),t=document.getElementById("panel");e.classList.remove("hidden"),requestAnimationFrame(()=>t.classList.remove("translate-x-full"))}function h(){document.getElementById("panel").classList.add("translate-x-full"),setTimeout(()=>document.getElementById("panel-overlay").classList.add("hidden"),300)}function q(e,t="gray"){const n={gray:"bg-gray-100 text-gray-700",teal:"bg-cv-50 text-cv-700 border border-cv-200",blue:"bg-blue-50 text-blue-700 border border-blue-200",purple:"bg-purple-50 text-purple-700 border border-purple-200"};return`<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${n[t]||n.gray}">${a(e)}</span>`}function j(e,t,n=!1){e.textContent=t,e.className="text-sm mt-3 "+(n?"text-red-400":"text-green-400"),e.classList.remove("hidden"),setTimeout(()=>e.classList.add("hidden"),4e3)}function z(e){return e?new Date(e).toLocaleString(void 0,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—"}function ye(e){document.readyState!=="loading"?e():document.addEventListener("DOMContentLoaded",e)}const N=k("/api/v1/catalogue");let K=[],Y=[],ae=[];function fe(e,t){const n=document.getElementById("panel-title"),s=document.getElementById("panel-body");({"entity-add":()=>{n.textContent="Add Entity",s.innerHTML=Ce()},"entity-edit":()=>{n.textContent="Edit Entity",s.innerHTML=Ce(t)},"field-add":()=>{n.textContent="Add Field",s.innerHTML=ft()},"field-categories":()=>{n.textContent="Manage Categories",s.innerHTML=ht(t)},"category-add":()=>{n.textContent="Add Category",s.innerHTML=Oe()},"category-edit":()=>{n.textContent="Edit Category",s.innerHTML=Oe(t)}}[e]||(()=>{s.innerHTML=""}))(),me()}async function re(){try{K=await N("/entities"),pt()}catch(e){document.getElementById("entities-table").innerHTML=`<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${a(e.message)}</td></tr>`}}function pt(){const e=document.getElementById("entities-table");if(!K.length){e.innerHTML='<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No entities defined yet.</td></tr>';return}e.innerHTML=K.map(t=>`
         <tr class="hover:bg-gray-800/30 transition-colors">
             <td class="px-6 py-4 font-medium text-white">${a(t.entityName)}</td>
             <td class="px-6 py-4 text-gray-400">${a(t.description||"—")}</td>
@@ -241,8 +241,8 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
             </div>
             <span id="pf-sub-msg" class="hidden"></span>
         </form>`}async function gn(e,t,n){e.preventDefault();const s=document.getElementById("pf-sub-name").value.trim(),o=document.getElementById("pf-sub-desc").value.trim(),r=document.getElementById("pf-sub-msg");try{if(t){const c=await fetch(`${D}/${encodeURIComponent(n)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({description:o})});if(!c.ok)throw new Error((await c.json().catch(()=>({}))).message||c.statusText)}else{const c=await fetch(D,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subjectName:s,description:o})});if(!c.ok)throw new Error((await c.json().catch(()=>({}))).message||c.statusText)}st(),je()}catch(c){r.textContent=c.message,r.className="text-sm mt-3 text-red-400",r.classList.remove("hidden")}}function mn(e){C(`Delete subject "${e}"? This cannot be undone.`,async()=>{try{const t=await fetch(`${D}/${encodeURIComponent(e)}`,{method:"DELETE"});if(!t.ok)throw new Error((await t.json().catch(()=>({}))).message||t.statusText);je(),M===e&&tt()}catch(t){alert(t.message)}})}function yn(){Object.assign(window,{showTab:Xe,closeDeleteModal:oe,setGraphMode:Vt,loadGraph:de,resetGraph:Qt,loadMoreGraph:Xt,applyLedgerFilters:on,toggleLedgerPause:an,filterSubjects:rn,openSubjectPanel:pn,closeSubjectPanel:st,viewSubject:cn,closeSubjectDetail:tt,showDetailTab:nt,exportSubjectData:un,saveSubject:gn,deleteSubject:mn,evaluateAndMask:_t,remask:Wt,loadSampleTemplate:Ht,copyMaskedOutput:qt}),ge(),ye(()=>{const e=window.location.hash.replace("#","");["graph","ledger","subjects","playground"].includes(e)?Xe(e):de()})}const fn=Object.freeze(Object.defineProperty({__proto__:null,init:yn},Symbol.toStringTag,{value:"Module"})),w=k("/api/v1/governance"),at="/api/v1/catalogue";let Ie=[],Le=[],pe=[],G=[],P=[];async function xn(){try{const[e,t]=await Promise.all([fetch(at+"/fields").then(n=>n.ok?n.json():[]),fetch(at+"/categories").then(n=>n.ok?n.json():[])]);Ie=e,Le=t}catch(e){console.warn("Failed to load catalogue data:",e)}}function ee(e,t){const n=document.getElementById("panel-title"),s=document.getElementById("panel-body");({"jurisdiction-add":()=>{n.textContent="Add Jurisdiction",s.innerHTML=rt()},"jurisdiction-edit":()=>{n.textContent="Edit Jurisdiction",s.innerHTML=rt(t)},"regulation-add":()=>{n.textContent="Add Regulation",s.innerHTML=En()},"purpose-add":()=>{n.textContent="Add Purpose",s.innerHTML=Ln()},"policy-add":()=>{n.textContent="Add Policy",s.innerHTML=Rn()},"regulation-jurisdictions":()=>{n.textContent="Manage Jurisdictions",s.innerHTML=Sn(t)},"purpose-regulations":()=>{n.textContent="Manage Regulations",s.innerHTML=Cn(t)}}[e]||(()=>{s.innerHTML=""}))(),me()}async function Be(){try{pe=await w("/jurisdictions"),bn()}catch(e){document.getElementById("jurisdictions-table").innerHTML=`<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${a(e.message)}</td></tr>`}}function bn(){const e=document.getElementById("jurisdictions-table");if(!pe.length){e.innerHTML='<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No jurisdictions defined yet.</td></tr>';return}e.innerHTML=pe.map(t=>`
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${a(t.jurisdictionName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${a(t.jurisdictionName)}</td>
             <td class="px-6 py-4 text-gray-400">${a(t.description||"—")}</td>
             <td class="px-6 py-4 text-right">
                 <button onclick='openPanel("jurisdiction-edit", ${JSON.stringify(t).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
@@ -252,32 +252,32 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
         <form onsubmit="saveJurisdiction(event, ${e?"true":"false"}, '${t}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-jur-name" value="${t}" ${e?"disabled":""} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-jur-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${n}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${n}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${e?"Update":"Create"}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-jur-msg" class="hidden"></span>
         </form>`}async function hn(e,t,n){e.preventDefault();const s=document.getElementById("pf-jur-name").value.trim(),o=document.getElementById("pf-jur-desc").value.trim(),r=document.getElementById("pf-jur-msg");try{t?await w(`/jurisdictions/${encodeURIComponent(n)}`,{method:"PUT",body:JSON.stringify({description:o})}):await w("/jurisdictions",{method:"POST",body:JSON.stringify({jurisdictionName:s,description:o})}),h(),Be()}catch(c){j(r,c.message,!0)}}function vn(e){C(`Delete jurisdiction "${e}"? This cannot be undone.`,async()=>{try{await w(`/jurisdictions/${encodeURIComponent(e)}`,{method:"DELETE"}),Be()}catch(t){alert(t.message)}})}async function te(){try{G=await w("/regulations"),wn()}catch(e){document.getElementById("regulations-table").innerHTML=`<tr><td colspan="4" class="px-6 py-8 text-center text-red-400">${a(e.message)}</td></tr>`}}function wn(){const e=document.getElementById("regulations-table");if(!G.length){e.innerHTML='<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No regulations defined yet.</td></tr>';return}e.innerHTML=G.map(t=>`
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${a(t.regulationName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${a(t.regulationName)}</td>
             <td class="px-6 py-4 text-gray-400">${a(t.description||"—")}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(t.activeJurisdictions||[]).map(n=>q(n.jurisdictionName,"teal")).join("")}
                     <button onclick='openPanel("regulation-jurisdictions", ${JSON.stringify(t).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-600 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
@@ -287,38 +287,38 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
         <form onsubmit="saveRegulation(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-reg-name" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-reg-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     Create
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-reg-msg" class="hidden"></span>
         </form>`}async function Nn(e){e.preventDefault();const t=document.getElementById("pf-reg-name").value.trim(),n=document.getElementById("pf-reg-desc").value.trim(),s=document.getElementById("pf-reg-msg");try{await w("/regulations",{method:"POST",body:JSON.stringify({regulationName:t,description:n})}),h(),te()}catch(o){j(s,o.message,!0)}}function $n(e){C(`Delete regulation "${e}"? This cannot be undone.`,async()=>{try{await w(`/regulations/${encodeURIComponent(e)}`,{method:"DELETE"}),te()}catch(t){alert(t.message)}})}function Sn(e){const t=new Set((e.activeJurisdictions||[]).map(s=>s.jurisdictionName)),n=pe.filter(s=>!t.has(s.jurisdictionName)).map(s=>`<option value="${a(s.jurisdictionName)}">${a(s.jurisdictionName)}</option>`).join("");return`
-        <p class="text-sm text-gray-400 mb-4">Manage jurisdictions for <strong class="text-white">${a(e.regulationName)}</strong></p>
+        <p class="text-sm text-gray-500 mb-4">Manage jurisdictions for <strong class="text-gray-900">${a(e.regulationName)}</strong></p>
         <div id="rj-list" class="space-y-2 mb-6">
             ${(e.activeJurisdictions||[]).map(s=>`
-                <div class="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
-                    <span class="text-sm text-white">${a(s.jurisdictionName)}</span>
+                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <span class="text-sm text-gray-900">${a(s.jurisdictionName)}</span>
                     <button onclick="removeJurisdictionFromRegulation('${a(e.regulationName)}','${a(s.jurisdictionName)}')"
                         class="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
                 </div>`).join("")||'<p class="text-sm text-gray-500">No jurisdictions linked.</p>'}
         </div>
-        <hr class="border-gray-700 mb-4">
-        <p class="text-sm text-gray-400 mb-3">Add a jurisdiction</p>
+        <hr class="border-gray-200 mb-4">
+        <p class="text-sm text-gray-500 mb-3">Add a jurisdiction</p>
         <form onsubmit="addJurisdictionToRegulation(event, '${a(e.regulationName)}')">
             <div class="flex gap-2">
-                <select id="rj-select" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                <select id="rj-select" class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                     <option value="">Select…</option>
                     ${n}
                 </select>
@@ -326,14 +326,14 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
             </div>
             <span id="rj-msg" class="hidden"></span>
         </form>`}async function Tn(e,t){e.preventDefault();const s=document.getElementById("rj-select").value;if(s)try{await w("/regulations/jurisdictions",{method:"POST",body:JSON.stringify({regulationName:t,jurisdictionName:s})}),h(),await te();const o=G.find(r=>r.regulationName===t);o&&ee("regulation-jurisdictions",o)}catch(o){j(document.getElementById("rj-msg"),o.message,!0)}}async function jn(e,t){try{await w(`/regulations/${encodeURIComponent(e)}/jurisdictions/${encodeURIComponent(t)}`,{method:"DELETE"}),h(),await te();const n=G.find(s=>s.regulationName===e);n&&ee("regulation-jurisdictions",n)}catch(n){alert(n.message)}}async function J(){try{P=await w("/purposes"),In(),An()}catch(e){document.getElementById("purposes-table").innerHTML=`<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">${a(e.message)}</td></tr>`}}function In(){const e=document.getElementById("purposes-table");if(!P.length){e.innerHTML='<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No purposes defined yet.</td></tr>';return}e.innerHTML=P.map(t=>`
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${a(t.purposeName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${a(t.purposeName)}</td>
             <td class="px-6 py-4 text-gray-400">${a(t.description||"—")}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(t.regulations||[]).map(n=>q(n.regulationName,"blue")).join("")}
                     <button onclick='openPanel("purpose-regulations", ${JSON.stringify(t).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-600 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4">
@@ -349,58 +349,58 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
         <form onsubmit="savePurpose(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-pur-name" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-pur-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     Create
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-pur-msg" class="hidden"></span>
         </form>`}async function Bn(e){e.preventDefault();const t=document.getElementById("pf-pur-name").value.trim(),n=document.getElementById("pf-pur-desc").value.trim(),s=document.getElementById("pf-pur-msg");try{await w("/purposes",{method:"POST",body:JSON.stringify({purposeName:t,description:n})}),h(),J()}catch(o){j(s,o.message,!0)}}function kn(e){C(`Delete purpose "${e}"? This will also remove all linked policies and regulations.`,async()=>{try{await w(`/purposes/${encodeURIComponent(e)}`,{method:"DELETE"}),J()}catch(t){alert(t.message)}})}function Cn(e){const t=new Set((e.regulations||[]).map(s=>s.regulationName)),n=G.filter(s=>!t.has(s.regulationName)).map(s=>`<option value="${a(s.regulationName)}">${a(s.regulationName)}</option>`).join("");return`
-        <p class="text-sm text-gray-400 mb-4">Manage regulation links for <strong class="text-white">${a(e.purposeName)}</strong></p>
+        <p class="text-sm text-gray-500 mb-4">Manage regulation links for <strong class="text-gray-900">${a(e.purposeName)}</strong></p>
         <div id="pr-list" class="space-y-2 mb-6">
             ${(e.regulations||[]).map(s=>`
-                <div class="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
+                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                     <div>
-                        <span class="text-sm text-white">${a(s.regulationName)}</span>
+                        <span class="text-sm text-gray-900">${a(s.regulationName)}</span>
                         ${s.lawfulBasis?`<span class="ml-2 text-xs text-gray-500">basis: ${a(s.lawfulBasis)}</span>`:""}
                     </div>
                     <button onclick="unlinkPurposeRegulation('${a(e.purposeName)}','${a(s.regulationName)}')"
                         class="text-xs text-red-400 hover:text-red-300 transition-colors">Unlink</button>
                 </div>`).join("")||'<p class="text-sm text-gray-500">No regulations linked.</p>'}
         </div>
-        <hr class="border-gray-700 mb-4">
-        <p class="text-sm text-gray-400 mb-3">Link a regulation</p>
+        <hr class="border-gray-200 mb-4">
+        <p class="text-sm text-gray-500 mb-3">Link a regulation</p>
         <form onsubmit="linkPurposeRegulation(event, '${a(e.purposeName)}')">
             <div class="space-y-3">
-                <select id="pr-select" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                <select id="pr-select" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                     <option value="">Select regulation…</option>
                     ${n}
                 </select>
                 <input id="pr-basis" placeholder="Lawful basis (e.g. consent, legitimate_interest)"
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                    class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 <div class="grid grid-cols-2 gap-3">
                     <input id="pr-granted" placeholder="On Granted action"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                     <input id="pr-denied" placeholder="On Denied action"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 </div>
                 <button type="submit" class="w-full px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Link</button>
             </div>
             <span id="pr-msg" class="hidden"></span>
         </form>`}async function On(e,t){e.preventDefault();const n=document.getElementById("pr-select").value;if(!n)return;const s=document.getElementById("pr-basis").value.trim()||null,o=document.getElementById("pr-granted").value.trim()||null,r=document.getElementById("pr-denied").value.trim()||null;try{await w("/purposes/regulations",{method:"POST",body:JSON.stringify({purposeName:t,regulationName:n,lawfulBasis:s,onGranted:o,onDenied:r})}),h(),await J();const c=P.find(l=>l.purposeName===t);c&&ee("purpose-regulations",c)}catch(c){j(document.getElementById("pr-msg"),c.message,!0)}}async function Mn(e,t){try{await w(`/purposes/${encodeURIComponent(e)}/regulations/${encodeURIComponent(t)}`,{method:"DELETE"}),h(),await J();const n=P.find(s=>s.purposeName===e);n&&ee("purpose-regulations",n)}catch(n){alert(n.message)}}function An(){const e=document.getElementById("policies-table"),t=[];if(P.forEach(n=>{(n.policies||[]).forEach(s=>{t.push({...s,purposeName:n.purposeName})})}),!t.length){e.innerHTML='<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No policies defined yet. Add policies from the Purposes tab.</td></tr>';return}e.innerHTML=t.map(n=>`
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${a(n.purposeName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${a(n.purposeName)}</td>
             <td class="px-6 py-4">${q(n.policyType,n.policyType==="FIELD"?"teal":"purple")}</td>
             <td class="px-6 py-4 text-gray-400">${n.policyType==="FIELD"?a(n.field?n.field.fieldName:"—"):a(n.category?n.category.categoryName:"—")}</td>
             <td class="px-6 py-4 text-gray-400">${n.policyType==="FIELD"&&n.field?a(n.field.entityName):"—"}</td>
@@ -411,34 +411,34 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
         <form onsubmit="addPolicy(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Purpose</label>
+                    <label class="block text-sm text-gray-500 mb-1">Purpose</label>
                     <select id="pf-pol-purpose" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="">Select purpose…</option>
                         ${P.map(n=>`<option value="${a(n.purposeName)}">${a(n.purposeName)}</option>`).join("")}
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Policy Type</label>
+                    <label class="block text-sm text-gray-500 mb-1">Policy Type</label>
                     <select id="pf-pol-type" onchange="togglePolicyFields()" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="FIELD">Field</option>
                         <option value="CATEGORY">Category</option>
                     </select>
                 </div>
                 <div id="pf-pol-field-group">
-                    <label class="block text-sm text-gray-400 mb-1">Field</label>
+                    <label class="block text-sm text-gray-500 mb-1">Field</label>
                     <select id="pf-pol-field-select" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="">Select field…</option>
                         ${e}
                     </select>
                     ${Ie.length?"":'<p class="text-xs text-amber-400 mt-1">No fields registered. Add fields in the Catalogue first.</p>'}
                 </div>
                 <div id="pf-pol-cat-group" class="hidden">
-                    <label class="block text-sm text-gray-400 mb-1">Category</label>
-                    <select id="pf-pol-cat-select" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                    <label class="block text-sm text-gray-500 mb-1">Category</label>
+                    <select id="pf-pol-cat-select"
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="">Select category…</option>
                         ${t}
                     </select>
@@ -447,7 +447,7 @@ var CveilWeb=(function(y){"use strict";var ct=y=>{throw TypeError(y)};var lt=(y,
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">Add Policy</button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-pol-msg" class="hidden"></span>
-        </form>`}function Dn(){const e=document.getElementById("pf-pol-type").value;document.getElementById("pf-pol-field-group").classList.toggle("hidden",e!=="FIELD"),document.getElementById("pf-pol-cat-group").classList.toggle("hidden",e!=="CATEGORY")}async function Pn(e){e.preventDefault();const t=document.getElementById("pf-pol-purpose").value,n=document.getElementById("pf-pol-type").value,s=document.getElementById("pf-pol-msg"),o={purposeName:t,policyType:n};if(n==="FIELD"){const r=document.getElementById("pf-pol-field-select").value;if(!r){j(s,"Please select a field.",!0);return}const c=JSON.parse(r);o.fieldName=c.fieldName,o.entityName=c.entityName,o.categoryName=null}else{if(o.categoryName=document.getElementById("pf-pol-cat-select").value,!o.categoryName){j(s,"Please select a category.",!0);return}o.fieldName=null,o.entityName=null}try{await w("/purposes/policies",{method:"POST",body:JSON.stringify(o)}),h(),await new Promise(r=>setTimeout(r,800)),await J()}catch(r){j(s,r.message,!0)}}async function Jn(e,t){C(`Remove this ${t.policyType.toLowerCase()} policy from "${e}"?`,async()=>{try{const n={purposeName:e,policyType:t.policyType,fieldName:t.field?t.field.fieldName:null,entityName:t.field?t.field.entityName:null,categoryName:t.category?t.category.categoryName:null};await w("/purposes/policies",{method:"DELETE",body:JSON.stringify(n)}),J()}catch(n){alert(n.message)}})}function Hn(){Object.assign(window,{showTab:b,openPanel:ee,closePanel:h,closeDeleteModal:oe,saveJurisdiction:hn,deleteJurisdiction:vn,saveRegulation:Nn,deleteRegulation:$n,addJurisdictionToRegulation:Tn,removeJurisdictionFromRegulation:jn,savePurpose:Bn,deletePurpose:kn,linkPurposeRegulation:On,unlinkPurposeRegulation:Mn,togglePolicyFields:Dn,addPolicy:Pn,removePolicy:Jn}),ge(),ye(()=>{Be(),te(),J(),xn();const e=window.location.hash.replace("#","");["jurisdictions","regulations","purposes","policies"].includes(e)&&b(e)})}const _n=Object.freeze(Object.defineProperty({__proto__:null,init:Hn},Symbol.toStringTag,{value:"Module"}));return y.catalogue=Tt,y.consent=fn,y.governance=_n,Object.defineProperty(y,Symbol.toStringTag,{value:"Module"}),y})({});
+        </form>`}function Dn(){const e=document.getElementById("pf-pol-type").value;document.getElementById("pf-pol-field-group").classList.toggle("hidden",e!=="FIELD"),document.getElementById("pf-pol-cat-group").classList.toggle("hidden",e!=="CATEGORY"),document.getElementById("pf-pol-field-select").required=e==="FIELD",document.getElementById("pf-pol-cat-select").required=e==="CATEGORY"}async function Pn(e){e.preventDefault();const t=document.getElementById("pf-pol-purpose").value,n=document.getElementById("pf-pol-type").value,s=document.getElementById("pf-pol-msg"),o={purposeName:t,policyType:n};if(n==="FIELD"){const r=document.getElementById("pf-pol-field-select").value;if(!r){j(s,"Please select a field.",!0);return}const c=JSON.parse(r);o.fieldName=c.fieldName,o.entityName=c.entityName,o.categoryName=null}else{if(o.categoryName=document.getElementById("pf-pol-cat-select").value,!o.categoryName){j(s,"Please select a category.",!0);return}o.fieldName=null,o.entityName=null}try{await w("/purposes/policies",{method:"POST",body:JSON.stringify(o)}),h(),await new Promise(r=>setTimeout(r,800)),await J()}catch(r){j(s,r.message,!0)}}async function Jn(e,t){C(`Remove this ${t.policyType.toLowerCase()} policy from "${e}"?`,async()=>{try{const n={purposeName:e,policyType:t.policyType,fieldName:t.field?t.field.fieldName:null,entityName:t.field?t.field.entityName:null,categoryName:t.category?t.category.categoryName:null};await w("/purposes/policies",{method:"DELETE",body:JSON.stringify(n)}),J()}catch(n){alert(n.message)}})}function Hn(){Object.assign(window,{showTab:b,openPanel:ee,closePanel:h,closeDeleteModal:oe,saveJurisdiction:hn,deleteJurisdiction:vn,saveRegulation:Nn,deleteRegulation:$n,addJurisdictionToRegulation:Tn,removeJurisdictionFromRegulation:jn,savePurpose:Bn,deletePurpose:kn,linkPurposeRegulation:On,unlinkPurposeRegulation:Mn,togglePolicyFields:Dn,addPolicy:Pn,removePolicy:Jn}),ge(),ye(()=>{Be(),te(),J(),xn();const e=window.location.hash.replace("#","");["jurisdictions","regulations","purposes","policies"].includes(e)&&b(e)})}const _n=Object.freeze(Object.defineProperty({__proto__:null,init:Hn},Symbol.toStringTag,{value:"Module"}));return y.catalogue=Tt,y.consent=fn,y.governance=_n,Object.defineProperty(y,Symbol.toStringTag,{value:"Module"}),y})({});
