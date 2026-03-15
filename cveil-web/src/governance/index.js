@@ -5,7 +5,7 @@ import {
 } from '../shared/index.js';
 
 const api = createApi('/api/v1/governance');
-const CATALOGUE_API = '/api/v1/catalogue';
+const catalogueApi = createApi('/api/v1/catalogue');
 
 let fieldsCache = [];
 let categoriesCache = [];
@@ -17,11 +17,11 @@ let purposesCache = [];
 async function loadCatalogue() {
     try {
         const [fields, categories] = await Promise.all([
-            fetch(CATALOGUE_API + '/fields').then(r => r.ok ? r.json() : []),
-            fetch(CATALOGUE_API + '/categories').then(r => r.ok ? r.json() : []),
+            catalogueApi('/fields').catch(() => []),
+            catalogueApi('/categories').catch(() => []),
         ]);
-        fieldsCache = fields;
-        categoriesCache = categories;
+        fieldsCache = fields || [];
+        categoriesCache = categories || [];
     } catch (e) {
         console.warn('Failed to load catalogue data:', e);
     }
@@ -144,10 +144,8 @@ async function saveJurisdiction(e, isEdit, origName) {
 
 function deleteJurisdiction(name) {
     confirmDelete(`Delete jurisdiction "${name}"? This cannot be undone.`, async () => {
-        try {
-            await api(`/jurisdictions/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            await reloadJurisdictions();
-        } catch (e) { alert(e.message); }
+        await api(`/jurisdictions/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadJurisdictions();
     });
 }
 
@@ -224,10 +222,8 @@ async function saveRegulation(e) {
 
 function deleteRegulation(name) {
     confirmDelete(`Delete regulation "${name}"? This cannot be undone.`, async () => {
-        try {
-            await api(`/regulations/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            await reloadRegulations();
-        } catch (e) { alert(e.message); }
+        await api(`/regulations/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadRegulations();
     });
 }
 
@@ -283,7 +279,7 @@ async function removeJurisdictionFromRegulation(regName, jurName) {
         await reloadRegulations();
         const updated = regulationsCache.find(r => r.regulationName === regName);
         if (updated) openPanel('regulation-jurisdictions', updated);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showMsg(document.getElementById('rj-msg'), e.message, true); }
 }
 
 // ── Purposes ───────────────────────────────────────────────────
@@ -366,10 +362,8 @@ async function savePurpose(e) {
 
 function deletePurpose(name) {
     confirmDelete(`Delete purpose "${name}"? This will also remove all linked policies and regulations.`, async () => {
-        try {
-            await api(`/purposes/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            await reloadPurposes();
-        } catch (e) { alert(e.message); }
+        await api(`/purposes/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadPurposes();
     });
 }
 
@@ -438,7 +432,7 @@ async function unlinkPurposeRegulation(purposeName, regName) {
         await reloadPurposes();
         const updated = purposesCache.find(p => p.purposeName === purposeName);
         if (updated) openPanel('purpose-regulations', updated);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showMsg(document.getElementById('pr-msg'), e.message, true); }
 }
 
 // ── Policies (derived from purposes) ───────────────────────────
@@ -559,17 +553,15 @@ async function addPolicy(e) {
 
 async function removePolicy(purposeName, pol) {
     confirmDelete(`Remove this ${pol.policyType.toLowerCase()} policy from "${purposeName}"?`, async () => {
-        try {
-            const body = {
-                purposeName,
-                policyType: pol.policyType,
-                fieldName: pol.field ? pol.field.fieldName : null,
-                entityName: pol.field ? pol.field.entityName : null,
-                categoryName: pol.category ? pol.category.categoryName : null,
-            };
-            await api('/purposes/policies', { method: 'DELETE', body: JSON.stringify(body) });
-            await reloadPurposes();
-        } catch (e) { alert(e.message); }
+        const body = {
+            purposeName,
+            policyType: pol.policyType,
+            fieldName: pol.field ? pol.field.fieldName : null,
+            entityName: pol.field ? pol.field.entityName : null,
+            categoryName: pol.category ? pol.category.categoryName : null,
+        };
+        await api('/purposes/policies', { method: 'DELETE', body: JSON.stringify(body) });
+        await reloadPurposes();
     });
 }
 

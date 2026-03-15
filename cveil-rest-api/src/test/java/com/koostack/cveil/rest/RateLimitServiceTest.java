@@ -151,7 +151,7 @@ class RateLimitServiceTest {
     private static PlanQueryService.PlanInfo planInfo(
             int burstLimit, long evalLimit, long subjectLimit) {
         return new PlanQueryService.PlanInfo(
-                "plan", "Plan", "", evalLimit, subjectLimit, burstLimit, true, true, 1);
+                "plan", "Plan", "", evalLimit, subjectLimit, burstLimit, true, true, 1, null, null);
     }
 
     private static void injectField(Object target, String fieldName, Object value)

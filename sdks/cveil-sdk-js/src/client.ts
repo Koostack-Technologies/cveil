@@ -412,7 +412,7 @@ export class CveilClient {
     if (!this.abortController) return;
 
     const url = new URL(
-      "/api/v1/events/invalidations",
+      "/api/v1/consent/events",
       this.config.apiBaseUrl
     );
 

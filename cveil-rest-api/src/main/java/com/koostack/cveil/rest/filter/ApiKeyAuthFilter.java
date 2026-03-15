@@ -8,6 +8,7 @@ import com.koostack.cveil.core.platform.iam.AccessTokenInfo;
 import com.koostack.cveil.core.platform.iam.IdpProvider;
 import com.koostack.cveil.core.platform.iam.IdpTenantResolver;
 import com.koostack.cveil.core.platform.iam.PermissionService;
+import com.koostack.cveil.rest.billing.BillableEndpoints;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
@@ -25,6 +26,8 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.Instant;
@@ -722,6 +725,50 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                                     ? effectiveIdentity.roles()
                                     : Set.of(),
                             Set.of());
+        }
+
+        // ---- PAT endpoint restriction ----
+        // Personal access tokens may only access the public billable API surface
+        // (governance, consent/subjects, catalogue, graph, events). Requests to
+        // internal/dashboard endpoints (billing, IAM, metrics, platform, etc.) are
+        // rejected with 403 Forbidden to prevent billing bypass.
+        // This check runs BEFORE populating request-scoped state so that denied
+        // requests don't leak identity into downstream filters or rate limiters.
+        if (BillableEndpoints.isPatAuth(effectiveIdentity.provider())) {
+            String requestPath = ctx.getUriInfo().getPath();
+            if (!requestPath.startsWith("/")) {
+                requestPath = "/" + requestPath;
+            }
+            // Defensive normalization: collapse any "../" or "//" sequences
+            // that might bypass prefix matching. Quarkus/Vert.x normalizes
+            // before routing, but this guards against edge cases.
+            try {
+                requestPath = new URI(requestPath).normalize().getPath();
+            } catch (URISyntaxException ignored) {
+                // Malformed path — treat as non-billable (deny by default)
+            }
+            if (!BillableEndpoints.isBillable(requestPath)) {
+                LOG.warn(
+                        "PAT access denied to non-billable endpoint: path={}, subject={},"
+                                + " tenant={}",
+                        requestPath,
+                        effectiveIdentity.subject(),
+                        effectiveIdentity.tenantId());
+                ctx.abortWith(
+                        Response.status(Response.Status.FORBIDDEN)
+                                .entity(
+                                        Map.of(
+                                                "error",
+                                                "Forbidden",
+                                                "message",
+                                                "Personal access tokens can only access the public"
+                                                        + " API (consent, governance, catalogue,"
+                                                        + " graph, events). Use a session login for"
+                                                        + " dashboard endpoints."))
+                                .type(MediaType.APPLICATION_JSON_TYPE)
+                                .build());
+                return;
+            }
         }
 
         // Populate the request-scoped holder for TenantScopeInterceptor

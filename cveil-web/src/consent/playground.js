@@ -85,7 +85,10 @@ async function initWasm() {
                 ? `/api/v1/consent/graph?limit=500&cursor=${encodeURIComponent(cursor)}`
                 : '/api/v1/consent/graph?limit=500';
             const res = await fetch(url);
-            if (!res.ok) throw new Error('Graph fetch failed');
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: res.statusText }));
+                throw new Error(err.message || 'Graph fetch failed');
+            }
             const page = await res.json();
             const result = JSON.parse(bridge.call1(w.cveil_ingest_graph_page, JSON.stringify(page)));
             hasMore = result.hasMore;
@@ -290,7 +293,7 @@ async function evaluateWithRest(subject, entity, purpose, data, fieldPaths) {
 
     const fieldCatMap = {};
     for (const f of fieldMeta) {
-        fieldCatMap[(f.name || f.fieldName)] = f.categoryName || f.category || '';
+        fieldCatMap[(f.name || f.fieldName)] = f.categoryName || f.category || (f.categories && f.categories.length ? f.categories[0].categoryName : '');
     }
 
     const scopes = fieldPaths.map(path => {

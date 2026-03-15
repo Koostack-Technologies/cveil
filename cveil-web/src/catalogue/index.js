@@ -123,10 +123,8 @@ async function saveEntity(e, isEdit, origName) {
 
 function deleteEntity(name) {
     confirmDelete(`Delete entity "${name}"? This cannot be undone. Entities with fields must have their fields removed first.`, async () => {
-        try {
-            await api(`/entities/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            await reloadEntities();
-        } catch (e) { alert(e.message); }
+        await api(`/entities/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadEntities();
     });
 }
 
@@ -222,10 +220,8 @@ async function saveField(e) {
 
 function deleteField(entityName, fieldName) {
     confirmDelete(`Delete field "${fieldName}" from entity "${entityName}"? This cannot be undone.`, async () => {
-        try {
-            await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`, { method: 'DELETE' });
-            await reloadFields();
-        } catch (e) { alert(e.message); }
+        await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`, { method: 'DELETE' });
+        await reloadFields();
     });
 }
 
@@ -292,7 +288,7 @@ async function unassignFieldCategory(entityName, fieldName, categoryName) {
         await reloadFields();
         const updated = fieldsCache.find(f => f.fieldName === fieldName && f.entity && f.entity.entityName === entityName);
         if (updated) openPanel('field-categories', updated);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showMsg(document.getElementById('fc-msg'), e.message, true); }
 }
 
 // ── Categories ─────────────────────────────────────────────────
@@ -358,10 +354,8 @@ async function saveCategory(e, isEdit, origName) {
 
 function deleteCategory(name) {
     confirmDelete(`Delete category "${name}"? This cannot be undone. Categories still assigned to fields must be unassigned first.`, async () => {
-        try {
-            await api(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            await reloadCategories();
-        } catch (e) { alert(e.message); }
+        await api(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadCategories();
     });
 }
 

@@ -389,7 +389,7 @@ public class CacheInvalidationIT {
         @Order(1)
         @DisplayName("Unauthenticated SSE request returns 401")
         void unauthenticated() {
-            given().when().get("/api/v1/events/invalidations").then().statusCode(401);
+            given().when().get("/api/v1/consent/events").then().statusCode(401);
         }
 
         @Test
@@ -401,7 +401,7 @@ public class CacheInvalidationIT {
             int status =
                     given().header("Authorization", "Bearer " + accessToken)
                             .when()
-                            .get("/api/v1/events/invalidations")
+                            .get("/api/v1/consent/events")
                             .statusCode();
             assertThat(status).as("Authenticated SSE request should be accepted").isIn(200, 204);
         }
@@ -434,11 +434,7 @@ public class CacheInvalidationIT {
             int port = io.restassured.RestAssured.port > 0 ? io.restassured.RestAssured.port : 8081;
             HttpRequest request =
                     HttpRequest.newBuilder()
-                            .uri(
-                                    URI.create(
-                                            "http://localhost:"
-                                                    + port
-                                                    + "/api/v1/events/invalidations"))
+                            .uri(URI.create("http://localhost:" + port + "/api/v1/consent/events"))
                             .header("Authorization", auth())
                             .header("Accept", "text/event-stream")
                             .GET()

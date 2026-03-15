@@ -82,7 +82,10 @@ function getTimeRange() {
 async function fetchJson(url) {
     try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error(res.statusText);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: res.statusText }));
+            throw new Error(err.message || res.statusText);
+        }
         return await res.json();
     } catch (e) {
         console.warn('Metrics fetch failed:', url, e.message);
@@ -93,7 +96,7 @@ async function fetchJson(url) {
 async function refresh() {
     const { from, to } = getTimeRange();
     const loading = document.getElementById('chart-loading');
-    if (loading) loading.textContent = 'Loading…';
+    if (loading) { loading.textContent = 'Loading\u2026'; loading.className = 'text-sm text-gray-400'; }
 
     // Fetch summary + detail in parallel
     const [summary, detail, endpoints] = await Promise.all([
@@ -102,7 +105,11 @@ async function refresh() {
         fetchJson(`${API_BASE}?from=${from}&to=${to}&metricName=api_requests&pageSize=500`),
     ]);
 
-    if (loading) loading.textContent = '';
+    if (!summary && !detail && !endpoints) {
+        if (loading) { loading.textContent = 'Failed to load metrics \u2014 please try again.'; loading.className = 'text-sm text-red-400'; }
+        return;
+    }
+    if (loading) { loading.textContent = ''; }
 
     updateSummaryCards(summary);
     updateChart(detail);
@@ -543,7 +550,8 @@ export async function loadPlans() {
         renderCurrentPlan();
         renderPlansGrid();
     } catch (e) {
-        console.warn('Failed to load plans:', e.message);
+        const grid = document.getElementById('plans-grid');
+        if (grid) grid.innerHTML = `<p class="text-sm text-red-400 py-8 text-center col-span-full">Failed to load plans: ${esc(e.message)}</p>`;
     }
 }
 

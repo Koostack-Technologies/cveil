@@ -128,7 +128,7 @@ impl DaemonConfig {
         }
         if !is_valid_token_format(&self.api_token) {
             return Err(
-                "apiToken must be a cveil personal access token (cveil_...) or a JWT".into(),
+                "apiToken must be a cveil personal access token (cveil_...). JWTs are not accepted — use a PAT for CLI and SDK access.".into(),
             );
         }
         if self.default_jurisdiction.is_empty() {
@@ -150,8 +150,6 @@ impl DaemonConfig {
     pub fn token_type(&self) -> &'static str {
         if self.api_token.starts_with("cveil_") {
             "personal-access-token"
-        } else if is_jwt(&self.api_token) {
-            "jwt"
         } else {
             "unknown"
         }
@@ -197,11 +195,14 @@ pub fn run_config_show(args: ConfigArgs) -> i32 {
     }
 }
 
-/// Check if the token has a valid format — either a `cveil_` PAT or a JWT.
+/// Check if the token has a valid format — only `cveil_` PATs are accepted.
+/// JWTs are not allowed in CLI/SDK contexts to ensure all programmatic API
+/// access is metered via Personal Access Tokens.
 fn is_valid_token_format(token: &str) -> bool {
-    token.starts_with("cveil_") || is_jwt(token)
+    token.starts_with("cveil_")
 }
 
+#[cfg(test)]
 /// Check if the token looks like a JWT (three dot-separated base64url segments).
 fn is_jwt(token: &str) -> bool {
     let parts: Vec<&str> = token.splitn(4, '.').collect();
@@ -293,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_jwt_token() {
+    fn rejects_jwt_token() {
         let tmp = tempfile::tempdir().unwrap();
         let path = write_config(
             tmp.path(),
@@ -310,9 +311,8 @@ mod tests {
             pid_file: String::new(),
             log_level: None,
         };
-        let config = DaemonConfig::load(&start).unwrap();
-        assert!(config.api_token.contains('.'));
-        assert_eq!(config.token_type(), "jwt");
+        let err = DaemonConfig::load(&start).unwrap_err();
+        assert!(err.contains("apiToken"));
     }
 
     #[test]

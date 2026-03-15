@@ -5,6 +5,9 @@ import static org.mockito.Mockito.*;
 
 import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdentityContext;
+import com.koostack.cveil.core.platform.iam.AccessTokenGenerator;
+import com.koostack.cveil.core.platform.iam.AccessTokenInfo;
+import com.koostack.cveil.core.platform.iam.IamQueryService;
 import com.koostack.cveil.core.platform.iam.TokenValidationService;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
@@ -19,6 +22,7 @@ import jakarta.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -178,6 +182,18 @@ class ApiKeyAuthFilterTest {
                 Map.of(),
                 tenantId,
                 "api-key");
+    }
+
+    /** Creates an IdentityContext simulating a Personal Access Token (PAT). */
+    private static IdentityContext patIdentity(String subject, String tenantId, Set<String> roles) {
+        return new IdentityContext(
+                subject,
+                "cveil_test-token",
+                subject + "@example.com",
+                roles,
+                Map.of(),
+                tenantId,
+                "access-token");
     }
 
     /** Captures the Response passed to abortWith(). */
@@ -1136,6 +1152,135 @@ class ApiKeyAuthFilterTest {
             filter.filter(requestContext);
 
             verify(requestContext).abortWith(any());
+        }
+    }
+
+    // =======================================================================
+    // PAT endpoint restriction — PATs rejected on non-billable paths
+    // =======================================================================
+
+    @Nested
+    @DisplayName("PAT endpoint restriction")
+    class PatEndpointRestriction {
+
+        private AccessTokenGenerator.GeneratedToken generatedToken;
+
+        @SuppressWarnings("unchecked")
+        private IamQueryService<Object> iamQueryService;
+
+        @BeforeEach
+        @SuppressWarnings("unchecked")
+        void setUpPatFlow() {
+            generatedToken = AccessTokenGenerator.generate();
+            iamQueryService = mock(IamQueryService.class);
+            lenient().when(cqrsHolder.isCqrsAvailable()).thenReturn(true);
+            lenient().when(cqrsHolder.iamQueryService()).thenReturn(iamQueryService);
+        }
+
+        private AccessTokenInfo activeTokenInfo(String tenantId, String roles) {
+            return new AccessTokenInfo(
+                    1L,
+                    generatedToken.tokenPrefix(),
+                    "test-pat",
+                    tenantId,
+                    roles,
+                    "active",
+                    Instant.now().plusSeconds(3600),
+                    "test-user",
+                    null,
+                    Instant.now());
+        }
+
+        @Test
+        @DisplayName("PAT on billable endpoint (consent) → allowed")
+        void patOnBillableEndpointAllowed() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenMethod("POST");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("pat_tenant", "consent:write"));
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
+        }
+
+        @Test
+        @DisplayName("PAT on billable endpoint (governance) → allowed")
+        void patOnGovernanceAllowed() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/governance/purposes");
+            givenMethod("GET");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("pat_tenant", "governance:read"));
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
+        }
+
+        @Test
+        @DisplayName("PAT on non-billable endpoint (billing) → 403 Forbidden")
+        void patOnBillingEndpointRejected() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/billing/subscription");
+            givenMethod("GET");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("pat_tenant", "consent:write"));
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(403, abortResponse.getStatus());
+        }
+
+        @Test
+        @DisplayName("PAT on non-billable endpoint (metrics) → 403 Forbidden")
+        void patOnMetricsEndpointRejected() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/metrics");
+            givenMethod("GET");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("pat_tenant", "consent:read"));
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(403, abortResponse.getStatus());
+        }
+
+        @Test
+        @DisplayName("Config API key on non-billable endpoint → allowed (no PAT restriction)")
+        void configKeyOnBillingEndpointAllowed() throws IOException {
+            // Config-based API keys have provider "config-api-key", not "access-token"
+            String configToken = "dev-test-key-123";
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of(configToken, "role:admin,tenant:test_tenant"));
+            givenAuthenticatedEndpoint("api/v1/billing/subscription");
+            givenMethod("GET");
+            givenAuthHeader("Bearer " + configToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(configToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(configToken)).thenReturn(false);
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
         }
     }
 

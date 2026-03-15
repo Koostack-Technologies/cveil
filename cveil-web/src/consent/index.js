@@ -1,6 +1,6 @@
 import {
-    esc, showTab as _showTab, confirmDelete, closeDeleteModal, initDeleteModal,
-    activatePanel, closePanel, fmtTime, ready,
+    esc, showTab as _showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
+    activatePanel, closePanel, showMsg, fmtTime, ready,
     retryUntilChanged, setTableLoading,
 } from '../shared/index.js';
 
@@ -9,7 +9,7 @@ import {
 } from './playground.js';
 
 // ── Graph Explorer State ───────────────────────────────────────
-const GRAPH_API = '/api/v1/consent/graph';
+const graphApi = createApi('/api/v1/consent');
 const NODE_COLORS = {
     purpose: '#14b8a6',
     regulation: '#3b82f6',
@@ -26,7 +26,7 @@ let graphHasMore = false;
 let simulation = null;
 
 // ── Ledger State ───────────────────────────────────────────────
-const SSE_URL = '/api/v1/events/invalidations';
+const SSE_URL = '/api/v1/consent/events';
 let eventSource = null;
 let sseInitialized = false;
 let ledgerPaused = false;
@@ -41,14 +41,12 @@ const ACTION_STYLES = {
 };
 
 // ── Subjects State ─────────────────────────────────────────────
-const SUBJECTS_API = '/api/v1/subjects';
+const subjectsApi = createApi('/api/v1/subjects');
 let subjectsCache = [];
 let subjectsLoaded = false;
 
 async function fetchSubjectsList() {
-    const res = await fetch(SUBJECTS_API);
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-    return res.json();
+    return subjectsApi('');
 }
 
 async function reloadSubjects() {
@@ -101,9 +99,7 @@ async function loadGraph() {
     document.getElementById('graph-empty').classList.add('hidden');
 
     try {
-        const res = await fetch(`${GRAPH_API}?${params}`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await graphApi(`/graph?${params}`);
         graphData = data;
         graphCursor = data.pageInfo?.nextCursor || null;
         graphHasMore = data.pageInfo?.hasMore || false;
@@ -132,8 +128,7 @@ async function loadMoreGraph() {
     params.set('cursor', graphCursor);
 
     try {
-        const res = await fetch(`${GRAPH_API}?${params}`);
-        const data = await res.json();
+        const data = await graphApi(`/graph?${params}`);
 
         const existingNodes = new Set(graphData.nodes.map(n => n.type + ':' + n.name));
         data.nodes.forEach(n => { if (!existingNodes.has(n.type + ':' + n.name)) graphData.nodes.push(n); });
@@ -146,7 +141,8 @@ async function loadMoreGraph() {
         renderGraph();
         updateGraphPagination();
     } catch (e) {
-        console.error('Failed to load more graph:', e);
+        const stats = document.getElementById('graph-stats');
+        if (stats) stats.textContent += ' \u2014 failed to load more';
     }
 }
 
@@ -484,9 +480,7 @@ function toggleLedgerPause() {
 // ================================================================
 async function loadSubjects() {
     try {
-        const res = await fetch(SUBJECTS_API);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        subjectsCache = await res.json();
+        subjectsCache = await subjectsApi('');
         subjectsLoaded = true;
         renderSubjects();
     } catch (e) {
@@ -548,11 +542,9 @@ function showDetailTab(tab) {
 
 async function loadSubjectSummary() {
     const body = document.getElementById('subject-detail-body');
-    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading\u2026</p>';
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/summary`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/summary`);
         const entries = data.entries || [];
         if (!entries.length) {
             body.innerHTML = '<p class="text-gray-500 text-sm">No active consent entries for this subject.</p>';
@@ -582,11 +574,9 @@ async function loadSubjectSummary() {
 
 async function loadSubjectHistory() {
     const body = document.getElementById('subject-detail-body');
-    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading\u2026</p>';
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/history`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/history`);
         const entries = data.entries || [];
         if (!entries.length) {
             body.innerHTML = '<p class="text-gray-500 text-sm">No history for this subject.</p>';
@@ -629,9 +619,7 @@ async function loadSubjectHistory() {
 async function exportSubjectData() {
     if (!currentSubject) return;
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/export`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/export`);
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -640,7 +628,7 @@ async function exportSubjectData() {
         a.click();
         URL.revokeObjectURL(url);
     } catch (e) {
-        alert('Export failed: ' + e.message);
+        showMsg(document.getElementById('pf-sub-msg'), 'Export failed: ' + e.message, true);
     }
 }
 
@@ -697,37 +685,22 @@ async function saveSubject(e, isEdit, origName) {
     const msg = document.getElementById('pf-sub-msg');
     try {
         if (isEdit) {
-            const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(origName)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: desc }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+            await subjectsApi(`/${encodeURIComponent(origName)}`, { method: 'PUT', body: JSON.stringify({ description: desc }) });
         } else {
-            const res = await fetch(SUBJECTS_API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ subjectName: name, description: desc }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+            await subjectsApi('', { method: 'POST', body: JSON.stringify({ subjectName: name, description: desc }) });
         }
         closeSubjectPanel();
         await reloadSubjects();
     } catch (err) {
-        msg.textContent = err.message;
-        msg.className = 'text-sm mt-3 text-red-400';
-        msg.classList.remove('hidden');
+        showMsg(msg, err.message, true);
     }
 }
 
 function deleteSubject(name) {
     confirmDelete(`Delete subject "${name}"? This cannot be undone.`, async () => {
-        try {
-            const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-            await reloadSubjects();
-            if (currentSubject === name) closeSubjectDetail();
-        } catch (e) { alert(e.message); }
+        await subjectsApi(`/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadSubjects();
+        if (currentSubject === name) closeSubjectDetail();
     });
 }
 
