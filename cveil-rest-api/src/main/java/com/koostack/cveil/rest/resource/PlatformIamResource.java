@@ -956,10 +956,10 @@ public class PlatformIamResource {
             operationId = "login",
             summary = "Authenticate a user",
             description = "Resource Owner Password Credentials grant against the cveil realm.")
-    public Response login(@Valid LoginRequest request) {
+    public Response login(@HeaderParam("DPoP") String dpopProof, @Valid LoginRequest request) {
         requireCqrs();
 
-        LOG.debug("POST /platform/iam/login email={}", request.email());
+        LOG.debug("POST /platform/iam/login email={}, dpop={}", request.email(), dpopProof != null);
 
         try {
             var result =
@@ -967,7 +967,10 @@ public class PlatformIamResource {
                             cqrs.iamDispatcher()
                                     .dispatch(
                                             new AuthenticateCommandActuator.AuthenticateCommand(
-                                                    REALM, request.email(), request.password()));
+                                                    REALM,
+                                                    request.email(),
+                                                    request.password(),
+                                                    dpopProof));
             metrics.counter("iam_login", "SYSTEM");
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {
@@ -980,10 +983,11 @@ public class PlatformIamResource {
     @POST
     @Path("/refresh")
     @Operation(operationId = "refresh", summary = "Refresh access token")
-    public Response refresh(@Valid RefreshTokenRequest request) {
+    public Response refresh(
+            @HeaderParam("DPoP") String dpopProof, @Valid RefreshTokenRequest request) {
         requireCqrs();
 
-        LOG.debug("POST /platform/iam/refresh");
+        LOG.debug("POST /platform/iam/refresh dpop={}", dpopProof != null);
 
         try {
             var result =
@@ -991,7 +995,7 @@ public class PlatformIamResource {
                             cqrs.iamDispatcher()
                                     .dispatch(
                                             new RefreshTokenCommandActuator.RefreshTokenCommand(
-                                                    REALM, request.refreshToken()));
+                                                    REALM, request.refreshToken(), dpopProof));
             metrics.counter("iam_token_refreshed", "SYSTEM");
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {

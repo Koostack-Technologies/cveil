@@ -106,4 +106,28 @@ public final class AuthCookieHelper {
             return null;
         }
     }
+
+    /**
+     * Session cookie name used by the DPoP login flow. This is a non-HttpOnly cookie set by
+     * JavaScript containing base64-encoded JSON with user context ({@code u}=username, {@code
+     * e}=email).
+     */
+    public static final String SESSION_COOKIE = "cveil_session";
+
+    /**
+     * Decodes the lightweight {@code cveil_session} cookie set during DPoP-based login. The cookie
+     * value is {@code base64(JSON)} with keys {@code u} (username) and {@code e} (email).
+     *
+     * @param cookieHeader the raw Cookie header
+     * @return decoded JSON string, or {@code null} if the cookie is absent or malformed
+     */
+    public static String decodeSessionCookie(String cookieHeader) {
+        String value = readCookie(cookieHeader, SESSION_COOKIE);
+        if (value == null) return null;
+        try {
+            return new String(Base64.getDecoder().decode(value));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
 }

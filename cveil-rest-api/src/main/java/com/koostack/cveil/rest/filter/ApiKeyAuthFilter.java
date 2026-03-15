@@ -98,6 +98,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     /** Standard HTTP Bearer authentication scheme prefix. */
     private static final String BEARER_PREFIX = "Bearer ";
 
+    /** DPoP authentication scheme prefix (RFC 9449). */
+    private static final String DPOP_PREFIX = "DPoP ";
+
     /** Authentication scheme name set on the JAX-RS {@link SecurityContext}. */
     private static final String AUTH_SCHEME_BEARER = "BEARER";
 
@@ -167,6 +170,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      */
     @Inject Instance<IdpTenantResolver> idpTenantResolverInstance;
 
+    /** DPoP proof verifier — validates RFC 9449 proof JWTs on incoming requests. */
+    private final DpopVerifier dpopVerifier = new DpopVerifier();
+
     // -----------------------------------------------------------------------
     // Filter implementation
     // -----------------------------------------------------------------------
@@ -186,10 +192,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 3. Extract Bearer token from Authorization header, falling back to cookie
+        // 3. Extract token from Authorization header (DPoP or Bearer), falling back to cookie
         String authHeader = ctx.getHeaderString("Authorization");
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            // Fallback: read JWT from HttpOnly access cookie (dashboard fetch() calls)
+        boolean isDpopScheme = false;
+        if (authHeader != null && authHeader.startsWith(DPOP_PREFIX)) {
+            isDpopScheme = true;
+        } else if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            // Fallback: read JWT from HttpOnly access cookie (server-rendered pages)
             String cookieToken =
                     AuthCookieHelper.readCookie(
                             ctx.getHeaderString("Cookie"), AuthCookieHelper.ACCESS_COOKIE);
@@ -198,14 +207,18 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             } else {
                 abortUnauthorized(
                         ctx,
-                        "Missing or invalid Authorization header — " + "expected 'Bearer <token>'");
+                        "Missing or invalid Authorization header —"
+                                + " expected 'Bearer <token>' or 'DPoP <token>'");
                 return;
             }
         }
 
-        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+        String token =
+                authHeader
+                        .substring(isDpopScheme ? DPOP_PREFIX.length() : BEARER_PREFIX.length())
+                        .trim();
         if (token.isEmpty()) {
-            abortUnauthorized(ctx, "Bearer token must not be empty");
+            abortUnauthorized(ctx, "Token must not be empty");
             return;
         }
 
@@ -281,7 +294,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // 4e. JWT detection — if the token looks like a JWT (3 dot-separated
         //     base64url segments), verify via the tenant's IdpProvider.
         if (isJwt(token)) {
-            verifyJwt(ctx, token);
+            verifyJwt(ctx, token, isDpopScheme);
             return;
         }
 
@@ -571,13 +584,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Verifies a JWT bearer token via the tenant's IdpProvider.
+     * Verifies a JWT token via the tenant's IdpProvider, with optional DPoP proof validation.
      *
      * <p>Extracts the tenant ID from the JWT payload (without verification), resolves the
      * IdpProvider for that tenant, and delegates to its {@code verifyToken()} method for full
-     * JWKS-based signature verification.
+     * JWKS-based signature verification. When the request uses the {@code DPoP} authorization
+     * scheme, the DPoP proof header is validated and the access token's {@code cnf.jkt} claim is
+     * verified against the proof's public key thumbprint.
+     *
+     * @param ctx the request context
+     * @param token the JWT access token
+     * @param isDpopScheme true if the Authorization header used the DPoP scheme
      */
-    private void verifyJwt(ContainerRequestContext ctx, String token) {
+    private void verifyJwt(ContainerRequestContext ctx, String token, boolean isDpopScheme) {
         IdpTenantResolver idpResolver =
                 idpTenantResolverInstance.isResolvable() ? idpTenantResolverInstance.get() : null;
 
@@ -603,12 +622,45 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         try {
             IdpProvider<?> idpProvider = idpResolver.resolve(tenantId);
             IdentityContext identity = idpProvider.verifyToken(tenantId, token);
+
+            // -- DPoP proof validation --
+            // Extract cnf.jkt from the verified JWT claims (Keycloak adds this
+            // when dpop.bound.access.tokens is enabled on the client).
+            String expectedJkt = extractCnfJkt(identity);
+
+            if (isDpopScheme || expectedJkt != null) {
+                // DPoP proof is required: either the client sent DPoP scheme
+                // or the token is DPoP-bound (has cnf.jkt).
+                String dpopHeader = ctx.getHeaderString("DPoP");
+                if (dpopHeader == null || dpopHeader.isBlank()) {
+                    abortUnauthorized(ctx, "DPoP-bound token requires a DPoP proof header");
+                    return;
+                }
+
+                // Build the htu (scheme + authority + path, no query)
+                var requestUri = ctx.getUriInfo().getRequestUri();
+                String htu =
+                        requestUri.getScheme()
+                                + "://"
+                                + requestUri.getAuthority()
+                                + requestUri.getPath();
+
+                try {
+                    dpopVerifier.verify(dpopHeader, ctx.getMethod(), htu, token, expectedJkt);
+                } catch (DpopVerifier.DpopVerificationException e) {
+                    LOG.debug("DPoP verification failed: {}", e.getMessage());
+                    abortUnauthorized(ctx, "DPoP proof invalid: " + e.getMessage());
+                    return;
+                }
+            }
+
             LOG.debug(
-                    "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}",
+                    "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}, dpop={}",
                     identity.subject(),
                     identity.tenantId(),
                     identity.provider(),
-                    identity.roles());
+                    identity.roles(),
+                    isDpopScheme);
             applyAuthentication(
                     ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
         } catch (CveilAuthException e) {
@@ -618,6 +670,23 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             LOG.error("Unexpected error during JWT verification", e);
             abortUnauthorized(ctx, "Authentication failed — internal error");
         }
+    }
+
+    /**
+     * Extracts the {@code cnf.jkt} (JWK thumbprint confirmation) claim from the identity's claims
+     * map. Keycloak adds this claim to DPoP-bound access tokens.
+     *
+     * @return the JWK thumbprint, or {@code null} if not present
+     */
+    @SuppressWarnings("unchecked")
+    private static String extractCnfJkt(IdentityContext identity) {
+        if (identity.claims() == null) return null;
+        Object cnf = identity.claims().get("cnf");
+        if (cnf instanceof Map<?, ?> cnfMap) {
+            Object jkt = cnfMap.get("jkt");
+            return jkt instanceof String s ? s : null;
+        }
+        return null;
     }
 
     /**

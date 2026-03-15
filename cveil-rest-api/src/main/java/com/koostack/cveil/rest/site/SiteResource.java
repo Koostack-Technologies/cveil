@@ -406,27 +406,13 @@ public class SiteResource {
     @Path("dashboard")
     @Produces(MediaType.TEXT_HTML)
     public Object dashboardPage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        // Decode JWT payload for display (without cryptographic verification —
-        // the token was set by this server via HttpOnly cookie)
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        // Extract claims from JWT payload JSON
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) {
-            username = extractJsonString(payload, "sub");
-        }
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
 
         // Guard: redirect to setup page if workspace provisioning is still in progress
@@ -448,7 +434,9 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "overview");
     }
@@ -457,31 +445,23 @@ public class SiteResource {
     @Path("dashboard/account")
     @Produces(MediaType.TEXT_HTML)
     public Object accountPage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
-        String fullName = extractJsonString(payload, "name");
+        String username = uc.username();
+        String email = uc.email();
+        String fullName =
+                uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
                         : "U";
 
-        // Resolve roles from DB permissions framework
-        String rolesDisplay = resolveRolesDisplay(payload);
+        String rolesDisplay =
+                uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member";
 
         return account.data("username", username)
                 .data("email", email)
@@ -496,22 +476,13 @@ public class SiteResource {
     @Path("dashboard/billing")
     @Produces(MediaType.TEXT_HTML)
     public Object billingPage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
@@ -521,7 +492,9 @@ public class SiteResource {
         return billing.data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "billing")
                 .data("v", BUILD_VERSION);
@@ -531,22 +504,13 @@ public class SiteResource {
     @Path("dashboard/governance")
     @Produces(MediaType.TEXT_HTML)
     public Object governancePage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
@@ -557,7 +521,9 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "governance")
                 .data("v", BUILD_VERSION);
@@ -567,22 +533,13 @@ public class SiteResource {
     @Path("dashboard/catalogue")
     @Produces(MediaType.TEXT_HTML)
     public Object cataloguePage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
@@ -593,7 +550,9 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "catalogue")
                 .data("v", BUILD_VERSION);
@@ -603,22 +562,13 @@ public class SiteResource {
     @Path("dashboard/consent")
     @Produces(MediaType.TEXT_HTML)
     public Object consentPage() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
@@ -628,7 +578,9 @@ public class SiteResource {
         return consent.data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "consent")
                 .data("v", BUILD_VERSION);
@@ -638,22 +590,13 @@ public class SiteResource {
     @Path("dashboard/organizations/{orgId}")
     @Produces(MediaType.TEXT_HTML)
     public Object orgDetailPage(@PathParam("orgId") String orgId) {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-
-        if (accessToken == null) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-        if (payload == null) {
-            return Response.seeOther(URI.create("/login")).build();
-        }
-
-        String username = extractJsonString(payload, "preferred_username");
-        if (username == null) username = extractJsonString(payload, "sub");
-        String email = extractJsonString(payload, "email");
+        String username = uc.username();
+        String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
         String initial =
                 username != null && !username.isEmpty()
@@ -690,7 +633,9 @@ public class SiteResource {
                 .data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
-                .data("roles", resolveRolesDisplay(payload))
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
                 .data("initial", initial)
                 .data("activeNav", "account");
     }
@@ -718,7 +663,17 @@ public class SiteResource {
         }
 
         NewCookie[] cleared = AuthCookieHelper.clearAuthCookies();
-        return Response.seeOther(URI.create("/login")).cookie(cleared).build();
+        // Also clear the DPoP session cookie (non-HttpOnly, set by JS login)
+        NewCookie clearSession =
+                new NewCookie.Builder(AuthCookieHelper.SESSION_COOKIE)
+                        .value("")
+                        .path("/")
+                        .maxAge(0)
+                        .sameSite(NewCookie.SameSite.LAX)
+                        .build();
+        return Response.seeOther(URI.create("/login"))
+                .cookie(cleared[0], cleared[1], clearSession)
+                .build();
     }
 
     // -----------------------------------------------------------------------
@@ -759,6 +714,51 @@ public class SiteResource {
         int endQuote = json.indexOf('"', startQuote + 1);
         if (endQuote < 0) return null;
         return json.substring(startQuote + 1, endQuote);
+    }
+
+    /**
+     * Lightweight container for user context needed by dashboard templates. Resolved from either
+     * the {@code cveil_access} JWT cookie or the DPoP-flow {@code cveil_session} cookie.
+     */
+    record UserContext(String username, String email, String jwtPayload) {}
+
+    /**
+     * Resolves user context for server-rendered dashboard pages. Tries (in order):
+     *
+     * <ol>
+     *   <li>{@code cveil_access} cookie — decode the JWT payload (pre-DPoP flow)
+     *   <li>{@code cveil_session} cookie — lightweight base64 JSON set by DPoP login
+     * </ol>
+     *
+     * @return resolved context, or {@code null} if the user is not authenticated
+     */
+    private UserContext resolveUserContext() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+
+        // Path 1: traditional JWT cookie
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+        if (accessToken != null) {
+            String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+            if (payload != null) {
+                String u = extractJsonString(payload, "preferred_username");
+                if (u == null) u = extractJsonString(payload, "sub");
+                String e = extractJsonString(payload, "email");
+                return new UserContext(u, e, payload);
+            }
+        }
+
+        // Path 2: lightweight DPoP session cookie
+        String sessionJson = AuthCookieHelper.decodeSessionCookie(cookieHeader);
+        if (sessionJson != null) {
+            String u = extractJsonString(sessionJson, "u");
+            String e = extractJsonString(sessionJson, "e");
+            if (u != null) {
+                return new UserContext(u, e, null);
+            }
+        }
+
+        return null;
     }
 
     private List<Map<String, Object>> pricingTiers() {

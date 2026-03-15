@@ -12,8 +12,8 @@ quarkus:
     cors:
       origins: ${CVEIL_CORS_ORIGINS:https://dashboard.cveil.dev}
       methods: ${CVEIL_CORS_METHODS:GET,POST,DELETE,OPTIONS}
-      headers: ${CVEIL_CORS_HEADERS:Authorization,Content-Type,X-Request-Id}
-      exposed-headers: ${CVEIL_CORS_EXPOSED_HEADERS:X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning}
+      headers: ${CVEIL_CORS_HEADERS:Authorization,Content-Type,X-Request-Id,DPoP,X-Org-Id}
+      exposed-headers: ${CVEIL_CORS_EXPOSED_HEADERS:X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning,DPoP-Nonce}
   virtual-threads:
     enabled: true # REQUIRED for ScopedValue (TenantContext, RequestContext)
 

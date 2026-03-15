@@ -53,6 +53,7 @@ dependencies {
     implementation(project(":platform:cveil-platform-jooq"))
     implementation(project(":platform:cveil-platform-keycloak"))
     implementation("org.keycloak:keycloak-admin-client:26.0.8")
+    implementation("com.nimbusds:nimbus-jose-jwt:9.47") // DPoP proof verification
     implementation(project(":tenant:cveil-authz-keycloak"))
     implementation(project(":tenant:cveil-consent-admin-jooq-common"))
     implementation(project(":common:cveil-jooq"))

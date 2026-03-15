@@ -41,12 +41,20 @@ public class RefreshTokenCommandActuator
      *
      * @param realmId the Keycloak realm
      * @param refreshToken the refresh token
+     * @param dpopProof optional DPoP proof JWT from the client (forwarded to Keycloak)
      */
-    public record RefreshTokenCommand(String realmId, String refreshToken) {}
+    public record RefreshTokenCommand(String realmId, String refreshToken, String dpopProof) {
+        /** Convenience constructor without DPoP proof (backward compatible). */
+        public RefreshTokenCommand(String realmId, String refreshToken) {
+            this(realmId, refreshToken, null);
+        }
+    }
 
     @Override
     public AuthResult execute(RefreshTokenCommand command) {
-        AuthResult result = authSupport.refreshToken(command.realmId(), command.refreshToken());
+        AuthResult result =
+                authSupport.refreshToken(
+                        command.realmId(), command.refreshToken(), command.dpopProof());
 
         // Publish domain event
         String userId = result.identity().subject();

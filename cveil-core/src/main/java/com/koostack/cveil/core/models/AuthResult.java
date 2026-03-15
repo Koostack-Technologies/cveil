@@ -22,4 +22,9 @@ public record AuthResult(
             String accessToken, String refreshToken, long expiresIn, IdentityContext identity) {
         return new AuthResult(accessToken, refreshToken, expiresIn, "Bearer", identity);
     }
+
+    public static AuthResult dpop(
+            String accessToken, String refreshToken, long expiresIn, IdentityContext identity) {
+        return new AuthResult(accessToken, refreshToken, expiresIn, "DPoP", identity);
+    }
 }
