@@ -310,7 +310,7 @@ public class RegisterUserOrchestrator
                                     .dispatch(
                                             new CreateSubscriptionCommandActuator
                                                     .CreateSubscriptionCommand(
-                                                    in.tenantId(), "free"));
+                                                    in.tenantId(), "free", null, null, null));
                             ctx.put("subscriptionCreated", true);
                         }));
 

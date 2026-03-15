@@ -39,6 +39,9 @@ include("platform:cveil-billing-command")
 include("platform:cveil-billing-query-jooq")
 include("platform:cveil-billing-projection-jooq")
 
+// --- Payment Processor ---
+include("platform:cveil-payment-proc-stripe")
+
 // --- Platform Core ---
 include("platform:cveil-core-schema")
 include("platform:cveil-core-jooq-common")

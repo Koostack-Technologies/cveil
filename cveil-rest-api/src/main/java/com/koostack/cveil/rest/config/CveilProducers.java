@@ -115,6 +115,13 @@ public class CveilProducers {
     private BillingCommandService billingCommandService;
 
     @SuppressWarnings("rawtypes")
+    private com.koostack.cveil.core.platform.billing.BillingQueryService billingQueryService;
+
+    @SuppressWarnings("rawtypes")
+    private com.koostack.cveil.core.platform.billing.PaymentProcessorService
+            paymentProcessorService;
+
+    @SuppressWarnings("rawtypes")
     private CoreQueryService coreQueryService;
 
     @SuppressWarnings("rawtypes")
@@ -388,7 +395,9 @@ public class CveilProducers {
                 billingCommandService,
                 planQueryService,
                 null,
-                permissionService);
+                permissionService,
+                billingQueryService,
+                paymentProcessorService);
     }
 
     /**
@@ -1093,6 +1102,7 @@ public class CveilProducers {
 
         BillingQueryDispatcher billingQuerySvc = new BillingQueryDispatcher();
         billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
+        this.billingQueryService = billingQuerySvc;
 
         com.koostack.cveil.platform.plan.jooq.JooqPlanQueryService planQuerySvc =
                 new com.koostack.cveil.platform.plan.jooq.JooqPlanQueryService();
@@ -1101,6 +1111,13 @@ public class CveilProducers {
 
         this.coreQueryService = coreQuerySvc;
         this.planQueryService = planQuerySvc;
+
+        // -- Payment processor (Stripe) --
+        this.paymentProcessorService = initPaymentProcessor(config);
+
+        // -- Idempotent plan → Stripe sync (products + prices) --
+        com.koostack.cveil.rest.lifecycle.StripePlanSyncTask.sync(
+                paymentProcessorService, planQuerySvc, coreCmdSvc);
 
         // Configure billing dispatcher now that planQueryService is available
         billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService, planQuerySvc));
@@ -1653,6 +1670,33 @@ public class CveilProducers {
         requireNonBlank(
                 platformDb.password().orElse(null),
                 "cveil.platform-db.password (env: CVEIL_PLATFORM_DB_PASSWORD)");
+    }
+
+    @SuppressWarnings("rawtypes")
+    private com.koostack.cveil.core.platform.billing.PaymentProcessorService initPaymentProcessor(
+            CveilConfig config) {
+        if (config.stripe().isEmpty()) {
+            LOG.warn("Stripe config not present — PaymentProcessorService will be null");
+            return null;
+        }
+        var stripe = config.stripe().get();
+        if (stripe.secretKey().isEmpty()) {
+            LOG.warn("Stripe secret key not configured — PaymentProcessorService will be null");
+            return null;
+        }
+        try {
+            var svc = new com.koostack.cveil.plugin.platform.stripe.StripePaymentProcessorService();
+            svc.configure(
+                    new com.koostack.cveil.plugin.platform.stripe.StripePaymentProcessorConfig(
+                            stripe.secretKey().get(),
+                            stripe.publishableKey().orElse(null),
+                            stripe.webhookSecret().orElse(null)));
+            LOG.info("PaymentProcessorService (Stripe) initialized");
+            return svc;
+        } catch (Exception e) {
+            LOG.error("Failed to initialize Stripe PaymentProcessorService", e);
+            return null;
+        }
     }
 
     private void runFlyway(DataSource ds, String location, String historyTable) {

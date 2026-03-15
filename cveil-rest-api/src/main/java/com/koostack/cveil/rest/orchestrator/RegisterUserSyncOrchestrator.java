@@ -212,8 +212,7 @@ public class RegisterUserSyncOrchestrator
     }
 
     @Override
-    protected RegisterUserSyncResult toResult(
-            RegisterUserSyncCommand input, SagaContext context) {
+    protected RegisterUserSyncResult toResult(RegisterUserSyncCommand input, SagaContext context) {
         RegisterUserCommandActuator.RegisterUserResult userResult = context.get("userResult");
         return new RegisterUserSyncResult(
                 userResult.username(),

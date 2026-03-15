@@ -140,8 +140,8 @@ public record BillingProfileAggregate(
                                     e.subjectLimit(),
                                     e.burstLimit(),
                                     "active",
-                                    null,
-                                    null,
+                                    e.periodStart(),
+                                    e.periodEnd(),
                                     false);
                     yield new BillingProfileAggregate(
                             current.tenantId(),

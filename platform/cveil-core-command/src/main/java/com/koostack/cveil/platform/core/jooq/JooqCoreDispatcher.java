@@ -80,6 +80,9 @@ public class JooqCoreDispatcher
         actuators.put(
                 DeleteTenantCommandActuator.DeleteTenantCommand.class,
                 new DeleteTenantCommandActuator(eventService));
+        actuators.put(
+                SyncPlanStripeIdsCommandActuator.SyncPlanStripeIdsCommand.class,
+                new SyncPlanStripeIdsCommandActuator(eventService));
 
         LOG.info("JooqCoreDispatcher configured with {} actuators", actuators.size());
     }

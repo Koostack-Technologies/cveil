@@ -24,7 +24,9 @@ public interface PlanQueryService<T> extends Plugin<T> {
             int burstLimit,
             boolean isPublic,
             boolean isActive,
-            int sortOrder) {}
+            int sortOrder,
+            String stripeProductId,
+            String stripePriceId) {}
 
     /**
      * Get a single plan by ID.

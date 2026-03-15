@@ -5,6 +5,7 @@ import static org.jooq.impl.DSL.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.cveil.core.platform.core.CoreEventTypes;
 import com.koostack.cveil.core.platform.iam.IamEventTypes;
+import com.koostack.cveil.core.platform.plan.PlanEventTypes;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.jooq.DSLContext;
@@ -39,6 +40,16 @@ public class CoreProjectionHandler {
     private static final org.jooq.Field<String> TENANT_TYPE =
             field(name("tenant_type"), String.class);
 
+    // -- plan table -----------------------------------------------------------
+    private static final org.jooq.Table<?> PLAN_TABLE = table(name("platform_core", "plan"));
+    private static final org.jooq.Field<String> PLAN_ID = field(name("plan_id"), String.class);
+    private static final org.jooq.Field<String> STRIPE_PRODUCT_ID =
+            field(name("stripe_product_id"), String.class);
+    private static final org.jooq.Field<String> STRIPE_PRICE_ID =
+            field(name("stripe_price_id"), String.class);
+    private static final org.jooq.Field<OffsetDateTime> PLAN_UPDATED_AT =
+            field(name("updated_at"), OffsetDateTime.class);
+
     private final DSLContext dsl;
     private final ObjectMapper mapper;
 
@@ -69,6 +80,7 @@ public class CoreProjectionHandler {
                 case CoreEventTypes.TENANT_ACTIVATED -> handleActivated(payload);
                 case CoreEventTypes.TENANT_DELETED -> handleDeleted(payload);
                 case IamEventTypes.REDIS_PROVISIONED -> handleRedisProvisioned(payload);
+                case PlanEventTypes.PLAN_STRIPE_SYNCED -> handlePlanStripeSynced(payload);
                 default -> LOG.trace("Ignoring unhandled event type: {}", eventType);
             }
         } catch (Exception e) {
@@ -198,5 +210,21 @@ public class CoreProjectionHandler {
                 .execute();
 
         LOG.info("Redis ACL credentials stored for tenant {}: aclUser={}", id, aclUser);
+    }
+
+    private void handlePlanStripeSynced(String payload) throws Exception {
+        var node = mapper.readTree(payload);
+        String planId = node.get("planId").asText();
+        String productId = node.get("stripeProductId").asText();
+        String priceId = node.get("stripePriceId").asText();
+
+        dsl.update(PLAN_TABLE)
+                .set(STRIPE_PRODUCT_ID, productId)
+                .set(STRIPE_PRICE_ID, priceId)
+                .set(PLAN_UPDATED_AT, OffsetDateTime.now())
+                .where(PLAN_ID.eq(planId))
+                .execute();
+
+        LOG.info("Plan {} synced with Stripe: product={}, price={}", planId, productId, priceId);
     }
 }

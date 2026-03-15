@@ -77,10 +77,24 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
 
     @Override
     public void createSubscription(
-            String tenantId, String planTier, int evalLimit, int subjectLimit, int burstLimit) {
+            String tenantId,
+            String planTier,
+            int evalLimit,
+            int subjectLimit,
+            int burstLimit,
+            String externalSubscriptionId,
+            Instant periodStart,
+            Instant periodEnd) {
         var payload =
                 new SubscriptionCreatedEvent(
-                        tenantId, planTier, evalLimit, subjectLimit, burstLimit);
+                        tenantId,
+                        planTier,
+                        evalLimit,
+                        subjectLimit,
+                        burstLimit,
+                        externalSubscriptionId,
+                        periodStart,
+                        periodEnd);
         publishEvent(BillingEventTypes.SUBSCRIPTION_CREATED, tenantId, payload);
     }
 
@@ -108,6 +122,121 @@ public class JooqBillingCommandService implements BillingCommandService<JooqBill
     public void renewSubscription(String tenantId, Instant periodStart, Instant periodEnd) {
         var payload = new SubscriptionRenewedEvent(tenantId, periodStart, periodEnd);
         publishEvent(BillingEventTypes.SUBSCRIPTION_RENEWED, tenantId, payload);
+    }
+
+    // -- Payment method commands ----------------------------------------------
+
+    @Override
+    public void attachPaymentMethod(
+            String tenantId,
+            String externalPaymentMethodId,
+            String type,
+            String brand,
+            String last4,
+            int expMonth,
+            int expYear,
+            boolean isDefault) {
+        var payload =
+                new PaymentMethodAttachedEvent(
+                        tenantId,
+                        externalPaymentMethodId,
+                        type,
+                        brand,
+                        last4,
+                        expMonth,
+                        expYear,
+                        isDefault);
+        publishEvent(BillingEventTypes.PAYMENT_METHOD_ATTACHED, tenantId, payload);
+    }
+
+    @Override
+    public void detachPaymentMethod(String tenantId, String externalPaymentMethodId) {
+        var payload = new PaymentMethodDetachedEvent(tenantId, externalPaymentMethodId);
+        publishEvent(BillingEventTypes.PAYMENT_METHOD_DETACHED, tenantId, payload);
+    }
+
+    @Override
+    public void setDefaultPaymentMethod(String tenantId, String externalPaymentMethodId) {
+        var payload = new PaymentMethodDefaultChangedEvent(tenantId, externalPaymentMethodId);
+        publishEvent(BillingEventTypes.PAYMENT_METHOD_DEFAULT_CHANGED, tenantId, payload);
+    }
+
+    // -- Invoice commands -----------------------------------------------------
+
+    @Override
+    public void recordInvoice(
+            String tenantId,
+            String externalInvoiceId,
+            String externalSubscriptionId,
+            String status,
+            String currency,
+            long amountDue,
+            long subtotal,
+            long total,
+            String hostedInvoiceUrl,
+            String invoicePdfUrl,
+            Instant periodStart,
+            Instant periodEnd,
+            Instant dueDate) {
+        var payload =
+                new InvoiceCreatedEvent(
+                        tenantId,
+                        externalInvoiceId,
+                        externalSubscriptionId,
+                        status,
+                        currency,
+                        amountDue,
+                        subtotal,
+                        total,
+                        hostedInvoiceUrl,
+                        invoicePdfUrl,
+                        periodStart,
+                        periodEnd,
+                        dueDate);
+        publishEvent(BillingEventTypes.INVOICE_CREATED, tenantId, payload);
+    }
+
+    @Override
+    public void recordInvoicePaid(
+            String tenantId, String externalInvoiceId, long amountPaid, Instant paidAt) {
+        var payload = new InvoicePaidEvent(tenantId, externalInvoiceId, amountPaid, paidAt);
+        publishEvent(BillingEventTypes.INVOICE_PAID, tenantId, payload);
+    }
+
+    @Override
+    public void recordInvoiceUpdated(
+            String tenantId,
+            String externalInvoiceId,
+            String status,
+            long amountDue,
+            long amountPaid,
+            long amountRemaining,
+            long total,
+            String hostedInvoiceUrl,
+            String invoicePdfUrl,
+            Instant paidAt) {
+        var payload =
+                new InvoiceUpdatedEvent(
+                        tenantId,
+                        externalInvoiceId,
+                        status,
+                        amountDue,
+                        amountPaid,
+                        amountRemaining,
+                        total,
+                        hostedInvoiceUrl,
+                        invoicePdfUrl,
+                        paidAt);
+        publishEvent(BillingEventTypes.INVOICE_UPDATED, tenantId, payload);
+    }
+
+    // -- Usage commands -------------------------------------------------------
+
+    @Override
+    public void recordUsageReported(
+            String tenantId, String metricName, long quantity, Instant reportedAt) {
+        var payload = new UsageReportedEvent(tenantId, metricName, quantity, reportedAt);
+        publishEvent(BillingEventTypes.USAGE_REPORTED, tenantId, payload);
     }
 
     // -- Internal helpers -----------------------------------------------------

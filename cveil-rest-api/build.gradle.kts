@@ -75,6 +75,7 @@ dependencies {
     implementation(project(":platform:cveil-iam-query")) // JooqIamQueryService
     implementation(project(":platform:cveil-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:cveil-plan-query-jooq"))
+    implementation(project(":platform:cveil-payment-proc-stripe")) // Stripe payment processor
 
     // platform schemas
 

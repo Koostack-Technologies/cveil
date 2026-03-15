@@ -86,6 +86,11 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
                             "Identity and Access Management: user registration, "
                                     + "service accounts, authentication, and role management."),
             @Tag(
+                    name = CveilOpenApiConfig.TAG_BILLING,
+                    description =
+                            "Billing and payments: payment methods, invoices, "
+                                    + "subscription management, and Stripe webhook processing."),
+            @Tag(
                     name = CveilOpenApiConfig.TAG_HEALTH,
                     description =
                             "Health and readiness checks. Public endpoint, "
@@ -137,6 +142,9 @@ public class CveilOpenApiConfig {
 
     /** Tag for IAM endpoints (users, service accounts, authentication). */
     public static final String TAG_IAM = "IAM";
+
+    /** Tag for billing and payment endpoints. */
+    public static final String TAG_BILLING = "Billing";
 
     /** Tag for health/readiness endpoints. */
     public static final String TAG_HEALTH = "Health";

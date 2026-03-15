@@ -168,8 +168,8 @@ public class SiteResource {
 
             var syncCommand =
                     new RegisterUserSyncOrchestrator.RegisterUserSyncCommand(
-                            REALM, username, email, fullName, null,
-                            Set.of(), false, password, tenantId);
+                            REALM, username, email, fullName, null, Set.of(), false, password,
+                            tenantId);
 
             syncOrchestrator.execute(syncCommand);
 
@@ -177,8 +177,12 @@ public class SiteResource {
             provisioningTracker.start(tenantId, DeferredProvisioningTask.totalSteps());
             provisioningExecutor.submit(
                     new DeferredProvisioningTask(
-                            tenantId, email, "free",
-                            consentDispatcher, cqrs.billingDispatcher(),
+                            tenantId,
+                            email,
+                            "free",
+                            consentDispatcher,
+                            cqrs.billingDispatcher(),
+                            cqrs.paymentProcessorService(),
                             provisioningTracker));
 
             // ── Auto-login and redirect to setup loading page ──────────────
@@ -248,8 +252,8 @@ public class SiteResource {
     @GET
     @Path("setup")
     @Produces(MediaType.TEXT_HTML)
-    public Object setupPage(@QueryParam("username") String qpUsername,
-                            @QueryParam("tenant") String qpTenantId) {
+    public Object setupPage(
+            @QueryParam("username") String qpUsername, @QueryParam("tenant") String qpTenantId) {
         // Try cookie-based auth first
         String cookieHeader = httpHeaders.getHeaderString("Cookie");
         String accessToken =
@@ -267,15 +271,15 @@ public class SiteResource {
                 if (username != null) {
                     try {
                         tenantId = TenantIdDeriver.derive(username);
-                    } catch (Exception ignored) { }
+                    } catch (Exception ignored) {
+                    }
                 }
             }
         }
 
         // If provisioning is already done (or was never tracked), go straight to dashboard
         if (tenantId != null) {
-            ProvisioningTracker.ProvisioningStatus status =
-                    provisioningTracker.getStatus(tenantId);
+            ProvisioningTracker.ProvisioningStatus status = provisioningTracker.getStatus(tenantId);
             if (status == null || status.status() == ProvisioningTracker.Status.COMPLETED) {
                 return Response.seeOther(URI.create("/dashboard")).build();
             }
@@ -322,20 +326,22 @@ public class SiteResource {
                     .build();
         }
 
-        ProvisioningTracker.ProvisioningStatus status =
-                provisioningTracker.getStatus(tenantId);
+        ProvisioningTracker.ProvisioningStatus status = provisioningTracker.getStatus(tenantId);
 
         if (status == null) {
             // No tracker entry → provisioning already completed (or pre-existing tenant)
             return Response.ok(Map.of("status", "COMPLETED")).build();
         }
 
-        return Response.ok(Map.of(
-                "status", status.status().name(),
-                "currentStep", status.currentStep() != null ? status.currentStep() : "",
-                "completedSteps", status.completedSteps(),
-                "totalSteps", status.totalSteps(),
-                "errorMessage", status.errorMessage() != null ? status.errorMessage() : ""))
+        return Response.ok(
+                        Map.of(
+                                "status", status.status().name(),
+                                "currentStep",
+                                        status.currentStep() != null ? status.currentStep() : "",
+                                "completedSteps", status.completedSteps(),
+                                "totalSteps", status.totalSteps(),
+                                "errorMessage",
+                                        status.errorMessage() != null ? status.errorMessage() : ""))
                 .build();
     }
 
@@ -512,8 +518,7 @@ public class SiteResource {
                         ? username.substring(0, 1).toUpperCase()
                         : "U";
 
-        return billing
-                .data("username", username)
+        return billing.data("username", username)
                 .data("email", email)
                 .data("tenantId", tenantId)
                 .data("roles", resolveRolesDisplay(payload))

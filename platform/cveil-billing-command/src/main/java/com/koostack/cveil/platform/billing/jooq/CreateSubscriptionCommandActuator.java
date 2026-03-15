@@ -11,6 +11,7 @@ import com.koostack.cveil.core.platform.billing.BillingEventTypes;
 import com.koostack.cveil.core.platform.billing.aggregates.BillingProfileAggregate;
 import com.koostack.cveil.core.platform.billing.events.SubscriptionCreatedEvent;
 import com.koostack.cveil.core.platform.plan.PlanQueryService;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -33,7 +34,12 @@ public class CreateSubscriptionCommandActuator
         this.planQueryService = planQueryService;
     }
 
-    public record CreateSubscriptionCommand(String tenantId, String planTier) {}
+    public record CreateSubscriptionCommand(
+            String tenantId,
+            String planTier,
+            String externalSubscriptionId,
+            Instant periodStart,
+            Instant periodEnd) {}
 
     @Override
     public Void execute(CreateSubscriptionCommand command) {
@@ -67,7 +73,10 @@ public class CreateSubscriptionCommandActuator
                         command.planTier(),
                         Math.toIntExact(plan.evalLimit()),
                         Math.toIntExact(plan.subjectLimit()),
-                        plan.burstLimit());
+                        plan.burstLimit(),
+                        command.externalSubscriptionId(),
+                        command.periodStart(),
+                        command.periodEnd());
         eventPublisher()
                 .publishEvent(
                         PublishDomainEventInput.of(

@@ -32,6 +32,10 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
             field(name("is_active"), Boolean.class);
     private static final org.jooq.Field<Integer> SORT_ORDER =
             field(name("sort_order"), Integer.class);
+    private static final org.jooq.Field<String> STRIPE_PRODUCT_ID =
+            field(name("stripe_product_id"), String.class);
+    private static final org.jooq.Field<String> STRIPE_PRICE_ID =
+            field(name("stripe_price_id"), String.class);
 
     private DSLContext dsl;
     private RetryConfig retryConfig = RetryableQuery.DEFAULT;
@@ -109,6 +113,8 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
                 record.get(BURST_LIMIT),
                 record.get(IS_PUBLIC),
                 record.get(IS_ACTIVE),
-                record.get(SORT_ORDER));
+                record.get(SORT_ORDER),
+                record.get(STRIPE_PRODUCT_ID),
+                record.get(STRIPE_PRICE_ID));
     }
 }

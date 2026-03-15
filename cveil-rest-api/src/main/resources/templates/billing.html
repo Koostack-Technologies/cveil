@@ -122,22 +122,32 @@
     <!-- Plan Section                                                  -->
     <!-- ============================================================ -->
     <section id="section-plan" class="hidden">
-        <div class="max-w-2xl">
-            <h2 class="text-xl font-semibold mb-6">Current Plan</h2>
+        <div class="max-w-4xl">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-semibold">Plan &amp; Subscription</h2>
+            </div>
 
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-6">
+            <!-- Current subscription card -->
+            <div id="current-plan-card" class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
                 <div class="flex items-center justify-between mb-4">
                     <div>
-                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Plan</p>
-                        <p class="text-2xl font-bold text-cv-500">Free</p>
+                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Current Plan</p>
+                        <p id="current-plan-name" class="text-2xl font-bold text-cv-500">Free</p>
                     </div>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                    <span id="plan-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                         <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active
                     </span>
                 </div>
-                <p class="text-sm text-gray-500">The free tier includes basic consent management features with generous rate limits for development and testing.</p>
+                <p id="current-plan-desc" class="text-sm text-gray-500 mb-4">Loading...</p>
+                <div id="cancel-btn-container" class="hidden">
+                    <button onclick="CveilWeb.billing.cancelSubscription()"
+                        class="text-xs text-red-400 hover:text-red-600 transition-colors">
+                        Cancel Subscription
+                    </button>
+                </div>
             </div>
 
+            <!-- Usage limits -->
             <h3 class="text-sm font-semibold text-gray-700 mb-4">Usage Limits</h3>
             <div class="space-y-4 mb-8">
                 <div class="bg-white shadow-sm border border-gray-200 rounded-md p-4">
@@ -169,9 +179,11 @@
                 </div>
             </div>
 
-            <button disabled class="px-4 py-2.5 text-sm font-medium text-white bg-cv-500 rounded opacity-50 cursor-not-allowed">
-                Upgrade Plan — Coming Soon
-            </button>
+            <!-- Plan comparison cards -->
+            <h3 class="text-sm font-semibold text-gray-700 mb-4">Available Plans</h3>
+            <div id="plans-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <!-- Populated by JS -->
+            </div>
         </div>
     </section>
 
@@ -193,7 +205,7 @@
                             <th class="pb-2 text-xs text-gray-500 uppercase tracking-wide font-medium text-right"></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="invoices-table">
                         <tr>
                             <td colspan="5" class="py-12 text-center">
                                 <div class="flex flex-col items-center gap-3">
@@ -208,6 +220,10 @@
                         </tr>
                     </tbody>
                 </table>
+                <div class="mt-4 text-center">
+                    <button onclick="CveilWeb.billing.loadMoreInvoices()"
+                        class="text-xs text-cv-500 hover:underline">Load More</button>
+                </div>
             </div>
         </div>
     </section>
@@ -217,23 +233,42 @@
     <!-- ============================================================ -->
     <section id="section-payment" class="hidden">
         <div class="max-w-2xl">
-            <h2 class="text-xl font-semibold mb-6">Payment Methods</h2>
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-semibold">Payment Methods</h2>
+                <button onclick="CveilWeb.billing.openAddPaymentMethod()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-cv-500 rounded hover:bg-cv-600 transition-colors">
+                    Add Payment Method
+                </button>
+            </div>
 
             <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-                <div class="flex flex-col items-center gap-3 py-8">
-                    <svg class="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                            d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    <p class="text-sm text-gray-400">No payment methods on file</p>
-                    <p class="text-xs text-gray-400">Add a payment method to enable paid plans and automatic billing.</p>
-                    <button disabled class="mt-2 px-4 py-2 text-sm font-medium text-white bg-cv-500 rounded opacity-50 cursor-not-allowed">
-                        Add Payment Method — Coming Soon
-                    </button>
+                <div id="payment-methods-list">
+                    <div class="flex flex-col items-center gap-3 py-8">
+                        <svg class="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        <p class="text-sm text-gray-400">No payment methods on file</p>
+                        <p class="text-xs text-gray-400">Add a payment method to enable paid plans and automatic billing.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
+
+    <!-- ============================================================ -->
+    <!-- Slide Panel (used by Add Payment Method)                      -->
+    <!-- ============================================================ -->
+    <div id="panel-overlay" class="hidden fixed inset-0 z-40 bg-black/30 transition-opacity" onclick="CveilWeb.billing.closePanelGlobal()"></div>
+    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white border-l border-gray-200 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h3 id="panel-title" class="text-lg font-semibold"></h3>
+            <button onclick="CveilWeb.billing.closePanelGlobal()" class="text-gray-500 hover:text-gray-900 p-1 rounded hover:bg-gray-100 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="panel-body" class="p-6"></div>
+    </aside>
 
     <script>
         function showSection(name) {
@@ -249,6 +284,9 @@
                 btn.classList.remove('border-transparent', 'text-gray-500');
             }
             window.location.hash = name;
+            if (name === 'invoices') CveilWeb.billing.loadInvoices();
+            if (name === 'payment') CveilWeb.billing.loadPaymentMethods();
+            if (name === 'plan') CveilWeb.billing.loadPlans();
         }
         // Restore tab from hash
         const hash = window.location.hash.replace('#', '');
@@ -257,6 +295,8 @@
         }
     </script>
 
+<!-- Stripe.js for payment method collection -->
+<script src="https://js.stripe.com/v3/"></script>
 <!-- D3.js for chart visualization -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="/js/cveil-web.iife.js?v={v}"></script>

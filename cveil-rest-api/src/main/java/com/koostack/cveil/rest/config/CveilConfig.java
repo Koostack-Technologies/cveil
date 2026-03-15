@@ -60,8 +60,8 @@ import java.util.Optional;
  * init</em> deployment phase — before the runtime {@link io.smallrye.config.SmallRyeConfig} (which
  * holds the {@code @ConfigMapping} registrations) has been built. A direct {@code @Inject
  * CveilConfig} on a provider triggers immediate resolution, which fails with {@code SRCFG00027:
- * Could not find a mapping for ...}. Wrapping the injection in {@code Instance<CveilConfig>}
- * defers resolution to first access at request time, when the runtime config is available.
+ * Could not find a mapping for ...}. Wrapping the injection in {@code Instance<CveilConfig>} defers
+ * resolution to first access at request time, when the runtime config is available.
  *
  * <p>This restriction does <strong>not</strong> apply to normal CDI beans
  * ({@code @ApplicationScoped}, {@code @RequestScoped}, etc.) because Quarkus/Arc injects lazy
@@ -195,6 +195,15 @@ public interface CveilConfig {
      * {@code idp_config} table.
      */
     Optional<KeycloakConfig> keycloak();
+
+    /**
+     * Stripe payment processor configuration.
+     *
+     * <p>When present and {@code cveil.mode=production}, the platform initializes a {@code
+     * StripePaymentProcessorService} for payment method management, subscriptions, invoicing, and
+     * webhook processing.
+     */
+    Optional<StripeConfig> stripe();
 
     // -------------------------------------------------------------------
     // Nested configuration interfaces
@@ -569,5 +578,20 @@ public interface CveilConfig {
      */
     default boolean isMultiTenantEnabled() {
         return multiTenant().map(MultiTenantConfig::enabled).orElse(false);
+    }
+
+    /** Stripe payment processor configuration. */
+    interface StripeConfig {
+        /** Stripe secret API key (e.g. {@code sk_test_xxx} or {@code sk_live_xxx}). */
+        @WithName("secret-key")
+        Optional<String> secretKey();
+
+        /** Stripe publishable key for frontend SDK initialization (e.g. {@code pk_test_xxx}). */
+        @WithName("publishable-key")
+        Optional<String> publishableKey();
+
+        /** Stripe webhook endpoint secret for signature verification. */
+        @WithName("webhook-secret")
+        Optional<String> webhookSecret();
     }
 }

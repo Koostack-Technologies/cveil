@@ -63,8 +63,7 @@ public class ProvisioningTracker {
      */
     public void start(String tenantId, int totalSteps) {
         statuses.put(
-                tenantId,
-                ProvisioningStatus.inProgress("Initializing workspace", 0, totalSteps));
+                tenantId, ProvisioningStatus.inProgress("Initializing workspace", 0, totalSteps));
         LOG.info("Provisioning started for tenant: {} ({} steps)", tenantId, totalSteps);
     }
 
@@ -77,9 +76,7 @@ public class ProvisioningTracker {
      * @param totalSteps total number of steps
      */
     public void updateStep(String tenantId, String stepName, int completedSteps, int totalSteps) {
-        statuses.put(
-                tenantId,
-                ProvisioningStatus.inProgress(stepName, completedSteps, totalSteps));
+        statuses.put(tenantId, ProvisioningStatus.inProgress(stepName, completedSteps, totalSteps));
         LOG.debug(
                 "Provisioning step for tenant {}: {} ({}/{})",
                 tenantId,
