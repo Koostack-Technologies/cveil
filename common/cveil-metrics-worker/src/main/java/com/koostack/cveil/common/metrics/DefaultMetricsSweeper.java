@@ -7,8 +7,6 @@ import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -18,10 +16,11 @@ import redis.clients.jedis.params.XTrimParams;
 
 /**
  * Metrics sweeper that periodically deletes telemetry rows older than the configured retention
- * period and trims Redis metric streams.
+ * period and trims the Redis metrics stream.
  *
- * <p>Call {@link #sweep()} periodically (e.g. via a scheduled executor or cron) to clean up stale
- * data.
+ * <p>All tenant metrics are stored in the unified {@code platform_metrics.telemetry} table
+ * (differentiated by {@code tenant_id} column). Call {@link #sweep()} periodically (e.g. via a
+ * scheduled executor or cron) to clean up stale data.
  */
 public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfig> {
 
@@ -38,7 +37,6 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
     private volatile JedisPooled jedis;
     private volatile int retentionDays;
     private volatile String platformSchemaName;
-    private volatile Supplier<List<String>> tenantDiscovery;
 
     @Override
     public String getName() {
@@ -60,7 +58,6 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
         this.dataSource = config.dataSource();
         this.retentionDays = config.retentionDays();
         this.platformSchemaName = config.platformSchemaName();
-        this.tenantDiscovery = config.tenantDiscovery();
         if (config.redisConfig() != null) {
             this.jedis =
                     RedisClientFactory.createClient(
@@ -77,32 +74,15 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
     }
 
     /**
-     * Runs one sweep cycle: deletes old telemetry rows and trims Redis streams.
+     * Runs one sweep cycle: deletes old telemetry rows from the unified platform_metrics table and
+     * trims the Redis metrics stream.
      *
      * @return the total number of telemetry rows deleted
      */
     public int sweep() {
         Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
-        int totalDeleted = 0;
+        int totalDeleted = sweepSchema(platformSchemaName, cutoff);
 
-        // 1. Sweep platform metrics schema
-        totalDeleted += sweepSchema(platformSchemaName, cutoff);
-
-        // 2. Sweep tenant metrics schemas
-        if (tenantDiscovery != null) {
-            List<String> tenantIds = tenantDiscovery.get();
-            for (String tenantId : tenantIds) {
-                String metricsSchema = "t_" + tenantId + "_metrics";
-                totalDeleted += sweepSchema(metricsSchema, cutoff);
-
-                // Trim tenant metric Redis stream
-                if (jedis != null) {
-                    trimStream("cveil:metrics:tenant:" + tenantId);
-                }
-            }
-        }
-
-        // 3. Trim platform metric Redis stream
         if (jedis != null) {
             trimStream("cveil:metrics:platform");
         }

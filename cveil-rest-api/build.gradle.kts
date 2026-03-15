@@ -84,6 +84,7 @@ dependencies {
 
     // -- Metrics modules (MetricPublisherService + projections) ----------------
     implementation(project(":platform:cveil-platform-metrics-redis")) // PlatformRedisMetricPublisher + projections
+    implementation(project(":common:cveil-metrics-worker")) // DefaultMetricsSweeper
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")

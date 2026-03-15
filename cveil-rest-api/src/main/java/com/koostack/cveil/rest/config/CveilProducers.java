@@ -72,9 +72,9 @@ import redis.clients.jedis.JedisPooled;
  * configuration.
  *
  * <p>This is the Quarkus equivalent of the Spring Boot {@code CveilAutoConfiguration} in the
- * starter module. It reads {@link CveilConfig} (SmallRye {@code @ConfigMapping}) and constructs
- * the appropriate consent bundle, platform admin service, and token verifier based on the
- * configured deployment mode.
+ * starter module. It reads {@link CveilConfig} (SmallRye {@code @ConfigMapping}) and constructs the
+ * appropriate consent bundle, platform admin service, and token verifier based on the configured
+ * deployment mode.
  *
  * <h2>Production mode ({@code cveil.mode=production})</h2>
  *
@@ -401,7 +401,11 @@ public class CveilProducers {
     @Named("consentDispatcher")
     public CommandDispatcher consentDispatcher() {
         if (consentAdminCommandService != null) {
-            return consentAdminCommandService;
+            return new com.koostack.cveil.core.cqrs.InstrumentedDispatcher(
+                    (CommandDispatcher) consentAdminCommandService,
+                    metricPublisher,
+                    "consent",
+                    "SYSTEM");
         }
         LOG.debug("Cveil REST API: consent CommandDispatcher not available (embedded mode)");
         return null;
@@ -417,7 +421,8 @@ public class CveilProducers {
     @Named("consentQueryDispatcher")
     public QueryDispatcher consentQueryDispatcher() {
         if (consentAdminQueryDispatcher != null) {
-            return consentAdminQueryDispatcher;
+            return new com.koostack.cveil.core.cqrs.InstrumentedDispatcher(
+                    consentAdminQueryDispatcher, metricPublisher, "consent", "SYSTEM");
         }
         LOG.debug("Cveil REST API: consent QueryDispatcher not available (embedded mode)");
         return null;
@@ -433,7 +438,8 @@ public class CveilProducers {
     @Named("coreDispatcher")
     public CommandDispatcher coreDispatcher() {
         if (coreCommandService instanceof CommandDispatcher cd) {
-            return cd;
+            return new com.koostack.cveil.core.cqrs.InstrumentedDispatcher(
+                    cd, metricPublisher, "core", "SYSTEM");
         }
         LOG.debug("Cveil REST API: core CommandDispatcher not available (embedded mode)");
         return null;
@@ -449,7 +455,8 @@ public class CveilProducers {
     @Named("billingDispatcher")
     public CommandDispatcher billingDispatcher() {
         if (billingCommandService instanceof CommandDispatcher cd) {
-            return cd;
+            return new com.koostack.cveil.core.cqrs.InstrumentedDispatcher(
+                    cd, metricPublisher, "billing", "SYSTEM");
         }
         LOG.debug("Cveil REST API: billing CommandDispatcher not available (embedded mode)");
         return null;
@@ -646,6 +653,19 @@ public class CveilProducers {
     /** Platform DSLContext set during wirePlatformCqrsServices() — used for tenant hydration. */
     private DSLContext platformDsl;
 
+    /** Redis config stored during CQRS wiring — shared with metrics publisher/projection. */
+    private RedisPluginConfig metricsRedisPluginConfig;
+
+    /** Metrics publisher — publishes telemetry metrics to Redis stream. */
+    private com.koostack.cveil.platform.metrics.redis.PlatformRedisMetricPublisher metricPublisher;
+
+    /** Metrics projection — consumes from Redis stream and upserts into telemetry table. */
+    private com.koostack.cveil.platform.metrics.redis.PlatformRedisMetricProjection
+            metricProjection;
+
+    /** Metrics sweeper — deletes old telemetry rows and trims Redis streams. */
+    private com.koostack.cveil.common.metrics.DefaultMetricsSweeper metricsSweeper;
+
     /**
      * Produces the {@link ShardedStreamConsumer} that runs both the consent decision projection and
      * admin projection — materializing domain events into the Redis decision cache and SQL admin
@@ -795,6 +815,43 @@ public class CveilProducers {
         return adminSubscriptionManager;
     }
 
+    /**
+     * Produces the {@link com.koostack.cveil.core.metrics.MetricPublisherService} singleton for CDI
+     * injection. Returns the platform Redis-backed publisher, or {@code null} if metrics are not
+     * wired (embedded mode).
+     */
+    @Produces
+    @ApplicationScoped
+    @Unremovable
+    @SuppressWarnings("rawtypes")
+    public com.koostack.cveil.core.metrics.MetricPublisherService metricPublisherService() {
+        return metricPublisher;
+    }
+
+    /**
+     * Produces the {@link com.koostack.cveil.core.metrics.MetricsSweeper} singleton for CDI
+     * injection. Used by the scheduled sweeper job.
+     */
+    @Produces
+    @ApplicationScoped
+    @Unremovable
+    @SuppressWarnings("rawtypes")
+    public com.koostack.cveil.core.metrics.MetricsSweeper metricsSweeperService() {
+        return metricsSweeper;
+    }
+
+    /**
+     * Produces the platform {@link DataSource} for CDI injection. Used by metrics query endpoints
+     * to read from {@code platform_metrics.telemetry}. Returns {@code null} in embedded mode.
+     */
+    @Produces
+    @ApplicationScoped
+    @Named("platformDataSource")
+    @Unremovable
+    public DataSource platformDataSourceProducer() {
+        return platformDataSource;
+    }
+
     /** CDI shutdown hook — stops the stream consumer gracefully. */
     public void onShutdown(
             @jakarta.enterprise.event.Observes
@@ -819,6 +876,14 @@ public class CveilProducers {
         if (expiredConsentReaper != null) {
             LOG.info("Cveil REST API: stopping expired consent reaper");
             expiredConsentReaper.stop();
+        }
+        if (metricProjection != null) {
+            LOG.info("Cveil REST API: stopping metric projection");
+            metricProjection.stop();
+        }
+        if (metricPublisher != null) {
+            LOG.info("Cveil REST API: closing metric publisher");
+            metricPublisher.close();
         }
     }
 
@@ -882,6 +947,7 @@ public class CveilProducers {
                                     };
                                 })
                         .orElse(null);
+        this.metricsRedisPluginConfig = redisPluginConfig;
 
         // -- Platform event service -------------------------------------------
         // Include cveil_event in the search_path for the event service's DSLContext.
@@ -1113,9 +1179,7 @@ public class CveilProducers {
         // -- KeycloakOrganizationService (org = tenant in new architecture) ----
         if (iamKeycloakAdmin != null && kcIamConfig != null) {
             String realmName =
-                    kcIamConfig.cveilRealmName() != null
-                            ? kcIamConfig.cveilRealmName()
-                            : "cveil";
+                    kcIamConfig.cveilRealmName() != null ? kcIamConfig.cveilRealmName() : "cveil";
             orgService =
                     new com.koostack.cveil.plugin.platform.keycloak.KeycloakOrganizationService(
                             iamKeycloakAdmin, realmName);
@@ -1190,6 +1254,49 @@ public class CveilProducers {
         LOG.info(
                 "Cveil REST API: platform stream consumer started"
                         + " (groups=core-projection,billing-projection,iam-projection)");
+
+        // -- Metrics publisher + projection ------------------------------------
+        wireMetrics(redisPluginConfig, platformDataSource);
+    }
+
+    /**
+     * Wires the metrics publisher, projection, and sweeper. Called from {@code
+     * wirePlatformCqrsServices()} when Redis and the platform DataSource are available.
+     */
+    @SuppressWarnings("unchecked")
+    private void wireMetrics(RedisPluginConfig redisPluginConfig, DataSource platformDataSource) {
+        if (redisPluginConfig == null || platformDataSource == null) {
+            LOG.warn("Cveil REST API: metrics NOT wired — Redis or DataSource not configured");
+            return;
+        }
+
+        var metricsConfig =
+                new com.koostack.cveil.platform.metrics.redis.PlatformMetricsConfig(
+                        redisPluginConfig, platformDataSource);
+
+        // Publisher
+        var publisher =
+                new com.koostack.cveil.platform.metrics.redis.PlatformRedisMetricPublisher();
+        publisher.configure(metricsConfig);
+        this.metricPublisher = publisher;
+        LOG.info("Cveil REST API: PlatformRedisMetricPublisher configured");
+
+        // Projection (consumer)
+        var projection =
+                new com.koostack.cveil.platform.metrics.redis.PlatformRedisMetricProjection();
+        projection.configure(metricsConfig);
+        projection.start();
+        this.metricProjection = projection;
+        LOG.info("Cveil REST API: PlatformRedisMetricProjection started");
+
+        // Sweeper — unified platform_metrics.telemetry table (no per-tenant schemas)
+        var sweeperConfig =
+                new com.koostack.cveil.common.metrics.MetricsSweeperConfig(
+                        platformDataSource, redisPluginConfig);
+        var sweeper = new com.koostack.cveil.common.metrics.DefaultMetricsSweeper();
+        sweeper.configure(sweeperConfig);
+        this.metricsSweeper = sweeper;
+        LOG.info("Cveil REST API: DefaultMetricsSweeper configured (retention=30d)");
     }
 
     // -----------------------------------------------------------------------
@@ -1241,8 +1348,8 @@ public class CveilProducers {
 
             if (com.koostack.cveil.core.platform.core.CoreEventTypes.TENANT_CREATED.equals(
                             eventType)
-                    || com.koostack.cveil.core.platform.core.CoreEventTypes.TENANT_ACTIVATED
-                            .equals(eventType)) {
+                    || com.koostack.cveil.core.platform.core.CoreEventTypes.TENANT_ACTIVATED.equals(
+                            eventType)) {
                 activeTenants.add(tenantId);
             } else {
                 activeTenants.remove(tenantId);
@@ -1264,10 +1371,7 @@ public class CveilProducers {
             return createCoreConsentBundle();
         }
         throw new IllegalStateException(
-                "Unknown cveil.mode: '"
-                        + mode
-                        + "'. "
-                        + "Valid value is 'production'.");
+                "Unknown cveil.mode: '" + mode + "'. " + "Valid value is 'production'.");
     }
 
     /**
