@@ -63,7 +63,8 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
                     RedisClientFactory.createClient(
                             config.redisConfig().host(),
                             config.redisConfig().port(),
-                            config.redisConfig().password());
+                            config.redisConfig().password(),
+                            config.redisConfig().tlsConfig());
         }
         LOG.info("RedisMetricsSweeper configured: retentionDays={}", retentionDays);
     }

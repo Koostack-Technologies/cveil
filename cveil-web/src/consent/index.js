@@ -434,7 +434,7 @@ function renderLedgerFeed() {
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${style.label}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${style.label}</span>
                         ${ev.subject ? `<span class="text-xs text-white font-mono truncate">${esc(ev.subject)}</span>` : ''}
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -564,7 +564,7 @@ async function loadSubjectSummary() {
                     const style = getActionStyle(e.action);
                     return `
                     <div class="flex items-center gap-4 py-3">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${esc(e.action)}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span>
                         <div class="flex-1 text-sm">
                             <span class="text-white">${esc(e.purposeName)}</span>
                             <span class="text-gray-500 mx-1">→</span>
@@ -610,7 +610,7 @@ async function loadSubjectHistory() {
                             const style = getActionStyle(e.action);
                             return `
                             <tr class="hover:bg-gray-50">
-                                <td class="py-2 pr-4"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
+                                <td class="py-2 pr-4"><span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
                                 <td class="py-2 pr-4 text-gray-900">${esc(e.purposeName)}</td>
                                 <td class="py-2 pr-4 text-gray-600">${esc(e.policyType === 'FIELD' ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '') : e.categoryName || '')}</td>
                                 <td class="py-2 pr-4 text-gray-500">${esc(e.actor || '—')}</td>

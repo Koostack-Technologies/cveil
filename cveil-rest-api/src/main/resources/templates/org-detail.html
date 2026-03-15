@@ -10,7 +10,7 @@
     </a>
 
     <!-- Org info card -->
-    <div class="bg-white shadow-sm border border-gray-200 rounded p-6 mb-8">
+    <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
         <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Organization Details</h2>
         <dl class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
             <div>
@@ -29,7 +29,7 @@
     </div>
 
     <!-- Members section -->
-    <div class="bg-white shadow-sm border border-gray-200 rounded p-6 mb-8">
+    <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Members</h2>
         </div>
@@ -41,10 +41,10 @@
                     <label for="invite-email" class="block text-xs text-gray-500 mb-1">Invite by email</label>
                     <input type="email" id="invite-email" required
                         placeholder="user@example.com"
-                        class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                        class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
                 </div>
                 <button type="submit" id="invite-btn"
-                    class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors whitespace-nowrap">
+                    class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors whitespace-nowrap">
                     Send Invite
                 </button>
             </form>
@@ -57,7 +57,7 @@
     </div>
 
     <!-- Service Account section -->
-    <div class="bg-white shadow-sm border border-gray-200 rounded p-6">
+    <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Service Account</h2>
@@ -80,25 +80,25 @@
 
         <!-- Show-once secret modal -->
         <div id="sa-secret-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-            <div class="bg-white border border-gray-200 shadow-lg rounded p-6 max-w-lg w-full mx-4">
+            <div class="bg-white border border-gray-200 shadow-lg rounded-md p-6 max-w-lg w-full mx-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-2">Service Account Created</h3>
                 <p class="text-yellow-400 text-sm mb-4">⚠ Copy these credentials now. The secret will not be shown again.</p>
                 <div class="space-y-3">
                     <div>
                         <label class="text-xs text-gray-500">Client ID</label>
-                        <pre id="sa-modal-client-id" class="bg-gray-50 border border-gray-200 rounded-sm p-2 text-sm text-gray-900 font-mono"></pre>
+                        <pre id="sa-modal-client-id" class="bg-gray-50 border border-gray-200 rounded p-2 text-sm text-gray-900 font-mono"></pre>
                     </div>
                     <div class="relative">
                         <label class="text-xs text-gray-500">Client Secret</label>
-                        <pre id="sa-modal-secret" class="bg-gray-50 border border-gray-200 rounded-sm p-2 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
+                        <pre id="sa-modal-secret" class="bg-gray-50 border border-gray-200 rounded p-2 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
                         <button onclick="copySaSecret()" title="Copy"
-                            class="absolute top-6 right-2 p-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
+                            class="absolute top-6 right-2 p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                         </button>
                     </div>
                 </div>
                 <button onclick="document.getElementById('sa-secret-modal').classList.add('hidden')"
-                    class="mt-4 px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                    class="mt-4 px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                     I've copied the credentials
                 </button>
             </div>

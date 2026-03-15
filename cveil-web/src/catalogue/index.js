@@ -156,7 +156,7 @@ function renderFields() {
                 <div class="flex flex-wrap gap-1">
                     ${(f.categories || []).map(c => badge(c.categoryName, 'purple')).join('')}
                     <button onclick='openPanel("field-categories", ${JSON.stringify(f).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">

@@ -56,7 +56,8 @@ public class PlatformRedisMetricPublisher
                         RedisClientFactory.createClient(
                                 config.redisConfig().host(),
                                 config.redisConfig().port(),
-                                config.redisConfig().password()));
+                                config.redisConfig().password(),
+                                config.redisConfig().tlsConfig()));
         log.info("PlatformRedisMetricPublisher configured");
     }
 

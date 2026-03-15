@@ -7,5 +7,5 @@ export function badge(text, color = 'gray') {
         blue: 'bg-blue-50 text-blue-700 border border-blue-200',
         purple: 'bg-purple-50 text-purple-700 border border-purple-200',
     };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color] || colors.gray}">${esc(text)}</span>`;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${colors[color] || colors.gray}">${esc(text)}</span>`;
 }

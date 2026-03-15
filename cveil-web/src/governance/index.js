@@ -176,7 +176,7 @@ function renderRegulations() {
                 <div class="flex flex-wrap gap-1">
                     ${(r.activeJurisdictions || []).map(j => badge(j.jurisdictionName, 'teal')).join('')}
                     <button onclick='openPanel("regulation-jurisdictions", ${JSON.stringify(r).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
@@ -312,7 +312,7 @@ function renderPurposes() {
                 <div class="flex flex-wrap gap-1">
                     ${(p.regulations || []).map(r => badge(r.regulationName, 'blue')).join('')}
                     <button onclick='openPanel("purpose-regulations", ${JSON.stringify(p).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4">

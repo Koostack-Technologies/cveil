@@ -29,7 +29,7 @@
             <h2 class="text-xl font-semibold mb-6">Profile</h2>
 
             <!-- Profile info card -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded p-6 mb-6">
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-6">
                 <dl class="space-y-4 text-sm">
                     <div class="flex justify-between">
                         <dt class="text-gray-500">Username</dt>
@@ -57,22 +57,22 @@
             </div>
 
             <!-- Edit profile form -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded p-6 mb-6">
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-6">
                 <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Edit Profile</h3>
                 <form id="profile-form" onsubmit="updateProfile(event)" class="space-y-4">
                     <div>
                         <label for="fullName" class="block text-sm text-gray-500 mb-1">Full Name</label>
                         <input type="text" id="fullName" name="fullName" value="{fullName ?: ''}"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
                     </div>
                     <div>
                         <label for="emailInput" class="block text-sm text-gray-500 mb-1">Email</label>
                         <input type="email" id="emailInput" name="email" value="{email ?: ''}"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" id="profile-save-btn"
-                            class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                             Save Changes
                         </button>
                         <span id="profile-msg" class="text-sm hidden"></span>
@@ -81,23 +81,23 @@
             </div>
 
             <!-- Change password form -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded p-6">
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
                 <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Change Password</h3>
                 <form id="password-form" onsubmit="changePassword(event)" class="space-y-4">
                     <div>
                         <label for="newPassword" class="block text-sm text-gray-500 mb-1">New Password</label>
                         <input type="password" id="newPassword" name="newPassword" minlength="8" required
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none"
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none"
                             placeholder="Minimum 8 characters">
                     </div>
                     <div>
                         <label for="confirmPassword" class="block text-sm text-gray-500 mb-1">Confirm Password</label>
                         <input type="password" id="confirmPassword" name="confirmPassword" minlength="8" required
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" id="password-save-btn"
-                            class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                             Change Password
                         </button>
                         <span id="password-msg" class="text-sm hidden"></span>
@@ -114,14 +114,14 @@
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-semibold">Organizations</h2>
             <button onclick="showCreateOrgForm()" id="create-org-toggle-btn"
-                class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                 + New Organization
             </button>
         </div>
 
         <!-- Create org form (hidden by default) -->
         <div id="create-org-form-container" class="hidden mb-6">
-            <div class="bg-white shadow-sm border border-gray-200 rounded p-6">
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
                 <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Create Organization</h3>
                 <form id="create-org-form" onsubmit="createOrganization(event)" class="space-y-4">
                     <div>
@@ -130,22 +130,22 @@
                             pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]"
                             minlength="2" maxlength="255"
                             placeholder="my-organization"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none font-mono">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none font-mono">
                         <p class="text-gray-600 text-xs mt-1">Lowercase letters, numbers, and hyphens only.</p>
                     </div>
                     <div>
                         <label for="org-display-name" class="block text-sm text-gray-500 mb-1">Display Name <span class="text-gray-600">(optional)</span></label>
                         <input type="text" id="org-display-name" name="displayName" maxlength="255"
                             placeholder="My Organization"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" id="create-org-btn"
-                            class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                             Create Organization
                         </button>
                         <button type="button" onclick="hideCreateOrgForm()"
-                            class="px-4 py-2 rounded-sm bg-gray-100 hover:bg-gray-200 text-gray-500 text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 text-sm font-medium transition-colors">
                             Cancel
                         </button>
                         <span id="create-org-msg" class="text-sm hidden"></span>
@@ -167,7 +167,7 @@
             <h2 class="text-xl font-semibold">Access Tokens</h2>
             <button onclick="showCreateTokenModal()"
                 id="token-create-btn"
-                class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                 + Create Token
             </button>
         </div>
@@ -178,18 +178,18 @@
 
         <!-- Create token modal -->
         <div id="create-token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-            <div class="bg-white border border-gray-200 shadow-lg rounded p-6 max-w-md w-full mx-4">
+            <div class="bg-white border border-gray-200 shadow-lg rounded-md p-6 max-w-md w-full mx-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Access Token</h3>
                 <form onsubmit="createToken(event)">
                     <div class="mb-4">
                         <label for="token-name" class="block text-sm font-medium text-gray-600 mb-1">Name</label>
                         <input type="text" id="token-name" required maxlength="100" placeholder="e.g. CI Pipeline, CLI Tool"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm placeholder-gray-500 focus:outline-none focus:border-cv-500">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm placeholder-gray-500 focus:outline-none focus:border-cv-500">
                     </div>
                     <div class="mb-4">
                         <label for="token-scope" class="block text-sm font-medium text-gray-600 mb-1">Account Scope</label>
                         <select id="token-scope"
-                            class="w-full px-3 py-2 rounded-sm bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-cv-500">
+                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-cv-500">
                             <option value="">Personal (your account)</option>
                         </select>
                         <p class="text-gray-600 text-xs mt-1">Choose which account this token can act on behalf of.</p>
@@ -198,19 +198,19 @@
                         <label class="block text-sm font-medium text-gray-600 mb-2">Expiration</label>
                         <div class="grid grid-cols-4 gap-2" id="expiry-options">
                             <button type="button" onclick="selectExpiry(7, this)"
-                                class="expiry-btn px-3 py-2 rounded-sm border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
                                 7 days
                             </button>
                             <button type="button" onclick="selectExpiry(30, this)"
-                                class="expiry-btn px-3 py-2 rounded-sm border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors">
                                 30 days
                             </button>
                             <button type="button" onclick="selectExpiry(60, this)"
-                                class="expiry-btn px-3 py-2 rounded-sm border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
                                 60 days
                             </button>
                             <button type="button" onclick="selectExpiry(90, this)"
-                                class="expiry-btn px-3 py-2 rounded-sm border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
                                 90 days
                             </button>
                         </div>
@@ -218,11 +218,11 @@
                     <p id="create-token-msg" class="text-sm text-red-400 mb-3 hidden"></p>
                     <div class="flex gap-3 justify-end">
                         <button type="button" onclick="hideCreateTokenModal()"
-                            class="px-4 py-2 rounded-sm border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition-colors">
+                            class="px-4 py-2 rounded border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition-colors">
                             Cancel
                         </button>
                         <button type="submit" id="create-token-submit"
-                            class="px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                             Create Token
                         </button>
                     </div>
@@ -232,13 +232,13 @@
 
         <!-- Show-once token modal -->
         <div id="token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-            <div class="bg-white border border-gray-200 shadow-lg rounded p-6 max-w-lg w-full mx-4">
+            <div class="bg-white border border-gray-200 shadow-lg rounded-md p-6 max-w-lg w-full mx-4">
                 <h3 class="text-lg font-semibold text-gray-900 mb-2">Token Created</h3>
                 <p class="text-yellow-400 text-sm mb-4">⚠ Copy this token now. It will not be shown again.</p>
                 <div class="relative mb-4">
-                    <pre id="token-value" class="bg-gray-50 border border-gray-200 rounded-sm p-3 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
+                    <pre id="token-value" class="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
                     <button onclick="copyToken()" title="Copy"
-                        class="absolute top-2 right-2 p-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
+                        class="absolute top-2 right-2 p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                     </button>
                 </div>
@@ -253,14 +253,14 @@
                     </div>
                 </dl>
                 <button onclick="closeTokenModal()"
-                    class="w-full px-4 py-2 rounded-sm bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                    class="w-full px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
                     I've copied the token
                 </button>
             </div>
         </div>
 
         <!-- Token list -->
-        <div class="bg-white shadow-sm border border-gray-200 rounded overflow-hidden">
+        <div class="bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="border-b border-gray-200">
                     <tr class="text-gray-500 text-left">
@@ -476,7 +476,7 @@
                     } else {
                         roleBadges = '<span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">member</span>';
                     }
-                    return '<a href="/dashboard/organizations/' + escHtml(o.orgId) + '" class="block bg-white shadow-sm border border-gray-200 rounded p-5 hover:border-cv-500/40 transition-colors">'
+                    return '<a href="/dashboard/organizations/' + escHtml(o.orgId) + '" class="block bg-white shadow-sm border border-gray-200 rounded-md p-5 hover:border-cv-500/40 transition-colors">'
                         + '<div class="flex items-center justify-between"><div>'
                         + '<div class="flex items-center gap-2 mb-1">'
                         + '<h3 class="text-gray-900 font-medium">' + escHtml(o.displayName || o.orgName) + '</h3>'
@@ -505,10 +505,10 @@
             selectedExpiryDays = 30;
             // Reset expiry button styles (30 days is default selected)
             document.querySelectorAll('.expiry-btn').forEach(function(b) {
-                b.className = 'expiry-btn px-3 py-2 rounded-sm border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
+                b.className = 'expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
             });
             var btns = document.querySelectorAll('.expiry-btn');
-            if (btns[1]) btns[1].className = 'expiry-btn px-3 py-2 rounded-sm border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
+            if (btns[1]) btns[1].className = 'expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
 
             // Populate scope dropdown with user's orgs
             var scopeSelect = document.getElementById('token-scope');
@@ -537,9 +537,9 @@
         function selectExpiry(days, btn) {
             selectedExpiryDays = days;
             document.querySelectorAll('.expiry-btn').forEach(function(b) {
-                b.className = 'expiry-btn px-3 py-2 rounded-sm border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
+                b.className = 'expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
             });
-            btn.className = 'expiry-btn px-3 py-2 rounded-sm border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
+            btn.className = 'expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
         }
 
         async function loadTokens() {

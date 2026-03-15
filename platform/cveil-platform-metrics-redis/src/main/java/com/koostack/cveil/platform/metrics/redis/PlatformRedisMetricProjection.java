@@ -67,7 +67,8 @@ public class PlatformRedisMetricProjection implements MetricProjection<PlatformM
                         RedisClientFactory.createClient(
                                 config.redisConfig().host(),
                                 config.redisConfig().port(),
-                                config.redisConfig().password()));
+                                config.redisConfig().password(),
+                                config.redisConfig().tlsConfig()));
         this.consumer = new PlatformStreamConsumer(jedisProvider, 5_000, 100);
         log.info("PlatformRedisMetricProjection configured");
     }

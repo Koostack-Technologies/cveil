@@ -1,0 +1,221 @@
+{#include base.html}
+{#title}Setting Up Your Workspace{/title}
+{#head}
+<style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(20, 184, 166, 0.2);
+        border-top-color: #14b8a6;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    .step-enter { transition: all 0.4s ease; }
+</style>
+{/head}
+{#content}
+
+    <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 sm:pb-20">
+        <div class="w-full max-w-lg text-center">
+
+            <!-- Spinner -->
+            <div id="setup-spinner" class="mx-auto mb-8">
+                <div class="spinner mx-auto"></div>
+            </div>
+
+            <!-- Success icon (hidden initially) -->
+            <div id="setup-success" class="mx-auto mb-8 hidden">
+                <div class="mx-auto w-16 h-16 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+            </div>
+
+            <!-- Error icon (hidden initially) -->
+            <div id="setup-error-icon" class="mx-auto mb-8 hidden">
+                <div class="mx-auto w-16 h-16 rounded-full bg-red-900/30 border border-red-500/30 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+            </div>
+
+            <h1 id="setup-title" class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+                Setting up your workspace
+            </h1>
+            <p id="setup-subtitle" class="text-gray-400 text-lg mb-10">
+                This usually takes about 15 seconds. Hang tight!
+            </p>
+
+            <!-- Step checklist -->
+            <div class="bg-gray-800/40 border border-gray-700 rounded-md p-6 text-left mb-8">
+                <div class="space-y-4">
+                    <!-- Step: Account created (always done) -->
+                    <div class="flex items-center gap-3">
+                        <div class="shrink-0 w-6 h-6 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center">
+                            <svg class="w-3.5 h-3.5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <span class="text-sm text-white">Account created</span>
+                    </div>
+
+                    <!-- Step: Workspace provisioned (always done) -->
+                    <div class="flex items-center gap-3">
+                        <div class="shrink-0 w-6 h-6 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center">
+                            <svg class="w-3.5 h-3.5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <span class="text-sm text-white">Workspace provisioned</span>
+                    </div>
+
+                    <!-- Step: Governance defaults -->
+                    <div id="step-governance" class="flex items-center gap-3 step-enter">
+                        <div id="step-governance-icon" class="shrink-0 w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center">
+                            <div class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        </div>
+                        <span id="step-governance-text" class="text-sm text-gray-500">Configuring governance defaults</span>
+                    </div>
+
+                    <!-- Step: Billing -->
+                    <div id="step-billing" class="flex items-center gap-3 step-enter">
+                        <div id="step-billing-icon" class="shrink-0 w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center">
+                            <div class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        </div>
+                        <span id="step-billing-text" class="text-sm text-gray-500">Setting up billing</span>
+                    </div>
+
+                    <!-- Step: Plan activation -->
+                    <div id="step-plan" class="flex items-center gap-3 step-enter">
+                        <div id="step-plan-icon" class="shrink-0 w-6 h-6 rounded-full border border-gray-600 flex items-center justify-center">
+                            <div class="w-2 h-2 rounded-full bg-gray-600"></div>
+                        </div>
+                        <span id="step-plan-text" class="text-sm text-gray-500">Activating your plan</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error message (hidden initially) -->
+            <div id="setup-error" class="hidden mb-8 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="setup-error-text"></span>
+                </div>
+            </div>
+
+            <!-- CTA (hidden initially, shown on complete) -->
+            <a id="setup-cta" href="/dashboard" class="hidden bg-cv-500 text-gray-900 hover:bg-cv-600 px-8 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] inline-flex items-center justify-center gap-2">
+                Go to Dashboard
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+            </a>
+
+        </div>
+    </main>
+
+<script>
+(function() {
+    var POLL_INTERVAL = 2000;
+    var REDIRECT_DELAY = 1500;
+    var pollTimer = null;
+
+    var stepMap = {
+        'Configuring governance defaults': 'governance',
+        'Setting up billing': 'billing',
+        'Activating your plan': 'plan'
+    };
+    var stepOrder = ['governance', 'billing', 'plan'];
+
+    function markStepActive(stepId) {
+        var icon = document.getElementById('step-' + stepId + '-icon');
+        var text = document.getElementById('step-' + stepId + '-text');
+        if (icon) {
+            icon.className = 'shrink-0 w-6 h-6 rounded-full border border-cv-500/50 flex items-center justify-center';
+            icon.innerHTML = '<div class="w-2 h-2 rounded-full bg-cv-500 pulse"></div>';
+        }
+        if (text) text.className = 'text-sm text-cv-500 font-medium';
+    }
+
+    function markStepDone(stepId) {
+        var icon = document.getElementById('step-' + stepId + '-icon');
+        var text = document.getElementById('step-' + stepId + '-text');
+        if (icon) {
+            icon.className = 'shrink-0 w-6 h-6 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center';
+            icon.innerHTML = '<svg class="w-3.5 h-3.5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>';
+        }
+        if (text) text.className = 'text-sm text-white';
+    }
+
+    function updateSteps(completedSteps, currentStep) {
+        var activeId = stepMap[currentStep] || null;
+        var activeIndex = activeId ? stepOrder.indexOf(activeId) : -1;
+
+        for (var i = 0; i < stepOrder.length; i++) {
+            if (i < completedSteps) {
+                markStepDone(stepOrder[i]);
+            } else if (stepOrder[i] === activeId) {
+                markStepActive(stepOrder[i]);
+            }
+        }
+    }
+
+    function onComplete() {
+        // Mark all steps done
+        for (var i = 0; i < stepOrder.length; i++) {
+            markStepDone(stepOrder[i]);
+        }
+
+        document.getElementById('setup-spinner').classList.add('hidden');
+        document.getElementById('setup-success').classList.remove('hidden');
+        document.getElementById('setup-title').textContent = 'Your workspace is ready!';
+        document.getElementById('setup-subtitle').textContent = 'Redirecting to your dashboard…';
+
+        setTimeout(function() {
+            window.location.href = '/dashboard';
+        }, REDIRECT_DELAY);
+    }
+
+    function onError(message) {
+        document.getElementById('setup-spinner').classList.add('hidden');
+        document.getElementById('setup-error-icon').classList.remove('hidden');
+        document.getElementById('setup-title').textContent = 'Setup encountered an issue';
+        document.getElementById('setup-subtitle').textContent = 'Don\'t worry — your account is created. Some features may be limited until setup completes.';
+        document.getElementById('setup-error').classList.remove('hidden');
+        document.getElementById('setup-error-text').textContent = message || 'An unexpected error occurred.';
+        document.getElementById('setup-cta').classList.remove('hidden');
+    }
+
+    function poll() {
+        fetch('/setup/status', { credentials: 'same-origin' })
+            .then(function(res) {
+                if (!res.ok) {
+                    // If unauthenticated, still allow proceeding to dashboard
+                    if (res.status === 401) {
+                        onComplete();
+                        return null;
+                    }
+                    throw new Error('Status check failed');
+                }
+                return res.json();
+            })
+            .then(function(data) {
+                if (!data) return;
+
+                if (data.status === 'COMPLETED') {
+                    if (pollTimer) clearInterval(pollTimer);
+                    onComplete();
+                } else if (data.status === 'FAILED') {
+                    if (pollTimer) clearInterval(pollTimer);
+                    onError(data.errorMessage);
+                } else if (data.status === 'IN_PROGRESS') {
+                    updateSteps(data.completedSteps, data.currentStep);
+                }
+            })
+            .catch(function() {
+                // Silently retry on network errors
+            });
+    }
+
+    // Start polling
+    poll();
+    pollTimer = setInterval(poll, POLL_INTERVAL);
+})();
+</script>
+
+{/content}
+{/include}

@@ -7,7 +7,9 @@ import com.koostack.cveil.core.models.AuthResult;
 import com.koostack.cveil.platform.iam.jooq.AuthenticateCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.LogoutCommandActuator;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
-import com.koostack.cveil.rest.orchestrator.RegisterUserOrchestrator;
+import com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask;
+import com.koostack.cveil.rest.lifecycle.ProvisioningTracker;
+import com.koostack.cveil.rest.orchestrator.RegisterUserSyncOrchestrator;
 import com.koostack.cveil.rest.util.AuthCookieHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
@@ -22,6 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,17 +66,27 @@ public class SiteResource {
 
     @Inject Template catalogue;
 
+    @Inject Template billing;
+
+    @Inject Template setup;
+
     @Inject
     @io.quarkus.qute.Location("org-detail.html")
     Template orgDetail;
 
     @Inject PlatformCqrsHolder cqrs;
 
+    @Inject ProvisioningTracker provisioningTracker;
+
     @Inject
     @Named("consentDispatcher")
     CommandDispatcher consentDispatcher;
 
     @Context HttpHeaders httpHeaders;
+
+    /** Virtual-thread executor for deferred provisioning tasks. */
+    private final ExecutorService provisioningExecutor =
+            Executors.newVirtualThreadPerTaskExecutor();
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -145,23 +159,29 @@ public class SiteResource {
         try {
             String tenantId = TenantIdDeriver.derive(username);
 
-            var orchestrator =
-                    new RegisterUserOrchestrator(
+            // ── Fast synchronous path (steps 1–4: ~1–2s) ──────────────────
+            var syncOrchestrator =
+                    new RegisterUserSyncOrchestrator(
                             cqrs.iamDispatcher(),
                             cqrs.coreDispatcher(),
-                            cqrs.billingDispatcher(),
-                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
-                            consentDispatcher);
+                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
 
-            var command =
-                    new RegisterUserOrchestrator.RegisterUserCommand(
-                            REALM, username, email, fullName,
-                            Set.of(), // KC roles empty — DB-backed roles are authoritative
-                            false, password, tenantId);
+            var syncCommand =
+                    new RegisterUserSyncOrchestrator.RegisterUserSyncCommand(
+                            REALM, username, email, fullName, null,
+                            Set.of(), false, password, tenantId);
 
-            RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
+            syncOrchestrator.execute(syncCommand);
 
-            // Auto-login: authenticate with the credentials just used for registration
+            // ── Kick off deferred provisioning (steps 5–7) in background ───
+            provisioningTracker.start(tenantId, DeferredProvisioningTask.totalSteps());
+            provisioningExecutor.submit(
+                    new DeferredProvisioningTask(
+                            tenantId, email, "free",
+                            consentDispatcher, cqrs.billingDispatcher(),
+                            provisioningTracker));
+
+            // ── Auto-login and redirect to setup loading page ──────────────
             try {
                 AuthResult auth =
                         cqrs.iamDispatcher()
@@ -171,18 +191,17 @@ public class SiteResource {
                 NewCookie[] cookies =
                         AuthCookieHelper.setAuthCookies(
                                 auth.accessToken(), auth.refreshToken(), auth.expiresIn());
-                return Response.seeOther(URI.create("/dashboard")).cookie(cookies).build();
+                return Response.seeOther(URI.create("/setup")).cookie(cookies).build();
             } catch (Exception loginEx) {
                 LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
-                // Fallback: redirect to signup success page
                 return Response.seeOther(
                                 URI.create(
-                                        "/signup/success?username="
+                                        "/setup?username="
                                                 + URLEncoder.encode(
-                                                        result.username(), StandardCharsets.UTF_8)
+                                                        username, StandardCharsets.UTF_8)
                                                 + "&tenant="
                                                 + URLEncoder.encode(
-                                                        result.tenantId(), StandardCharsets.UTF_8)))
+                                                        tenantId, StandardCharsets.UTF_8)))
                         .build();
             }
         } catch (IllegalArgumentException e) {
@@ -220,6 +239,104 @@ public class SiteResource {
     public TemplateInstance signupSuccessPage(
             @QueryParam("username") String username, @QueryParam("tenant") String tenantId) {
         return signupSuccess.data("username", username).data("tenantId", tenantId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Workspace setup (loading screen during deferred provisioning)
+    // -----------------------------------------------------------------------
+
+    @GET
+    @Path("setup")
+    @Produces(MediaType.TEXT_HTML)
+    public Object setupPage(@QueryParam("username") String qpUsername,
+                            @QueryParam("tenant") String qpTenantId) {
+        // Try cookie-based auth first
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        String username = qpUsername;
+        String tenantId = qpTenantId;
+
+        if (accessToken != null) {
+            String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+            if (payload != null) {
+                String jwtUsername = extractJsonString(payload, "preferred_username");
+                if (jwtUsername == null) jwtUsername = extractJsonString(payload, "sub");
+                if (jwtUsername != null) username = jwtUsername;
+                if (username != null) {
+                    try {
+                        tenantId = TenantIdDeriver.derive(username);
+                    } catch (Exception ignored) { }
+                }
+            }
+        }
+
+        // If provisioning is already done (or was never tracked), go straight to dashboard
+        if (tenantId != null) {
+            ProvisioningTracker.ProvisioningStatus status =
+                    provisioningTracker.getStatus(tenantId);
+            if (status == null || status.status() == ProvisioningTracker.Status.COMPLETED) {
+                return Response.seeOther(URI.create("/dashboard")).build();
+            }
+        }
+
+        return setup.data("username", username).data("tenantId", tenantId);
+    }
+
+    @GET
+    @Path("setup/status")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response setupStatus() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Not authenticated"))
+                    .build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Invalid token"))
+                    .build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        if (username == null) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Cannot determine tenant"))
+                    .build();
+        }
+
+        String tenantId;
+        try {
+            tenantId = TenantIdDeriver.derive(username);
+        } catch (Exception e) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "Invalid tenant ID"))
+                    .build();
+        }
+
+        ProvisioningTracker.ProvisioningStatus status =
+                provisioningTracker.getStatus(tenantId);
+
+        if (status == null) {
+            // No tracker entry → provisioning already completed (or pre-existing tenant)
+            return Response.ok(Map.of("status", "COMPLETED")).build();
+        }
+
+        return Response.ok(Map.of(
+                "status", status.status().name(),
+                "currentStep", status.currentStep() != null ? status.currentStep() : "",
+                "completedSteps", status.completedSteps(),
+                "totalSteps", status.totalSteps(),
+                "errorMessage", status.errorMessage() != null ? status.errorMessage() : ""))
+                .build();
     }
 
     // -----------------------------------------------------------------------
@@ -306,6 +423,16 @@ public class SiteResource {
         String email = extractJsonString(payload, "email");
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
 
+        // Guard: redirect to setup page if workspace provisioning is still in progress
+        if (tenantId != null) {
+            ProvisioningTracker.ProvisioningStatus provStatus =
+                    provisioningTracker.getStatus(tenantId);
+            if (provStatus != null
+                    && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
+                return Response.seeOther(URI.create("/setup")).build();
+            }
+        }
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
@@ -357,6 +484,42 @@ public class SiteResource {
                 .data("roles", rolesDisplay)
                 .data("initial", initial)
                 .data("activeNav", "account");
+    }
+
+    @GET
+    @Path("dashboard/billing")
+    @Produces(MediaType.TEXT_HTML)
+    public Object billingPage() {
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String accessToken =
+                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
+
+        if (accessToken == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
+        if (payload == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        String username = extractJsonString(payload, "preferred_username");
+        if (username == null) username = extractJsonString(payload, "sub");
+        String email = extractJsonString(payload, "email");
+        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+
+        return billing
+                .data("username", username)
+                .data("email", email)
+                .data("tenantId", tenantId)
+                .data("roles", resolveRolesDisplay(payload))
+                .data("initial", initial)
+                .data("activeNav", "billing")
+                .data("v", BUILD_VERSION);
     }
 
     @GET

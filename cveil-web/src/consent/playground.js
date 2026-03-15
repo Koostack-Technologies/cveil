@@ -146,7 +146,7 @@ function populateTemplateButtons() {
     if (!container) return;
     container.innerHTML = Object.keys(SAMPLE_TEMPLATES)
         .map(name => `<button onclick="loadSampleTemplate('${name}')"
-            class="px-2 py-1 text-xs border border-gray-300 rounded-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">${esc(name)}</button>`)
+            class="px-2 py-1 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">${esc(name)}</button>`)
         .join('');
 }
 
@@ -382,7 +382,7 @@ function renderDecisions() {
             <td class="px-3 py-2 text-xs text-gray-500">${esc(d.resolvedBy)}</td>
             <td class="px-3 py-2">
                 <select id="pg-override-${CSS.escape(d.path)}" onchange="remask()"
-                    class="bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700 focus:border-cv-500 focus:outline-none">
+                    class="bg-white border border-gray-300 rounded-md px-2 py-1 text-xs text-gray-700 focus:border-cv-500 focus:outline-none">
                     ${overrideOpts}
                 </select>
             </td>
@@ -464,6 +464,6 @@ function showPlaygroundMsg(text, isError) {
     const el = document.getElementById('playground-msg');
     if (!el) return;
     if (!text) { el.className = 'hidden'; el.textContent = ''; return; }
-    el.className = `text-xs px-3 py-2 rounded ${isError ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`;
+    el.className = `text-xs px-3 py-2 rounded-md ${isError ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`;
     el.textContent = text;
 }
