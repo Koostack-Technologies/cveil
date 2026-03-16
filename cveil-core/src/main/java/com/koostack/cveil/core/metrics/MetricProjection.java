@@ -9,7 +9,7 @@ import com.koostack.cveil.core.spi.Plugin;
  * telemetry table:
  *
  * <ul>
- *   <li>Platform → {@code platform_metrics.telemetry}
+ *   <li>Platform → {@code cveilmetrics.telemetry}
  *   <li>Tenant → {@code t_{tenantId}_metrics.telemetry}
  * </ul>
  *

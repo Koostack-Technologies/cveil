@@ -31,6 +31,9 @@ public class OnboardingStateHolder {
         private boolean isTeam;
         private String orgTenantId;
 
+        // Selected plan (from pricing page → signup → onboarding)
+        private String plan;
+
         // Step 2
         private IndustryPreset industryPreset;
 
@@ -79,6 +82,15 @@ public class OnboardingStateHolder {
 
         public void setOrgTenantId(String orgTenantId) {
             this.orgTenantId = orgTenantId;
+        }
+
+        /** Returns the selected plan ID, or {@code "free"} if none was chosen. */
+        public String plan() {
+            return plan != null && !plan.isBlank() ? plan : "free";
+        }
+
+        public void setPlan(String plan) {
+            this.plan = plan;
         }
 
         /**

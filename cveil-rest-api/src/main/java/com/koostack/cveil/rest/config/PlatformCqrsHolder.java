@@ -195,6 +195,18 @@ public class PlatformCqrsHolder {
         return (PlanQueryService<T>) planQueryService;
     }
 
+    /**
+     * Returns the plan query dispatcher for direct query-record dispatch.
+     *
+     * @throws IllegalStateException if the underlying service is not a QueryDispatcher
+     */
+    public QueryDispatcher planQueryDispatcher() {
+        if (planQueryService instanceof QueryDispatcher qd) {
+            return qd;
+        }
+        throw new IllegalStateException("Plan query service does not implement QueryDispatcher");
+    }
+
     @SuppressWarnings("unchecked")
     public <T> TokenValidationService<T> tokenValidationService() {
         return (TokenValidationService<T>) tokenValidationService;

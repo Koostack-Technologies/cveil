@@ -192,13 +192,6 @@ services:
       CVEIL_DB_PASSWORD: "cveil_local_dev"
       CVEIL_DB_SSL_MODE: "require"
 
-      # -- Platform database (tenant management, API keys) -----------------
-      CVEIL_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
-      CVEIL_PLATFORM_DB_DIALECT: "POSTGRES"
-      CVEIL_PLATFORM_DB_USERNAME: "cveil"
-      CVEIL_PLATFORM_DB_PASSWORD: "cveil_local_dev"
-      CVEIL_PLATFORM_DB_SSL_MODE: "require"
-
       # -- Redis (consent decision cache + rate limiting) ------------------
       CVEIL_REDIS_HOST: "redis"
       CVEIL_REDIS_PORT: "6379"

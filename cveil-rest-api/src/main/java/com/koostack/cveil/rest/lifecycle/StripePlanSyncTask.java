@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  * <p>On each application boot this task:
  *
  * <ol>
- *   <li>Reads all active plans from {@code platform_core.plan}
+ *   <li>Reads all active plans from {@code cveilcore.plan}
  *   <li>Skips plans that already have Stripe IDs persisted (fast path)
  *   <li>For plans that need syncing, calls {@link PaymentProcessorService#syncProduct} which is
  *       itself idempotent (searches Stripe by {@code metadata.plan_id} before creating)

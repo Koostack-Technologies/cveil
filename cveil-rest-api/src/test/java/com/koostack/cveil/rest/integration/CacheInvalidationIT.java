@@ -321,7 +321,7 @@ public class CacheInvalidationIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = '"
                                                         + TENANT_ID
                                                         + "'");
@@ -554,7 +554,7 @@ public class CacheInvalidationIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = '"
                                                         + TENANT_ID
                                                         + "'");

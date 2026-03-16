@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Query service for the core platform domain (tenant read model).
  *
- * <p>Reads from the materialized {@code platform_core.tenant} table populated by the {@link
+ * <p>Reads from the materialized {@code cveiliam.tenant} table populated by the {@link
  * CoreProjection}.
  */
 public interface CoreQueryService<T> extends Plugin<T> {

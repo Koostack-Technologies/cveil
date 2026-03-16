@@ -131,7 +131,7 @@ function sumMetrics(summaries, names) {
 function updateSummaryCards(summaryResp) {
     const summaries = summaryResp?.summaries || [];
 
-    setText('card-total-requests', fmtNum(sumMetrics(summaries, ['api_requests'])));
+    setText('card-total-requests', fmtNum(sumMetrics(summaries, ['api_billed_requests'])));
     setText('card-consent-ops', fmtNum(sumMetrics(summaries, CONSENT_METRICS)));
     setText('card-subject-ops', fmtNum(sumMetrics(summaries, SUBJECT_METRICS)));
     setText('card-dsar-ops', fmtNum(sumMetrics(summaries, DSAR_METRICS)));

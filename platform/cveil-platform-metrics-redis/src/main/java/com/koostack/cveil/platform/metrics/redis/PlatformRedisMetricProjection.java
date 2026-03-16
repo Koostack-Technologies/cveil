@@ -14,6 +14,7 @@ import java.time.temporal.ChronoUnit;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.JedisPooled;
 
 /**
  * Platform metric projection — consumes from the {@code cveil:metrics:platform} Redis stream and
@@ -26,14 +27,14 @@ public class PlatformRedisMetricProjection implements MetricProjection<PlatformM
     private static final String CONSUMER_GROUP = "platform-metric-projection";
 
     private static final String UPSERT_SQL =
-            "INSERT INTO platform_metrics.telemetry (time_bucket, tenant_id, metric_name,"
-                + " dimensions, metric_value, published_at) VALUES (?, ?, ?, ?::jsonb, ?, ?) ON"
-                + " CONFLICT (time_bucket, tenant_id, metric_name, dimensions) DO UPDATE SET"
-                + " metric_value = platform_metrics.telemetry.metric_value + EXCLUDED.metric_value,"
-                + "               published_at = EXCLUDED.published_at";
+            "INSERT INTO cveilmetrics.telemetry (time_bucket, tenant_id, metric_name,"
+                    + " dimensions, metric_value, published_at) VALUES (?, ?, ?, ?::jsonb, ?, ?) ON"
+                    + " CONFLICT (time_bucket, tenant_id, metric_name, dimensions) DO UPDATE SET"
+                    + " metric_value = cveilmetrics.telemetry.metric_value + EXCLUDED.metric_value,"
+                    + "               published_at = EXCLUDED.published_at";
 
     private static final String GAUGE_UPSERT_SQL =
-            "INSERT INTO platform_metrics.telemetry (time_bucket, tenant_id, metric_name,"
+            "INSERT INTO cveilmetrics.telemetry (time_bucket, tenant_id, metric_name,"
                     + " dimensions, metric_value, published_at) VALUES (?, ?, ?, ?::jsonb, ?, ?) ON"
                     + " CONFLICT (time_bucket, tenant_id, metric_name, dimensions) DO UPDATE SET"
                     + " metric_value = EXCLUDED.metric_value,               published_at ="
@@ -62,13 +63,15 @@ public class PlatformRedisMetricProjection implements MetricProjection<PlatformM
     public void configure(PlatformMetricsConfig config) {
         this.dataSource = config.dataSource();
         this.timeBucketMinutes = config.timeBucketMinutes();
-        JedisProvider jedisProvider =
-                JedisProvider.shared(
-                        RedisClientFactory.createClient(
+        JedisPooled client =
+                config.sharedRedisClient() != null
+                        ? config.sharedRedisClient()
+                        : RedisClientFactory.createClient(
                                 config.redisConfig().host(),
                                 config.redisConfig().port(),
                                 config.redisConfig().password(),
-                                config.redisConfig().tlsConfig()));
+                                config.redisConfig().tlsConfig());
+        JedisProvider jedisProvider = JedisProvider.shared(client);
         this.consumer = new PlatformStreamConsumer(jedisProvider, 5_000, 100);
         log.info("PlatformRedisMetricProjection configured");
     }
@@ -164,8 +167,7 @@ public class PlatformRedisMetricProjection implements MetricProjection<PlatformM
             ps.setTimestamp(6, Timestamp.from(publishedAt));
             ps.executeUpdate();
         } catch (Exception e) {
-            log.error(
-                    "Failed to project metric '{}' into platform_metrics.telemetry", metricName, e);
+            log.error("Failed to project metric '{}' into cveilmetrics.telemetry", metricName, e);
         }
     }
 

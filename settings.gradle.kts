@@ -65,3 +65,6 @@ include("platform:cveil-plan-query-jooq")
 // --- Metrics ---
 include("platform:cveil-platform-metrics-redis")
 include("common:cveil-metrics-worker")
+
+// --- SDKs ---
+include("sdks:cveil-sdk-java")

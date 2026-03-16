@@ -15,7 +15,7 @@ import java.util.UUID;
  * Actuator that records the Stripe Product + Price IDs for a plan.
  *
  * <p>Publishes a {@link PlanStripeSyncedEvent} to the platform event store so that the core
- * projection handler can update the {@code platform_core.plan} read model with the external
+ * projection handler can update the {@code cveilcore.plan} read model with the external
  * identifiers.
  */
 public class SyncPlanStripeIdsCommandActuator

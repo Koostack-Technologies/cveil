@@ -13,7 +13,6 @@ let purposes = [];
 let categories = [];
 let subjects = [];
 let lastDecisions = [];   // array of { path, status, resolvedBy, maskingType, detail }
-let fieldOverrides = {};  // path → MaskingType (user overrides)
 let lastInputData = null;
 let lastMaskedData = null;
 let playgroundLoaded = false;
@@ -70,11 +69,12 @@ async function initWasm() {
         bridge = await WasmBridge.load(WASM_URL);
         const w = bridge.exports;
 
-        // Initialize SDK core with minimal config
+        // Initialize SDK core — the playground uses session cookies for REST
+        // calls, but the WASM config validator requires a non-empty token/jurisdiction.
         bridge.call1(w.cveil_init, JSON.stringify({
             apiBaseUrl: window.location.origin,
-            apiToken: '',
-            defaultJurisdiction: '',
+            apiToken: 'cveil_playground',
+            defaultJurisdiction: 'default',
         }));
 
         // Ingest the full consent graph (paginated)
@@ -239,16 +239,18 @@ async function evaluateWithWasm(subject, entity, purpose, data, fieldPaths) {
         }
     }
 
-    lastMaskedData = result.data;
-
-    // Also get per-field evaluation details via cveil_evaluate
+    // Get per-field evaluation details via cveil_evaluate
     const evalJson = bridge.call4(w.cveil_evaluate, subject, entity, JSON.stringify(fieldPaths), purpose);
     const evalResults = JSON.parse(evalJson);
 
     lastDecisions = fieldPaths.map((path, i) => {
         const er = evalResults[i] || {};
-        const mt = er.masking_type || er.maskingType || MaskingType.RedactAll;
+        let mt = er.masking_type || er.maskingType || MaskingType.RedactAll;
         const needsFetch = er.needs_fetch || er.needsFetch || false;
+        // NeedsFetch/unrecognized types → deny-by-default (RedactAll)
+        if (!MASKING_TYPES.includes(mt)) {
+            mt = MaskingType.RedactAll;
+        }
         return {
             path,
             fieldName: er.field || path.split('.').pop(),
@@ -259,9 +261,10 @@ async function evaluateWithWasm(subject, entity, purpose, data, fieldPaths) {
         };
     });
 
-    fieldOverrides = {};
     renderDecisions();
-    renderMaskedOutput(result.data);
+    // Apply JS masking from evaluation results to ensure all denied fields
+    // are properly masked, even if cveil_mask missed some (e.g. unregistered fields).
+    await applyMaskingJs();
 }
 
 /** Build decision entries from REST evaluate response for WASM ingestion. */
@@ -322,7 +325,6 @@ async function evaluateWithRest(subject, entity, purpose, data, fieldPaths) {
         };
     });
 
-    fieldOverrides = {};
     renderDecisions();
     await applyMaskingJs();
 }
@@ -331,37 +333,11 @@ async function applyMaskingJs() {
     if (!lastInputData || lastDecisions.length === 0) return;
     const resolutions = {};
     for (const d of lastDecisions) {
-        resolutions[d.path] = fieldOverrides[d.path] || d.maskingType;
+        resolutions[d.path] = d.maskingType;
     }
     const masked = await maskJsonTree(lastInputData, resolutions);
     lastMaskedData = masked;
     renderMaskedOutput(masked);
-}
-
-export async function remask() {
-    for (const d of lastDecisions) {
-        const sel = document.getElementById(`pg-override-${CSS.escape(d.path)}`);
-        if (sel && sel.value) fieldOverrides[d.path] = sel.value;
-    }
-    // Re-mask: if WASM is available and no overrides differ, use WASM; otherwise JS fallback
-    const hasOverrides = Object.keys(fieldOverrides).length > 0;
-    if (wasmReady && !hasOverrides) {
-        const subjectId = document.getElementById('pg-subject')?.value;
-        const entityName = document.getElementById('pg-entity')?.value;
-        const purposeName = document.getElementById('pg-purpose')?.value;
-        if (subjectId && entityName && purposeName && lastInputData) {
-            try {
-                const w = bridge.exports;
-                const resultJson = bridge.call4(w.cveil_mask, subjectId, entityName, JSON.stringify(lastInputData), purposeName);
-                const result = JSON.parse(resultJson);
-                lastMaskedData = result.data;
-                renderMaskedOutput(result.data);
-                return;
-            } catch { /* fall through to JS */ }
-        }
-    }
-    // JS fallback for overrides or WASM unavailability
-    await applyMaskingJs();
 }
 
 // ── Rendering ──────────────────────────────────────────────────
@@ -370,25 +346,15 @@ function renderDecisions() {
     if (!container || lastDecisions.length === 0) return;
 
     const rows = lastDecisions.map(d => {
-        const effectiveMask = fieldOverrides[d.path] || d.maskingType;
         const statusBadge = d.status === 'GRANTED'
             ? '<span class="inline-flex items-center gap-1 text-xs font-medium text-green-400"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>GRANTED</span>'
             : '<span class="inline-flex items-center gap-1 text-xs font-medium text-red-400"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>DENIED</span>';
-
-        const overrideOpts = MASKING_TYPES.map(mt =>
-            `<option value="${mt}" ${mt === effectiveMask ? 'selected' : ''}>${mt}</option>`
-        ).join('');
 
         return `<tr class="border-t border-gray-200">
             <td class="px-3 py-2 font-mono text-xs text-gray-600">${esc(d.path)}</td>
             <td class="px-3 py-2">${statusBadge}</td>
             <td class="px-3 py-2 text-xs text-gray-500">${esc(d.resolvedBy)}</td>
-            <td class="px-3 py-2">
-                <select id="pg-override-${CSS.escape(d.path)}" onchange="remask()"
-                    class="bg-white border border-gray-300 rounded-md px-2 py-1 text-xs text-gray-700 focus:border-cv-500 focus:outline-none">
-                    ${overrideOpts}
-                </select>
-            </td>
+            <td class="px-3 py-2 text-xs text-gray-700">${esc(d.maskingType)}</td>
         </tr>`;
     }).join('');
 
@@ -442,7 +408,6 @@ export function copyMaskedOutput() {
 
 function clearResults() {
     lastDecisions = [];
-    fieldOverrides = {};
     lastInputData = null;
     lastMaskedData = null;
     const dec = document.getElementById('pg-decisions');

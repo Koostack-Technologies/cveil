@@ -63,8 +63,8 @@ import org.slf4j.MDC;
  *       tenant scope. This allows initial platform setup before any real API keys exist.
  *   <li><strong>Token verification</strong> — for {@code cveil_} prefixed tokens, validates the
  *       CRC32 checksum, computes a SHA-256 hash, and looks it up in the {@code
- *       platform_iam.access_token} table. For JWT tokens (three dot-separated segments), delegates
- *       to the tenant's {@link IdpProvider} for JWKS-based verification.
+ *       cveiliam.access_token} table. For JWT tokens (three dot-separated segments), delegates to
+ *       the tenant's {@link IdpProvider} for JWKS-based verification.
  *   <li><strong>Security context</strong> — on success, sets a JAX-RS {@link SecurityContext} with
  *       the authenticated principal and roles, and stores the full {@link IdentityContext} as a
  *       request property for downstream consumption (e.g. {@code TenantScopeInterceptor}).
@@ -285,7 +285,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         // 4d. Personal access token (cveil_ prefix) — SHA-256 hash lookup
-        //     in the platform_iam.access_token table.
+        //     in the cveiliam.access_token table.
         if (AccessTokenGenerator.isAccessToken(token)) {
             verifyAccessToken(ctx, token);
             return;
@@ -358,7 +358,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      * <ol>
      *   <li>Fast-reject malformed tokens via CRC32 checksum validation
      *   <li>Compute SHA-256 hash of the raw token
-     *   <li>Look up hash in {@code platform_iam.access_token} via CQRS query
+     *   <li>Look up hash in {@code cveiliam.access_token} via CQRS query
      *   <li>Validate status ({@code active}) and expiration
      *   <li>Build {@link IdentityContext} with snapshotted roles
      * </ol>

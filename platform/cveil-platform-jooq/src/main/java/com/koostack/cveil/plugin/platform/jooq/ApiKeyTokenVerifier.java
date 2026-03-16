@@ -16,8 +16,8 @@ import java.util.stream.Collectors;
  * Access token bearer token verifier — the auth filter hot path.
  *
  * <p>Implements {@link TokenValidationService} by SHA-256 hashing the raw bearer token, looking up
- * the hash in the {@code platform_iam.access_token} table via {@link IamQueryService}, and
- * validating the token's status and expiration before building an {@link IdentityContext}.
+ * the hash in the {@code cveiliam.access_token} table via {@link IamQueryService}, and validating
+ * the token's status and expiration before building an {@link IdentityContext}.
  *
  * @see TokenValidationService
  */

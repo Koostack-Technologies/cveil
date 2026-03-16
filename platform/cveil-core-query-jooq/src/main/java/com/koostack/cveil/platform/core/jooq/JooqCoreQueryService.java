@@ -20,7 +20,7 @@ public class JooqCoreQueryService implements CoreQueryService<JooqCoreQueryConfi
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqCoreQueryService.class);
 
-    private static final org.jooq.Table<?> TENANT = table(name("platform_core", "tenant"));
+    private static final org.jooq.Table<?> TENANT = table(name("cveiliam", "tenant"));
     private static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> DISPLAY_NAME =
             field(name("display_name"), String.class);

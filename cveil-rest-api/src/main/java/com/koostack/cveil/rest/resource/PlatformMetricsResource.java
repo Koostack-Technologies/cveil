@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * Platform-admin metrics endpoint — cross-tenant telemetry queries.
  *
  * <p>Requires {@code platform:tenant:read} permission (super-admin). Queries the unified {@code
- * platform_metrics.telemetry} table with optional filters for tenant, metric name, and time range.
+ * cveilmetrics.telemetry} table with optional filters for tenant, metric name, and time range.
  */
 @Path("/api/v1/platform/metrics")
 @Produces(MediaType.APPLICATION_JSON)
@@ -228,10 +228,10 @@ public class PlatformMetricsResource {
             params.add(java.sql.Timestamp.from(to));
         }
 
-        String countSql = "SELECT COUNT(*) FROM platform_metrics.telemetry" + where;
+        String countSql = "SELECT COUNT(*) FROM cveilmetrics.telemetry" + where;
         String dataSql =
                 "SELECT time_bucket, tenant_id, metric_name, dimensions, metric_value, published_at"
-                        + " FROM platform_metrics.telemetry"
+                        + " FROM cveilmetrics.telemetry"
                         + where
                         + " ORDER BY time_bucket DESC LIMIT ? OFFSET ?";
 
@@ -286,7 +286,7 @@ public class PlatformMetricsResource {
         String sql =
                 "SELECT metric_name, SUM(metric_value) AS total_value,"
                         + " MIN(time_bucket) AS first_seen, MAX(time_bucket) AS last_seen"
-                        + " FROM platform_metrics.telemetry"
+                        + " FROM cveilmetrics.telemetry"
                         + where
                         + " GROUP BY metric_name ORDER BY total_value DESC";
 

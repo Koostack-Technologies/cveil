@@ -236,7 +236,7 @@ public class SubjectLifecycleIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = ?",
                                                 TENANT_ID);
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();

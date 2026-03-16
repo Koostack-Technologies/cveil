@@ -2,6 +2,7 @@ package com.koostack.cveil.rest.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.koostack.cveil.plugin.event.jooq.RedisEventPublisher;
 import com.koostack.cveil.rest.config.CveilConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -78,7 +79,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /**
      * Creates support with tenant schema routing. JDBC queries will execute with {@code SET
-     * search_path TO cveil_consent, cveil_event, platform_core, public}.
+     * search_path TO cveilconsent, cveilevent, cveilcore, public}.
      */
     public IntegrationTestSupport(CveilConfig config, String tenantId) {
         var redis =
@@ -100,7 +101,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.jdbcUrl = db.url();
         this.dbUsername = db.username().orElse("cveil_test");
         this.dbPassword = db.password().orElse("cveil_test_password");
-        this.tenantSchema = tenantId != null ? "cveil_consent" : null;
+        this.tenantSchema = tenantId != null ? "cveilconsent" : null;
         this.tenantId = tenantId;
 
         this.keycloakUrl =
@@ -297,8 +298,8 @@ public class IntegrationTestSupport implements AutoCloseable {
         if (tenantSchema != null) {
             try (var stmt = conn.createStatement()) {
                 stmt.execute(
-                        "SET search_path TO cveil_consent, cveil_event, platform_core,"
-                                + " platform_iam, platform_billing, public");
+                        "SET search_path TO cveilconsent, cveilevent, cveilcore,"
+                                + " cveiliam, cveilbilling, public");
             }
         }
         return conn;
@@ -579,7 +580,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /** Computes the shard stream key for a tenant (must match RedisEventPublisher routing). */
     private String shardStreamKey(String tenantId) {
-        int shard = Math.floorMod(tenantId.hashCode(), 8);
+        int shard = Math.floorMod(tenantId.hashCode(), RedisEventPublisher.DEFAULT_SHARD_COUNT);
         return "cveil:stream:shard:" + shard;
     }
 
@@ -618,7 +619,7 @@ public class IntegrationTestSupport implements AutoCloseable {
                                 var rs =
                                         conn.createStatement()
                                                 .executeQuery(
-                                                        "SELECT 1 FROM platform_core.tenant WHERE"
+                                                        "SELECT 1 FROM cveiliam.tenant WHERE"
                                                                 + " tenant_id = '"
                                                                 + tenantId
                                                                 + "' AND status IN ('created',"

@@ -127,14 +127,24 @@ public class SiteResource {
     @Path("plans")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance pricing() {
-        return plans.data("tiers", pricingTiers());
+        List<?> tiers;
+        try {
+            tiers =
+                    cqrs.planQueryDispatcher()
+                            .dispatch(
+                                    new com.koostack.cveil.platform.plan.jooq
+                                            .ListPricingTiersQueryActuator.ListPricingTiersQuery());
+        } catch (IllegalStateException e) {
+            tiers = List.of();
+        }
+        return plans.data("tiers", tiers);
     }
 
     @GET
     @Path("signup")
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance signupPage() {
-        return signup.data("error", null);
+    public TemplateInstance signupPage(@QueryParam("plan") String plan) {
+        return signup.data("error", null).data("plan", plan);
     }
 
     @POST
@@ -146,9 +156,10 @@ public class SiteResource {
             @FormParam("email") String email,
             @FormParam("fullName") String fullName,
             @FormParam("password") String password,
-            @FormParam("confirmPassword") String confirmPassword) {
+            @FormParam("confirmPassword") String confirmPassword,
+            @FormParam("plan") String plan) {
 
-        LOG.debug("POST /signup username={}, email={}", username, email);
+        LOG.debug("POST /signup username={}, email={}, plan={}", username, email, plan);
 
         if (username == null
                 || username.isBlank()
@@ -159,14 +170,16 @@ public class SiteResource {
             return signup.data("error", "Username, email, and password are required.")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         }
 
         if (!password.equals(confirmPassword)) {
             return signup.data("error", "Passwords do not match.")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         }
 
         if (!cqrs.isCqrsAvailable()) {
@@ -175,7 +188,8 @@ public class SiteResource {
                             "Registration is temporarily unavailable. Please try again later.")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         }
 
         try {
@@ -207,7 +221,11 @@ public class SiteResource {
                 NewCookie[] cookies =
                         AuthCookieHelper.setAuthCookies(
                                 auth.accessToken(), auth.refreshToken(), auth.expiresIn());
-                return Response.seeOther(URI.create("/onboarding")).cookie(cookies).build();
+                String onboardingUri =
+                        plan != null && !plan.isBlank()
+                                ? "/onboarding?plan=" + plan
+                                : "/onboarding";
+                return Response.seeOther(URI.create(onboardingUri)).cookie(cookies).build();
             } catch (Exception loginEx) {
                 LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
                 return Response.seeOther(URI.create("/login")).build();
@@ -219,7 +237,8 @@ public class SiteResource {
                             "Invalid username. Use letters and numbers only (e.g. janedoe).")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         } catch (OrchestratorException e) {
             LOG.error(
                     "User registration saga failed at step '{}' ({}/{} completed): {}",
@@ -231,13 +250,15 @@ public class SiteResource {
             return signup.data("error", "Registration failed. Please try again or contact support.")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         } catch (Exception e) {
             LOG.error("Unexpected error during registration: {}", e.getMessage(), e);
             return signup.data("error", "An unexpected error occurred. Please try again.")
                     .data("username", username)
                     .data("email", email)
-                    .data("fullName", fullName);
+                    .data("fullName", fullName)
+                    .data("plan", plan);
         }
     }
 
@@ -357,12 +378,15 @@ public class SiteResource {
     @GET
     @Path("onboarding")
     @Produces(MediaType.TEXT_HTML)
-    public Object onboardingStep1() {
+    public Object onboardingStep1(@QueryParam("plan") String plan) {
         UserContext uc = resolveUserContext();
         if (uc == null) return Response.seeOther(URI.create("/login")).build();
 
         String tenantId = TenantIdDeriver.derive(uc.username());
-        onboardingStateHolder.start(tenantId);
+        var state = onboardingStateHolder.start(tenantId);
+        if (plan != null && !plan.isBlank()) {
+            state.setPlan(plan);
+        }
         return onboardingWorkspace.data("error", null).data("workspaceName", "");
     }
 
@@ -543,7 +567,7 @@ public class SiteResource {
                 new DeferredProvisioningTask(
                         tenantId,
                         uc.email(),
-                        "free",
+                        state.plan(),
                         consentDispatcher,
                         cqrs.billingDispatcher(),
                         cqrs.paymentProcessorService(),
@@ -1153,59 +1177,5 @@ public class SiteResource {
         }
 
         return null;
-    }
-
-    private List<Map<String, Object>> pricingTiers() {
-        return List.of(
-                Map.ofEntries(
-                        Map.entry("name", "Starter"),
-                        Map.entry("price", "$49"),
-                        Map.entry("period", "/mo"),
-                        Map.entry(
-                                "description",
-                                "For early-stage startups validating product-market fit."),
-                        Map.entry("evaluations", "50,000"),
-                        Map.entry("overage", "$0.002 / eval"),
-                        Map.entry("masking", "Basic (email, phone)"),
-                        Map.entry("auditRetention", "30 days"),
-                        Map.entry("support", "Community + Docs"),
-                        Map.entry("residency", "Shared US / EU"),
-                        Map.entry("sso", false),
-                        Map.entry("sla", "99.9%"),
-                        Map.entry("cta", "Start Free Trial"),
-                        Map.entry("highlighted", false)),
-                Map.ofEntries(
-                        Map.entry("name", "Pro"),
-                        Map.entry("price", "$249"),
-                        Map.entry("period", "/mo"),
-                        Map.entry(
-                                "description", "For growing teams that need compliance at scale."),
-                        Map.entry("evaluations", "500,000"),
-                        Map.entry("overage", "$0.001 / eval"),
-                        Map.entry("masking", "Full field-level"),
-                        Map.entry("auditRetention", "1 year"),
-                        Map.entry("support", "Priority email · 24h SLA"),
-                        Map.entry("residency", "Dedicated region"),
-                        Map.entry("sso", true),
-                        Map.entry("sla", "99.95%"),
-                        Map.entry("cta", "Start Free Trial"),
-                        Map.entry("highlighted", true)),
-                Map.ofEntries(
-                        Map.entry("name", "Enterprise"),
-                        Map.entry("price", "Custom"),
-                        Map.entry("period", ""),
-                        Map.entry(
-                                "description",
-                                "For organizations with strict regulatory requirements."),
-                        Map.entry("evaluations", "Unlimited"),
-                        Map.entry("overage", "Custom"),
-                        Map.entry("masking", "Full + custom rules"),
-                        Map.entry("auditRetention", "Unlimited"),
-                        Map.entry("support", "Dedicated CSM · Slack · 1h SLA"),
-                        Map.entry("residency", "Custom / on-prem"),
-                        Map.entry("sso", true),
-                        Map.entry("sla", "99.99%"),
-                        Map.entry("cta", "Contact Sales"),
-                        Map.entry("highlighted", false)));
     }
 }

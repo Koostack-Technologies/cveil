@@ -55,7 +55,8 @@ public class ProvisionRedisCommandActuator
         String tenantId = command.tenantId();
         // Shard streams are created at startup by ShardedStreamConsumer —
         // no per-tenant stream creation needed.
-        int shard = Math.floorMod(tenantId.hashCode(), 8);
+        // Must match RedisEventPublisher.DEFAULT_SHARD_COUNT
+        int shard = Math.floorMod(tenantId.hashCode(), 16);
         String streamKey = "cveil:stream:shard:" + shard;
         String pubSubChannel = "consent-cache-invalidation:" + tenantId;
 

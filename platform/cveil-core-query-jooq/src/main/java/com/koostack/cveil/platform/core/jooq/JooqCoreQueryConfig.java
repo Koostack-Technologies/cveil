@@ -6,7 +6,7 @@ import org.jooq.DSLContext;
 /**
  * Configuration for {@link JooqCoreQueryService}.
  *
- * @param dsl the platform {@link DSLContext} targeting the platform_core schema
+ * @param dsl the platform {@link DSLContext} targeting the cveilcore schema
  * @param decryptor optional function to decrypt encrypted column values (e.g. {@code
  *     redis_acl_password}); pass {@code null} or {@link UnaryOperator#identity()} to disable
  *     decryption

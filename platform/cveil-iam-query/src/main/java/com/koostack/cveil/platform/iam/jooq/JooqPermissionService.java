@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /**
  * JDBC-backed implementation of {@link PermissionService}.
  *
- * <p>Resolves role assignments from the {@code platform_iam} schema, expands them into atomic
+ * <p>Resolves role assignments from the {@code cveiliam} schema, expands them into atomic
  * permissions via the {@code role_permission} mapping, and caches results with a short TTL.
  *
  * <p>Cache is a simple {@code ConcurrentHashMap} with timestamp-based expiry to avoid adding a
@@ -101,7 +101,7 @@ public class JooqPermissionService implements PermissionService {
         validateRoleAssignable(roleId);
 
         String sql =
-                "INSERT INTO platform_iam.role_assignment"
+                "INSERT INTO cveiliam.role_assignment"
                         + " (user_id, tenant_id, role_id, granted_by, granted_at)"
                         + " VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)"
                         + " ON CONFLICT (user_id, COALESCE(tenant_id, ''), role_id) DO NOTHING";
@@ -135,7 +135,7 @@ public class JooqPermissionService implements PermissionService {
     @Override
     public void removeRole(String userId, String tenantId, String roleId) {
         String sql =
-                "DELETE FROM platform_iam.role_assignment WHERE user_id = ? AND COALESCE(tenant_id,"
+                "DELETE FROM cveiliam.role_assignment WHERE user_id = ? AND COALESCE(tenant_id,"
                         + " '') = COALESCE(?, '') AND role_id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -166,7 +166,7 @@ public class JooqPermissionService implements PermissionService {
         String sql =
                 "SELECT rd.role_id, rd.tenant_id, rd.scope, rd.display_name, rd.description,"
                         + " rd.is_system, rd.is_assignable"
-                        + " FROM platform_iam.role_definition rd"
+                        + " FROM cveiliam.role_definition rd"
                         + " WHERE rd.tenant_id IS NULL OR rd.tenant_id = ?"
                         + " ORDER BY rd.is_system DESC, rd.display_name";
         List<RoleDefinitionInfo> result = new ArrayList<>();
@@ -200,7 +200,7 @@ public class JooqPermissionService implements PermissionService {
     public List<RoleAssignmentInfo> listUserRolesInTenant(String userId, String tenantId) {
         String sql =
                 "SELECT user_id, tenant_id, role_id, granted_by, granted_at"
-                        + " FROM platform_iam.role_assignment"
+                        + " FROM cveiliam.role_assignment"
                         + " WHERE user_id = ? AND (tenant_id = ? OR tenant_id IS NULL)"
                         + " ORDER BY granted_at";
         return queryRoleAssignments(sql, userId, tenantId);
@@ -210,7 +210,7 @@ public class JooqPermissionService implements PermissionService {
     public List<RoleAssignmentInfo> listTenantRoleAssignments(String tenantId) {
         String sql =
                 "SELECT user_id, tenant_id, role_id, granted_by, granted_at"
-                        + " FROM platform_iam.role_assignment"
+                        + " FROM cveiliam.role_assignment"
                         + " WHERE tenant_id = ?"
                         + " ORDER BY user_id, granted_at";
         List<RoleAssignmentInfo> result = new ArrayList<>();
@@ -245,7 +245,7 @@ public class JooqPermissionService implements PermissionService {
             try {
                 // Insert role definition
                 String insertRole =
-                        "INSERT INTO platform_iam.role_definition (role_id, tenant_id, scope,"
+                        "INSERT INTO cveiliam.role_definition (role_id, tenant_id, scope,"
                             + " display_name, description, is_system, is_assignable) VALUES (?, ?,"
                             + " 'tenant', ?, ?, FALSE, TRUE)";
                 try (PreparedStatement ps = conn.prepareStatement(insertRole)) {
@@ -258,7 +258,7 @@ public class JooqPermissionService implements PermissionService {
 
                 // Insert role → permission mappings
                 String insertPerm =
-                        "INSERT INTO platform_iam.role_permission"
+                        "INSERT INTO cveiliam.role_permission"
                                 + " (role_id, permission_id) VALUES (?, ?)";
                 try (PreparedStatement ps = conn.prepareStatement(insertPerm)) {
                     for (String permission : permissions) {
@@ -290,7 +290,7 @@ public class JooqPermissionService implements PermissionService {
     public void deleteCustomRole(String tenantId, String roleId) {
         // Verify it's not a system role
         String checkSql =
-                "SELECT is_system FROM platform_iam.role_definition"
+                "SELECT is_system FROM cveiliam.role_definition"
                         + " WHERE role_id = ? AND (tenant_id = ? OR tenant_id IS NULL)";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(checkSql)) {
@@ -312,7 +312,7 @@ public class JooqPermissionService implements PermissionService {
 
         // CASCADE will handle role_permission and role_assignment cleanup
         String deleteSql =
-                "DELETE FROM platform_iam.role_definition WHERE role_id = ? AND tenant_id = ?";
+                "DELETE FROM cveiliam.role_definition WHERE role_id = ? AND tenant_id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(deleteSql)) {
             ps.setString(1, roleId);
@@ -349,8 +349,8 @@ public class JooqPermissionService implements PermissionService {
         // Include both tenant-scoped and platform-scoped (NULL tenant) assignments
         String sql =
                 "SELECT DISTINCT rp.permission_id"
-                        + " FROM platform_iam.role_assignment ra"
-                        + " JOIN platform_iam.role_permission rp ON ra.role_id = rp.role_id"
+                        + " FROM cveiliam.role_assignment ra"
+                        + " JOIN cveiliam.role_permission rp ON ra.role_id = rp.role_id"
                         + " WHERE ra.user_id = ? AND (ra.tenant_id = ? OR ra.tenant_id IS NULL)";
         Set<String> permissions = new HashSet<>();
         try (Connection conn = dataSource.getConnection();
@@ -372,7 +372,7 @@ public class JooqPermissionService implements PermissionService {
     private Set<String> loadRolesFromDb(String userId, String tenantId) {
         String sql =
                 "SELECT DISTINCT ra.role_id"
-                        + " FROM platform_iam.role_assignment ra"
+                        + " FROM cveiliam.role_assignment ra"
                         + " WHERE ra.user_id = ? AND (ra.tenant_id = ? OR ra.tenant_id IS NULL)";
         Set<String> roles = new HashSet<>();
         try (Connection conn = dataSource.getConnection();
@@ -392,7 +392,7 @@ public class JooqPermissionService implements PermissionService {
     }
 
     private List<String> loadPermissionsForRole(Connection conn, String roleId) throws Exception {
-        String sql = "SELECT permission_id FROM platform_iam.role_permission WHERE role_id = ?";
+        String sql = "SELECT permission_id FROM cveiliam.role_permission WHERE role_id = ?";
         List<String> perms = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, roleId);
@@ -435,7 +435,7 @@ public class JooqPermissionService implements PermissionService {
     }
 
     private void validateRoleExists(String roleId) {
-        String sql = "SELECT 1 FROM platform_iam.role_definition WHERE role_id = ?";
+        String sql = "SELECT 1 FROM cveiliam.role_definition WHERE role_id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, roleId);
@@ -453,7 +453,7 @@ public class JooqPermissionService implements PermissionService {
 
     /** Validates the role exists and is assignable (not super-admin or other non-assignable). */
     private void validateRoleAssignable(String roleId) {
-        String sql = "SELECT is_assignable FROM platform_iam.role_definition WHERE role_id = ?";
+        String sql = "SELECT is_assignable FROM cveiliam.role_definition WHERE role_id = ?";
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, roleId);
@@ -490,7 +490,7 @@ public class JooqPermissionService implements PermissionService {
 
         String placeholders = String.join(",", permissions.stream().map(p -> "?").toList());
         String sql =
-                "SELECT COUNT(*) FROM platform_iam.permission WHERE permission_id IN ("
+                "SELECT COUNT(*) FROM cveiliam.permission WHERE permission_id IN ("
                         + placeholders
                         + ")";
         try (Connection conn = dataSource.getConnection();

@@ -17,7 +17,7 @@ public class ListUsersQueryActuator
 
     private static final Logger LOG = LoggerFactory.getLogger(ListUsersQueryActuator.class);
 
-    private static final org.jooq.Table<?> IAM_USER = table(name("platform_iam", "iam_user"));
+    private static final org.jooq.Table<?> IAM_USER = table(name("cveiliam", "iam_user"));
     private static final org.jooq.Field<String> USERNAME = field(name("username"), String.class);
     private static final org.jooq.Field<String> EMAIL = field(name("email"), String.class);
     private static final org.jooq.Field<String> FULL_NAME = field(name("full_name"), String.class);

@@ -83,7 +83,7 @@ import redis.clients.jedis.JedisPooled;
  *   <li>CQRS command/query services — tenant lifecycle, API key management, billing, and plan
  *       management
  *   <li>{@code ApiKeyTokenVerifier} — SHA-256 bearer token verification against the {@code
- *       platform_iam.api_key} projection table
+ *       cveiliam.api_key} projection table
  * </ul>
  *
  * <h2>Produced beans</h2>
@@ -171,7 +171,7 @@ public class CveilProducers {
      * <ol>
      *   <li>Selects the consent bundle based on {@code cveil.mode}.
      *   <li>In production mode, also wires the platform admin service and token verifier from
-     *       {@code cveil.platform-db} and {@code cveil.redis} config.
+     *       {@code cveil.db} and {@code cveil.redis} config.
      *   <li>Sets the application name if configured.
      * </ol>
      *
@@ -184,10 +184,10 @@ public class CveilProducers {
         String mode = config.mode();
         LOG.info("Cveil REST API: initializing (mode={})", mode);
 
-        // Validate platform DB credentials upfront in production mode so
+        // Validate DB credentials upfront in production mode so
         // misconfiguration is caught before any connections are attempted.
         if (MODE_PRODUCTION.equalsIgnoreCase(mode)) {
-            validatePlatformDbCredentials();
+            validateDbCredentials();
         }
 
         Cveil.Builder builder = Cveil.builder();
@@ -252,13 +252,9 @@ public class CveilProducers {
             dsarService = new com.koostack.cveil.plugin.consent.jooq.JooqSubjectDsarService();
             dsarService.configure(jooqConfig);
 
-            if (config.platformDb().isPresent()) {
+            if (config.db().isPresent()) {
                 String encKey =
-                        config.platformDb()
-                                .get()
-                                .encryptionKey()
-                                .filter(k -> !k.isBlank())
-                                .orElse(null);
+                        config.db().get().encryptionKey().filter(k -> !k.isBlank()).orElse(null);
                 if (encKey != null) {
                     final String capturedKey = encKey;
                     keyEncryptor =
@@ -280,7 +276,7 @@ public class CveilProducers {
 
         // -- Configure consent commands with unified platform event service ---
         // Deferred until after wirePlatformCqrsServices() because consent commands
-        // write events to the unified cveil_event.event table via platformEventService.
+        // write events to the unified cveilevent.event table via platformEventService.
         if (this.platformEventService != null) {
             commandService.configure(
                     new ConsentAdminCommandConfig(
@@ -851,7 +847,7 @@ public class CveilProducers {
 
     /**
      * Produces the platform {@link DataSource} for CDI injection. Used by metrics query endpoints
-     * to read from {@code platform_metrics.telemetry}. Returns {@code null} in embedded mode.
+     * to read from {@code cveilmetrics.telemetry}. Returns {@code null} in embedded mode.
      */
     @Produces
     @ApplicationScoped
@@ -908,10 +904,10 @@ public class CveilProducers {
      * and query services are stored as instance fields and exposed via {@link PlatformCqrsHolder}.
      */
     private void wirePlatformCqrsServices(Cveil.Builder builder) {
-        CveilConfig.DbConfig platformDb = config.platformDb().orElse(null);
+        CveilConfig.DbConfig platformDb = config.db().orElse(null);
         if (platformDb == null) {
             LOG.warn(
-                    "Cveil REST API: platform CQRS services NOT wired — cveil.platform-db not"
+                    "Cveil REST API: platform CQRS services NOT wired — cveil.db not"
                             + " configured");
             return;
         }
@@ -959,13 +955,13 @@ public class CveilProducers {
         this.metricsRedisPluginConfig = redisPluginConfig;
 
         // -- Platform event service -------------------------------------------
-        // Include cveil_event in the search_path for the event service's DSLContext.
+        // Include cveilevent in the search_path for the event service's DSLContext.
         // The JooqDataSourceFactory creates its own HikariCP pool without a
         // connectionInitSql, so we use the JDBC currentSchema parameter instead.
         String eventDbUrl = platformDbUrl;
         if (eventDbUrl != null && eventDbUrl.startsWith("jdbc:postgresql")) {
             String sep = eventDbUrl.contains("?") ? "&" : "?";
-            eventDbUrl = eventDbUrl + sep + "currentSchema=cveil_event,public";
+            eventDbUrl = eventDbUrl + sep + "currentSchema=cveilevent,public";
         }
         int eventShardCount =
                 config.stream()
@@ -986,55 +982,97 @@ public class CveilProducers {
         DataSource migrationDs =
                 JooqDataSourceFactory.createDataSource(eventConfig, "cveil-cqrs-migrations");
 
-        // Unified event store lives in cveil_event schema. All consent tables
-        // live in cveil_consent. Metrics in cveil_metrics.
-        // -- Unified schema migrations (all schemas created at startup) -----
+        // -- Schema rename + migration ----------------------------------------
+        // Step 1: Rename old schema names → new names (for existing databases).
+        //         On fresh databases these are no-ops.
+        // Step 2: Create schemas that Flyway doesn't self-create (event, consent).
+        // Step 3: Run Flyway migrations with new schema names.
+        // Step 4: Clean up old-name schemas created by V1 SQL on fresh databases.
+        // Step 5: Move tenant table from cveilcore → cveiliam (domain boundary).
         try (var conn = migrationDs.getConnection();
                 var stmt = conn.createStatement()) {
-            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveil_event");
-            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveil_consent");
-            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveil_metrics");
+            // Step 1: rename old → new (existing databases)
+            renameSchemaIfNeeded(stmt, "platform_core", "cveilcore");
+            renameSchemaIfNeeded(stmt, "platform_billing", "cveilbilling");
+            renameSchemaIfNeeded(stmt, "platform_iam", "cveiliam");
+            renameSchemaIfNeeded(stmt, "cveil_event", "cveilevent");
+            renameSchemaIfNeeded(stmt, "cveil_consent", "cveilconsent");
+            renameSchemaIfNeeded(stmt, "platform_metrics", "cveilmetrics");
+
+            // Step 2: create schemas with new names (event + consent use unqualified SQL)
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilevent");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilconsent");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create unified schemas", e);
+            throw new RuntimeException("Failed to prepare schemas", e);
         }
 
+        // Step 3: run Flyway migrations
+        // Simple-rename schemas (V1 SQL uses unqualified table names)
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-event-postgresql",
                 "flyway_schema_history_event",
-                "cveil_event");
+                "cveilevent");
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/consent",
                 "flyway_schema_history_consent",
-                "cveil_consent");
+                "cveilconsent");
+        // Self-creating schemas (V1 SQL explicitly creates old-name schema + qualifies tables)
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-metrics",
                 "flyway_schema_history_metrics",
-                "cveil_metrics");
-
-        // Domain projection schemas (self-contained — each V1 creates its own schema).
+                "cveilmetrics");
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-core",
                 "flyway_schema_history",
-                "platform_core");
+                "cveilcore");
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-billing",
                 "flyway_schema_history",
-                "platform_billing");
+                "cveilbilling");
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-iam",
                 "flyway_schema_history",
-                "platform_iam");
+                "cveiliam");
+
+        // Step 4: clean up old-name schemas created by V1 on fresh installs
+        try (var conn = migrationDs.getConnection();
+                var stmt = conn.createStatement()) {
+            cleanupOldSchema(conn, "platform_core", "cveilcore");
+            cleanupOldSchema(conn, "platform_billing", "cveilbilling");
+            cleanupOldSchema(conn, "platform_iam", "cveiliam");
+            cleanupOldSchema(conn, "platform_metrics", "cveilmetrics");
+
+            // Step 5: move tenant table from cveilcore → cveiliam
+            moveTableIfNeeded(stmt, "cveilcore", "tenant", "cveiliam");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to finalize schema migration", e);
+        }
 
         // RLS policies — must run AFTER all schema migrations complete.
         // Uses 'public' schema for the flyway history table since RLS
         // policies span multiple schemas.
-        runFlyway(migrationDs, "classpath:db/migration/rls-policies", "flyway_schema_history_rls");
+        // Baseline at V2 so that V1/V2 (which reference old schema names) are
+        // skipped on fresh databases; V3 contains the full RLS setup.
+        runFlyway(
+                migrationDs,
+                "classpath:db/migration/rls-policies",
+                "flyway_schema_history_rls",
+                "2");
+
+        // Migrations complete — close the dedicated migration pool to free idle connections.
+        if (migrationDs instanceof java.io.Closeable closeable) {
+            try {
+                closeable.close();
+            } catch (Exception e) {
+                LOG.warn("Failed to close migration DataSource", e);
+            }
+        }
 
         JooqPlatformEventService platformEventService = new JooqPlatformEventService();
         platformEventService.configure(eventConfig);
@@ -1072,8 +1110,8 @@ public class CveilProducers {
         if (eventConfig.username() != null) hikariCfg.setUsername(eventConfig.username());
         if (eventConfig.password() != null) hikariCfg.setPassword(eventConfig.password());
         hikariCfg.setConnectionInitSql(
-                "SET search_path TO platform_core, platform_billing, platform_iam, cveil_event,"
-                        + " cveil_consent, cveil_metrics, public");
+                "SET search_path TO cveilcore, cveilbilling, cveiliam, cveilevent,"
+                        + " cveilconsent, cveilmetrics, public");
         DataSource platformDataSource = new com.zaxxer.hikari.HikariDataSource(hikariCfg);
         this.platformDataSource = platformDataSource;
         DSLContext platformDsl =
@@ -1104,8 +1142,8 @@ public class CveilProducers {
         billingQuerySvc.configure(new JooqBillingQueryConfig(platformDsl));
         this.billingQueryService = billingQuerySvc;
 
-        com.koostack.cveil.platform.plan.jooq.JooqPlanQueryService planQuerySvc =
-                new com.koostack.cveil.platform.plan.jooq.JooqPlanQueryService();
+        com.koostack.cveil.platform.plan.jooq.PlanQueryDispatcher planQuerySvc =
+                new com.koostack.cveil.platform.plan.jooq.PlanQueryDispatcher();
         planQuerySvc.configure(
                 new com.koostack.cveil.platform.plan.jooq.JooqPlanQueryConfig(platformDsl));
 
@@ -1287,9 +1325,17 @@ public class CveilProducers {
             return;
         }
 
+        // Single shared Redis client for all metrics modules
+        JedisPooled metricsRedis =
+                RedisClientFactory.createClient(
+                        redisPluginConfig.host(),
+                        redisPluginConfig.port(),
+                        redisPluginConfig.password(),
+                        redisPluginConfig.tlsConfig());
+
         var metricsConfig =
                 new com.koostack.cveil.platform.metrics.redis.PlatformMetricsConfig(
-                        redisPluginConfig, platformDataSource);
+                        redisPluginConfig, platformDataSource, metricsRedis);
 
         // Publisher
         var publisher =
@@ -1306,10 +1352,10 @@ public class CveilProducers {
         this.metricProjection = projection;
         LOG.info("Cveil REST API: PlatformRedisMetricProjection started");
 
-        // Sweeper — unified platform_metrics.telemetry table (no per-tenant schemas)
+        // Sweeper — unified cveilmetrics.telemetry table (no per-tenant schemas)
         var sweeperConfig =
                 new com.koostack.cveil.common.metrics.MetricsSweeperConfig(
-                        platformDataSource, redisPluginConfig);
+                        platformDataSource, redisPluginConfig, metricsRedis);
         var sweeper = new com.koostack.cveil.common.metrics.DefaultMetricsSweeper();
         sweeper.configure(sweeperConfig);
         this.metricsSweeper = sweeper;
@@ -1435,7 +1481,7 @@ public class CveilProducers {
         // Append SSL parameters to JDBC URL if needed
         String dbUrl = appendSslParameters(db.url(), db);
 
-        // Consent tables live in cveil_consent; event table in cveil_event.
+        // Consent tables live in cveilconsent; event table in cveilevent.
         // Append currentSchema so jOOQ's renderSchema(false) resolves unqualified
         // table names to the correct schemas.
         if (dbUrl != null && dbUrl.startsWith("jdbc:postgresql")) {
@@ -1443,8 +1489,8 @@ public class CveilProducers {
             dbUrl =
                     dbUrl
                             + sep
-                            + "currentSchema=cveil_consent,cveil_event,platform_core,"
-                            + "platform_iam,platform_billing,public";
+                            + "currentSchema=cveilconsent,cveilevent,cveilcore,"
+                            + "cveiliam,cveilbilling,public";
         }
 
         JooqConsentAdminServiceConfig jooqConfig =
@@ -1521,8 +1567,8 @@ public class CveilProducers {
      *
      * <p>The provider caches per-tenant {@link JedisPooled} connections, each authenticated as the
      * tenant's dedicated Redis ACL user. The credential lookup delegates to {@link
-     * CoreQueryService#getTenantCredentials(String)} which reads from the {@code
-     * platform_core.tenant} table.
+     * CoreQueryService#getTenantCredentials(String)} which reads from the {@code cveiliam.tenant}
+     * table.
      *
      * @param redis the Redis connection config (host, port)
      * @param adminPool the admin-level JedisPooled (default user)
@@ -1652,24 +1698,20 @@ public class CveilProducers {
     }
 
     /**
-     * Validates that platform DB credentials are present and non-blank in production mode. Called
-     * at the top of {@link #tenantService()} before any connections are attempted.
+     * Validates that DB credentials are present and non-blank in production mode. Called at the top
+     * of {@link #cveilInit()} before any connections are attempted.
      */
-    private void validatePlatformDbCredentials() {
-        CveilConfig.DbConfig platformDb =
-                config.platformDb()
+    private void validateDbCredentials() {
+        CveilConfig.DbConfig db =
+                config.db()
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
-                                                "cveil.mode=production requires cveil.platform-db"
+                                                "cveil.mode=production requires cveil.db"
                                                         + " to be configured"));
-        requireNonBlank(platformDb.url(), "cveil.platform-db.url");
-        requireNonBlank(
-                platformDb.username().orElse(null),
-                "cveil.platform-db.username (env: CVEIL_PLATFORM_DB_USERNAME)");
-        requireNonBlank(
-                platformDb.password().orElse(null),
-                "cveil.platform-db.password (env: CVEIL_PLATFORM_DB_PASSWORD)");
+        requireNonBlank(db.url(), "cveil.db.url");
+        requireNonBlank(db.username().orElse(null), "cveil.db.username (env: CVEIL_DB_USERNAME)");
+        requireNonBlank(db.password().orElse(null), "cveil.db.password (env: CVEIL_DB_PASSWORD)");
     }
 
     @SuppressWarnings("rawtypes")
@@ -1700,15 +1742,23 @@ public class CveilProducers {
     }
 
     private void runFlyway(DataSource ds, String location, String historyTable) {
+        runFlyway(ds, location, historyTable, "0");
+    }
+
+    private void runFlyway(
+            DataSource ds, String location, String historyTable, String baselineVersion) {
         LOG.debug(
-                "Running Flyway migrations: location={}, historyTable={}", location, historyTable);
+                "Running Flyway migrations: location={}, historyTable={}, baselineVersion={}",
+                location,
+                historyTable,
+                baselineVersion);
         var result =
                 Flyway.configure()
                         .dataSource(ds)
                         .locations(location)
                         .table(historyTable)
                         .baselineOnMigrate(true)
-                        .baselineVersion("0")
+                        .baselineVersion(baselineVersion)
                         .load()
                         .migrate();
         LOG.debug(
@@ -1740,5 +1790,113 @@ public class CveilProducers {
                 location,
                 result.migrationsExecuted,
                 result.success);
+    }
+
+    /**
+     * Renames a PostgreSQL schema if the old name exists and the new name does not. This is a no-op
+     * on fresh databases (old schema doesn't exist) and on databases already migrated (old schema
+     * already renamed).
+     */
+    private void renameSchemaIfNeeded(java.sql.Statement stmt, String oldName, String newName)
+            throws java.sql.SQLException {
+        try (var rs =
+                stmt.executeQuery(
+                        "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
+                                + " schema_name = '"
+                                + oldName
+                                + "')"
+                                + " AND NOT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
+                                + " schema_name = '"
+                                + newName
+                                + "')")) {
+            if (rs.next() && rs.getBoolean(1)) {
+                LOG.info("Renaming schema {} → {}", oldName, newName);
+                stmt.execute("ALTER SCHEMA " + oldName + " RENAME TO " + newName);
+            }
+        }
+    }
+
+    /**
+     * On fresh installs, Flyway V1 migrations create old-name schemas (e.g. {@code platform_core})
+     * and put tables there, while the Flyway history table lives in the new-name schema. This
+     * method moves all tables and sequences from the old schema to the new one and drops the old
+     * schema.
+     */
+    private void cleanupOldSchema(java.sql.Connection conn, String oldName, String newName)
+            throws java.sql.SQLException {
+        try (var check =
+                conn.createStatement()
+                        .executeQuery(
+                                "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
+                                        + " schema_name = '"
+                                        + oldName
+                                        + "')")) {
+            if (!check.next() || !check.getBoolean(1)) return;
+        }
+        LOG.info("Cleaning up old schema {} → moving objects to {}", oldName, newName);
+        try (var stmt = conn.createStatement()) {
+            // Move tables
+            try (var tables =
+                    stmt.executeQuery(
+                            "SELECT table_name FROM information_schema.tables WHERE table_schema"
+                                    + " = '"
+                                    + oldName
+                                    + "' AND table_type = 'BASE TABLE'")) {
+                while (tables.next()) {
+                    String tbl = tables.getString(1);
+                    conn.createStatement()
+                            .execute(
+                                    "ALTER TABLE "
+                                            + oldName
+                                            + ".\""
+                                            + tbl
+                                            + "\" SET SCHEMA "
+                                            + newName);
+                }
+            }
+            // Move sequences
+            try (var seqs =
+                    stmt.executeQuery(
+                            "SELECT sequence_name FROM information_schema.sequences WHERE"
+                                    + " sequence_schema = '"
+                                    + oldName
+                                    + "'")) {
+                while (seqs.next()) {
+                    String seq = seqs.getString(1);
+                    conn.createStatement()
+                            .execute(
+                                    "ALTER SEQUENCE "
+                                            + oldName
+                                            + ".\""
+                                            + seq
+                                            + "\" SET SCHEMA "
+                                            + newName);
+                }
+            }
+            // Drop the now-empty old schema
+            conn.createStatement().execute("DROP SCHEMA IF EXISTS " + oldName + " CASCADE");
+        }
+    }
+
+    /**
+     * Moves a single table from one schema to another if it exists in the source schema. Used to
+     * relocate the {@code tenant} table from {@code cveilcore} to {@code cveiliam}.
+     */
+    private void moveTableIfNeeded(
+            java.sql.Statement stmt, String fromSchema, String table, String toSchema)
+            throws java.sql.SQLException {
+        try (var rs =
+                stmt.executeQuery(
+                        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE"
+                                + " table_schema = '"
+                                + fromSchema
+                                + "' AND table_name = '"
+                                + table
+                                + "')")) {
+            if (rs.next() && rs.getBoolean(1)) {
+                LOG.info("Moving table {}.{} → {}", fromSchema, table, toSchema);
+                stmt.execute("ALTER TABLE " + fromSchema + "." + table + " SET SCHEMA " + toSchema);
+            }
+        }
     }
 }

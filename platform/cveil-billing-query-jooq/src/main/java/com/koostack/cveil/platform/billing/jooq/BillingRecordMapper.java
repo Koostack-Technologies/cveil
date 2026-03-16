@@ -17,8 +17,7 @@ import org.jooq.Record;
 public final class BillingRecordMapper {
 
     // -- billing_profile table ------------------------------------------------
-    static final org.jooq.Table<?> BILLING_PROFILE =
-            table(name("platform_billing", "billing_profile"));
+    static final org.jooq.Table<?> BILLING_PROFILE = table(name("cveilbilling", "billing_profile"));
     static final org.jooq.Field<String> BP_TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> BP_BILLING_EMAIL =
             field(name("billing_email"), String.class);
@@ -35,7 +34,7 @@ public final class BillingRecordMapper {
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- subscription table ---------------------------------------------------
-    static final org.jooq.Table<?> SUBSCRIPTION = table(name("platform_billing", "subscription"));
+    static final org.jooq.Table<?> SUBSCRIPTION = table(name("cveilbilling", "subscription"));
     static final org.jooq.Field<String> SUB_TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> SUB_PLAN_TIER = field(name("plan_tier"), String.class);
     static final org.jooq.Field<Long> SUB_EVAL_LIMIT =
@@ -58,8 +57,7 @@ public final class BillingRecordMapper {
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- payment_method table -------------------------------------------------
-    static final org.jooq.Table<?> PAYMENT_METHOD =
-            table(name("platform_billing", "payment_method"));
+    static final org.jooq.Table<?> PAYMENT_METHOD = table(name("cveilbilling", "payment_method"));
     static final org.jooq.Field<UUID> PM_ID = field(name("id"), UUID.class);
     static final org.jooq.Field<String> PM_TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> PM_STRIPE_PM_ID =
@@ -78,7 +76,7 @@ public final class BillingRecordMapper {
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- invoice table --------------------------------------------------------
-    static final org.jooq.Table<?> INVOICE = table(name("platform_billing", "invoice"));
+    static final org.jooq.Table<?> INVOICE = table(name("cveilbilling", "invoice"));
     static final org.jooq.Field<UUID> INV_ID = field(name("id"), UUID.class);
     static final org.jooq.Field<String> INV_TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> INV_STRIPE_INVOICE_ID =
@@ -112,7 +110,7 @@ public final class BillingRecordMapper {
 
     // -- invoice_line_item table ----------------------------------------------
     static final org.jooq.Table<?> INVOICE_LINE_ITEM =
-            table(name("platform_billing", "invoice_line_item"));
+            table(name("cveilbilling", "invoice_line_item"));
     static final org.jooq.Field<UUID> ILI_ID = field(name("id"), UUID.class);
     static final org.jooq.Field<UUID> ILI_INVOICE_ID = field(name("invoice_id"), UUID.class);
     static final org.jooq.Field<String> ILI_STRIPE_LINE_ITEM_ID =

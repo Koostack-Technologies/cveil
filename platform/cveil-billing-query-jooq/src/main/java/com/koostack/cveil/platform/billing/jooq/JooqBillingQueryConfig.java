@@ -5,7 +5,7 @@ import org.jooq.DSLContext;
 /**
  * Configuration for {@link JooqBillingQueryService}.
  *
- * @param dsl the platform {@link DSLContext} targeting the platform_billing schema
+ * @param dsl the platform {@link DSLContext} targeting the cveilbilling schema
  */
 public record JooqBillingQueryConfig(DSLContext dsl) {
     public JooqBillingQueryConfig {

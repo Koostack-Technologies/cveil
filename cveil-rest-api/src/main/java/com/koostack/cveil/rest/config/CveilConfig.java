@@ -28,9 +28,6 @@ import java.util.Optional;
  *     host: localhost
  *     port: 6379
  *     password:                # optional
- *   platform-db:
- *     url: jdbc:postgresql://localhost:5432/cveil
- *     dialect: POSTGRES
  *   super-admin:
  *     bootstrap-key:           # optional — env var CVEIL_BOOTSTRAP_KEY
  * }</pre>
@@ -107,12 +104,13 @@ public interface CveilConfig {
     Optional<String> appName();
 
     /**
-     * Consent database configuration (jOOQ admin + sync layer).
+     * Unified database configuration (all schemas: cveilcore, cveiliam, cveilbilling, cveilevent,
+     * cveilconsent, cveilmetrics).
      *
      * <p>Required when {@code mode=production}. Ignored when {@code mode=embedded} (the embedded
      * bundle uses an in-memory H2 database by default).
      *
-     * @return the consent DB config, or empty
+     * @return the DB config, or empty
      */
     Optional<DbConfig> db();
 
@@ -125,16 +123,6 @@ public interface CveilConfig {
      * @return the Redis config, or empty
      */
     Optional<RedisConfig> redis();
-
-    /**
-     * Platform database configuration (tenant management, API keys, IdP).
-     *
-     * <p>Required when {@code mode=production}. In many deployments this points to the same
-     * Postgres instance as {@link #db()} but could be a separate database for isolation.
-     *
-     * @return the platform DB config, or empty
-     */
-    Optional<DbConfig> platformDb();
 
     /**
      * Super-admin bootstrap key configuration.

@@ -51,13 +51,15 @@ public class PlatformRedisMetricPublisher
 
     @Override
     public void configure(PlatformMetricsConfig config) {
-        this.jedisProvider =
-                JedisProvider.shared(
-                        RedisClientFactory.createClient(
+        JedisPooled client =
+                config.sharedRedisClient() != null
+                        ? config.sharedRedisClient()
+                        : RedisClientFactory.createClient(
                                 config.redisConfig().host(),
                                 config.redisConfig().port(),
                                 config.redisConfig().password(),
-                                config.redisConfig().tlsConfig()));
+                                config.redisConfig().tlsConfig());
+        this.jedisProvider = JedisProvider.shared(client);
         log.info("PlatformRedisMetricPublisher configured");
     }
 

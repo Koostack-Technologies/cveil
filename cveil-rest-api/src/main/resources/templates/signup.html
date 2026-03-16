@@ -23,7 +23,7 @@
 
             <div class="text-center mb-8">
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Create your account</h1>
-                <p class="text-gray-400">Start managing consent in minutes. Free plan included.</p>
+                <p class="text-gray-400">Start managing consent in minutes.{#if plan} Selected plan: <span class="text-cv-500 font-medium">{plan}</span>.{#else} Free plan included.{/if}</p>
             </div>
 
             {#if error}
@@ -36,6 +36,8 @@
             {/if}
 
             <form method="POST" action="/signup" class="space-y-5">
+
+                <input type="hidden" name="plan" value="{plan ?: ''}">
 
                 <div>
                     <label for="username" class="block text-sm font-medium text-gray-300 mb-1.5">Username <span class="text-red-400">*</span></label>

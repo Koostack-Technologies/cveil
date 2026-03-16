@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Query service for the billing platform domain (billing read model).
  *
- * <p>Reads from the materialized {@code platform_billing} tables populated by the {@link
+ * <p>Reads from the materialized {@code cveilbilling} tables populated by the {@link
  * BillingProjection}.
  */
 public interface BillingQueryService<T> extends Plugin<T> {

@@ -187,10 +187,10 @@ public final class RedisClientFactory {
 
         var poolConfig = new redis.clients.jedis.ConnectionPoolConfig();
         // Sharded stream consumer uses shardCount × handlerCount blocking XREADGROUP
-        // connections (default 8×2 = 16). Combined with outbox poller, platform
+        // connections (default 16×2 = 32). Combined with outbox poller, platform
         // consumer, and dispatch ACK threads, the default pool of 8 is insufficient.
-        poolConfig.setMaxTotal(64);
-        poolConfig.setMaxIdle(32);
+        poolConfig.setMaxTotal(128);
+        poolConfig.setMaxIdle(64);
 
         // If TLS is enabled, create a socket factory for TLS connections
         if (tlsConfig != null && tlsConfig.isEnabled()) {

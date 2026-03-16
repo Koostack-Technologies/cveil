@@ -1,7 +1,6 @@
 package com.koostack.cveil.plugin.event.jooq;
 
 import com.koostack.cveil.plugin.redis.common.TenantAwareJedisProvider;
-import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.jooq.DSLContext;
 import org.jooq.conf.RenderNameCase;
@@ -45,9 +44,24 @@ abstract class PlatformEventServiceTestBase {
         // pool (default user) when no TenantContext is active.
         TenantAwareJedisProvider.TenantCredentialLookup noopLookup = tenantId -> null;
 
+        Settings testSettings =
+                new Settings().withRenderNameCase(RenderNameCase.LOWER).withRenderSchema(false);
+        dsl = DSL.using(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        dsl = DSL.using(dsl.configuration().derive(testSettings));
+
+        // Create unified event schema and run Flyway migrations — mirrors
+        // what CveilProducers does in production.
+        initUnifiedEventSchema();
+
+        // Append cveilevent to search_path so the service resolves the
+        // event and aggregate_snapshot tables without schema-qualification.
+        String jdbcUrl = postgres.getJdbcUrl();
+        String sep = jdbcUrl.contains("?") ? "&" : "?";
+        String eventDbUrl = jdbcUrl + sep + "currentSchema=cveilevent,public";
+
         PlatformEventJooqConfig config =
                 new PlatformEventJooqConfig(
-                        postgres.getJdbcUrl(),
+                        eventDbUrl,
                         "POSTGRES",
                         postgres.getUsername(),
                         postgres.getPassword(),
@@ -56,34 +70,19 @@ abstract class PlatformEventServiceTestBase {
 
         service = new JooqPlatformEventService();
         service.configure(config);
-
-        Settings testSettings =
-                new Settings().withRenderNameCase(RenderNameCase.LOWER).withRenderSchema(false);
-        dsl = DSL.using(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
-        dsl = DSL.using(dsl.configuration().derive(testSettings));
-
-        // Create per-tenant schemas used by the test methods.
-        // In production, CveilProducers creates t_platform and TenantManager
-        // creates t_{tenantId}; tests must do this explicitly.
-        for (String tenant : List.of("tenant_publish", "tenant_multi", "tenant_snap")) {
-            createPlatformEventSchema(tenant);
-        }
     }
 
     /**
-     * Creates the per-tenant schemas and runs Flyway platform-event migrations. Mirrors what
-     * CveilProducers does in production.
+     * Creates the unified {@code cveilevent} schema and runs the platform-event Flyway migrations.
+     * Mirrors what CveilProducers does in production.
      */
-    static void createPlatformEventSchema(String tenantId) {
-        String base = "t_" + tenantId;
-        String eventSchema = base + "_event";
-        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + base);
-        dsl.execute("CREATE SCHEMA IF NOT EXISTS " + eventSchema);
+    static void initUnifiedEventSchema() {
+        dsl.execute("CREATE SCHEMA IF NOT EXISTS cveilevent");
         Flyway.configure()
                 .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                 .locations("classpath:db/migration/platform-event-postgresql")
-                .schemas(eventSchema)
-                .table("flyway_schema_history_platform_event")
+                .schemas("cveilevent")
+                .table("flyway_schema_history_event")
                 .baselineOnMigrate(true)
                 .baselineVersion("0")
                 .load()
@@ -91,11 +90,10 @@ abstract class PlatformEventServiceTestBase {
     }
 
     /**
-     * Sets the test DSL search_path to the given tenant's schemas so that assertion queries can
-     * find the event and snapshot tables.
+     * Sets the test DSL search_path to the unified event schema so that assertion queries can find
+     * the event and snapshot tables.
      */
-    static void setTestSearchPath(String tenantId) {
-        String base = "t_" + tenantId;
-        dsl.execute("SET search_path TO " + base + ", " + base + "_event, public");
+    static void setTestSearchPath() {
+        dsl.execute("SET search_path TO cveilevent, public");
     }
 }

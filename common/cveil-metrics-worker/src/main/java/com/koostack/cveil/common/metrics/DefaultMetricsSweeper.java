@@ -18,7 +18,7 @@ import redis.clients.jedis.params.XTrimParams;
  * Metrics sweeper that periodically deletes telemetry rows older than the configured retention
  * period and trims the Redis metrics stream.
  *
- * <p>All tenant metrics are stored in the unified {@code platform_metrics.telemetry} table
+ * <p>All tenant metrics are stored in the unified {@code cveilmetrics.telemetry} table
  * (differentiated by {@code tenant_id} column). Call {@link #sweep()} periodically (e.g. via a
  * scheduled executor or cron) to clean up stale data.
  */
@@ -58,7 +58,9 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
         this.dataSource = config.dataSource();
         this.retentionDays = config.retentionDays();
         this.platformSchemaName = config.platformSchemaName();
-        if (config.redisConfig() != null) {
+        if (config.sharedRedisClient() != null) {
+            this.jedis = config.sharedRedisClient();
+        } else if (config.redisConfig() != null) {
             this.jedis =
                     RedisClientFactory.createClient(
                             config.redisConfig().host(),
@@ -75,7 +77,7 @@ public class DefaultMetricsSweeper implements MetricsSweeper<MetricsSweeperConfi
     }
 
     /**
-     * Runs one sweep cycle: deletes old telemetry rows from the unified platform_metrics table and
+     * Runs one sweep cycle: deletes old telemetry rows from the unified cveilmetrics table and
      * trims the Redis metrics stream.
      *
      * @return the total number of telemetry rows deleted

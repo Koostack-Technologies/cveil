@@ -5,7 +5,7 @@ import {
 } from '../shared/index.js';
 
 import {
-    initPlayground, evaluateAndMask, remask, loadSampleTemplate, copyMaskedOutput,
+    initPlayground, evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
 } from './playground.js';
 
 // ── Graph Explorer State ───────────────────────────────────────
@@ -716,7 +716,7 @@ export function init() {
         showDetailTab, exportSubjectData,
         saveSubject, deleteSubject,
         // Playground
-        evaluateAndMask, remask, loadSampleTemplate, copyMaskedOutput,
+        evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
     });
 
     initDeleteModal();

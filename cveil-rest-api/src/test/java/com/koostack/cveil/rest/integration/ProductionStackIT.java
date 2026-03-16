@@ -185,7 +185,6 @@ class ProductionStackIT {
             assertEquals("production", config.mode(), "Test should run in production mode");
             assertTrue(config.db().isPresent(), "cveil.db must be configured");
             assertTrue(config.redis().isPresent(), "cveil.redis must be configured");
-            assertTrue(config.platformDb().isPresent(), "cveil.platform-db must be configured");
         }
 
         @Test
@@ -208,14 +207,6 @@ class ProductionStackIT {
             assertTrue(
                     db.password().isPresent() && !db.password().get().isBlank(),
                     "cveil.db.password must be non-blank");
-
-            CveilConfig.DbConfig platformDb = config.platformDb().orElseThrow();
-            assertTrue(
-                    platformDb.username().isPresent() && !platformDb.username().get().isBlank(),
-                    "cveil.platform-db.username must be non-blank");
-            assertTrue(
-                    platformDb.password().isPresent() && !platformDb.password().get().isBlank(),
-                    "cveil.platform-db.password must be non-blank");
         }
     }
 
@@ -846,7 +837,7 @@ class ProductionStackIT {
         @Order(60)
         @DisplayName("Await governance projection (policies visible)")
         void awaitGovernanceProjection() {
-            // Wait until all 3 policies are projected into the cveil_consent.policy table
+            // Wait until all 3 policies are projected into the cveilconsent.policy table
             org.awaitility.Awaitility.await()
                     .atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
@@ -854,7 +845,7 @@ class ProductionStackIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = ?",
                                                 TENANT_ID);
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();

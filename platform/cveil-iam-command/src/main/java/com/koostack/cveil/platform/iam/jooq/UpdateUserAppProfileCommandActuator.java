@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  * timezone). These fields live only in the local IAM mirror — Keycloak is not involved.
  *
  * <p>Publishes a {@link UserAppProfileUpdatedEvent} which the projection handler materializes into
- * the {@code platform_iam.iam_user} table.
+ * the {@code cveiliam.iam_user} table.
  */
 public class UpdateUserAppProfileCommandActuator
         implements CommandActuator<

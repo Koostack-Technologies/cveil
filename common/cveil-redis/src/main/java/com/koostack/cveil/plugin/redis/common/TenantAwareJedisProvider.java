@@ -271,7 +271,7 @@ public class TenantAwareJedisProvider implements JedisProvider, AutoCloseable {
     /**
      * Maximum number of attempts to resolve tenant Redis ACL credentials before giving up. This
      * handles the race condition where tenant events arrive at projections before the
-     * REDIS_PROVISIONED event has been projected to the platform_core.tenant table.
+     * REDIS_PROVISIONED event has been projected to the cveiliam.tenant table.
      */
     private static final int CREDENTIAL_LOOKUP_MAX_ATTEMPTS = 30;
 

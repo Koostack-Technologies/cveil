@@ -25,7 +25,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
 
     // -- billing_profile table ------------------------------------------------
     private static final org.jooq.Table<?> BILLING_PROFILE =
-            table(name("platform_billing", "billing_profile"));
+            table(name("cveilbilling", "billing_profile"));
     private static final org.jooq.Field<String> BP_TENANT_ID =
             field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> BP_BILLING_EMAIL =
@@ -44,7 +44,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
 
     // -- subscription table ---------------------------------------------------
     private static final org.jooq.Table<?> SUBSCRIPTION =
-            table(name("platform_billing", "subscription"));
+            table(name("cveilbilling", "subscription"));
     private static final org.jooq.Field<String> SUB_TENANT_ID =
             field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> SUB_PLAN_TIER =
@@ -71,7 +71,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
 
     // -- payment_method table -------------------------------------------------
     private static final org.jooq.Table<?> PAYMENT_METHOD =
-            table(name("platform_billing", "payment_method"));
+            table(name("cveilbilling", "payment_method"));
     private static final org.jooq.Field<UUID> PM_ID = field(name("id"), UUID.class);
     private static final org.jooq.Field<String> PM_TENANT_ID =
             field(name("tenant_id"), String.class);
@@ -95,7 +95,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- invoice table --------------------------------------------------------
-    private static final org.jooq.Table<?> INVOICE = table(name("platform_billing", "invoice"));
+    private static final org.jooq.Table<?> INVOICE = table(name("cveilbilling", "invoice"));
     private static final org.jooq.Field<UUID> INV_ID = field(name("id"), UUID.class);
     private static final org.jooq.Field<String> INV_TENANT_ID =
             field(name("tenant_id"), String.class);
@@ -134,7 +134,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
 
     // -- stripe_event_log table -----------------------------------------------
     private static final org.jooq.Table<?> STRIPE_EVENT_LOG =
-            table(name("platform_billing", "stripe_event_log"));
+            table(name("cveilbilling", "stripe_event_log"));
     private static final org.jooq.Field<String> SEL_EVENT_ID =
             field(name("stripe_event_id"), String.class);
     private static final org.jooq.Field<String> SEL_EVENT_TYPE =
@@ -145,7 +145,7 @@ public class JooqBillingQueryService implements BillingQueryService<JooqBillingQ
 
     // -- invoice_line_item table ----------------------------------------------
     private static final org.jooq.Table<?> INVOICE_LINE_ITEM =
-            table(name("platform_billing", "invoice_line_item"));
+            table(name("cveilbilling", "invoice_line_item"));
     private static final org.jooq.Field<UUID> ILI_ID = field(name("id"), UUID.class);
     private static final org.jooq.Field<UUID> ILI_INVOICE_ID =
             field(name("invoice_id"), UUID.class);

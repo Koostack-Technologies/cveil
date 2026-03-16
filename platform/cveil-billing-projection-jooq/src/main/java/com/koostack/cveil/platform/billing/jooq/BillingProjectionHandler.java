@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Platform stream event handler that materializes billing domain events into the {@code
- * platform_billing.billing_profile} and {@code platform_billing.subscription} read models.
+ * cveilbilling.billing_profile} and {@code cveilbilling.subscription} read models.
  *
  * <p>All operations are idempotent upserts so that replaying the event stream produces the same
  * result.
@@ -25,7 +25,7 @@ public class BillingProjectionHandler {
 
     // -- billing_profile table ------------------------------------------------
     private static final org.jooq.Table<?> BILLING_PROFILE =
-            table(name("platform_billing", "billing_profile"));
+            table(name("cveilbilling", "billing_profile"));
     private static final org.jooq.Field<String> BP_TENANT_ID =
             field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> BP_BILLING_EMAIL =
@@ -44,7 +44,7 @@ public class BillingProjectionHandler {
 
     // -- payment_method table -------------------------------------------------
     private static final org.jooq.Table<?> PAYMENT_METHOD =
-            table(name("platform_billing", "payment_method"));
+            table(name("cveilbilling", "payment_method"));
     private static final org.jooq.Field<java.util.UUID> PM_ID =
             field(name("id"), java.util.UUID.class);
     private static final org.jooq.Field<String> PM_TENANT_ID =
@@ -69,7 +69,7 @@ public class BillingProjectionHandler {
             field(name("updated_at"), OffsetDateTime.class);
 
     // -- invoice table --------------------------------------------------------
-    private static final org.jooq.Table<?> INVOICE = table(name("platform_billing", "invoice"));
+    private static final org.jooq.Table<?> INVOICE = table(name("cveilbilling", "invoice"));
     private static final org.jooq.Field<String> INV_TENANT_ID =
             field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> INV_STRIPE_INVOICE_ID =
@@ -107,7 +107,7 @@ public class BillingProjectionHandler {
 
     // -- subscription table ---------------------------------------------------
     private static final org.jooq.Table<?> SUBSCRIPTION =
-            table(name("platform_billing", "subscription"));
+            table(name("cveilbilling", "subscription"));
     private static final org.jooq.Field<String> SUB_TENANT_ID =
             field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> SUB_PLAN_TIER =

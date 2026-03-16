@@ -84,15 +84,6 @@ cveil:
     tls-enabled: ${CVEIL_REDIS_TLS_ENABLED:false} # set to true for production with TLS
     tls-ca-cert-path: ${CVEIL_REDIS_TLS_CA_CERT_PATH:} # path to PEM CA certificate
     tls-verify-peer: ${CVEIL_REDIS_TLS_VERIFY_PEER:true} # verify server certificate
-  platform-db:
-    url: jdbc:postgresql://localhost:5432/cveil
-    dialect: POSTGRES
-    username: ${CVEIL_PLATFORM_DB_USERNAME:}
-    password: ${CVEIL_PLATFORM_DB_PASSWORD:}
-    encryption-key: ${CVEIL_DB_ENCRYPTION_KEY:}
-    ssl-mode: ${CVEIL_PLATFORM_DB_SSL_MODE:require} # disable, require, verify-ca, verify-full
-    ssl-cert-path: ${CVEIL_PLATFORM_DB_SSL_CERT_PATH:} # path to PEM CA certificate
-    ssl-key-path: ${CVEIL_PLATFORM_DB_SSL_KEY_PATH:} # path to PEM client key (for mTLS)
   super-admin:
     bootstrap-key: ${CVEIL_BOOTSTRAP_KEY:}
     force-bootstrap: ${CVEIL_FORCE_BOOTSTRAP:false}

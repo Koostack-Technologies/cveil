@@ -18,7 +18,7 @@ public class GetOrganizationQueryActuator
     private static final Logger LOG = LoggerFactory.getLogger(GetOrganizationQueryActuator.class);
 
     private static final org.jooq.Table<?> IAM_ORGANIZATION =
-            table(name("platform_iam", "iam_organization"));
+            table(name("cveiliam", "iam_organization"));
     private static final org.jooq.Field<String> ORG_ID = field(name("org_id"), String.class);
     private static final org.jooq.Field<String> ORG_NAME = field(name("org_name"), String.class);
     private static final org.jooq.Field<String> DISPLAY_NAME =

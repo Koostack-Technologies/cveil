@@ -244,10 +244,10 @@ public class TenantMetricsResource {
             params.add(java.sql.Timestamp.from(to));
         }
 
-        String countSql = "SELECT COUNT(*) FROM platform_metrics.telemetry" + where;
+        String countSql = "SELECT COUNT(*) FROM cveilmetrics.telemetry" + where;
         String dataSql =
                 "SELECT time_bucket, tenant_id, metric_name, dimensions, metric_value, published_at"
-                        + " FROM platform_metrics.telemetry"
+                        + " FROM cveilmetrics.telemetry"
                         + where
                         + " ORDER BY time_bucket DESC LIMIT ? OFFSET ?";
 
@@ -299,7 +299,7 @@ public class TenantMetricsResource {
         String sql =
                 "SELECT metric_name, SUM(metric_value) AS total_value,"
                         + " MIN(time_bucket) AS first_seen, MAX(time_bucket) AS last_seen"
-                        + " FROM platform_metrics.telemetry"
+                        + " FROM cveilmetrics.telemetry"
                         + where
                         + " GROUP BY metric_name ORDER BY total_value DESC";
 

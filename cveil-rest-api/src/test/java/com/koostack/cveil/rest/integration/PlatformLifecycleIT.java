@@ -121,7 +121,7 @@ public class PlatformLifecycleIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT plan FROM platform_core.tenant WHERE"
+                                                "SELECT plan FROM cveiliam.tenant WHERE"
                                                         + " tenant_id = ?",
                                                 PLAN_TENANT);
                                 assertThat(rows).isNotEmpty();
@@ -197,8 +197,7 @@ public class PlatformLifecycleIT {
         void tenantRowExistsBefore() {
             var rows =
                     support.query(
-                            "SELECT * FROM platform_core.tenant WHERE tenant_id = ?",
-                            DELETE_TENANT);
+                            "SELECT * FROM cveiliam.tenant WHERE tenant_id = ?", DELETE_TENANT);
             assertThat(rows).as("Tenant row should exist before deletion").isNotEmpty();
         }
 
@@ -266,7 +265,7 @@ public class PlatformLifecycleIT {
         void deletionEventExists() {
             var events =
                     support.query(
-                            "SELECT * FROM cveil_event.event WHERE event_type ="
+                            "SELECT * FROM cveilevent.event WHERE event_type ="
                                     + " 'core.tenant.deleted' AND payload::text LIKE ?",
                             "%" + DELETE_TENANT + "%");
             assertThat(events).as("core.tenant.deleted event should exist").isNotEmpty();

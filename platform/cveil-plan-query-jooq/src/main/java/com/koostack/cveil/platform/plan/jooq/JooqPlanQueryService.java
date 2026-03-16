@@ -15,7 +15,7 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqPlanQueryService.class);
 
-    private static final org.jooq.Table<?> PLAN = table(name("platform_core", "plan"));
+    private static final org.jooq.Table<?> PLAN = table(name("cveilcore", "plan"));
     private static final org.jooq.Field<String> PLAN_ID = field(name("plan_id"), String.class);
     private static final org.jooq.Field<String> DISPLAY_NAME =
             field(name("display_name"), String.class);
