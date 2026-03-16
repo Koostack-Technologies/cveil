@@ -52,29 +52,19 @@ public class SeedConsentGovernanceCommandActuator
         TenantContext.runWhere(
                 tenantId,
                 () -> {
-                    // Phase 1: Register all standalone entities (no cross-references)
-                    LOG.info("Phase 1/3: Seeding reference entities…");
+                    LOG.info("Seeding reference entities…");
                     seedCategories();
                     seedRegulations();
                     seedJurisdictions();
                     seedPurposes();
                     seedEntities();
 
-                    // Events are published via an async outbox (250ms poll) → Redis
-                    // stream → projection handler. Pause to let phase-1 rows become
-                    // visible in projection tables before phase-2 links reference them.
-                    awaitProjections(5);
-
-                    // Phase 2: First-order links (depend on phase-1 projections)
-                    LOG.info("Phase 2/3: Seeding links and fields…");
+                    LOG.info("Seeding links and fields…");
                     seedRegulationJurisdictionLinks();
                     seedPurposeRegulationLinks();
                     seedFields();
 
-                    awaitProjections(5);
-
-                    // Phase 3: Second-order links (depend on phase-2 projections)
-                    LOG.info("Phase 3/3: Seeding assignments and policies…");
+                    LOG.info("Seeding assignments and policies…");
                     seedFieldCategoryAssignments();
                     seedPurposeCategoryPolicies();
                 });
@@ -88,16 +78,6 @@ public class SeedConsentGovernanceCommandActuator
      * events. The outbox polls every ~250ms, then events traverse a Redis stream before reaching
      * the projection handler, so a few seconds is sufficient under normal load.
      */
-    private void awaitProjections(int seconds) {
-        LOG.info("Waiting {}s for projections to catch up…", seconds);
-        try {
-            Thread.sleep(seconds * 1000L);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            LOG.warn("Projection wait interrupted");
-        }
-    }
-
     // -----------------------------------------------------------------------
     // Categories (17)
     // -----------------------------------------------------------------------

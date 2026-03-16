@@ -508,8 +508,7 @@ public class SiteResource {
         if (state == null) return Response.seeOther(URI.create("/onboarding")).build();
 
         // Guard: prevent double-submit — if provisioning is already running, redirect
-        String activeTenantId = state.activeTenantId();
-        var existingStatus = provisioningTracker.getStatus(activeTenantId);
+        var existingStatus = provisioningTracker.getStatus(tenantId);
         if (existingStatus != null) {
             return Response.seeOther(URI.create("/onboarding/complete")).build();
         }
@@ -535,11 +534,14 @@ public class SiteResource {
         Set<String> selectedRegulations = IndustryPreset.deriveRegulations(jurisdictions);
         Set<String> purposeIds = new LinkedHashSet<>(state.industryPreset().purposes());
 
-        // Seed governance + billing in the background
-        provisioningTracker.start(activeTenantId, DeferredProvisioningTask.totalSteps());
+        // Always provision under the personal tenantId. The dashboard and API auth
+        // resolve the tenant from the JWT (personal), so governance + billing data
+        // must live there. The org created in Step 1 reserves the namespace but does
+        // not change the data-scoping until org context switching is implemented.
+        provisioningTracker.start(tenantId, DeferredProvisioningTask.totalSteps());
         provisioningExecutor.submit(
                 new DeferredProvisioningTask(
-                        activeTenantId,
+                        tenantId,
                         uc.email(),
                         "free",
                         consentDispatcher,
@@ -669,22 +671,11 @@ public class SiteResource {
     }
 
     /**
-     * Resolves the provisioning status for a tenant.
-     *
-     * <p>Checks the personal tenantId first. If no tracker is found and the user has an onboarding
-     * state with an org tenant, checks that too. This handles the case where provisioning was
-     * started against the org tenant (via {@code activeTenantId()}).
+     * Resolves the provisioning status for a tenant. All provisioning is now keyed by the personal
+     * tenantId, so a direct lookup suffices.
      */
     private ProvisioningTracker.ProvisioningStatus resolveProvisioningStatus(String tenantId) {
-        ProvisioningTracker.ProvisioningStatus status = provisioningTracker.getStatus(tenantId);
-        if (status != null) return status;
-
-        // Check if the user had an org-based onboarding — the tracker may be keyed by orgTenantId
-        var state = onboardingStateHolder.get(tenantId);
-        if (state != null && state.orgTenantId() != null) {
-            return provisioningTracker.getStatus(state.orgTenantId());
-        }
-        return null;
+        return provisioningTracker.getStatus(tenantId);
     }
 
     /** Extracts the Keycloak user ID (sub claim) from the resolved user context. */
@@ -694,6 +685,44 @@ public class SiteResource {
             if (sub != null) return sub;
         }
         return uc.username();
+    }
+
+    /**
+     * Checks whether the tenant has completed the onboarding flow.
+     *
+     * <p>Uses the existence of a billing subscription as a durable signal. The subscription is
+     * created as the final step of {@link DeferredProvisioningTask}, so its presence means the full
+     * provisioning pipeline (governance seed + billing + Stripe + subscription) completed. Unlike
+     * the in-memory {@link ProvisioningTracker}, this survives server restarts.
+     */
+    private boolean hasCompletedOnboarding(String tenantId) {
+        try {
+            var billingQs = cqrs.billingQueryService();
+            if (billingQs == null) {
+                return true;
+            }
+            return billingQs.getSubscription(tenantId) != null;
+        } catch (Exception e) {
+            LOG.debug("Could not check subscription for {}: {}", tenantId, e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * Checks if the dashboard should be blocked because onboarding is incomplete. Returns a
+     * redirect Response if the user should be sent back to onboarding or the progress page; returns
+     * {@code null} if the user may proceed to the dashboard.
+     */
+    private Response checkOnboardingGuard(String tenantId) {
+        if (tenantId == null) return null;
+        ProvisioningTracker.ProvisioningStatus provStatus = provisioningTracker.getStatus(tenantId);
+        if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
+            return Response.seeOther(URI.create("/onboarding/complete")).build();
+        }
+        if (!hasCompletedOnboarding(tenantId)) {
+            return Response.seeOther(URI.create("/onboarding")).build();
+        }
+        return null;
     }
 
     // -----------------------------------------------------------------------
@@ -766,15 +795,9 @@ public class SiteResource {
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
 
-        // Guard: redirect to onboarding if workspace provisioning is still in progress
-        if (tenantId != null) {
-            ProvisioningTracker.ProvisioningStatus provStatus =
-                    provisioningTracker.getStatus(tenantId);
-            if (provStatus != null
-                    && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
-                return Response.seeOther(URI.create("/onboarding/complete")).build();
-            }
-        }
+        // Guard: redirect if onboarding is in progress or never completed
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
 
         String initial =
                 username != null && !username.isEmpty()
@@ -806,6 +829,10 @@ public class SiteResource {
         String fullName =
                 uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
@@ -835,6 +862,10 @@ public class SiteResource {
         String username = uc.username();
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
@@ -863,6 +894,10 @@ public class SiteResource {
         String username = uc.username();
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
@@ -892,6 +927,10 @@ public class SiteResource {
         String username = uc.username();
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
@@ -921,6 +960,10 @@ public class SiteResource {
         String username = uc.username();
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        if (onboardingRedirect != null) return onboardingRedirect;
+
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()

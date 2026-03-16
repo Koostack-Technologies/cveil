@@ -87,26 +87,19 @@ public class SeedParameterizedGovernanceCommandActuator
         TenantContext.runWhere(
                 tenantId,
                 () -> {
-                    // Phase 1: Standalone entities (no cross-references)
-                    LOG.info("Phase 1/3: Seeding reference entities…");
+                    LOG.info("Seeding reference entities…");
                     seedAllCategories();
                     seedRegulations(regulations);
                     seedJurisdictions(jurisdictions);
                     seedPurposes(purposes);
                     seedEntities(entities);
 
-                    awaitProjections(5);
-
-                    // Phase 2: First-order links
-                    LOG.info("Phase 2/3: Seeding links and fields…");
+                    LOG.info("Seeding links and fields…");
                     seedRegulationJurisdictionLinks(jurisdictions, regulations);
                     seedPurposeRegulationLinks(purposes, regulations);
                     seedAllFields();
 
-                    awaitProjections(5);
-
-                    // Phase 3: Second-order links (universal reference data)
-                    LOG.info("Phase 3/3: Seeding assignments and policies…");
+                    LOG.info("Seeding assignments and policies…");
                     seedAllFieldCategoryAssignments();
                     seedAllPurposeCategoryPolicies();
                 });
@@ -906,26 +899,19 @@ public class SeedParameterizedGovernanceCommandActuator
         }
     }
 
-    private void awaitProjections(int seconds) {
-        LOG.info("Waiting {}s for projections to catch up…", seconds);
-        try {
-            Thread.sleep(seconds * 1000L);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            LOG.warn("Projection wait interrupted");
-        }
-    }
-
     private void dispatchSafe(Runnable action, String entityType, String name) {
         try {
             action.run();
+            LOG.debug("Seed {} '{}' OK", entityType, name);
         } catch (Exception e) {
-            LOG.warn(
-                    "Seed {} '{}' skipped (may already exist): {}",
-                    entityType,
-                    name,
-                    e.getMessage());
-            LOG.debug("Seed {} '{}' root cause:", entityType, name, e);
+            String msg = e.getMessage();
+            // "already exists" collisions are expected (idempotent re-runs)
+            if (msg != null && msg.contains("already exists")) {
+                LOG.debug("Seed {} '{}' skipped (already exists)", entityType, name);
+            } else {
+                LOG.warn("Seed {} '{}' FAILED: {}", entityType, name, msg);
+                LOG.debug("Seed {} '{}' root cause:", entityType, name, e);
+            }
         }
     }
 

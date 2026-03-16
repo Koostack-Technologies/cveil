@@ -142,27 +142,32 @@ public class DeferredProvisioningTask implements Runnable {
         }
         try {
             if (jurisdictionIds != null) {
-                // Parameterized seed — only the user's onboarding selections
                 LOG.info(
-                        "Seeding parameterized governance for tenant {}: {} jurisdictions",
+                        "Seeding parameterized governance for tenant {}: jurisdictions={}, "
+                                + "regulations={}, purposes={}, entities={}",
                         tenantId,
-                        jurisdictionIds.size());
+                        jurisdictionIds,
+                        regulationIds,
+                        purposeIds,
+                        entityNames);
                 consentDispatcher.dispatch(
                         new SeedParameterizedGovernanceCommandActuator
                                 .SeedParameterizedGovernanceCommand(
                                 tenantId, jurisdictionIds, regulationIds, purposeIds, entityNames));
+                LOG.info("Parameterized governance seed completed for tenant {}", tenantId);
             } else {
-                // Legacy full seed (API path or backward compatibility)
+                LOG.info("Seeding full governance for tenant {}", tenantId);
                 consentDispatcher.dispatch(
                         new SeedConsentGovernanceCommandActuator.SeedConsentGovernanceCommand(
                                 tenantId));
+                LOG.info("Full governance seed completed for tenant {}", tenantId);
             }
         } catch (Exception e) {
-            // Non-fatal: governance seed failure should not block the rest of provisioning
-            LOG.warn(
-                    "Consent governance seed failed (non-fatal) for tenant {}: {}",
+            LOG.error(
+                    "Consent governance seed FAILED for tenant {}: {}",
                     tenantId,
-                    e.getMessage());
+                    e.getMessage(),
+                    e);
         }
     }
 
