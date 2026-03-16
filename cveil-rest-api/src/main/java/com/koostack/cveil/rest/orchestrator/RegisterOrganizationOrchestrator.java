@@ -12,7 +12,6 @@ import com.koostack.cveil.platform.iam.jooq.CreateOrganizationCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.DeleteOrganizationCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.ProvisionRedisCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.RemoveOrgMemberCommandActuator;
-import com.koostack.cveil.plugin.consent.jooq.SeedConsentGovernanceCommandActuator;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +34,6 @@ import java.util.logging.Logger;
  *       Compensation: removes the role.
  *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub (non-fatal).
  *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes.
- *   <li><b>seed-consent-governance</b> — seeds default US consent governance data (non-fatal).
  *   <li><b>create-billing-profile</b> — creates billing profile.
  *   <li><b>create-subscription</b> — creates subscription.
  * </ol>
@@ -51,7 +49,6 @@ public class RegisterOrganizationOrchestrator
     public static final String DISPATCHER_IAM = "iam";
     public static final String DISPATCHER_CORE = "core";
     public static final String DISPATCHER_BILLING = "billing";
-    public static final String DISPATCHER_CONSENT = "consent";
 
     public record RegisterOrgCommand(
             String realmId,
@@ -65,7 +62,6 @@ public class RegisterOrganizationOrchestrator
             String orgId, String orgName, String tenantId, String plan, String tenantStatus) {}
 
     private final PermissionService permissionService;
-    private final CommandDispatcher consentDispatcher;
 
     public RegisterOrganizationOrchestrator(
             CommandDispatcher iamDispatcher,
@@ -77,7 +73,8 @@ public class RegisterOrganizationOrchestrator
         registerDispatcher(DISPATCHER_CORE, coreDispatcher);
         registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
         this.permissionService = permissionService;
-        this.consentDispatcher = consentDispatcher;
+        // consentDispatcher accepted for backward compatibility but no longer used —
+        // governance seeding is now handled by the onboarding wizard.
     }
 
     /** Backward-compatible constructor for callers without PermissionService or consent. */
@@ -234,30 +231,7 @@ public class RegisterOrganizationOrchestrator
                             }
                         }));
 
-        // Step 7: Seed default consent governance data (non-fatal)
-        steps.add(
-                SagaStep.of(
-                        "seed-consent-governance",
-                        (in, ctx) -> {
-                            if (consentDispatcher == null) {
-                                LOG.info(
-                                        "Consent dispatcher not available — skipping governance"
-                                                + " seed");
-                                return;
-                            }
-                            try {
-                                consentDispatcher.dispatch(
-                                        new SeedConsentGovernanceCommandActuator
-                                                .SeedConsentGovernanceCommand(in.orgName()));
-                                ctx.put("consentGovernanceSeeded", true);
-                            } catch (Exception e) {
-                                LOG.warning(
-                                        "Consent governance seed failed (non-fatal): "
-                                                + e.getMessage());
-                            }
-                        }));
-
-        // Step 8: Create billing profile
+        // Step 7: Create billing profile
         steps.add(
                 SagaStep.of(
                         "create-billing-profile",
@@ -271,7 +245,7 @@ public class RegisterOrganizationOrchestrator
                             ctx.put("billingProfileCreated", true);
                         }));
 
-        // Step 9: Create subscription
+        // Step 8: Create subscription
         steps.add(
                 SagaStep.of(
                         "create-subscription",

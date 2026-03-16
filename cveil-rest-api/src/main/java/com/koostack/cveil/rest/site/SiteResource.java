@@ -9,6 +9,9 @@ import com.koostack.cveil.platform.iam.jooq.LogoutCommandActuator;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask;
 import com.koostack.cveil.rest.lifecycle.ProvisioningTracker;
+import com.koostack.cveil.rest.onboarding.IndustryPreset;
+import com.koostack.cveil.rest.onboarding.OnboardingStateHolder;
+import com.koostack.cveil.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterUserSyncOrchestrator;
 import com.koostack.cveil.rest.util.AuthCookieHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
@@ -19,8 +22,9 @@ import jakarta.inject.Named;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -74,9 +78,27 @@ public class SiteResource {
     @io.quarkus.qute.Location("org-detail.html")
     Template orgDetail;
 
+    @Inject
+    @io.quarkus.qute.Location("onboarding-workspace.html")
+    Template onboardingWorkspace;
+
+    @Inject
+    @io.quarkus.qute.Location("onboarding-industry.html")
+    Template onboardingIndustry;
+
+    @Inject
+    @io.quarkus.qute.Location("onboarding-compliance.html")
+    Template onboardingCompliance;
+
+    @Inject
+    @io.quarkus.qute.Location("onboarding-complete.html")
+    Template onboardingComplete;
+
     @Inject PlatformCqrsHolder cqrs;
 
     @Inject ProvisioningTracker provisioningTracker;
+
+    @Inject OnboardingStateHolder onboardingStateHolder;
 
     @Inject
     @Named("consentDispatcher")
@@ -173,19 +195,9 @@ public class SiteResource {
 
             syncOrchestrator.execute(syncCommand);
 
-            // ── Kick off deferred provisioning (steps 5–7) in background ───
-            provisioningTracker.start(tenantId, DeferredProvisioningTask.totalSteps());
-            provisioningExecutor.submit(
-                    new DeferredProvisioningTask(
-                            tenantId,
-                            email,
-                            "free",
-                            consentDispatcher,
-                            cqrs.billingDispatcher(),
-                            cqrs.paymentProcessorService(),
-                            provisioningTracker));
-
-            // ── Auto-login and redirect to setup loading page ──────────────
+            // ── Auto-login and redirect to onboarding wizard ───────────────
+            // Deferred provisioning (governance + billing) runs after the user
+            // completes the onboarding wizard and selects their compliance profile.
             try {
                 AuthResult auth =
                         cqrs.iamDispatcher()
@@ -195,18 +207,10 @@ public class SiteResource {
                 NewCookie[] cookies =
                         AuthCookieHelper.setAuthCookies(
                                 auth.accessToken(), auth.refreshToken(), auth.expiresIn());
-                return Response.seeOther(URI.create("/setup")).cookie(cookies).build();
+                return Response.seeOther(URI.create("/onboarding")).cookie(cookies).build();
             } catch (Exception loginEx) {
                 LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
-                return Response.seeOther(
-                                URI.create(
-                                        "/setup?username="
-                                                + URLEncoder.encode(
-                                                        username, StandardCharsets.UTF_8)
-                                                + "&tenant="
-                                                + URLEncoder.encode(
-                                                        tenantId, StandardCharsets.UTF_8)))
-                        .build();
+                return Response.seeOther(URI.create("/login")).build();
             }
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid username for tenant derivation: {}", e.getMessage());
@@ -346,6 +350,353 @@ public class SiteResource {
     }
 
     // -----------------------------------------------------------------------
+    // Onboarding Wizard (multi-step setup after registration)
+    // -----------------------------------------------------------------------
+
+    /** Step 1: Name your workspace and choose personal vs team. */
+    @GET
+    @Path("onboarding")
+    @Produces(MediaType.TEXT_HTML)
+    public Object onboardingStep1() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        onboardingStateHolder.start(tenantId);
+        return onboardingWorkspace.data("error", null).data("workspaceName", "");
+    }
+
+    @POST
+    @Path("onboarding")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Object processOnboardingStep1(
+            @FormParam("workspaceName") String workspaceName, @FormParam("isTeam") String isTeam) {
+
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        var state = onboardingStateHolder.get(tenantId);
+        if (state == null) state = onboardingStateHolder.start(tenantId);
+
+        String trimmedName = workspaceName != null ? workspaceName.trim() : "My Workspace";
+        if (trimmedName.isEmpty()) trimmedName = "My Workspace";
+        state.setWorkspaceName(trimmedName);
+        state.setTeam("on".equals(isTeam) || "true".equals(isTeam));
+
+        // If the user wants a team workspace, create the organization now so we
+        // have a TenantContext for all subsequent governance seed operations.
+        if (state.isTeam()) {
+            if (!cqrs.isCqrsAvailable()) {
+                return onboardingWorkspace
+                        .data("error", "Organization creation is temporarily unavailable.")
+                        .data("workspaceName", trimmedName);
+            }
+            try {
+                String orgName =
+                        TenantIdDeriver.derive(
+                                trimmedName.toLowerCase().replaceAll("[^a-z0-9]", ""));
+                String kcUserId = resolveKeycloakUserId(uc);
+
+                var orchestrator =
+                        new RegisterOrganizationOrchestrator(
+                                cqrs.iamDispatcher(),
+                                cqrs.coreDispatcher(),
+                                cqrs.billingDispatcher(),
+                                cqrs.isPermissionServiceAvailable()
+                                        ? cqrs.permissionService()
+                                        : null,
+                                consentDispatcher);
+
+                var orgCommand =
+                        new RegisterOrganizationOrchestrator.RegisterOrgCommand(
+                                REALM, orgName, trimmedName, kcUserId, uc.username(), "free");
+
+                var orgResult = orchestrator.execute(orgCommand);
+                state.setOrgTenantId(orgResult.orgName());
+                LOG.info(
+                        "Organization '{}' created during onboarding for user {}",
+                        orgResult.orgName(),
+                        uc.username());
+            } catch (OrchestratorException e) {
+                LOG.error(
+                        "Org creation in onboarding failed at step '{}': {}",
+                        e.failedStep(),
+                        e.getMessage(),
+                        e);
+                return onboardingWorkspace
+                        .data(
+                                "error",
+                                "Could not create organization. Please try again or uncheck"
+                                        + " the team option.")
+                        .data("workspaceName", trimmedName);
+            } catch (Exception e) {
+                LOG.error("Unexpected error creating org in onboarding: {}", e.getMessage(), e);
+                return onboardingWorkspace
+                        .data("error", "An unexpected error occurred. Please try again.")
+                        .data("workspaceName", trimmedName);
+            }
+        }
+
+        return Response.seeOther(URI.create("/onboarding/industry")).build();
+    }
+
+    /** Step 2: Choose your industry preset. */
+    @GET
+    @Path("onboarding/industry")
+    @Produces(MediaType.TEXT_HTML)
+    public Object onboardingStep2() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        return onboardingIndustry.data("presets", IndustryPreset.values());
+    }
+
+    @POST
+    @Path("onboarding/industry")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public Object processOnboardingStep2(@FormParam("industry") String industry) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        var state = onboardingStateHolder.get(tenantId);
+        if (state == null) return Response.seeOther(URI.create("/onboarding")).build();
+
+        try {
+            IndustryPreset preset = IndustryPreset.valueOf(industry);
+            state.setIndustryPreset(preset);
+        } catch (IllegalArgumentException e) {
+            return Response.seeOther(URI.create("/onboarding/industry")).build();
+        }
+
+        return Response.seeOther(URI.create("/onboarding/compliance")).build();
+    }
+
+    /** Step 3: Review and customize compliance profile (jurisdictions, entities). */
+    @GET
+    @Path("onboarding/compliance")
+    @Produces(MediaType.TEXT_HTML)
+    public Object onboardingStep3() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        var state = onboardingStateHolder.get(tenantId);
+        if (state == null) return Response.seeOther(URI.create("/onboarding")).build();
+        if (state.industryPreset() == null) {
+            return Response.seeOther(URI.create("/onboarding/industry")).build();
+        }
+
+        return renderCompliancePage(state, null);
+    }
+
+    @POST
+    @Path("onboarding/compliance")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Object processOnboardingStep3(
+            @FormParam("jurisdictions") List<String> jurisdictions,
+            @FormParam("entities") List<String> entities) {
+
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        var state = onboardingStateHolder.get(tenantId);
+        if (state == null) return Response.seeOther(URI.create("/onboarding")).build();
+
+        // Guard: prevent double-submit — if provisioning is already running, redirect
+        String activeTenantId = state.activeTenantId();
+        var existingStatus = provisioningTracker.getStatus(activeTenantId);
+        if (existingStatus != null) {
+            return Response.seeOther(URI.create("/onboarding/complete")).build();
+        }
+
+        if (jurisdictions == null || jurisdictions.isEmpty()) {
+            return renderCompliancePage(state, "Please select at least one jurisdiction.");
+        }
+
+        int tierLimit = resolveTierLimit();
+        if (tierLimit > 0 && jurisdictions.size() > tierLimit) {
+            return renderCompliancePage(
+                    state,
+                    "Your plan allows "
+                            + tierLimit
+                            + " jurisdictions. Please deselect "
+                            + (jurisdictions.size() - tierLimit)
+                            + " to continue.");
+        }
+
+        state.setSelectedJurisdictions(jurisdictions);
+        state.setSelectedEntities(entities != null ? entities : List.of());
+
+        Set<String> selectedRegulations = IndustryPreset.deriveRegulations(jurisdictions);
+        Set<String> purposeIds = new LinkedHashSet<>(state.industryPreset().purposes());
+
+        // Seed governance + billing in the background
+        provisioningTracker.start(activeTenantId, DeferredProvisioningTask.totalSteps());
+        provisioningExecutor.submit(
+                new DeferredProvisioningTask(
+                        activeTenantId,
+                        uc.email(),
+                        "free",
+                        consentDispatcher,
+                        cqrs.billingDispatcher(),
+                        cqrs.paymentProcessorService(),
+                        provisioningTracker,
+                        new LinkedHashSet<>(jurisdictions),
+                        selectedRegulations,
+                        purposeIds,
+                        new LinkedHashSet<>(entities != null ? entities : List.of())));
+
+        onboardingStateHolder.complete(tenantId);
+
+        return Response.seeOther(URI.create("/onboarding/complete")).build();
+    }
+
+    /** Step 4: Progress page — polls /onboarding/status until seeding completes. */
+    @GET
+    @Path("onboarding/complete")
+    @Produces(MediaType.TEXT_HTML)
+    public Object onboardingCompletePage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) return Response.seeOther(URI.create("/login")).build();
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        var status = resolveProvisioningStatus(tenantId);
+        if (status == null || status.status() == ProvisioningTracker.Status.COMPLETED) {
+            return Response.seeOther(URI.create("/dashboard")).build();
+        }
+
+        return onboardingComplete.instance();
+    }
+
+    /** JSON status endpoint for the onboarding progress page. */
+    @GET
+    @Path("onboarding/status")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response onboardingStatus() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(Map.of("error", "Not authenticated"))
+                    .build();
+        }
+
+        String tenantId = TenantIdDeriver.derive(uc.username());
+        ProvisioningTracker.ProvisioningStatus status = resolveProvisioningStatus(tenantId);
+
+        if (status == null) {
+            return Response.ok(Map.of("status", "COMPLETED")).build();
+        }
+
+        return Response.ok(
+                        Map.of(
+                                "status", status.status().name(),
+                                "currentStep",
+                                        status.currentStep() != null ? status.currentStep() : "",
+                                "completedSteps", status.completedSteps(),
+                                "totalSteps", status.totalSteps(),
+                                "errorMessage",
+                                        status.errorMessage() != null ? status.errorMessage() : ""))
+                .build();
+    }
+
+    // ── Onboarding helpers ────────────────────────────────────────────────
+
+    private int resolveTierLimit() {
+        try {
+            var planInfo = cqrs.planQueryService().getPlan("free");
+            if (planInfo != null) return planInfo.jurisdictionLimit();
+        } catch (Exception e) {
+            LOG.warn("Failed to resolve tier limit, using default: {}", e.getMessage());
+        }
+        return 3;
+    }
+
+    private Object renderCompliancePage(OnboardingStateHolder.OnboardingState state, String error) {
+
+        IndustryPreset preset = state.industryPreset();
+        int tierLimit = resolveTierLimit();
+
+        var preChecked = new HashSet<>(preset.preCheckedJurisdictions(tierLimit));
+        var locked = new HashSet<>(preset.lockedJurisdictions(tierLimit));
+
+        List<String> showJurisdictions =
+                preset == IndustryPreset.GENERAL
+                        ? IndustryPreset.allJurisdictionIds()
+                        : preset.fullJurisdictionSet();
+
+        var jurisdictions = new ArrayList<Map<String, Object>>();
+        for (String jurId : showJurisdictions) {
+            jurisdictions.add(
+                    Map.of(
+                            "id", jurId,
+                            "name", IndustryPreset.jurisdictionDisplayName(jurId),
+                            "description", IndustryPreset.jurisdictionDescription(jurId),
+                            "checked", preChecked.contains(jurId),
+                            "locked", locked.contains(jurId)));
+        }
+
+        var regulations = new ArrayList<Map<String, Object>>();
+        for (String regId :
+                IndustryPreset.deriveRegulations(
+                        showJurisdictions.isEmpty()
+                                ? IndustryPreset.allJurisdictionIds()
+                                : showJurisdictions)) {
+            regulations.add(Map.of("name", regId, "jurisdictions", ""));
+        }
+
+        var entities = new ArrayList<Map<String, Object>>();
+        for (String entityId : preset.entities()) {
+            entities.add(Map.of("id", entityId, "checked", true));
+        }
+
+        int initialChecked = preChecked.size();
+        int tierPercent = tierLimit > 0 ? Math.min(100, (initialChecked * 100) / tierLimit) : 0;
+
+        return onboardingCompliance
+                .data("presetName", preset.displayName())
+                .data("jurisdictions", jurisdictions)
+                .data("regulations", regulations)
+                .data("entities", entities)
+                .data("tierLimit", tierLimit)
+                .data("initialChecked", initialChecked)
+                .data("tierPercent", tierPercent)
+                .data("error", error);
+    }
+
+    /**
+     * Resolves the provisioning status for a tenant.
+     *
+     * <p>Checks the personal tenantId first. If no tracker is found and the user has an onboarding
+     * state with an org tenant, checks that too. This handles the case where provisioning was
+     * started against the org tenant (via {@code activeTenantId()}).
+     */
+    private ProvisioningTracker.ProvisioningStatus resolveProvisioningStatus(String tenantId) {
+        ProvisioningTracker.ProvisioningStatus status = provisioningTracker.getStatus(tenantId);
+        if (status != null) return status;
+
+        // Check if the user had an org-based onboarding — the tracker may be keyed by orgTenantId
+        var state = onboardingStateHolder.get(tenantId);
+        if (state != null && state.orgTenantId() != null) {
+            return provisioningTracker.getStatus(state.orgTenantId());
+        }
+        return null;
+    }
+
+    /** Extracts the Keycloak user ID (sub claim) from the resolved user context. */
+    private String resolveKeycloakUserId(UserContext uc) {
+        if (uc.jwtPayload() != null) {
+            String sub = extractJsonString(uc.jwtPayload(), "sub");
+            if (sub != null) return sub;
+        }
+        return uc.username();
+    }
+
+    // -----------------------------------------------------------------------
     // Login
     // -----------------------------------------------------------------------
 
@@ -415,13 +766,13 @@ public class SiteResource {
         String email = uc.email();
         String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
 
-        // Guard: redirect to setup page if workspace provisioning is still in progress
+        // Guard: redirect to onboarding if workspace provisioning is still in progress
         if (tenantId != null) {
             ProvisioningTracker.ProvisioningStatus provStatus =
                     provisioningTracker.getStatus(tenantId);
             if (provStatus != null
                     && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
-                return Response.seeOther(URI.create("/setup")).build();
+                return Response.seeOther(URI.create("/onboarding/complete")).build();
             }
         }
 

@@ -22,11 +22,18 @@ public interface PlanQueryService<T> extends Plugin<T> {
             long evalLimit,
             long subjectLimit,
             int burstLimit,
+            int jurisdictionLimit,
             boolean isPublic,
             boolean isActive,
             int sortOrder,
             String stripeProductId,
-            String stripePriceId) {}
+            String stripePriceId) {
+
+        /** Returns true if jurisdictions are unlimited on this plan (-1). */
+        public boolean isJurisdictionUnlimited() {
+            return jurisdictionLimit < 0;
+        }
+    }
 
     /**
      * Get a single plan by ID.

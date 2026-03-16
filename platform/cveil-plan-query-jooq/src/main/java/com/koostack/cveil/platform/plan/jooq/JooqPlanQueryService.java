@@ -26,6 +26,8 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
             field(name("subject_limit"), Long.class);
     private static final org.jooq.Field<Integer> BURST_LIMIT =
             field(name("burst_limit"), Integer.class);
+    private static final org.jooq.Field<Integer> JURISDICTION_LIMIT =
+            field(name("jurisdiction_limit"), Integer.class);
     private static final org.jooq.Field<Boolean> IS_PUBLIC =
             field(name("is_public"), Boolean.class);
     private static final org.jooq.Field<Boolean> IS_ACTIVE =
@@ -111,6 +113,7 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
                 record.get(EVAL_LIMIT),
                 record.get(SUBJECT_LIMIT),
                 record.get(BURST_LIMIT),
+                record.get(JURISDICTION_LIMIT) != null ? record.get(JURISDICTION_LIMIT) : 3,
                 record.get(IS_PUBLIC),
                 record.get(IS_ACTIVE),
                 record.get(SORT_ORDER),

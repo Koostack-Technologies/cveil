@@ -258,6 +258,13 @@ public class JooqConsentAdminCommandService
                 SeedConsentGovernanceCommandActuator.SeedConsentGovernanceCommand.class,
                 seedConsentGovernanceActuator);
 
+        // Parameterized seed actuator — seeds only user-selected governance data
+        var seedParameterizedActuator =
+                new SeedParameterizedGovernanceCommandActuator(eventService, this);
+        actuators.put(
+                SeedParameterizedGovernanceCommandActuator.SeedParameterizedGovernanceCommand.class,
+                seedParameterizedActuator);
+
         LOG.info(
                 "JooqConsentAdminCommandService configured (event-sourced, {} actuators)",
                 actuators.size());
