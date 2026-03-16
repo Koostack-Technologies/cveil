@@ -106,8 +106,7 @@ public class CveilClient implements AutoCloseable {
     }
 
     private void initialize() throws IOException {
-        Path wasmPath = resolveWasmPath();
-        this.bridge = WasmBridge.load(wasmPath);
+        this.bridge = loadWasmBridge();
 
         bridge.init(toJson(config));
         this.initialized = true;
@@ -119,9 +118,23 @@ public class CveilClient implements AutoCloseable {
         }
     }
 
-    private Path resolveWasmPath() {
-        if (options.wasmPath() != null) return options.wasmPath();
-        return Path.of("wasm", "cveil_sdk_core.wasm");
+    private WasmBridge loadWasmBridge() throws IOException {
+        if (options.wasmPath() != null) {
+            return WasmBridge.load(options.wasmPath());
+        }
+        // Prefer classpath (embedded in JAR), fall back to filesystem
+        try {
+            return WasmBridge.loadFromClasspath();
+        } catch (IOException ignored) {
+            Path fsPath = Path.of("wasm", "cveil_sdk_core.wasm");
+            if (fsPath.toFile().exists()) {
+                return WasmBridge.load(fsPath);
+            }
+            throw new IOException(
+                    "WASM binary not found on classpath or filesystem. "
+                            + "Ensure the SDK JAR includes wasm/cveil_sdk_core.wasm "
+                            + "or provide an explicit path via CveilClientOptions.wasmPath().");
+        }
     }
 
     // ─── Graph Loading ─────────────────────────────────────────────

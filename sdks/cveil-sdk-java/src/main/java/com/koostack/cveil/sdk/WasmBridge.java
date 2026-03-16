@@ -9,6 +9,8 @@ import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasi.WasiPreview1_ModuleFactory;
 import com.dylibso.chicory.wasm.Parser;
 import com.dylibso.chicory.wasm.WasmModule;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
@@ -70,11 +72,35 @@ public class WasmBridge {
 
     /** Load the WASM module from the given file path. */
     public static WasmBridge load(Path wasmPath) {
+        WasmModule module = Parser.parse(wasmPath.toFile());
+        return instantiate(module);
+    }
+
+    /** Load the WASM module from a classpath resource (e.g. "wasm/cveil_sdk_core.wasm"). */
+    public static WasmBridge loadFromClasspath(String resourcePath) throws IOException {
+        try (InputStream is =
+                WasmBridge.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new IOException(
+                        "WASM resource not found on classpath: " + resourcePath);
+            }
+            WasmModule module = Parser.parse(is);
+            return instantiate(module);
+        }
+    }
+
+    private static final String CLASSPATH_WASM = "wasm/cveil_sdk_core.wasm";
+
+    /** Load the WASM module from the default classpath location. */
+    public static WasmBridge loadFromClasspath() throws IOException {
+        return loadFromClasspath(CLASSPATH_WASM);
+    }
+
+    private static WasmBridge instantiate(WasmModule module) {
         var wasi = WasiPreview1.builder().withOptions(WasiOptions.builder().build()).build();
         var hostFunctions = WasiPreview1_ModuleFactory.toHostFunctions(wasi);
         var importValues = ImportValues.builder().addFunction(hostFunctions).build();
 
-        WasmModule module = Parser.parse(wasmPath.toFile());
         var instance =
                 Instance.builder(module)
                         .withImportValues(importValues)
