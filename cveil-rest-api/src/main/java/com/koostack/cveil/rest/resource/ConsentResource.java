@@ -16,6 +16,7 @@ import com.koostack.cveil.plugin.consent.jooq.DeleteSubjectAuditCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.EvaluateConsentQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.FindPolicyQueryActuator;
+import com.koostack.cveil.plugin.consent.jooq.GetDsarAuditLogQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GetSubjectConsentQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GetSubjectQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GrantConsentCommandActuator;
@@ -34,6 +35,7 @@ import com.koostack.cveil.rest.dto.AdminDtos.RegisterSubjectRequest;
 import com.koostack.cveil.rest.dto.AdminDtos.UpdateSubjectRequest;
 import com.koostack.cveil.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.cveil.rest.dto.CommonDtos.MessageResponse;
+import com.koostack.cveil.rest.dto.ConsentDtos;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchConsentResponse;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchRevokeRequest;
@@ -709,6 +711,80 @@ public class ConsentResource {
             LOG.error("Failed to export data for subject: {}", subjectId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(ErrorResponse.internal("Failed to export subject data"))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{id}/audit")
+    @Operation(
+            operationId = "getSubjectDsarAuditLog",
+            summary = "Get DSAR audit log for a subject",
+            description =
+                    "Returns the DSAR audit log entries for a subject, ordered by most recent"
+                            + " first. Each entry records a past erasure request with metadata"
+                            + " (policies deleted, cached keys deleted, status, actor, etc.).")
+    @APIResponses({
+        @APIResponse(
+                responseCode = "200",
+                description = "Audit log returned",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                implementation =
+                                                        ConsentDtos.DsarAuditLogResponse.class))),
+        @APIResponse(
+                responseCode = "500",
+                description = "Failed to retrieve audit log",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getSubjectDsarAuditLog(
+            @Context SecurityContext securityContext,
+            @Parameter(description = "The data subject identifier", required = true)
+                    @PathParam("id")
+                    String subjectId) {
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
+
+        try {
+            @SuppressWarnings("unchecked")
+            List<com.koostack.cveil.plugin.consent.jooq.generated.tables.pojos.DsarAuditLog>
+                    entries =
+                            consentQueryDispatcher.dispatch(
+                                    new GetDsarAuditLogQueryActuator.GetDsarAuditLogQuery(
+                                            subjectId));
+
+            List<ConsentDtos.DsarAuditEntry> dtos =
+                    entries.stream()
+                            .map(
+                                    e ->
+                                            new ConsentDtos.DsarAuditEntry(
+                                                    e.getDeletionRequestId(),
+                                                    e.getPoliciesDeleted(),
+                                                    e.getCachedKeysDeleted(),
+                                                    e.getAuditEntriesDeleted(),
+                                                    e.getStatus(),
+                                                    e.getActor(),
+                                                    e.getIpAddress(),
+                                                    e.getUserAgent(),
+                                                    e.getCreatedAt() != null
+                                                            ? e.getCreatedAt()
+                                                                    .atZone(
+                                                                            java.time.ZoneOffset
+                                                                                    .UTC)
+                                                                    .toInstant()
+                                                            : null))
+                            .toList();
+
+            return Response.ok(new ConsentDtos.DsarAuditLogResponse(subjectId, dtos)).build();
+        } catch (Exception e) {
+            LOG.error("Failed to retrieve DSAR audit log for subject: {}", subjectId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.internal("Failed to retrieve DSAR audit log"))
                     .build();
         }
     }

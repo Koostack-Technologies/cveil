@@ -68,3 +68,5 @@ include("common:cveil-metrics-worker")
 
 // --- SDKs ---
 include("sdks:cveil-sdk-java")
+
+include("examples:cveil-java-sdk-examples")

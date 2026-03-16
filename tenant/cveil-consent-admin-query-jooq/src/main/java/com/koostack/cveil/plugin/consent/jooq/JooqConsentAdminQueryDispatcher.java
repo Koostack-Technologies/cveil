@@ -101,7 +101,9 @@ public class JooqConsentAdminQueryDispatcher
         ConsentAdminRecordMapper mapper =
                 new ConsentAdminRecordMapper(dsl, entityRepository, policyRepository);
 
-        // Register all 18 actuators
+        DsarAuditLogRepository dsarAuditLogRepository = new DsarAuditLogRepository(dsl);
+
+        // Register all 19 actuators
         actuators.put(
                 ListEntitiesQueryActuator.ListEntitiesQuery.class,
                 new ListEntitiesQueryActuator(entityRepository));
@@ -156,6 +158,9 @@ public class JooqConsentAdminQueryDispatcher
         actuators.put(
                 FindPolicyQueryActuator.FindPolicyQuery.class,
                 new FindPolicyQueryActuator(policyRepository));
+        actuators.put(
+                GetDsarAuditLogQueryActuator.GetDsarAuditLogQuery.class,
+                new GetDsarAuditLogQueryActuator(dsarAuditLogRepository));
 
         LOG.info("JooqConsentAdminQueryDispatcher configured with {} actuators", actuators.size());
     }

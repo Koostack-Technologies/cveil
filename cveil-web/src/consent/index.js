@@ -538,6 +538,7 @@ function showDetailTab(tab) {
 
     if (tab === 'summary') loadSubjectSummary();
     else if (tab === 'history') loadSubjectHistory();
+    else if (tab === 'compliance') loadComplianceTab();
 }
 
 async function loadSubjectSummary() {
@@ -632,6 +633,287 @@ async function exportSubjectData() {
     }
 }
 
+// ── Compliance Tab ─────────────────────────────────────────────
+
+let complianceErasureComplete = false;
+
+async function loadComplianceTab() {
+    const body = document.getElementById('subject-detail-body');
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    complianceErasureComplete = false;
+
+    try {
+        const [exportData, auditData] = await Promise.all([
+            subjectsApi(`/${encodeURIComponent(currentSubject)}/export`).catch(() => null),
+            subjectsApi(`/${encodeURIComponent(currentSubject)}/audit`).catch(() => ({ entries: [] })),
+        ]);
+
+        const entries = exportData?.consent?.entries || [];
+        const auditEntries = auditData?.entries || [];
+        const hasErasureHistory = auditEntries.length > 0;
+
+        body.innerHTML = `
+            <div class="space-y-8">
+                <!-- Export Section -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-gray-900">Export Data</h4>
+                        <button onclick="exportSubjectData()" class="px-3 py-1.5 text-xs text-cv-600 border border-cv-500/30 rounded hover:bg-cv-500/10 transition-colors inline-flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download JSON
+                        </button>
+                    </div>
+                    ${entries.length ? `
+                    <div class="border border-gray-200 rounded-md overflow-hidden">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                                <tr>
+                                    <th class="px-4 py-2">Status</th>
+                                    <th class="px-4 py-2">Purpose</th>
+                                    <th class="px-4 py-2">Scope</th>
+                                    <th class="px-4 py-2">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${entries.slice(0, 20).map(e => {
+                                    const style = getActionStyle(e.action);
+                                    const scope = e.policyType === 'FIELD'
+                                        ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '')
+                                        : e.categoryName || '';
+                                    return `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
+                                        <td class="px-4 py-2 text-gray-900">${esc(e.purposeName)}</td>
+                                        <td class="px-4 py-2 text-gray-500">${esc(scope)}</td>
+                                        <td class="px-4 py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        ${entries.length > 20 ? `<div class="px-4 py-2 bg-gray-50 text-xs text-gray-500">Showing 20 of ${entries.length} entries. Download JSON for full export.</div>` : ''}
+                    </div>` : `<p class="text-gray-400 text-sm">No consent entries to export.</p>`}
+                </div>
+
+                <!-- Shred Section -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-1">Right to Erasure</h4>
+                    <p class="text-xs text-gray-500 mb-4">Permanently erase all data for this subject. This is a two-step, irreversible process.</p>
+
+                    <div class="space-y-4">
+                        <!-- Step 1 -->
+                        <div id="compliance-step1" class="border border-gray-200 rounded-md p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-semibold text-gray-400 uppercase">Step 1</span>
+                                        <span id="compliance-step1-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Not started</span>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-900">Revoke All Consent &amp; Purge Cache</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Revokes all consent, deletes cached decisions, removes the subject record, and logs an audit entry.</p>
+                                </div>
+                                <button onclick="openErasureModal()" id="compliance-step1-btn" class="px-3 py-2 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition-colors whitespace-nowrap">
+                                    Begin Erasure
+                                </button>
+                            </div>
+                            <div id="compliance-step1-result" class="hidden mt-3 text-xs"></div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div id="compliance-step2" class="border border-gray-200 rounded-md p-4 opacity-50">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-semibold text-gray-400 uppercase">Step 2</span>
+                                        <span id="compliance-step2-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Waiting for Step 1</span>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-900">Shred Encryption Key</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Deletes the per-subject encryption key — all encrypted event payloads become permanently unreadable.</p>
+                                </div>
+                                <button onclick="shredSubjectKey()" id="compliance-step2-btn" class="px-3 py-2 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Shred Key
+                                </button>
+                            </div>
+                            <div id="compliance-step2-result" class="hidden mt-3 text-xs"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audit Log Section -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3">Erasure Audit Log</h4>
+                    ${auditEntries.length ? `
+                    <div class="border border-gray-200 rounded-md overflow-hidden">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                                <tr>
+                                    <th class="px-4 py-2">Status</th>
+                                    <th class="px-4 py-2">Request ID</th>
+                                    <th class="px-4 py-2">Policies</th>
+                                    <th class="px-4 py-2">Cache Keys</th>
+                                    <th class="px-4 py-2">Actor</th>
+                                    <th class="px-4 py-2">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${auditEntries.map(e => `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
+                                            e.status === 'SUCCESS' || e.status === 'PENDING_SHRED'
+                                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                                : 'bg-red-50 text-red-700 border border-red-200'
+                                        }">${esc(e.status)}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-gray-500 font-mono">${esc((e.deletionRequestId || '').substring(0, 8))}…</td>
+                                    <td class="px-4 py-2 text-gray-700">${e.policiesDeleted}</td>
+                                    <td class="px-4 py-2 text-gray-700">${e.cachedKeysDeleted}</td>
+                                    <td class="px-4 py-2 text-gray-500">${esc(e.actor || '—')}</td>
+                                    <td class="px-4 py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>` : `<p class="text-gray-400 text-sm">No erasure requests have been made for this subject.</p>`}
+                </div>
+            </div>`;
+    } catch (e) {
+        body.innerHTML = `<p class="text-red-500 text-sm">${esc(e.message)}</p>`;
+    }
+}
+
+function openErasureModal() {
+    if (!currentSubject) return;
+    const token = 'DELETE_' + currentSubject;
+    document.getElementById('erasure-modal-token').textContent = token;
+    document.getElementById('erasure-modal-input').value = '';
+    document.getElementById('erasure-modal-confirm').disabled = true;
+    const errEl = document.getElementById('erasure-modal-error');
+    errEl.textContent = '';
+    errEl.classList.add('hidden');
+    document.getElementById('erasure-modal').classList.remove('hidden');
+
+    const input = document.getElementById('erasure-modal-input');
+    input.setAttribute('placeholder', token);
+    input.oninput = () => {
+        document.getElementById('erasure-modal-confirm').disabled = input.value !== token;
+    };
+}
+
+function closeErasureModal() {
+    document.getElementById('erasure-modal').classList.add('hidden');
+}
+
+function initErasureModal() {
+    const btn = document.getElementById('erasure-modal-confirm');
+    btn.addEventListener('click', async () => {
+        const token = 'DELETE_' + currentSubject;
+        const input = document.getElementById('erasure-modal-input');
+        if (input.value !== token) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Erasing…';
+        const errEl = document.getElementById('erasure-modal-error');
+        errEl.classList.add('hidden');
+
+        try {
+            await beginErasureRequest();
+            closeErasureModal();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Begin Erasure';
+        }
+    });
+}
+
+async function beginErasureRequest() {
+    if (!currentSubject) return;
+    const token = 'DELETE_' + currentSubject;
+
+    const result = await subjectsApi(
+        `/${encodeURIComponent(currentSubject)}/audit?confirm=${encodeURIComponent(token)}`,
+        { method: 'DELETE' }
+    );
+
+    complianceErasureComplete = true;
+
+    // Update Step 1 UI
+    const s1Status = document.getElementById('compliance-step1-status');
+    s1Status.textContent = result.status || 'PENDING_SHRED';
+    s1Status.className = 'text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700';
+
+    const s1Result = document.getElementById('compliance-step1-result');
+    s1Result.classList.remove('hidden');
+    s1Result.innerHTML = `
+        <div class="bg-green-50 border border-green-200 rounded p-2 text-green-800">
+            Erasure complete — ${result.ledgerEntriesRevoked || 0} entries revoked, ${result.cachedKeysDeleted || 0} cache keys deleted.
+            <span class="font-mono text-xs text-green-600">Request: ${esc((result.deletionRequestId || '').substring(0, 8))}…</span>
+        </div>`;
+
+    const s1Btn = document.getElementById('compliance-step1-btn');
+    s1Btn.disabled = true;
+    s1Btn.classList.add('opacity-50', 'cursor-not-allowed');
+    s1Btn.textContent = 'Completed';
+
+    // Enable Step 2
+    document.getElementById('compliance-step2').classList.remove('opacity-50');
+    const s2Status = document.getElementById('compliance-step2-status');
+    s2Status.textContent = 'Ready';
+    s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
+    document.getElementById('compliance-step2-btn').disabled = false;
+}
+
+async function shredSubjectKey() {
+    if (!currentSubject || !complianceErasureComplete) return;
+
+    const btn = document.getElementById('compliance-step2-btn');
+    btn.disabled = true;
+    btn.textContent = 'Shredding…';
+
+    try {
+        await subjectsApi(
+            `/${encodeURIComponent(currentSubject)}/dsar-key`,
+            { method: 'DELETE' }
+        );
+
+        const s2Status = document.getElementById('compliance-step2-status');
+        s2Status.textContent = 'Shredded';
+        s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700';
+
+        btn.textContent = 'Completed';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        const s2Result = document.getElementById('compliance-step2-result');
+        s2Result.classList.remove('hidden');
+        s2Result.innerHTML = `
+            <div class="bg-green-50 border border-green-200 rounded p-2 text-green-800">
+                Encryption key permanently destroyed. All encrypted event payloads for this subject are now unreadable.
+            </div>`;
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Shred Key';
+
+        const s2Result = document.getElementById('compliance-step2-result');
+        s2Result.classList.remove('hidden');
+
+        if (e.message && e.message.includes('EVENTS_PENDING')) {
+            const s2Status = document.getElementById('compliance-step2-status');
+            s2Status.textContent = 'Events pending';
+            s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
+            s2Result.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800">
+                    Events are still being processed by the outbox. Please wait a moment and try again.
+                </div>`;
+        } else {
+            s2Result.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded p-2 text-red-800">
+                    Shred failed: ${esc(e.message)}
+                </div>`;
+        }
+    }
+}
+
 function openSubjectPanel(type, data) {
     const title = document.getElementById('panel-title');
     const body = document.getElementById('panel-body');
@@ -715,11 +997,15 @@ export function init() {
         viewSubject, closeSubjectDetail,
         showDetailTab, exportSubjectData,
         saveSubject, deleteSubject,
+        // Compliance
+        openErasureModal, closeErasureModal,
+        beginErasureRequest, shredSubjectKey,
         // Playground
         evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
     });
 
     initDeleteModal();
+    initErasureModal();
 
     ready(() => {
         const hash = window.location.hash.replace('#', '');
