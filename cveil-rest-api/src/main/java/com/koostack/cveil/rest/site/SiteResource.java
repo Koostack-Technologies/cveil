@@ -24,6 +24,8 @@ import jakarta.inject.Named;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -249,14 +251,15 @@ public class SiteResource {
                     e.totalSteps(),
                     e.getMessage(),
                     e);
-            return signup.data("error", "Registration failed. Please try again or contact support.")
+            String userMessage = extractUserFriendlySignupError(e);
+            return signup.data("error", userMessage)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
                     .data("plan", plan);
         } catch (Exception e) {
             LOG.error("Unexpected error during registration: {}", e.getMessage(), e);
-            return signup.data("error", "An unexpected error occurred. Please try again.")
+            return signup.data("error", "An unexpected error occurred: " + summarizeException(e))
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -380,7 +383,8 @@ public class SiteResource {
     @GET
     @Path("onboarding")
     @Produces(MediaType.TEXT_HTML)
-    public Object onboardingStep1(@QueryParam("plan") String plan) {
+    public Object onboardingStep1(
+            @QueryParam("plan") String plan, @QueryParam("error") String error) {
         UserContext uc = resolveUserContext();
         if (uc == null) return Response.seeOther(URI.create("/login")).build();
 
@@ -389,7 +393,9 @@ public class SiteResource {
         if (plan != null && !plan.isBlank()) {
             state.setPlan(plan);
         }
-        return onboardingWorkspace.data("error", null).data("workspaceName", "");
+        return onboardingWorkspace
+                .data("error", error != null && !error.isBlank() ? error : null)
+                .data("workspaceName", "");
     }
 
     @POST
@@ -451,16 +457,14 @@ public class SiteResource {
                         e.failedStep(),
                         e.getMessage(),
                         e);
+                String userMessage = extractUserFriendlyOrgError(e);
                 return onboardingWorkspace
-                        .data(
-                                "error",
-                                "Could not create organization. Please try again or uncheck"
-                                        + " the team option.")
+                        .data("error", userMessage)
                         .data("workspaceName", trimmedName);
             } catch (Exception e) {
                 LOG.error("Unexpected error creating org in onboarding: {}", e.getMessage(), e);
                 return onboardingWorkspace
-                        .data("error", "An unexpected error occurred. Please try again.")
+                        .data("error", "An unexpected error occurred: " + summarizeException(e))
                         .data("workspaceName", trimmedName);
             }
         }
@@ -755,6 +759,13 @@ public class SiteResource {
         if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
             return Response.seeOther(URI.create("/onboarding/complete")).build();
         }
+        if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.FAILED) {
+            String msg = provStatus.errorMessage() != null
+                    ? provStatus.errorMessage()
+                    : "Workspace setup did not complete.";
+            return Response.seeOther(
+                    URI.create("/onboarding?error=" + urlEncode(msg))).build();
+        }
         if (hasCompletedOnboarding(personalTenantId)) return null;
         // When seed data was placed under an org tenant, check that tenant too
         if (effectiveTenantId != null
@@ -762,7 +773,10 @@ public class SiteResource {
                 && hasCompletedOnboarding(effectiveTenantId)) {
             return null;
         }
-        return Response.seeOther(URI.create("/onboarding")).build();
+        return Response.seeOther(
+                URI.create("/onboarding?error=" + urlEncode(
+                        "Your previous setup did not complete. Please complete onboarding to continue.")))
+                .build();
     }
 
     // -----------------------------------------------------------------------
@@ -1241,5 +1255,66 @@ public class SiteResource {
         }
 
         return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Error message helpers
+    // -----------------------------------------------------------------------
+
+    /** Extracts a user-friendly error message from an org-creation OrchestratorException. */
+    private static String extractUserFriendlyOrgError(OrchestratorException e) {
+        String rootMsg = rootCauseMessage(e);
+        if (rootMsg.contains("conflicts")) {
+            return "An organization with that name already exists. Please choose a different workspace name.";
+        }
+        if (rootMsg.contains("401") || rootMsg.contains("Unauthorized")) {
+            return "Identity provider authentication failed. Please contact support.";
+        }
+        if (rootMsg.contains("403") || rootMsg.contains("Forbidden")) {
+            return "You do not have permission to create an organization. Please contact support.";
+        }
+        return "Could not create organization: " + summarizeException(e)
+                + ". Please try a different name or uncheck the team option.";
+    }
+
+    /** Extracts a user-friendly error message from a signup OrchestratorException. */
+    private static String extractUserFriendlySignupError(OrchestratorException e) {
+        String rootMsg = rootCauseMessage(e);
+        if (rootMsg.contains("409") || rootMsg.contains("Conflict")
+                || rootMsg.contains("already exists") || rootMsg.contains("User exists")) {
+            return "An account with that email or username already exists. Please log in or use a different email.";
+        }
+        if (rootMsg.contains("401") || rootMsg.contains("Unauthorized")) {
+            return "Identity provider authentication failed. Please try again or contact support.";
+        }
+        if (rootMsg.contains("404") || rootMsg.contains("Not Found")) {
+            return "The identity service is not fully configured. Please contact support.";
+        }
+        return "Registration failed at step '" + e.failedStep() + "': " + summarizeException(e)
+                + ". Please try again or contact support.";
+    }
+
+    /** Walks the exception cause chain and returns the deepest cause's message. */
+    private static String rootCauseMessage(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
+    }
+
+    /** Returns a short summary of an exception suitable for display to users. */
+    private static String summarizeException(Throwable t) {
+        String msg = rootCauseMessage(t);
+        // Truncate long stack-trace-style messages for user display
+        if (msg.length() > 150) {
+            msg = msg.substring(0, 147) + "...";
+        }
+        return msg;
+    }
+
+    /** URL-encodes a string for safe use in query parameters. */
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }
