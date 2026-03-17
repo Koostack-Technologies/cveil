@@ -173,7 +173,7 @@
         </div>
 
         <p class="text-gray-500 text-sm mb-6">
-            Personal access tokens provide long-lived API access as Bearer tokens. Each token is scoped to your personal account or a specific organization. Permissions are resolved live from your assigned roles. Maximum expiration: 90 days.
+            Personal access tokens provide long-lived API access as Bearer tokens. Tokens are automatically scoped to your currently active workspace. Switch workspaces from the sidebar to create tokens for a different scope. Maximum expiration: 90 days.
         </p>
 
         <!-- Create token modal -->
@@ -188,11 +188,12 @@
                     </div>
                     <div class="mb-4">
                         <label for="token-scope" class="block text-sm font-medium text-gray-600 mb-1">Account Scope</label>
-                        <select id="token-scope"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-cv-500">
-                            <option value="">Personal (your account)</option>
-                        </select>
-                        <p class="text-gray-600 text-xs mt-1">Choose which account this token can act on behalf of.</p>
+                        <input type="text" id="token-scope-display"
+                            value="{workspaceDisplayName ?: 'Personal'} ({tenantId ?: 'personal'})"
+                            disabled
+                            class="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 text-sm cursor-not-allowed">
+                        <input type="hidden" id="token-scope" value="{tenantId ?: ''}">
+                        <p class="text-gray-600 text-xs mt-1">Token will be scoped to the currently active workspace. Switch workspaces from the sidebar to change.</p>
                     </div>
                     <div class="mb-5">
                         <label class="block text-sm font-medium text-gray-600 mb-2">Expiration</label>
@@ -509,23 +510,6 @@
             });
             var btns = document.querySelectorAll('.expiry-btn');
             if (btns[1]) btns[1].className = 'expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
-
-            // Populate scope dropdown with user's orgs
-            var scopeSelect = document.getElementById('token-scope');
-            scopeSelect.innerHTML = '<option value="">Personal (your account)</option>';
-            try {
-                if (cachedOrgs.length === 0) {
-                    var res = await fetch('/api/v1/platform/iam/me');
-                    var me = await res.json();
-                    cachedOrgs = me.organizations || [];
-                }
-                cachedOrgs.forEach(function(o) {
-                    var opt = document.createElement('option');
-                    opt.value = o.tenantId || o.orgId;
-                    opt.textContent = (o.displayName || o.orgName) + ' (' + o.orgId + ')';
-                    scopeSelect.appendChild(opt);
-                });
-            } catch (e) { /* ignore — personal only */ }
 
             document.getElementById('token-name').focus();
         }

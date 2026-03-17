@@ -108,6 +108,53 @@ public final class AuthCookieHelper {
     }
 
     /**
+     * Cookie name for the currently active organization. Stores the org's {@code orgName} which
+     * doubles as the tenant ID for that organization. When absent or empty, the dashboard falls
+     * back to the user's personal tenant (derived from username).
+     *
+     * <p>This is a non-HttpOnly cookie (it's a UI preference, not a secret) so that client-side
+     * JavaScript can read it if needed.
+     */
+    public static final String ACTIVE_ORG_COOKIE = "cveil_active_org";
+
+    /**
+     * Creates a {@code Set-Cookie} header that stores the active organization selection.
+     *
+     * @param orgName the org name / tenant ID to select (must not be {@code null} or blank)
+     * @return a {@link NewCookie} for the active org
+     */
+    public static NewCookie setActiveOrgCookie(String orgName) {
+        return new NewCookie.Builder(ACTIVE_ORG_COOKIE)
+                .value(orgName)
+                .path(COOKIE_PATH)
+                .maxAge(365 * 24 * 60 * 60) // 1 year
+                .httpOnly(false)
+                .sameSite(NewCookie.SameSite.LAX)
+                .build();
+    }
+
+    /** Creates an expired cookie to clear the active organization selection. */
+    public static NewCookie clearActiveOrgCookie() {
+        return new NewCookie.Builder(ACTIVE_ORG_COOKIE)
+                .value("")
+                .path(COOKIE_PATH)
+                .maxAge(0)
+                .httpOnly(false)
+                .sameSite(NewCookie.SameSite.LAX)
+                .build();
+    }
+
+    /**
+     * Reads the active organization from the cookie header.
+     *
+     * @param cookieHeader the raw Cookie header
+     * @return the active org name, or {@code null} if not set
+     */
+    public static String readActiveOrg(String cookieHeader) {
+        return readCookie(cookieHeader, ACTIVE_ORG_COOKIE);
+    }
+
+    /**
      * Session cookie name used by the DPoP login flow. This is a non-HttpOnly cookie set by
      * JavaScript containing base64-encoded JSON with user context ({@code u}=username, {@code
      * e}=email).

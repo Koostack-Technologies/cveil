@@ -13,6 +13,8 @@ import com.koostack.cveil.rest.onboarding.IndustryPreset;
 import com.koostack.cveil.rest.onboarding.OnboardingStateHolder;
 import com.koostack.cveil.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterUserSyncOrchestrator;
+import com.koostack.cveil.core.platform.iam.IamQueryService.OrganizationInfo;
+import com.koostack.cveil.platform.iam.jooq.GetCurrentUserQueryActuator;
 import com.koostack.cveil.rest.util.AuthCookieHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
@@ -558,13 +560,13 @@ public class SiteResource {
         Set<String> selectedRegulations = IndustryPreset.deriveRegulations(jurisdictions);
         Set<String> purposeIds = new LinkedHashSet<>(state.industryPreset().purposes());
 
-        // Always provision under the personal tenantId. The dashboard and API auth
-        // resolve the tenant from the JWT (personal), so governance + billing data
-        // must live there. The org created in Step 1 reserves the namespace but does
-        // not change the data-scoping until org context switching is implemented.
+        // Seed governance and billing under the org tenant when one was created
+        // during step 1, otherwise under the personal tenant.
+        String targetTenantId = state.activeTenantId();
         provisioningTracker.start(tenantId, DeferredProvisioningTask.totalSteps());
         provisioningExecutor.submit(
                 new DeferredProvisioningTask(
+                        targetTenantId,
                         tenantId,
                         uc.email(),
                         state.plan(),
@@ -577,9 +579,16 @@ public class SiteResource {
                         purposeIds,
                         new LinkedHashSet<>(entities != null ? entities : List.of())));
 
+        // If an org was created, set the active-org cookie so the dashboard
+        // automatically opens in the org workspace after onboarding completes.
+        String orgTenantId = state.orgTenantId();
         onboardingStateHolder.complete(tenantId);
 
-        return Response.seeOther(URI.create("/onboarding/complete")).build();
+        var redirect = Response.seeOther(URI.create("/onboarding/complete"));
+        if (orgTenantId != null) {
+            redirect.cookie(AuthCookieHelper.setActiveOrgCookie(orgTenantId));
+        }
+        return redirect.build();
     }
 
     /** Step 4: Progress page — polls /onboarding/status until seeding completes. */
@@ -736,17 +745,24 @@ public class SiteResource {
      * Checks if the dashboard should be blocked because onboarding is incomplete. Returns a
      * redirect Response if the user should be sent back to onboarding or the progress page; returns
      * {@code null} if the user may proceed to the dashboard.
+     *
+     * @param personalTenantId the user's personal tenant ID
+     * @param effectiveTenantId the currently active tenant (org or personal)
      */
-    private Response checkOnboardingGuard(String tenantId) {
-        if (tenantId == null) return null;
-        ProvisioningTracker.ProvisioningStatus provStatus = provisioningTracker.getStatus(tenantId);
+    private Response checkOnboardingGuard(String personalTenantId, String effectiveTenantId) {
+        if (personalTenantId == null) return null;
+        ProvisioningTracker.ProvisioningStatus provStatus = provisioningTracker.getStatus(personalTenantId);
         if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
             return Response.seeOther(URI.create("/onboarding/complete")).build();
         }
-        if (!hasCompletedOnboarding(tenantId)) {
-            return Response.seeOther(URI.create("/onboarding")).build();
+        if (hasCompletedOnboarding(personalTenantId)) return null;
+        // When seed data was placed under an org tenant, check that tenant too
+        if (effectiveTenantId != null
+                && !effectiveTenantId.equals(personalTenantId)
+                && hasCompletedOnboarding(effectiveTenantId)) {
+            return null;
         }
-        return null;
+        return Response.seeOther(URI.create("/onboarding")).build();
     }
 
     // -----------------------------------------------------------------------
@@ -815,28 +831,13 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
         // Guard: redirect if onboarding is in progress or never completed
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
-
-        return dashboard
-                .data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "overview");
+        return applyDashboardData(dashboard.instance(), uc, ws, "overview");
     }
 
     @GET
@@ -848,30 +849,16 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String fullName =
-                uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
+        String fullName =
+                uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
 
-        String rolesDisplay =
-                uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member";
-
-        return account.data("username", username)
-                .data("email", email)
-                .data("fullName", fullName)
-                .data("tenantId", tenantId)
-                .data("roles", rolesDisplay)
-                .data("initial", initial)
-                .data("activeNav", "account");
+        return applyDashboardData(account.instance(), uc, ws, "account")
+                .data("fullName", fullName);
     }
 
     @GET
@@ -883,26 +870,12 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
-
-        return billing.data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "billing")
+        return applyDashboardData(billing.instance(), uc, ws, "billing")
                 .data("v", BUILD_VERSION);
     }
 
@@ -915,27 +888,12 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
-
-        return governance
-                .data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "governance")
+        return applyDashboardData(governance.instance(), uc, ws, "governance")
                 .data("v", BUILD_VERSION);
     }
 
@@ -948,27 +906,12 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
-
-        return catalogue
-                .data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "catalogue")
+        return applyDashboardData(catalogue.instance(), uc, ws, "catalogue")
                 .data("v", BUILD_VERSION);
     }
 
@@ -981,26 +924,12 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(tenantId);
+        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
-
-        return consent.data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "consent")
+        return applyDashboardData(consent.instance(), uc, ws, "consent")
                 .data("v", BUILD_VERSION);
     }
 
@@ -1013,13 +942,7 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        String username = uc.username();
-        String email = uc.email();
-        String tenantId = username != null ? TenantIdDeriver.derive(username) : null;
-        String initial =
-                username != null && !username.isEmpty()
-                        ? username.substring(0, 1).toUpperCase()
-                        : "U";
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
 
         // Look up org info for display
         String orgName = orgId;
@@ -1044,18 +967,53 @@ public class SiteResource {
             }
         }
 
-        return orgDetail
+        return applyDashboardData(orgDetail.instance(), uc, ws, "account")
                 .data("orgId", orgId)
                 .data("orgName", orgName)
-                .data("orgDisplayName", orgDisplayName)
-                .data("username", username)
-                .data("email", email)
-                .data("tenantId", tenantId)
-                .data(
-                        "roles",
-                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
-                .data("initial", initial)
-                .data("activeNav", "account");
+                .data("orgDisplayName", orgDisplayName);
+    }
+
+    // -----------------------------------------------------------------------
+    // Workspace switching
+    // -----------------------------------------------------------------------
+
+    /**
+     * Switches the active workspace by setting the {@code cveil_active_org} cookie. Accepts an
+     * {@code orgName} form parameter — if empty or {@code "personal"}, clears the cookie to revert
+     * to the user's personal workspace.
+     */
+    @POST
+    @Path("dashboard/switch-org")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public Response switchOrganization(@FormParam("orgName") String orgName) {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        // Switch back to personal workspace
+        if (orgName == null || orgName.isBlank() || "personal".equals(orgName)) {
+            return Response.seeOther(URI.create("/dashboard"))
+                    .cookie(AuthCookieHelper.clearActiveOrgCookie())
+                    .build();
+        }
+
+        // Validate that the user is a member of the requested org
+        List<OrganizationInfo> orgs = resolveUserOrganizations(uc);
+        boolean isMember =
+                orgs.stream().anyMatch(o -> orgName.equals(o.orgName()));
+
+        if (!isMember) {
+            LOG.warn(
+                    "User '{}' attempted to switch to org '{}' but is not a member",
+                    uc.username(),
+                    orgName);
+            return Response.seeOther(URI.create("/dashboard")).build();
+        }
+
+        return Response.seeOther(URI.create("/dashboard"))
+                .cookie(AuthCookieHelper.setActiveOrgCookie(orgName))
+                .build();
     }
 
     // -----------------------------------------------------------------------
@@ -1089,14 +1047,120 @@ public class SiteResource {
                         .maxAge(0)
                         .sameSite(NewCookie.SameSite.LAX)
                         .build();
+        NewCookie clearOrg = AuthCookieHelper.clearActiveOrgCookie();
         return Response.seeOther(URI.create("/login"))
-                .cookie(cleared[0], cleared[1], clearSession)
+                .cookie(cleared[0], cleared[1], clearSession, clearOrg)
                 .build();
     }
 
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Resolved workspace context for dashboard pages — encapsulates the effective tenant ID,
+     * display label, and the user's available workspaces (personal + organizations).
+     *
+     * @param tenantId        the effective tenant ID (org's orgName or personal tenant)
+     * @param displayName     human-readable label ("Personal" or org display name)
+     * @param activeOrgId     the Keycloak org ID of the active org, or {@code null} for personal
+     * @param personalTenantId the user's personal tenant ID (always available)
+     * @param organizations   organizations the user belongs to (may be empty)
+     */
+    record WorkspaceContext(
+            String tenantId,
+            String displayName,
+            String activeOrgId,
+            String personalTenantId,
+            List<OrganizationInfo> organizations) {}
+
+    /**
+     * Resolves the effective workspace context for the current request. Checks the
+     * {@code cveil_active_org} cookie; if set to a valid org the user belongs to, uses that org's
+     * {@code orgName} as tenantId. Otherwise falls back to the user's personal tenant.
+     */
+    private WorkspaceContext resolveWorkspaceContext(UserContext uc) {
+        String username = uc.username();
+        String personalTenantId = username != null ? TenantIdDeriver.derive(username) : null;
+
+        // Try to load user's org memberships
+        List<OrganizationInfo> organizations = resolveUserOrganizations(uc);
+
+        // Check the active org cookie
+        String cookieHeader = httpHeaders.getHeaderString("Cookie");
+        String activeOrgName = AuthCookieHelper.readActiveOrg(cookieHeader);
+
+        if (activeOrgName != null && !activeOrgName.isBlank()) {
+            // Validate the user is actually a member of this org
+            for (OrganizationInfo org : organizations) {
+                if (activeOrgName.equals(org.orgName())) {
+                    String display = org.displayName() != null ? org.displayName() : org.orgName();
+                    return new WorkspaceContext(
+                            org.orgName(), display, org.orgId(), personalTenantId, organizations);
+                }
+            }
+            // Cookie references an org the user doesn't belong to — fall through to personal
+            LOG.debug(
+                    "Active org cookie '{}' does not match any user org membership, "
+                            + "falling back to personal tenant",
+                    activeOrgName);
+        }
+
+        return new WorkspaceContext(
+                personalTenantId, "Personal", null, personalTenantId, organizations);
+    }
+
+    /**
+     * Resolves the list of organizations the current user belongs to by querying the
+     * {@code GetCurrentUserQueryActuator} via the IAM query dispatcher.
+     */
+    private List<OrganizationInfo> resolveUserOrganizations(UserContext uc) {
+        if (!cqrs.isCqrsAvailable()) return List.of();
+
+        String userId = resolveKeycloakUserId(uc);
+        if (userId == null) return List.of();
+
+        try {
+            var result =
+                    cqrs.iamQueryDispatcher()
+                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+            if (result instanceof GetCurrentUserQueryActuator.CurrentUserResult cur) {
+                return cur.organizations() != null ? cur.organizations() : List.of();
+            }
+        } catch (Exception e) {
+            LOG.debug("Failed to resolve user organizations: {}", e.getMessage());
+        }
+        return List.of();
+    }
+
+    /**
+     * Populates common template data shared by all dashboard pages: workspace context (tenantId,
+     * display name, org list), user info, roles, and navigation state.
+     */
+    private TemplateInstance applyDashboardData(
+            TemplateInstance template,
+            UserContext uc,
+            WorkspaceContext ws,
+            String activeNav) {
+        String username = uc.username();
+        String initial =
+                username != null && !username.isEmpty()
+                        ? username.substring(0, 1).toUpperCase()
+                        : "U";
+        return template
+                .data("username", username)
+                .data("email", uc.email())
+                .data("tenantId", ws.tenantId())
+                .data("workspaceDisplayName", ws.displayName())
+                .data("activeOrgId", ws.activeOrgId())
+                .data("personalTenantId", ws.personalTenantId())
+                .data("organizations", ws.organizations())
+                .data(
+                        "roles",
+                        uc.jwtPayload() != null ? resolveRolesDisplay(uc.jwtPayload()) : "member")
+                .data("initial", initial)
+                .data("activeNav", activeNav);
+    }
 
     /** Resolve the user's display roles from the DB permissions framework. */
     private String resolveRolesDisplay(String jwtPayload) {

@@ -38,11 +38,63 @@
             <span class="text-lg font-bold tracking-tight text-white">Cveil</span>
         </div>
 
-        <!-- Workspace badge -->
+        <!-- Workspace switcher -->
         <div class="px-4 py-4">
-            <div class="bg-gray-800/60 border border-gray-700 rounded px-3 py-2">
-                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
-                <p class="text-sm text-white font-mono truncate">{tenantId ?: 'default'}</p>
+            <div class="relative" id="ws-switcher">
+                <button onclick="document.getElementById('ws-dropdown').classList.toggle('hidden')"
+                        class="w-full bg-gray-800/60 border border-gray-700 rounded px-3 py-2 text-left hover:border-gray-600 transition-colors group">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm text-white font-mono truncate">{workspaceDisplayName ?: tenantId ?: 'default'}</p>
+                        <svg class="w-4 h-4 text-gray-500 group-hover:text-gray-300 shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                    </div>
+                    {#if activeOrgId}
+                    <p class="text-xs text-gray-500 font-mono truncate mt-0.5">{tenantId}</p>
+                    {/if}
+                </button>
+
+                <!-- Dropdown -->
+                <div id="ws-dropdown" class="hidden absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <!-- Personal workspace -->
+                    <form method="POST" action="/dashboard/switch-org" class="contents">
+                        <input type="hidden" name="orgName" value="personal">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors border-b border-gray-700 {#if !activeOrgId}bg-gray-700/40{/if}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-xs font-bold shrink-0">{initial ?: 'U'}</span>
+                                <div class="min-w-0">
+                                    <p class="text-sm text-white truncate">Personal</p>
+                                    <p class="text-xs text-gray-500 font-mono truncate">{personalTenantId ?: 'default'}</p>
+                                </div>
+                                {#if !activeOrgId}
+                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                {/if}
+                            </div>
+                        </button>
+                    </form>
+
+                    {#if organizations != null && organizations.size > 0}
+                    <div class="px-3 py-1.5">
+                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Organizations</p>
+                    </div>
+                    {#for org in organizations}
+                    <form method="POST" action="/dashboard/switch-org" class="contents">
+                        <input type="hidden" name="orgName" value="{org.orgName}">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors {#if activeOrgId == org.orgId}bg-gray-700/40{/if}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-purple-900/40 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xs font-bold shrink-0">{org.orgName.charAt(0)}</span>
+                                <div class="min-w-0">
+                                    <p class="text-sm text-white truncate">{org.displayName ?: org.orgName}</p>
+                                    <p class="text-xs text-gray-500 font-mono truncate">{org.orgName}</p>
+                                </div>
+                                {#if activeOrgId == org.orgId}
+                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                {/if}
+                            </div>
+                        </button>
+                    </form>
+                    {/for}
+                    {/if}
+                </div>
             </div>
         </div>
 
@@ -141,5 +193,17 @@
         </main>
     </div>
 
+    {#raw}
+    <script>
+        // Close workspace switcher dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            var switcher = document.getElementById('ws-switcher');
+            var dropdown = document.getElementById('ws-dropdown');
+            if (switcher && dropdown && !switcher.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    </script>
+    {/raw}
 </body>
 </html>

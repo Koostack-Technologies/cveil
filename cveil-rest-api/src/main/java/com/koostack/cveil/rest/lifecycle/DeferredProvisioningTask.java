@@ -36,7 +36,12 @@ public class DeferredProvisioningTask implements Runnable {
 
     private static final int TOTAL_STEPS = 4;
 
+    /** Tenant ID that seed and billing data are written to (may be an org tenant). */
     private final String tenantId;
+
+    /** Tenant ID used to report progress via {@link ProvisioningTracker} (always the personal tenant). */
+    private final String trackingTenantId;
+
     private final String email;
     private final String plan;
     private final CommandDispatcher consentDispatcher;
@@ -53,6 +58,7 @@ public class DeferredProvisioningTask implements Runnable {
     /** Full constructor with onboarding selections for parameterized seeding. */
     public DeferredProvisioningTask(
             String tenantId,
+            String trackingTenantId,
             String email,
             String plan,
             CommandDispatcher consentDispatcher,
@@ -64,6 +70,7 @@ public class DeferredProvisioningTask implements Runnable {
             Set<String> purposeIds,
             Set<String> entityNames) {
         this.tenantId = tenantId;
+        this.trackingTenantId = trackingTenantId;
         this.email = email;
         this.plan = plan;
         this.consentDispatcher = consentDispatcher;
@@ -76,7 +83,7 @@ public class DeferredProvisioningTask implements Runnable {
         this.entityNames = entityNames;
     }
 
-    /** Legacy constructor — falls back to full governance seed. */
+    /** Legacy constructor — falls back to full governance seed under the personal tenant. */
     public DeferredProvisioningTask(
             String tenantId,
             String email,
@@ -86,6 +93,7 @@ public class DeferredProvisioningTask implements Runnable {
             PaymentProcessorService<?> paymentProcessorService,
             ProvisioningTracker tracker) {
         this(
+                tenantId,
                 tenantId,
                 email,
                 plan,
@@ -106,32 +114,32 @@ public class DeferredProvisioningTask implements Runnable {
 
     @Override
     public void run() {
-        LOG.info("Starting deferred provisioning for tenant: {}", tenantId);
+        LOG.info("Starting deferred provisioning for tenant: {} (tracker: {})", tenantId, trackingTenantId);
 
         try {
             // Step 1: Seed consent governance data (the slow step)
-            tracker.updateStep(tenantId, "Configuring governance defaults", 0, TOTAL_STEPS);
+            tracker.updateStep(trackingTenantId, "Configuring governance defaults", 0, TOTAL_STEPS);
             seedConsentGovernance();
 
             // Step 2: Create billing profile
-            tracker.updateStep(tenantId, "Setting up billing", 1, TOTAL_STEPS);
+            tracker.updateStep(trackingTenantId, "Setting up billing", 1, TOTAL_STEPS);
             createBillingProfile();
 
             // Step 3: Create Stripe customer and link to billing profile
-            tracker.updateStep(tenantId, "Connecting payment processor", 2, TOTAL_STEPS);
+            tracker.updateStep(trackingTenantId, "Connecting payment processor", 2, TOTAL_STEPS);
             createStripeCustomer();
 
             // Step 4: Create subscription
-            tracker.updateStep(tenantId, "Activating your plan", 3, TOTAL_STEPS);
+            tracker.updateStep(trackingTenantId, "Activating your plan", 3, TOTAL_STEPS);
             createSubscription();
 
-            tracker.complete(tenantId);
+            tracker.complete(trackingTenantId);
             LOG.info("Deferred provisioning completed for tenant: {}", tenantId);
 
         } catch (Exception e) {
             LOG.error(
                     "Deferred provisioning failed for tenant {}: {}", tenantId, e.getMessage(), e);
-            tracker.fail(tenantId, "Workspace setup encountered an error. Please contact support.");
+            tracker.fail(trackingTenantId, "Workspace setup encountered an error. Please contact support.");
         }
     }
 

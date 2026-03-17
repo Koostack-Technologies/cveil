@@ -741,6 +741,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 activeTenant = orgHeader;
                 LOG.debug("JWT user selecting org context via X-Org-Id: {}", orgHeader);
             }
+        } else if (!isPatAuth) {
+            // Fallback: read cveil_active_org cookie for browser-based JWT requests.
+            // This ensures dashboard fetch() calls respect the workspace selection
+            // without requiring every frontend call to include the X-Org-Id header.
+            String cookieHeader = ctx.getHeaderString("Cookie");
+            String orgCookie = AuthCookieHelper.readActiveOrg(cookieHeader);
+            if (orgCookie != null && !orgCookie.isBlank()) {
+                activeTenant = orgCookie;
+                LOG.debug("JWT user selecting org context via cookie: {}", orgCookie);
+            }
         }
 
         // If the active tenant changed from what's in the identity, create
@@ -971,7 +981,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.startsWith("dashboard/governance")
                 || normalized.startsWith("dashboard/consent")
                 || normalized.startsWith("dashboard/catalogue")
-                || normalized.startsWith("dashboard/organizations/"));
+                || normalized.startsWith("dashboard/organizations/")
+                || normalized.startsWith("dashboard/switch-org"));
     }
 
     /**
