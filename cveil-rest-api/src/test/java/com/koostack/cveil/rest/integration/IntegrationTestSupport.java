@@ -2,6 +2,7 @@ package com.koostack.cveil.rest.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.koostack.cveil.plugin.event.jooq.RedisEventPublisher;
 import com.koostack.cveil.rest.config.CveilConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -78,7 +79,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /**
      * Creates support with tenant schema routing. JDBC queries will execute with {@code SET
-     * search_path TO cveil_consent, cveil_event, platform_core, public}.
+     * search_path TO cveilconsent, cveilevent, cveilcore, public}.
      */
     public IntegrationTestSupport(CveilConfig config, String tenantId) {
         var redis =
@@ -100,7 +101,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         this.jdbcUrl = db.url();
         this.dbUsername = db.username().orElse("cveil_test");
         this.dbPassword = db.password().orElse("cveil_test_password");
-        this.tenantSchema = tenantId != null ? "cveil_consent" : null;
+        this.tenantSchema = tenantId != null ? "cveilconsent" : null;
         this.tenantId = tenantId;
 
         this.keycloakUrl =
@@ -297,8 +298,8 @@ public class IntegrationTestSupport implements AutoCloseable {
         if (tenantSchema != null) {
             try (var stmt = conn.createStatement()) {
                 stmt.execute(
-                        "SET search_path TO cveil_consent, cveil_event, platform_core,"
-                                + " platform_iam, platform_billing, public");
+                        "SET search_path TO cveilconsent, cveilevent, cveilcore,"
+                                + " cveiliam, cveilbilling, public");
             }
         }
         return conn;
@@ -440,7 +441,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     public List<Map<String, Object>> queryFields() {
         return query(
                 "SELECT f.*, e.entity_name FROM field f "
-                        + "JOIN entity e ON f.entity_id = e.entity_id "
+                        + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
                         + "ORDER BY f.field_name");
     }
 
@@ -448,9 +449,9 @@ public class IntegrationTestSupport implements AutoCloseable {
         return query(
                 "SELECT fc.*, f.field_name, c.category_name, e.entity_name "
                         + "FROM field_category fc "
-                        + "JOIN field f ON fc.field_id = f.field_id "
-                        + "JOIN entity e ON f.entity_id = e.entity_id "
-                        + "JOIN category c ON fc.category_id = c.category_id "
+                        + "JOIN field f ON fc.field_uuid = f.field_uuid "
+                        + "JOIN entity e ON f.entity_uuid = e.entity_uuid "
+                        + "JOIN category c ON fc.category_uuid = c.category_uuid "
                         + "WHERE f.field_name = ? AND e.entity_name = ?",
                 fieldName,
                 entityName);
@@ -579,7 +580,7 @@ public class IntegrationTestSupport implements AutoCloseable {
 
     /** Computes the shard stream key for a tenant (must match RedisEventPublisher routing). */
     private String shardStreamKey(String tenantId) {
-        int shard = Math.floorMod(tenantId.hashCode(), 8);
+        int shard = Math.floorMod(tenantId.hashCode(), RedisEventPublisher.DEFAULT_SHARD_COUNT);
         return "cveil:stream:shard:" + shard;
     }
 
@@ -618,7 +619,7 @@ public class IntegrationTestSupport implements AutoCloseable {
                                 var rs =
                                         conn.createStatement()
                                                 .executeQuery(
-                                                        "SELECT 1 FROM platform_core.tenant WHERE"
+                                                        "SELECT 1 FROM cveiliam.tenant WHERE"
                                                                 + " tenant_id = '"
                                                                 + tenantId
                                                                 + "' AND status IN ('created',"
@@ -734,7 +735,7 @@ public class IntegrationTestSupport implements AutoCloseable {
             String displayName,
             String plan,
             String password) {
-        String username = tenantId.replace("_", "-") + "-admin";
+        String username = tenantId.replace("_", "-");
         String email = username + "@cveil-test.com";
 
         String passwordField = "";
@@ -755,11 +756,17 @@ public class IntegrationTestSupport implements AutoCloseable {
                           "username": "%s",
                           "email": "%s",
                           "fullName": "%s Admin",
+                          "displayName": "%s",
                           "roles": ["super-admin"],
                           "temporaryPassword": false%s
                         }
                         """
-                                        .formatted(username, email, displayName, passwordField))
+                                        .formatted(
+                                                username,
+                                                email,
+                                                displayName,
+                                                displayName,
+                                                passwordField))
                         .when()
                         .post("/api/v1/platform/iam/users");
 
@@ -838,7 +845,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     public static AuthInfo provisionTenantAndLogin(
             String bootstrapKey, String tenantId, String displayName) {
         String password = "Test1234!";
-        String username = tenantId.replace("_", "-") + "-admin";
+        String username = tenantId.replace("_", "-");
         String email = username + "@cveil-test.com";
 
         try {

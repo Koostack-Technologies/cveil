@@ -37,7 +37,7 @@ public class FindAccessTokenByHashQueryActuator
         String sql =
                 "SELECT access_token_id, token_prefix, name, tenant_id, roles, status,"
                         + " expires_at, created_by, last_used_at, created_at"
-                        + " FROM platform_iam.access_token WHERE token_hash = ?";
+                        + " FROM cveiliam.access_token WHERE token_hash = ?";
         try (var conn = platformDataSource.getConnection();
                 var ps = conn.prepareStatement(sql)) {
             ps.setString(1, query.tokenHash());

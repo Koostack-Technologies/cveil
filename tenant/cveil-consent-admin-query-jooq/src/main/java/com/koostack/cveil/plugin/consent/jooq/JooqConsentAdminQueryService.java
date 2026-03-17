@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jooq.DSLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,7 +106,7 @@ public class JooqConsentAdminQueryService
     public List<EntityView> listEntities() {
         getDsl();
         return entityRepository.findAll().stream()
-                .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()))
+                .map(e -> new EntityView(e.getEntityUuid(), e.getEntityName(), e.getDescription()))
                 .toList();
     }
 
@@ -114,7 +115,7 @@ public class JooqConsentAdminQueryService
         getDsl();
         return entityRepository
                 .findByName(entityName)
-                .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()));
+                .map(e -> new EntityView(e.getEntityUuid(), e.getEntityName(), e.getDescription()));
     }
 
     // -----------------------------------------------------------------------
@@ -128,7 +129,9 @@ public class JooqConsentAdminQueryService
                 .map(
                         c ->
                                 new CategoryView(
-                                        c.getCategoryId(), c.getCategoryName(), c.getDescription()))
+                                        c.getCategoryUuid(),
+                                        c.getCategoryName(),
+                                        c.getDescription()))
                 .toList();
     }
 
@@ -140,7 +143,7 @@ public class JooqConsentAdminQueryService
                 .map(
                         c ->
                                 new CategoryView(
-                                        c.getCategoryId(),
+                                        c.getCategoryUuid(),
                                         c.getCategoryName(),
                                         c.getDescription()));
     }
@@ -162,28 +165,31 @@ public class JooqConsentAdminQueryService
         Optional<Entity> entity = entityRepository.findByName(entityName);
         if (entity.isEmpty()) return null;
         Optional<Field> field =
-                fieldRepository.findByNameAndEntity(fieldName, entity.get().getEntityId());
+                fieldRepository.findByNameAndEntity(fieldName, entity.get().getEntityUuid());
         return field.map(this::toFieldView).orElse(null);
     }
 
     private FieldView toFieldView(Field f) {
         FieldView.EntityView entityView = null;
-        if (f.getEntityId() != null) {
+        if (f.getEntityUuid() != null) {
             entityView =
-                    entityRepository
-                            .dao()
-                            .findOptionalById(f.getEntityId())
-                            .map(e -> new FieldView.EntityView(e.getEntityId(), e.getEntityName()))
+                    getDsl().selectFrom(ENTITY)
+                            .where(ENTITY.ENTITY_UUID.eq(f.getEntityUuid()))
+                            .fetchOptionalInto(Entity.class)
+                            .map(
+                                    e ->
+                                            new FieldView.EntityView(
+                                                    e.getEntityUuid(), e.getEntityName()))
                             .orElse(null);
         }
 
         // Get categories for this field
         var fieldCategories =
-                getDsl().select(CATEGORY.CATEGORY_ID, CATEGORY.CATEGORY_NAME)
+                getDsl().select(CATEGORY.CATEGORY_UUID, CATEGORY.CATEGORY_NAME)
                         .from(FIELD_CATEGORY)
                         .join(CATEGORY)
-                        .on(FIELD_CATEGORY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
-                        .where(FIELD_CATEGORY.FIELD_ID.eq(f.getFieldId()))
+                        .on(FIELD_CATEGORY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
+                        .where(FIELD_CATEGORY.FIELD_UUID.eq(f.getFieldUuid()))
                         .fetch();
 
         List<FieldView.CategoryView> categories =
@@ -191,12 +197,12 @@ public class JooqConsentAdminQueryService
                         .map(
                                 r ->
                                         new FieldView.CategoryView(
-                                                r.get(CATEGORY.CATEGORY_ID),
+                                                r.get(CATEGORY.CATEGORY_UUID),
                                                 r.get(CATEGORY.CATEGORY_NAME)))
                         .toList();
 
         return new FieldView(
-                f.getFieldId(), f.getFieldName(), f.getDescription(), entityView, categories);
+                f.getFieldUuid(), f.getFieldName(), f.getDescription(), entityView, categories);
     }
 
     // -----------------------------------------------------------------------
@@ -226,8 +232,8 @@ public class JooqConsentAdminQueryService
                                 PURPOSE_REGULATION.ON_DENIED)
                         .from(PURPOSE_REGULATION)
                         .join(REGULATION)
-                        .on(PURPOSE_REGULATION.REGULATION_ID.eq(REGULATION.REGULATION_ID))
-                        .where(PURPOSE_REGULATION.PURPOSE_ID.eq(p.getPurposeId()))
+                        .on(PURPOSE_REGULATION.REGULATION_UUID.eq(REGULATION.REGULATION_UUID))
+                        .where(PURPOSE_REGULATION.PURPOSE_UUID.eq(p.getPurposeUuid()))
                         .fetch();
 
         List<PurposeView.RegulationLinkView> regs =
@@ -248,12 +254,12 @@ public class JooqConsentAdminQueryService
                         .toList();
 
         // Policies under this purpose
-        var policyRecords = policyRepository.findByPurpose(p.getPurposeId());
+        var policyRecords = policyRepository.findByPurpose(p.getPurposeUuid());
         List<PurposeView.PolicyView> policies =
                 policyRecords.stream()
                         .map(
                                 r -> {
-                                    long policyId = r.get(POLICY.POLICY_ID);
+                                    UUID policyId = r.get(POLICY.POLICY_UUID);
                                     String policyType =
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
@@ -265,13 +271,13 @@ public class JooqConsentAdminQueryService
                                     if (r.get(CATEGORY.CATEGORY_NAME) != null) {
                                         catRef =
                                                 new PurposeView.CategoryRef(
-                                                        r.get(POLICY.CATEGORY_ID),
+                                                        r.get(POLICY.CATEGORY_UUID),
                                                         r.get(CATEGORY.CATEGORY_NAME));
                                     }
                                     if (r.get(FIELD.FIELD_NAME) != null) {
                                         fieldRef =
                                                 new PurposeView.FieldRef(
-                                                        r.get(POLICY.FIELD_ID),
+                                                        r.get(POLICY.FIELD_UUID),
                                                         r.get(FIELD.FIELD_NAME),
                                                         r.get(ENTITY.ENTITY_NAME));
                                     }
@@ -282,7 +288,7 @@ public class JooqConsentAdminQueryService
                         .toList();
 
         return new PurposeView(
-                p.getPurposeId(), p.getPurposeName(), p.getDescription(), regs, policies);
+                p.getPurposeUuid(), p.getPurposeName(), p.getDescription(), regs, policies);
     }
 
     // -----------------------------------------------------------------------
@@ -307,13 +313,13 @@ public class JooqConsentAdminQueryService
 
     private RegulationView toRegulationView(Regulation r) {
         var jurisdictions =
-                getDsl().select(JURISDICTION.JURISDICTION_ID, JURISDICTION.JURISDICTION_NAME)
+                getDsl().select(JURISDICTION.JURISDICTION_UUID, JURISDICTION.JURISDICTION_NAME)
                         .from(REGULATION_JURISDICTION)
                         .join(JURISDICTION)
                         .on(
-                                REGULATION_JURISDICTION.JURISDICTION_ID.eq(
-                                        JURISDICTION.JURISDICTION_ID))
-                        .where(REGULATION_JURISDICTION.REGULATION_ID.eq(r.getRegulationId()))
+                                REGULATION_JURISDICTION.JURISDICTION_UUID.eq(
+                                        JURISDICTION.JURISDICTION_UUID))
+                        .where(REGULATION_JURISDICTION.REGULATION_UUID.eq(r.getRegulationUuid()))
                         .fetch();
 
         List<RegulationView.JurisdictionView> juris =
@@ -321,12 +327,12 @@ public class JooqConsentAdminQueryService
                         .map(
                                 j ->
                                         new RegulationView.JurisdictionView(
-                                                j.get(JURISDICTION.JURISDICTION_ID),
+                                                j.get(JURISDICTION.JURISDICTION_UUID),
                                                 j.get(JURISDICTION.JURISDICTION_NAME)))
                         .toList();
 
         return new RegulationView(
-                r.getRegulationId(), r.getRegulationName(), r.getDescription(), juris);
+                r.getRegulationUuid(), r.getRegulationName(), r.getDescription(), juris);
     }
 
     // -----------------------------------------------------------------------
@@ -340,7 +346,7 @@ public class JooqConsentAdminQueryService
                 .map(
                         j ->
                                 new JurisdictionView(
-                                        j.getJurisdictionId(),
+                                        j.getJurisdictionUuid(),
                                         j.getJurisdictionName(),
                                         j.getDescription()))
                 .toList();
@@ -354,7 +360,7 @@ public class JooqConsentAdminQueryService
                 .map(
                         j ->
                                 new JurisdictionView(
-                                        j.getJurisdictionId(),
+                                        j.getJurisdictionUuid(),
                                         j.getJurisdictionName(),
                                         j.getDescription()));
     }
@@ -370,7 +376,7 @@ public class JooqConsentAdminQueryService
                 .map(
                         s ->
                                 new SubjectView(
-                                        s.getSubjectId(),
+                                        s.getSubjectUuid(),
                                         s.getSubjectName(),
                                         s.getDescription(),
                                         toInstant(s.getCreatedAt()),
@@ -388,7 +394,7 @@ public class JooqConsentAdminQueryService
                 .map(
                         s ->
                                 new SubjectView(
-                                        s.getSubjectId(),
+                                        s.getSubjectUuid(),
                                         s.getSubjectName(),
                                         s.getDescription(),
                                         toInstant(s.getCreatedAt()),
@@ -411,9 +417,9 @@ public class JooqConsentAdminQueryService
                         .map(
                                 r ->
                                         new SubjectConsentView.ConsentLedgerEntryView(
-                                                r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                                                r.get(CONSENT_LEDGER.CONSENT_LEDGER_UUID),
                                                 subjectId,
-                                                r.get(CONSENT_LEDGER.POLICY_ID),
+                                                r.get(CONSENT_LEDGER.POLICY_UUID),
                                                 r.get(PURPOSE.PURPOSE_NAME),
                                                 r.get(POLICY.POLICY_TYPE) != null
                                                         ? r.get(POLICY.POLICY_TYPE).getLiteral()
@@ -457,9 +463,9 @@ public class JooqConsentAdminQueryService
                 .map(
                         r ->
                                 new SubjectConsentView.ConsentLedgerEntryView(
-                                        r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                                        r.get(CONSENT_LEDGER.CONSENT_LEDGER_UUID),
                                         r.get(CONSENT_LEDGER.SUBJECT_ID),
-                                        r.get(CONSENT_LEDGER.POLICY_ID),
+                                        r.get(CONSENT_LEDGER.POLICY_UUID),
                                         r.get(PURPOSE.PURPOSE_NAME),
                                         r.get(POLICY.POLICY_TYPE) != null
                                                 ? r.get(POLICY.POLICY_TYPE).getLiteral()
@@ -496,25 +502,27 @@ public class JooqConsentAdminQueryService
             return opt.map(
                             r ->
                                     new PurposeView.PolicyView(
-                                            r.get(POLICY.POLICY_ID),
+                                            r.get(POLICY.POLICY_UUID),
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
                                                     : "FIELD",
                                             null,
                                             new PurposeView.FieldRef(
-                                                    r.get(POLICY.FIELD_ID), fieldName, entityName)))
+                                                    r.get(POLICY.FIELD_UUID),
+                                                    fieldName,
+                                                    entityName)))
                     .orElse(null);
         } else if ("CATEGORY".equals(policyType)) {
             var opt = policyRepository.findCategoryPolicy(purposeName, categoryName);
             return opt.map(
                             r ->
                                     new PurposeView.PolicyView(
-                                            r.get(POLICY.POLICY_ID),
+                                            r.get(POLICY.POLICY_UUID),
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
                                                     : "CATEGORY",
                                             new PurposeView.CategoryRef(
-                                                    r.get(POLICY.CATEGORY_ID), categoryName),
+                                                    r.get(POLICY.CATEGORY_UUID), categoryName),
                                             null))
                     .orElse(null);
         }

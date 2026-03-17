@@ -8,6 +8,7 @@ import com.koostack.cveil.core.platform.iam.AccessTokenInfo;
 import com.koostack.cveil.core.platform.iam.IdpProvider;
 import com.koostack.cveil.core.platform.iam.IdpTenantResolver;
 import com.koostack.cveil.core.platform.iam.PermissionService;
+import com.koostack.cveil.rest.billing.BillableEndpoints;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
@@ -25,6 +26,8 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.Instant;
@@ -60,8 +63,8 @@ import org.slf4j.MDC;
  *       tenant scope. This allows initial platform setup before any real API keys exist.
  *   <li><strong>Token verification</strong> — for {@code cveil_} prefixed tokens, validates the
  *       CRC32 checksum, computes a SHA-256 hash, and looks it up in the {@code
- *       platform_iam.access_token} table. For JWT tokens (three dot-separated segments), delegates
- *       to the tenant's {@link IdpProvider} for JWKS-based verification.
+ *       cveiliam.access_token} table. For JWT tokens (three dot-separated segments), delegates to
+ *       the tenant's {@link IdpProvider} for JWKS-based verification.
  *   <li><strong>Security context</strong> — on success, sets a JAX-RS {@link SecurityContext} with
  *       the authenticated principal and roles, and stores the full {@link IdentityContext} as a
  *       request property for downstream consumption (e.g. {@code TenantScopeInterceptor}).
@@ -94,6 +97,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     /** Standard HTTP Bearer authentication scheme prefix. */
     private static final String BEARER_PREFIX = "Bearer ";
+
+    /** DPoP authentication scheme prefix (RFC 9449). */
+    private static final String DPOP_PREFIX = "DPoP ";
 
     /** Authentication scheme name set on the JAX-RS {@link SecurityContext}. */
     private static final String AUTH_SCHEME_BEARER = "BEARER";
@@ -164,6 +170,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      */
     @Inject Instance<IdpTenantResolver> idpTenantResolverInstance;
 
+    /** DPoP proof verifier — validates RFC 9449 proof JWTs on incoming requests. */
+    private final DpopVerifier dpopVerifier = new DpopVerifier();
+
     // -----------------------------------------------------------------------
     // Filter implementation
     // -----------------------------------------------------------------------
@@ -183,10 +192,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 3. Extract Bearer token from Authorization header, falling back to cookie
+        // 3. Extract token from Authorization header (DPoP or Bearer), falling back to cookie
         String authHeader = ctx.getHeaderString("Authorization");
-        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            // Fallback: read JWT from HttpOnly access cookie (dashboard fetch() calls)
+        boolean isDpopScheme = false;
+        if (authHeader != null && authHeader.startsWith(DPOP_PREFIX)) {
+            isDpopScheme = true;
+        } else if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            // Fallback: read JWT from HttpOnly access cookie (server-rendered pages)
             String cookieToken =
                     AuthCookieHelper.readCookie(
                             ctx.getHeaderString("Cookie"), AuthCookieHelper.ACCESS_COOKIE);
@@ -195,14 +207,18 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             } else {
                 abortUnauthorized(
                         ctx,
-                        "Missing or invalid Authorization header — " + "expected 'Bearer <token>'");
+                        "Missing or invalid Authorization header —"
+                                + " expected 'Bearer <token>' or 'DPoP <token>'");
                 return;
             }
         }
 
-        String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+        String token =
+                authHeader
+                        .substring(isDpopScheme ? DPOP_PREFIX.length() : BEARER_PREFIX.length())
+                        .trim();
         if (token.isEmpty()) {
-            abortUnauthorized(ctx, "Bearer token must not be empty");
+            abortUnauthorized(ctx, "Token must not be empty");
             return;
         }
 
@@ -269,7 +285,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         // 4d. Personal access token (cveil_ prefix) — SHA-256 hash lookup
-        //     in the platform_iam.access_token table.
+        //     in the cveiliam.access_token table.
         if (AccessTokenGenerator.isAccessToken(token)) {
             verifyAccessToken(ctx, token);
             return;
@@ -278,7 +294,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // 4e. JWT detection — if the token looks like a JWT (3 dot-separated
         //     base64url segments), verify via the tenant's IdpProvider.
         if (isJwt(token)) {
-            verifyJwt(ctx, token);
+            verifyJwt(ctx, token, isDpopScheme);
             return;
         }
 
@@ -342,7 +358,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
      * <ol>
      *   <li>Fast-reject malformed tokens via CRC32 checksum validation
      *   <li>Compute SHA-256 hash of the raw token
-     *   <li>Look up hash in {@code platform_iam.access_token} via CQRS query
+     *   <li>Look up hash in {@code cveiliam.access_token} via CQRS query
      *   <li>Validate status ({@code active}) and expiration
      *   <li>Build {@link IdentityContext} with snapshotted roles
      * </ol>
@@ -568,13 +584,19 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
     }
 
     /**
-     * Verifies a JWT bearer token via the tenant's IdpProvider.
+     * Verifies a JWT token via the tenant's IdpProvider, with optional DPoP proof validation.
      *
      * <p>Extracts the tenant ID from the JWT payload (without verification), resolves the
      * IdpProvider for that tenant, and delegates to its {@code verifyToken()} method for full
-     * JWKS-based signature verification.
+     * JWKS-based signature verification. When the request uses the {@code DPoP} authorization
+     * scheme, the DPoP proof header is validated and the access token's {@code cnf.jkt} claim is
+     * verified against the proof's public key thumbprint.
+     *
+     * @param ctx the request context
+     * @param token the JWT access token
+     * @param isDpopScheme true if the Authorization header used the DPoP scheme
      */
-    private void verifyJwt(ContainerRequestContext ctx, String token) {
+    private void verifyJwt(ContainerRequestContext ctx, String token, boolean isDpopScheme) {
         IdpTenantResolver idpResolver =
                 idpTenantResolverInstance.isResolvable() ? idpTenantResolverInstance.get() : null;
 
@@ -600,12 +622,45 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         try {
             IdpProvider<?> idpProvider = idpResolver.resolve(tenantId);
             IdentityContext identity = idpProvider.verifyToken(tenantId, token);
+
+            // -- DPoP proof validation --
+            // Extract cnf.jkt from the verified JWT claims (Keycloak adds this
+            // when dpop.bound.access.tokens is enabled on the client).
+            String expectedJkt = extractCnfJkt(identity);
+
+            if (isDpopScheme || expectedJkt != null) {
+                // DPoP proof is required: either the client sent DPoP scheme
+                // or the token is DPoP-bound (has cnf.jkt).
+                String dpopHeader = ctx.getHeaderString("DPoP");
+                if (dpopHeader == null || dpopHeader.isBlank()) {
+                    abortUnauthorized(ctx, "DPoP-bound token requires a DPoP proof header");
+                    return;
+                }
+
+                // Build the htu (scheme + authority + path, no query)
+                var requestUri = ctx.getUriInfo().getRequestUri();
+                String htu =
+                        requestUri.getScheme()
+                                + "://"
+                                + requestUri.getAuthority()
+                                + requestUri.getPath();
+
+                try {
+                    dpopVerifier.verify(dpopHeader, ctx.getMethod(), htu, token, expectedJkt);
+                } catch (DpopVerifier.DpopVerificationException e) {
+                    LOG.debug("DPoP verification failed: {}", e.getMessage());
+                    abortUnauthorized(ctx, "DPoP proof invalid: " + e.getMessage());
+                    return;
+                }
+            }
+
             LOG.debug(
-                    "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}",
+                    "JWT authenticated: subject={}, tenantId={}, provider={}, roles={}, dpop={}",
                     identity.subject(),
                     identity.tenantId(),
                     identity.provider(),
-                    identity.roles());
+                    identity.roles(),
+                    isDpopScheme);
             applyAuthentication(
                     ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
         } catch (CveilAuthException e) {
@@ -615,6 +670,23 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             LOG.error("Unexpected error during JWT verification", e);
             abortUnauthorized(ctx, "Authentication failed — internal error");
         }
+    }
+
+    /**
+     * Extracts the {@code cnf.jkt} (JWK thumbprint confirmation) claim from the identity's claims
+     * map. Keycloak adds this claim to DPoP-bound access tokens.
+     *
+     * @return the JWK thumbprint, or {@code null} if not present
+     */
+    @SuppressWarnings("unchecked")
+    private static String extractCnfJkt(IdentityContext identity) {
+        if (identity.claims() == null) return null;
+        Object cnf = identity.claims().get("cnf");
+        if (cnf instanceof Map<?, ?> cnfMap) {
+            Object jkt = cnfMap.get("jkt");
+            return jkt instanceof String s ? s : null;
+        }
+        return null;
     }
 
     /**
@@ -669,6 +741,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 activeTenant = orgHeader;
                 LOG.debug("JWT user selecting org context via X-Org-Id: {}", orgHeader);
             }
+        } else if (!isPatAuth) {
+            // Fallback: read cveil_active_org cookie for browser-based JWT requests.
+            // This ensures dashboard fetch() calls respect the workspace selection
+            // without requiring every frontend call to include the X-Org-Id header.
+            String cookieHeader = ctx.getHeaderString("Cookie");
+            String orgCookie = AuthCookieHelper.readActiveOrg(cookieHeader);
+            if (orgCookie != null && !orgCookie.isBlank()) {
+                activeTenant = orgCookie;
+                LOG.debug("JWT user selecting org context via cookie: {}", orgCookie);
+            }
         }
 
         // If the active tenant changed from what's in the identity, create
@@ -687,8 +769,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         // -- Resolve permissions from DB --
+        // Skip DB resolution for bootstrap-key auth — its super-admin role is
+        // authoritative and there is no corresponding DB user.
         AuthorizationContext authz = null;
-        if (cqrsHolder.isPermissionServiceAvailable() && effectiveIdentity.subject() != null) {
+        boolean skipDbResolution = BOOTSTRAP_PROVIDER.equals(effectiveIdentity.provider());
+        if (!skipDbResolution
+                && cqrsHolder.isPermissionServiceAvailable()
+                && effectiveIdentity.subject() != null) {
             try {
                 PermissionService permSvc = cqrsHolder.permissionService();
                 Set<String> roles = permSvc.resolveRoles(effectiveIdentity.subject(), activeTenant);
@@ -717,6 +804,50 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                                     ? effectiveIdentity.roles()
                                     : Set.of(),
                             Set.of());
+        }
+
+        // ---- PAT endpoint restriction ----
+        // Personal access tokens may only access the public billable API surface
+        // (governance, consent/subjects, catalogue, graph, events). Requests to
+        // internal/dashboard endpoints (billing, IAM, metrics, platform, etc.) are
+        // rejected with 403 Forbidden to prevent billing bypass.
+        // This check runs BEFORE populating request-scoped state so that denied
+        // requests don't leak identity into downstream filters or rate limiters.
+        if (BillableEndpoints.isPatAuth(effectiveIdentity.provider())) {
+            String requestPath = ctx.getUriInfo().getPath();
+            if (!requestPath.startsWith("/")) {
+                requestPath = "/" + requestPath;
+            }
+            // Defensive normalization: collapse any "../" or "//" sequences
+            // that might bypass prefix matching. Quarkus/Vert.x normalizes
+            // before routing, but this guards against edge cases.
+            try {
+                requestPath = new URI(requestPath).normalize().getPath();
+            } catch (URISyntaxException ignored) {
+                // Malformed path — treat as non-billable (deny by default)
+            }
+            if (!BillableEndpoints.isBillable(requestPath)) {
+                LOG.warn(
+                        "PAT access denied to non-billable endpoint: path={}, subject={},"
+                                + " tenant={}",
+                        requestPath,
+                        effectiveIdentity.subject(),
+                        effectiveIdentity.tenantId());
+                ctx.abortWith(
+                        Response.status(Response.Status.FORBIDDEN)
+                                .entity(
+                                        Map.of(
+                                                "error",
+                                                "Forbidden",
+                                                "message",
+                                                "Personal access tokens can only access the public"
+                                                        + " API (consent, governance, catalogue,"
+                                                        + " graph, events). Use a session login for"
+                                                        + " dashboard endpoints."))
+                                .type(MediaType.APPLICATION_JSON_TYPE)
+                                .build());
+                return;
+            }
         }
 
         // Populate the request-scoped holder for TenantScopeInterceptor
@@ -832,6 +963,13 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("signup/")
                 || normalized.equals("signup/success")
                 || normalized.equals("signup/success/")
+                || normalized.equals("setup")
+                || normalized.equals("setup/")
+                || normalized.equals("setup/status")
+                || normalized.equals("setup/status/")
+                || normalized.equals("onboarding")
+                || normalized.equals("onboarding/")
+                || normalized.startsWith("onboarding/")
                 || normalized.equals("login")
                 || normalized.equals("login/")
                 || normalized.equals("logout")
@@ -843,7 +981,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.startsWith("dashboard/governance")
                 || normalized.startsWith("dashboard/consent")
                 || normalized.startsWith("dashboard/catalogue")
-                || normalized.startsWith("dashboard/organizations/"));
+                || normalized.startsWith("dashboard/organizations/")
+                || normalized.startsWith("dashboard/switch-org"));
     }
 
     /**

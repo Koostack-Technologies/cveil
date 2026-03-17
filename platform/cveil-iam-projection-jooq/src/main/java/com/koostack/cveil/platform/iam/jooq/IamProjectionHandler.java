@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
  * Platform stream event handler for IAM domain events.
  *
  * <p>Materializes user, organization, membership, and invitation data from domain events into the
- * {@code platform_iam} read model tables. All operations are idempotent upserts so that replaying
- * the event stream produces the same result.
+ * {@code cveiliam} read model tables. All operations are idempotent upserts so that replaying the
+ * event stream produces the same result.
  *
  * <p>Keycloak side-effects are still performed synchronously by the command actuators before the
  * event is published (Phase 2 model). This handler only writes to the local database.
@@ -25,8 +25,8 @@ public class IamProjectionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(IamProjectionHandler.class);
 
-    // -- platform_iam.iam_user ------------------------------------------------
-    private static final org.jooq.Table<?> IAM_USER = table(name("platform_iam", "iam_user"));
+    // -- cveiliam.iam_user ------------------------------------------------
+    private static final org.jooq.Table<?> IAM_USER = table(name("cveiliam", "iam_user"));
     private static final org.jooq.Field<UUID> USER_ID = field(name("user_id"), UUID.class);
     private static final org.jooq.Field<String> USER_TENANT_ID =
             field(name("tenant_id"), String.class);
@@ -46,9 +46,8 @@ public class IamProjectionHandler {
     private static final org.jooq.Field<OffsetDateTime> UPDATED_AT =
             field(name("updated_at"), OffsetDateTime.class);
 
-    // -- platform_iam.iam_organization ----------------------------------------
-    private static final org.jooq.Table<?> IAM_ORG =
-            table(name("platform_iam", "iam_organization"));
+    // -- cveiliam.iam_organization ----------------------------------------
+    private static final org.jooq.Table<?> IAM_ORG = table(name("cveiliam", "iam_organization"));
     private static final org.jooq.Field<String> ORG_ID = field(name("org_id"), String.class);
     private static final org.jooq.Field<String> ORG_TENANT_ID =
             field(name("tenant_id"), String.class);
@@ -59,18 +58,16 @@ public class IamProjectionHandler {
             field(name("description"), String.class);
     private static final org.jooq.Field<String> ORG_STATUS = field(name("status"), String.class);
 
-    // -- platform_iam.org_membership ------------------------------------------
-    private static final org.jooq.Table<?> MEMBERSHIP =
-            table(name("platform_iam", "org_membership"));
+    // -- cveiliam.org_membership ------------------------------------------
+    private static final org.jooq.Table<?> MEMBERSHIP = table(name("cveiliam", "org_membership"));
     private static final org.jooq.Field<String> MEM_ORG_ID = field(name("org_id"), String.class);
     private static final org.jooq.Field<UUID> MEM_USER_ID = field(name("user_id"), UUID.class);
     private static final org.jooq.Field<String> MEM_ROLE = field(name("role"), String.class);
     private static final org.jooq.Field<OffsetDateTime> JOINED_AT =
             field(name("joined_at"), OffsetDateTime.class);
 
-    // -- platform_iam.org_invitation ------------------------------------------
-    private static final org.jooq.Table<?> INVITATION =
-            table(name("platform_iam", "org_invitation"));
+    // -- cveiliam.org_invitation ------------------------------------------
+    private static final org.jooq.Table<?> INVITATION = table(name("cveiliam", "org_invitation"));
     private static final org.jooq.Field<String> INV_ORG_ID = field(name("org_id"), String.class);
     private static final org.jooq.Field<String> INV_EMAIL = field(name("email"), String.class);
     private static final org.jooq.Field<UUID> INV_INVITED_BY =

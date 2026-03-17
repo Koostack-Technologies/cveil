@@ -29,7 +29,7 @@ public class GraphResourceIT {
     private static final String TENANT_ID = "graph_query_it_tenant";
     private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
-    private static final String ENTITY_USER = "GqUser";
+    private static final String ENTITY_USER = "gq_user";
     private static final String CATEGORY_PII = "GqPII";
     private static final String FIELD_EMAIL = "gq_email";
     private static final String PURPOSE_MARKETING = "gq_marketing";
@@ -67,7 +67,7 @@ public class GraphResourceIT {
                 assertThat(accessToken).isNotBlank();
             } catch (Exception e) {
                 if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                    String email = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+                    String email = TENANT_ID.replace("_", "-") + "@cveil-test.com";
                     accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
                 } else {
                     throw e;
@@ -245,7 +245,7 @@ public class GraphResourceIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = '"
                                                         + TENANT_ID
                                                         + "'");

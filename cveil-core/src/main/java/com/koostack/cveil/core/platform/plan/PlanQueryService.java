@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * Query service for subscription plans — reads pre-seeded plan definitions from the {@code
- * platform_core.plan} table.
+ * cveilcore.plan} table.
  *
  * <p>Used by the platform tenant-creation flow to validate that the requested plan exists and is
  * active, and to retrieve limits for subscription creation.
@@ -22,9 +22,18 @@ public interface PlanQueryService<T> extends Plugin<T> {
             long evalLimit,
             long subjectLimit,
             int burstLimit,
+            int jurisdictionLimit,
             boolean isPublic,
             boolean isActive,
-            int sortOrder) {}
+            int sortOrder,
+            String stripeProductId,
+            String stripePriceId) {
+
+        /** Returns true if jurisdictions are unlimited on this plan (-1). */
+        public boolean isJurisdictionUnlimited() {
+            return jurisdictionLimit < 0;
+        }
+    }
 
     /**
      * Get a single plan by ID.
@@ -47,4 +56,13 @@ public interface PlanQueryService<T> extends Plugin<T> {
      * @return active plan definitions, sorted by {@code sort_order}
      */
     List<PlanInfo> listActivePlans();
+
+    /**
+     * List active, public plans joined with their display detail for the pricing page.
+     *
+     * @return pricing tiers sorted by {@code sort_order}
+     */
+    default List<PlanPricingTier> listPricingTiers() {
+        throw new UnsupportedOperationException("listPricingTiers not implemented");
+    }
 }

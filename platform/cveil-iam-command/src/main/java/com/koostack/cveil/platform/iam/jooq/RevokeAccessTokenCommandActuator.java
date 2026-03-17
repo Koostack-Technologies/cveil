@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  * Revokes a personal access token by setting its status to {@code "revoked"} in the platform
  * database.
  *
- * <p>Updates the {@code platform_iam.access_token} table and publishes an {@link
+ * <p>Updates the {@code cveiliam.access_token} table and publishes an {@link
  * AccessTokenRevokedEvent}.
  */
 public class RevokeAccessTokenCommandActuator
@@ -54,7 +54,7 @@ public class RevokeAccessTokenCommandActuator
 
         // Update the token status in the database
         String sql =
-                "UPDATE platform_iam.access_token"
+                "UPDATE cveiliam.access_token"
                         + " SET status = 'revoked', updated_at = CURRENT_TIMESTAMP"
                         + " WHERE tenant_id = ? AND token_prefix = ? AND status = 'active'";
         int rowsUpdated;

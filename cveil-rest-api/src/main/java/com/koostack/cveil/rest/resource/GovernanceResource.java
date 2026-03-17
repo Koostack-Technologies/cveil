@@ -38,6 +38,7 @@ import com.koostack.cveil.rest.dto.AdminDtos.UpdateJurisdictionRequest;
 import com.koostack.cveil.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.cveil.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.cveil.rest.interceptor.TenantScoped;
+import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.validation.Valid;
@@ -47,6 +48,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
@@ -82,6 +84,12 @@ public class GovernanceResource {
     QueryDispatcher consentQueryDispatcher;
 
     @Inject CveilRequestHolder requestHolder;
+
+    @Inject MetricsHelper metrics;
+
+    private String currentTenantId() {
+        return requestHolder.identity() != null ? requestHolder.identity().tenantId() : null;
+    }
 
     // -------------------------------------------------------------------
     // Purposes
@@ -156,6 +164,7 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new RegisterPurposeCommandActuator.RegisterPurposeCommand(
                         req.purposeName(), req.description()));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "create"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Purpose registered: " + req.purposeName()))
                 .build();
@@ -179,6 +188,7 @@ public class GovernanceResource {
         Permissions.require(requestHolder.authorization(), Permissions.GOVERNANCE_WRITE);
         consentDispatcher.dispatch(
                 new RemovePurposeCommandActuator.RemovePurposeCommand(purposeName));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Purpose removed")).build();
     }
 
@@ -205,6 +215,7 @@ public class GovernanceResource {
                         req.fieldName(),
                         req.entityName(),
                         req.categoryName()));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "create"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Policy added to purpose: " + req.purposeName()))
                 .build();
@@ -233,6 +244,7 @@ public class GovernanceResource {
                         req.fieldName(),
                         req.entityName(),
                         req.categoryName()));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Policy removed")).build();
     }
 
@@ -259,6 +271,7 @@ public class GovernanceResource {
                         req.lawfulBasis(),
                         req.onGranted(),
                         req.onDenied()));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "create"));
         return Response.ok(
                         MessageResponse.of(
                                 "Purpose '"
@@ -292,6 +305,7 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new UnlinkPurposeFromRegulationCommandActuator.UnlinkPurposeFromRegulationCommand(
                         purposeName, regulationName));
+        metrics.counter("governance_policies", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Purpose unlinked from regulation")).build();
     }
 
@@ -369,6 +383,7 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new RegisterRegulationCommandActuator.RegisterRegulationCommand(
                         req.regulationName(), req.description()));
+        metrics.counter("governance_regulations", currentTenantId(), Map.of("operation", "create"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Regulation registered: " + req.regulationName()))
                 .build();
@@ -392,6 +407,7 @@ public class GovernanceResource {
         Permissions.require(requestHolder.authorization(), Permissions.GOVERNANCE_WRITE);
         consentDispatcher.dispatch(
                 new RemoveRegulationCommandActuator.RemoveRegulationCommand(regulationName));
+        metrics.counter("governance_regulations", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Regulation removed")).build();
     }
 
@@ -414,6 +430,7 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new AddRegulationJurisdictionCommandActuator.AddRegulationJurisdictionCommand(
                         req.regulationName(), req.jurisdictionName(), req.description()));
+        metrics.counter("governance_regulations", currentTenantId(), Map.of("operation", "create"));
         return Response.status(Response.Status.CREATED)
                 .entity(
                         MessageResponse.of(
@@ -444,6 +461,7 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new RemoveRegulationJurisdictionCommandActuator.RemoveRegulationJurisdictionCommand(
                         regulationName, jurisdictionName));
+        metrics.counter("governance_regulations", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Jurisdiction removed from regulation")).build();
     }
 
@@ -522,6 +540,8 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new RegisterJurisdictionCommandActuator.RegisterJurisdictionCommand(
                         req.jurisdictionName(), req.description()));
+        metrics.counter(
+                "governance_jurisdictions", currentTenantId(), Map.of("operation", "create"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Jurisdiction registered: " + req.jurisdictionName()))
                 .build();
@@ -548,6 +568,8 @@ public class GovernanceResource {
         consentDispatcher.dispatch(
                 new UpdateJurisdictionCommandActuator.UpdateJurisdictionCommand(
                         jurisdictionName, req.description()));
+        metrics.counter(
+                "governance_jurisdictions", currentTenantId(), Map.of("operation", "update"));
         return Response.ok(MessageResponse.of("Jurisdiction updated: " + jurisdictionName)).build();
     }
 
@@ -591,6 +613,8 @@ public class GovernanceResource {
         }
         consentDispatcher.dispatch(
                 new RemoveJurisdictionCommandActuator.RemoveJurisdictionCommand(jurisdictionName));
+        metrics.counter(
+                "governance_jurisdictions", currentTenantId(), Map.of("operation", "delete"));
         return Response.ok(MessageResponse.of("Jurisdiction removed")).build();
     }
 }

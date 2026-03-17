@@ -61,9 +61,9 @@ class ConsentDsarIntegrationIT {
         String subject = "export_test_1";
 
         // Grant three policies
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
-        grantConsent(subject, "PII", "phone", "User", "analytics");
-        grantConsent(subject, "HEALTH", "ssn", "Patient", "sales");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
+        grantConsent(subject, "PII", "phone", "user", "analytics");
+        grantConsent(subject, "HEALTH", "ssn", "patient", "sales");
 
         // Export
         SubjectDataExport export = exportSubject(subject);
@@ -103,8 +103,8 @@ class ConsentDsarIntegrationIT {
         String subject = "export_test_audit";
 
         // Grant and revoke same scope
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
-        revokeConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
+        revokeConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Export
         SubjectDataExport export = exportSubject(subject);
@@ -124,7 +124,7 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Delete without confirmation token should return 400")
     void testDeleteMissingConfirmation() {
         String subject = "delete_test_noconfirm";
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Try to delete without confirm parameter
         given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
@@ -143,7 +143,7 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Delete with wrong confirmation token should return 400")
     void testDeleteWrongConfirmation() {
         String subject = "delete_test_wrongconfirm";
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Try to delete with wrong confirmation
         given().header("Authorization", "Bearer " + BOOTSTRAP_KEY)
@@ -166,7 +166,7 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_atomicity";
 
         // Grant policy
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Verify it exists via export
         SubjectDataExport beforeDelete = exportSubject(subject);
@@ -197,7 +197,7 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_idempotent";
 
         // Grant policy
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Delete first time
         String confirmToken = "DELETE_" + subject;
@@ -226,9 +226,9 @@ class ConsentDsarIntegrationIT {
         String subject = "delete_test_auditlog";
 
         // Grant three policies
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
-        grantConsent(subject, "PII", "phone", "User", "analytics");
-        grantConsent(subject, "HEALTH", "ssn", "Patient", "sales");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
+        grantConsent(subject, "PII", "phone", "user", "analytics");
+        grantConsent(subject, "HEALTH", "ssn", "patient", "sales");
 
         // Delete
         String confirmToken = "DELETE_" + subject;
@@ -251,7 +251,7 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Delete without valid credentials should return 401")
     void testDeleteAuthorization() {
         String subject = "delete_test_authz";
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Try to delete with an unrecognized API key
         String confirmToken = "DELETE_" + subject;
@@ -273,7 +273,7 @@ class ConsentDsarIntegrationIT {
     @DisplayName("Export without valid credentials should return 401")
     void testExportAuthorization() {
         String subject = "export_test_authz";
-        grantConsent(subject, "PII", "email", "DsarUser", "marketing");
+        grantConsent(subject, "PII", "email", "dsar_user", "marketing");
 
         // Try to export with an unrecognized API key
         given().header("Authorization", "Bearer invalid-key-no-access")

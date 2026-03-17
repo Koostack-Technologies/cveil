@@ -39,6 +39,9 @@ include("platform:cveil-billing-command")
 include("platform:cveil-billing-query-jooq")
 include("platform:cveil-billing-projection-jooq")
 
+// --- Payment Processor ---
+include("platform:cveil-payment-proc-stripe")
+
 // --- Platform Core ---
 include("platform:cveil-core-schema")
 include("platform:cveil-core-jooq-common")
@@ -62,3 +65,8 @@ include("platform:cveil-plan-query-jooq")
 // --- Metrics ---
 include("platform:cveil-platform-metrics-redis")
 include("common:cveil-metrics-worker")
+
+// --- SDKs ---
+include("sdks:cveil-sdk-java")
+
+include("examples:cveil-java-sdk-examples")

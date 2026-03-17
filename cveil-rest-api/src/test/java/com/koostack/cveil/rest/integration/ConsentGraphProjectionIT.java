@@ -43,7 +43,7 @@ class ConsentGraphProjectionIT {
     private static final String TENANT_ID = "graph_it_tenant";
 
     // Catalogue items
-    private static final String ENTITY_CUSTOMER = "Customer";
+    private static final String ENTITY_CUSTOMER = "customer";
     private static final String CATEGORY_PERSONAL = "Personal";
     private static final String FIELD_EMAIL = "email";
     private static final String QUALIFIED_FIELD = ENTITY_CUSTOMER + "/" + FIELD_EMAIL;
@@ -88,7 +88,7 @@ class ConsentGraphProjectionIT {
                 assertThat(accessToken).isNotBlank();
             } catch (Exception e) {
                 if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                    String email = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+                    String email = TENANT_ID.replace("_", "-") + "@cveil-test.com";
                     accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
                 } else {
                     throw e;
@@ -528,8 +528,8 @@ class ConsentGraphProjectionIT {
             // Wait for the policy to be projected before granting
             support.awaitQuery(
                     "SELECT p.policy_type FROM policy p "
-                            + "JOIN purpose pu ON p.purpose_id = pu.purpose_id "
-                            + "JOIN field f ON p.field_id = f.field_id "
+                            + "JOIN purpose pu ON p.purpose_uuid = pu.purpose_uuid "
+                            + "JOIN field f ON p.field_uuid = f.field_uuid "
                             + "WHERE pu.purpose_name = ? AND f.field_name = ?",
                     rows -> !rows.isEmpty(),
                     "Policy for marketing/email must be projected before consent grant",

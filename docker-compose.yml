@@ -192,13 +192,6 @@ services:
       CVEIL_DB_PASSWORD: "cveil_local_dev"
       CVEIL_DB_SSL_MODE: "require"
 
-      # -- Platform database (tenant management, API keys) -----------------
-      CVEIL_PLATFORM_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
-      CVEIL_PLATFORM_DB_DIALECT: "POSTGRES"
-      CVEIL_PLATFORM_DB_USERNAME: "cveil"
-      CVEIL_PLATFORM_DB_PASSWORD: "cveil_local_dev"
-      CVEIL_PLATFORM_DB_SSL_MODE: "require"
-
       # -- Redis (consent decision cache + rate limiting) ------------------
       CVEIL_REDIS_HOST: "redis"
       CVEIL_REDIS_PORT: "6379"
@@ -224,6 +217,11 @@ services:
       CVEIL_KEYCLOAK_SMTP_FROM: "koostacktech@gmail.com"
       CVEIL_KEYCLOAK_SMTP_USER: "koostacktech@gmail.com"
       CVEIL_KEYCLOAK_SMTP_PASSWORD: "jtlcywxzufwsunsx"
+
+      # -- Stripe API key (for testing Stripe integration in the dashboard) ----------
+      CVEIL_STRIPE_SECRET_KEY: sk_test_51TB2Tx0hZvbJkvbUlp4her8bZpDfoIb7PX7UFQk9ehOlJYOJ3IspMnJj6EG0cu5lmBVe34uOpMzmYJNP7K9KUoVP004tz0CGbR
+      CVEIL_STRIPE_PUBLISHABLE_KEY: pk_test_51TB2Tx0hZvbJkvbUJUzsIHu7drjwMVFN5DKEOeHaQSyVX2VaMp6flaazTdLZO7yTDW2QH8UJBTqqvpLhiItBCleq00E6b3aQIi
+      # CVEIL_STRIPE_WEBHOOK_SECRET=whsec_xxx
 
       # -- JVM tuning (local dev — generous limits) ------------------------
       JAVA_OPTS: >-

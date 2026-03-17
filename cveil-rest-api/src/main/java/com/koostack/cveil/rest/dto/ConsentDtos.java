@@ -312,4 +312,56 @@ public final class ConsentDtos {
                             description = "Timestamp when the deletion was completed",
                             example = "2026-02-23T10:30:00Z")
                     Instant completedAt) {}
+
+    /**
+     * A single entry from the DSAR audit log.
+     *
+     * @param deletionRequestId unique request ID for the erasure operation
+     * @param policiesDeleted number of consent policies deleted
+     * @param cachedKeysDeleted number of cached keys deleted from Redis
+     * @param auditEntriesDeleted number of audit log entries deleted
+     * @param status {@code "SUCCESS"}, {@code "PENDING_SHRED"}, or {@code "PARTIAL_FAILURE"}
+     * @param actor the identity that initiated the deletion
+     * @param ipAddress the originating IP address
+     * @param userAgent the originating User-Agent header
+     * @param createdAt when the audit entry was recorded
+     */
+    @Schema(description = "A single DSAR audit log entry recording an erasure operation")
+    public record DsarAuditEntry(
+            @Schema(
+                            description = "Unique request ID for this erasure operation",
+                            example = "550e8400-e29b-41d4-a716-446655440000")
+                    String deletionRequestId,
+            @Schema(description = "Number of consent policies deleted", example = "5")
+                    int policiesDeleted,
+            @Schema(description = "Number of cached keys deleted from Redis", example = "3")
+                    int cachedKeysDeleted,
+            @Schema(description = "Number of audit log entries deleted", example = "12")
+                    int auditEntriesDeleted,
+            @Schema(
+                            description = "Status of the deletion operation",
+                            example = "PENDING_SHRED")
+                    String status,
+            @Schema(description = "Identity that initiated the deletion", example = "admin@acme.com")
+                    String actor,
+            @Schema(description = "Originating IP address", example = "203.0.113.45")
+                    String ipAddress,
+            @Schema(description = "Originating User-Agent header") String userAgent,
+            @Schema(
+                            description = "When the audit entry was recorded",
+                            example = "2026-02-23T10:30:00Z")
+                    Instant createdAt) {}
+
+    /**
+     * Response for {@code GET /api/v1/subjects/{id}/audit}.
+     *
+     * @param subjectId the data subject identifier
+     * @param entries the DSAR audit log entries for this subject
+     */
+    @Schema(description = "DSAR audit log for a specific subject")
+    public record DsarAuditLogResponse(
+            @Schema(description = "The data subject identifier", example = "user_123")
+                    String subjectId,
+            @Schema(description = "Audit log entries ordered by most recent first")
+                    List<DsarAuditEntry> entries) {}
 }

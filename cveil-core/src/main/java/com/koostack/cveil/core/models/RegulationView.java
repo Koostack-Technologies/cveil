@@ -1,11 +1,12 @@
 package com.koostack.cveil.core.models;
 
 import java.util.List;
+import java.util.UUID;
 
 public record RegulationView(
-        long regulationId,
+        UUID regulationId,
         String regulationName,
         String description,
         List<JurisdictionView> activeJurisdictions) {
-    public record JurisdictionView(long jurisdictionId, String jurisdictionName) {}
+    public record JurisdictionView(UUID jurisdictionId, String jurisdictionName) {}
 }

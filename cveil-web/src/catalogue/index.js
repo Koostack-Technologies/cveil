@@ -1,55 +1,39 @@
-const API = '/api/v1/catalogue';
+import {
+    esc, showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
+    activatePanel, closePanel, badge, showMsg, ready,
+    retryUntilChanged, setTableLoading,
+} from '../shared/index.js';
 
-// ── Tab switching ──────────────────────────────────────────────
-function showTab(name) {
-    document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('border-cv-500', 'text-cv-500');
-        b.classList.add('border-transparent', 'text-gray-400');
-    });
-    document.getElementById('section-' + name).classList.remove('hidden');
-    const btn = document.getElementById('tab-' + name);
-    btn.classList.add('border-cv-500', 'text-cv-500');
-    btn.classList.remove('border-transparent', 'text-gray-400');
-    window.location.hash = name;
+const api = createApi('/api/v1/catalogue');
+
+let entitiesCache = [];
+let fieldsCache = [];
+let categoriesCache = [];
+
+// ── Retry-aware reloaders (post-mutation eventual consistency) ──
+async function reloadEntities() {
+    setTableLoading('entities-table', true);
+    entitiesCache = await retryUntilChanged(() => api('/entities'), entitiesCache);
+    renderEntities();
+    setTableLoading('entities-table', false);
 }
 
-// ── Helpers ────────────────────────────────────────────────────
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-async function api(path, opts = {}) {
-    const headers = { ...opts.headers };
-    if (opts.body) headers['Content-Type'] = 'application/json';
-    const res = await fetch(API + path, { ...opts, headers });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }));
-        throw new Error(err.message || res.statusText);
-    }
-    if (res.status === 204) return null;
-    return res.json();
+async function reloadFields() {
+    setTableLoading('fields-table', true);
+    fieldsCache = await retryUntilChanged(() => api('/fields'), fieldsCache);
+    renderFields();
+    setTableLoading('fields-table', false);
 }
 
-function badge(text, color = 'gray') {
-    const colors = {
-        gray: 'bg-gray-700 text-gray-300',
-        teal: 'bg-cv-900/50 text-cv-500 border border-cv-500/30',
-        blue: 'bg-blue-900/50 text-blue-400 border border-blue-500/30',
-        purple: 'bg-purple-900/50 text-purple-400 border border-purple-500/30',
-    };
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color] || colors.gray}">${esc(text)}</span>`;
+async function reloadCategories() {
+    setTableLoading('categories-table', true);
+    categoriesCache = await retryUntilChanged(() => api('/categories'), categoriesCache);
+    renderCategories();
+    setTableLoading('categories-table', false);
 }
 
-function showMsg(el, text, isError = false) {
-    el.textContent = text;
-    el.className = 'text-sm mt-3 ' + (isError ? 'text-red-400' : 'text-green-400');
-    el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 4000);
-}
-
-// ── Slide-out Panel ────────────────────────────────────────────
+// ── Panel ──────────────────────────────────────────────────────
 function openPanel(type, data) {
-    const overlay = document.getElementById('panel-overlay');
-    const panel = document.getElementById('panel');
     const title = document.getElementById('panel-title');
     const body = document.getElementById('panel-body');
 
@@ -63,33 +47,10 @@ function openPanel(type, data) {
     };
 
     (forms[type] || (() => { body.innerHTML = ''; }))();
-    overlay.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    activatePanel();
 }
-
-function closePanel() {
-    document.getElementById('panel').classList.add('translate-x-full');
-    setTimeout(() => document.getElementById('panel-overlay').classList.add('hidden'), 300);
-}
-
-// ── Delete Modal ───────────────────────────────────────────────
-let pendingDeleteFn = null;
-function confirmDelete(msg, fn) {
-    document.getElementById('delete-modal-msg').textContent = msg;
-    document.getElementById('delete-modal').classList.remove('hidden');
-    pendingDeleteFn = fn;
-}
-function closeDeleteModal() {
-    document.getElementById('delete-modal').classList.add('hidden');
-    pendingDeleteFn = null;
-}
-document.getElementById('delete-modal-confirm').addEventListener('click', async () => {
-    if (pendingDeleteFn) { await pendingDeleteFn(); closeDeleteModal(); }
-});
 
 // ── Entities ───────────────────────────────────────────────────
-let entitiesCache = [];
-
 async function loadEntities() {
     try {
         entitiesCache = await api('/entities');
@@ -107,8 +68,8 @@ function renderEntities() {
         return;
     }
     tb.innerHTML = entitiesCache.map(e => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(e.entityName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(e.entityName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(e.description || '—')}</td>
             <td class="px-6 py-4 text-right">
                 <button onclick='openPanel("entity-edit", ${JSON.stringify(e).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
@@ -124,21 +85,21 @@ function entityForm(existing) {
         <form onsubmit="saveEntity(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-ent-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-ent-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-ent-msg" class="hidden"></span>
         </form>`;
@@ -156,22 +117,18 @@ async function saveEntity(e, isEdit, origName) {
             await api('/entities', { method: 'POST', body: JSON.stringify({ entityName: name, description: desc }) });
         }
         closePanel();
-        loadEntities();
+        await reloadEntities();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
 function deleteEntity(name) {
     confirmDelete(`Delete entity "${name}"? This cannot be undone. Entities with fields must have their fields removed first.`, async () => {
-        try {
-            await api(`/entities/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadEntities();
-        } catch (e) { alert(e.message); }
+        await api(`/entities/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadEntities();
     });
 }
 
 // ── Fields ─────────────────────────────────────────────────────
-let fieldsCache = [];
-
 async function loadFields() {
     try {
         fieldsCache = await api('/fields');
@@ -189,15 +146,15 @@ function renderFields() {
         return;
     }
     tb.innerHTML = fieldsCache.map(f => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(f.fieldName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(f.fieldName)}</td>
             <td class="px-6 py-4 text-gray-400">${f.entity ? esc(f.entity.entityName) : '<span class="text-gray-600">—</span>'}</td>
             <td class="px-6 py-4 text-gray-400">${esc(f.description || '—')}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(f.categories || []).map(c => badge(c.categoryName, 'purple')).join('')}
                     <button onclick='openPanel("field-categories", ${JSON.stringify(f).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-600 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
@@ -214,33 +171,33 @@ function fieldForm() {
         <form onsubmit="saveField(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Field Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Field Name</label>
                     <input id="pf-fld-name" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Entity</label>
+                    <label class="block text-sm text-gray-500 mb-1">Entity</label>
                     <select id="pf-fld-entity" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                         <option value="">Select entity…</option>
                         ${entityOptions}
                     </select>
                     ${!entitiesCache.length ? '<p class="text-xs text-amber-400 mt-1">No entities registered. Add an entity first.</p>' : ''}
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-fld-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Entity Description <span class="text-gray-600">(optional, used if entity is new)</span></label>
+                    <label class="block text-sm text-gray-500 mb-1">Entity Description <span class="text-gray-600">(optional, used if entity is new)</span></label>
                     <textarea id="pf-fld-ent-desc" rows="2"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">Create</button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-fld-msg" class="hidden"></span>
         </form>`;
@@ -256,23 +213,19 @@ async function saveField(e) {
     try {
         await api('/fields', { method: 'POST', body: JSON.stringify({ fieldName, entityName, description, entityDescription }) });
         closePanel();
-        loadFields();
-        loadEntities();
+        await reloadFields();
+        await reloadEntities();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
 function deleteField(entityName, fieldName) {
     confirmDelete(`Delete field "${fieldName}" from entity "${entityName}"? This cannot be undone.`, async () => {
-        try {
-            await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`, { method: 'DELETE' });
-            loadFields();
-        } catch (e) { alert(e.message); }
+        await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}`, { method: 'DELETE' });
+        await reloadFields();
     });
 }
 
 // ── Field–Category Management ──────────────────────────────────
-let categoriesCache = [];
-
 async function loadCategories() {
     try {
         categoriesCache = await api('/categories');
@@ -285,39 +238,34 @@ async function loadCategories() {
 
 function fieldCategoriesForm(field) {
     const entityName = field.entity ? field.entity.entityName : '';
+    const existing = new Set((field.categories || []).map(c => c.categoryName));
+    const availableOptions = categoriesCache
+        .filter(c => !existing.has(c.categoryName))
+        .map(c => `<option value="${esc(c.categoryName)}">${esc(c.categoryName)}</option>`)
+        .join('');
+
     return `
-        <p class="text-sm text-gray-400 mb-4">Manage categories for field <strong class="text-white">${esc(field.fieldName)}</strong> on entity <strong class="text-white">${esc(entityName)}</strong></p>
+        <p class="text-sm text-gray-500 mb-4">Manage categories for field <strong class="text-gray-900">${esc(field.fieldName)}</strong> on entity <strong class="text-gray-900">${esc(entityName)}</strong></p>
         <div id="fc-list" class="space-y-2 mb-6">
             ${(field.categories || []).map(c => `
-                <div class="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
-                    <span class="text-sm text-white">${esc(c.categoryName)}</span>
+                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <span class="text-sm text-gray-900">${esc(c.categoryName)}</span>
                     <button onclick="unassignFieldCategory('${esc(entityName)}','${esc(field.fieldName)}','${esc(c.categoryName)}')"
                         class="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
                 </div>`).join('') || '<p class="text-sm text-gray-500">No categories assigned.</p>'}
         </div>
-        <hr class="border-gray-700 mb-4">
-        <p class="text-sm text-gray-400 mb-3">Assign a category</p>
+        <hr class="border-gray-200 mb-4">
+        <p class="text-sm text-gray-500 mb-3">Assign a category</p>
         <form onsubmit="assignFieldCategory(event, '${esc(entityName)}', '${esc(field.fieldName)}')">
             <div class="flex gap-2">
-                <select id="fc-select" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">
+                <select id="fc-select" class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
                     <option value="">Select…</option>
+                    ${availableOptions}
                 </select>
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Assign</button>
             </div>
             <span id="fc-msg" class="hidden"></span>
-        </form>
-        <script>
-            (function() {
-                const existing = new Set(${JSON.stringify((field.categories || []).map(c => c.categoryName))});
-                const sel = document.getElementById('fc-select');
-                categoriesCache.filter(c => !existing.has(c.categoryName)).forEach(c => {
-                    const o = document.createElement('option');
-                    o.value = c.categoryName;
-                    o.textContent = c.categoryName;
-                    sel.appendChild(o);
-                });
-            })();
-        </script>`;
+        </form>`;
 }
 
 async function assignFieldCategory(e, entityName, fieldName) {
@@ -327,7 +275,7 @@ async function assignFieldCategory(e, entityName, fieldName) {
     try {
         await api('/fields/categories', { method: 'POST', body: JSON.stringify({ fieldName, entityName, categoryName }) });
         closePanel();
-        await loadFields();
+        await reloadFields();
         const updated = fieldsCache.find(f => f.fieldName === fieldName && f.entity && f.entity.entityName === entityName);
         if (updated) openPanel('field-categories', updated);
     } catch (err) { showMsg(document.getElementById('fc-msg'), err.message, true); }
@@ -337,10 +285,10 @@ async function unassignFieldCategory(entityName, fieldName, categoryName) {
     try {
         await api(`/fields/${encodeURIComponent(entityName)}/${encodeURIComponent(fieldName)}/categories/${encodeURIComponent(categoryName)}`, { method: 'DELETE' });
         closePanel();
-        await loadFields();
+        await reloadFields();
         const updated = fieldsCache.find(f => f.fieldName === fieldName && f.entity && f.entity.entityName === entityName);
         if (updated) openPanel('field-categories', updated);
-    } catch (e) { alert(e.message); }
+    } catch (e) { showMsg(document.getElementById('fc-msg'), e.message, true); }
 }
 
 // ── Categories ─────────────────────────────────────────────────
@@ -351,8 +299,8 @@ function renderCategories() {
         return;
     }
     tb.innerHTML = categoriesCache.map(c => `
-        <tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="px-6 py-4 font-medium text-white">${esc(c.categoryName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-6 py-4 font-medium text-gray-900">${esc(c.categoryName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(c.description || '—')}</td>
             <td class="px-6 py-4 text-right">
                 <button onclick='openPanel("category-edit", ${JSON.stringify(c).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
@@ -368,21 +316,21 @@ function categoryForm(existing) {
         <form onsubmit="saveCategory(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Name</label>
                     <input id="pf-cat-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-cat-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-cat-msg" class="hidden"></span>
         </form>`;
@@ -400,28 +348,38 @@ async function saveCategory(e, isEdit, origName) {
             await api('/categories', { method: 'POST', body: JSON.stringify({ categoryName: name, description: desc }) });
         }
         closePanel();
-        loadCategories();
+        await reloadCategories();
     } catch (err) { showMsg(msg, err.message, true); }
 }
 
 function deleteCategory(name) {
     confirmDelete(`Delete category "${name}"? This cannot be undone. Categories still assigned to fields must be unassigned first.`, async () => {
-        try {
-            await api(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            loadCategories();
-        } catch (e) { alert(e.message); }
+        await api(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadCategories();
     });
 }
 
 // ── Init ───────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    loadEntities();
-    loadFields();
-    loadCategories();
+export function init() {
+    // Expose functions for inline onclick handlers in templates
+    Object.assign(window, {
+        showTab, openPanel, closePanel, closeDeleteModal,
+        saveEntity, deleteEntity,
+        saveField, deleteField,
+        assignFieldCategory, unassignFieldCategory,
+        saveCategory, deleteCategory,
+    });
 
-    // Hash-based tab selection
-    const hash = window.location.hash.replace('#', '');
-    if (['entities', 'fields', 'categories'].includes(hash)) {
-        showTab(hash);
-    }
-});
+    initDeleteModal();
+
+    ready(() => {
+        loadEntities();
+        loadFields();
+        loadCategories();
+
+        const hash = window.location.hash.replace('#', '');
+        if (['entities', 'fields', 'categories'].includes(hash)) {
+            showTab(hash);
+        }
+    });
+}

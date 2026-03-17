@@ -1,5 +1,8 @@
 package com.koostack.cveil.rest.filter;
 
+import com.koostack.cveil.core.metrics.Metric;
+import com.koostack.cveil.core.metrics.MetricPublisherService;
+import com.koostack.cveil.core.metrics.MetricType;
 import com.koostack.cveil.core.models.IdentityContext;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
 import jakarta.annotation.Priority;
@@ -11,7 +14,9 @@ import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -131,6 +136,10 @@ public class RequestTracingFilter implements ContainerRequestFilter, ContainerRe
      */
     @Inject CveilRequestHolder requestHolder;
 
+    @Inject
+    @SuppressWarnings("rawtypes")
+    jakarta.enterprise.inject.Instance<MetricPublisherService> metricPublisherInstance;
+
     // -----------------------------------------------------------------------
     // Request filter — runs BEFORE authentication
     // -----------------------------------------------------------------------
@@ -242,6 +251,9 @@ public class RequestTracingFilter implements ContainerRequestFilter, ContainerRe
                         MDC.get(MDC_TENANT_ID),
                         MDC.get(MDC_SUBJECT));
             }
+
+            // 6. Publish telemetry metrics (best-effort)
+            publishRequestMetrics(method, path, status, durationMs);
         } finally {
             // Clear MDC to prevent context leaking.
             //    With virtual threads each request has its own thread, but
@@ -281,5 +293,89 @@ public class RequestTracingFilter implements ContainerRequestFilter, ContainerRe
         if (subject != null && !subject.isBlank()) {
             MDC.put(MDC_SUBJECT, subject);
         }
+    }
+
+    /**
+     * Publishes {@code api_requests} (COUNTER) and {@code api_latency_ms} (GAUGE) metrics for the
+     * current request. Tenant ID is read from MDC; platform-scoped if absent.
+     */
+    @SuppressWarnings("unchecked")
+    private void publishRequestMetrics(String method, String path, int status, long durationMs) {
+        try {
+            if (!metricPublisherInstance.isResolvable()) {
+                return;
+            }
+            MetricPublisherService<?> publisher = metricPublisherInstance.get();
+            if (publisher == null) {
+                return;
+            }
+
+            String tenantId = MDC.get(MDC_TENANT_ID);
+            if (MDC_ABSENT.equals(tenantId)) {
+                tenantId = null;
+            }
+
+            // Normalize path to avoid high cardinality (strip UUIDs and IDs)
+            String normalizedPath = normalizePath(path);
+            String statusFamily = String.valueOf(status / 100) + "xx";
+            Map<String, String> dims =
+                    Map.of(
+                            "method", method,
+                            "path", normalizedPath,
+                            "status", statusFamily);
+
+            publisher.publish(
+                    Metric.builder()
+                            .metricName("api_requests")
+                            .metricValue(1.0)
+                            .metricType(MetricType.COUNTER)
+                            .tenantId(tenantId)
+                            .dimensions(dims)
+                            .build());
+
+            if (durationMs >= 0) {
+                publisher.publish(
+                        Metric.builder()
+                                .metricName("api_latency_ms")
+                                .metricValue(durationMs)
+                                .metricType(MetricType.GAUGE)
+                                .tenantId(tenantId)
+                                .dimensions(Map.of("method", method, "path", normalizedPath))
+                                .build());
+            }
+
+            // Publish error metric for 4xx/5xx
+            if (status >= 400) {
+                publisher.publish(
+                        Metric.builder()
+                                .metricName("api_errors")
+                                .metricValue(1.0)
+                                .metricType(MetricType.COUNTER)
+                                .tenantId(tenantId)
+                                .dimensions(dims)
+                                .build());
+            }
+        } catch (Exception e) {
+            LOG.debug("Best-effort metric publish failed", e);
+        }
+    }
+
+    /**
+     * Normalizes a URI path by replacing UUID and numeric path segments with placeholders to reduce
+     * cardinality in metric dimensions.
+     */
+    private static final Pattern UUID_PATTERN =
+            Pattern.compile(
+                    "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+    private static final Pattern NUMERIC_SEGMENT_PATTERN = Pattern.compile("/[0-9]+(?=/|$)");
+
+    private static String normalizePath(String path) {
+        if (path == null) {
+            return "/";
+        }
+        String normalized = UUID_PATTERN.matcher(path).replaceAll("{id}");
+        normalized = NUMERIC_SEGMENT_PATTERN.matcher(normalized).replaceAll("/{id}");
+        return normalized;
     }
 }

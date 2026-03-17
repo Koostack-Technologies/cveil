@@ -66,6 +66,18 @@ public final class KeycloakAuthSupport {
      * @param password the user's password
      */
     public AuthResult authenticate(String id, String email, String password) {
+        return authenticate(id, email, password, null);
+    }
+
+    /**
+     * ROPC grant with optional DPoP proof.
+     *
+     * @param id ignored — all auth targets the single realm
+     * @param email the user's email
+     * @param password the user's password
+     * @param dpopProof optional DPoP proof JWT to forward to the Keycloak token endpoint
+     */
+    public AuthResult authenticate(String id, String email, String password, String dpopProof) {
         String realmId = config.cveilRealmName();
         try {
             String clientSecret = resolveClientSecret();
@@ -83,12 +95,13 @@ public final class KeycloakAuthSupport {
                             + urlEncode(password);
 
             LOG.info(
-                    "ROPC authenticate: url={}, client_id={}, username={}",
+                    "ROPC authenticate: url={}, client_id={}, username={}, dpop={}",
                     tokenUrl,
                     config.cveilClientId(),
-                    email);
+                    email,
+                    dpopProof != null);
 
-            HttpResponse<String> response = post(tokenUrl, formBody);
+            HttpResponse<String> response = post(tokenUrl, formBody, dpopProof);
 
             if (response.statusCode() != 200) {
                 LOG.warn("ROPC failed: status={}, body={}", response.statusCode(), response.body());
@@ -109,6 +122,17 @@ public final class KeycloakAuthSupport {
      * @param refreshToken the refresh token
      */
     public AuthResult refreshToken(String id, String refreshToken) {
+        return refreshToken(id, refreshToken, null);
+    }
+
+    /**
+     * Refresh-token grant with optional DPoP proof.
+     *
+     * @param id tenant context identifier (passed through to IdentityContext)
+     * @param refreshToken the refresh token
+     * @param dpopProof optional DPoP proof JWT to forward to the Keycloak token endpoint
+     */
+    public AuthResult refreshToken(String id, String refreshToken, String dpopProof) {
         String realmId = config.cveilRealmName();
         try {
             String clientSecret = resolveClientSecret();
@@ -123,7 +147,7 @@ public final class KeycloakAuthSupport {
                             + "&refresh_token="
                             + urlEncode(refreshToken);
 
-            HttpResponse<String> response = post(tokenUrl, formBody);
+            HttpResponse<String> response = post(tokenUrl, formBody, dpopProof);
 
             if (response.statusCode() != 200) {
                 throw new CveilAuthException("Invalid or expired refresh token");
@@ -170,13 +194,23 @@ public final class KeycloakAuthSupport {
     }
 
     private HttpResponse<String> post(String url, String formBody) throws Exception {
-        return httpClient.send(
+        return post(url, formBody, null);
+    }
+
+    private HttpResponse<String> post(String url, String formBody, String dpopProof)
+            throws Exception {
+        var builder =
                 HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Content-Type", "application/x-www-form-urlencoded")
-                        .timeout(HTTP_TIMEOUT)
-                        .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                        .build(),
+                        .timeout(HTTP_TIMEOUT);
+
+        if (dpopProof != null && !dpopProof.isBlank()) {
+            builder.header("DPoP", dpopProof);
+        }
+
+        return httpClient.send(
+                builder.POST(HttpRequest.BodyPublishers.ofString(formBody)).build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -216,6 +250,7 @@ public final class KeycloakAuthSupport {
             String refreshTokenVal =
                     root.has("refresh_token") ? root.get("refresh_token").asText() : null;
             long expiresIn = root.has("expires_in") ? root.get("expires_in").asLong() : 900;
+            String tokenType = root.has("token_type") ? root.get("token_type").asText() : "Bearer";
 
             if (accessToken == null) {
                 throw new CveilAuthException("Keycloak returned no access_token");
@@ -225,6 +260,10 @@ public final class KeycloakAuthSupport {
             String jwksUrl =
                     config.serverUrl() + "/realms/" + realmId + "/protocol/openid-connect/certs";
             IdentityContext identity = jwksVerifier.verify(jwksUrl, accessToken, tenantId);
+
+            if ("DPoP".equalsIgnoreCase(tokenType)) {
+                return AuthResult.dpop(accessToken, refreshTokenVal, expiresIn, identity);
+            }
             return AuthResult.bearer(accessToken, refreshTokenVal, expiresIn, identity);
         } catch (CveilAuthException e) {
             throw e;

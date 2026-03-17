@@ -53,6 +53,7 @@ dependencies {
     implementation(project(":platform:cveil-platform-jooq"))
     implementation(project(":platform:cveil-platform-keycloak"))
     implementation("org.keycloak:keycloak-admin-client:26.0.8")
+    implementation("com.nimbusds:nimbus-jose-jwt:9.47") // DPoP proof verification
     implementation(project(":tenant:cveil-authz-keycloak"))
     implementation(project(":tenant:cveil-consent-admin-jooq-common"))
     implementation(project(":common:cveil-jooq"))
@@ -75,6 +76,7 @@ dependencies {
     implementation(project(":platform:cveil-iam-query")) // JooqIamQueryService
     implementation(project(":platform:cveil-iam-projection-jooq")) // IamProjectionHandler
     implementation(project(":platform:cveil-plan-query-jooq"))
+    implementation(project(":platform:cveil-payment-proc-stripe")) // Stripe payment processor
 
     // platform schemas
 
@@ -84,6 +86,7 @@ dependencies {
 
     // -- Metrics modules (MetricPublisherService + projections) ----------------
     implementation(project(":platform:cveil-platform-metrics-redis")) // PlatformRedisMetricPublisher + projections
+    implementation(project(":common:cveil-metrics-worker")) // DefaultMetricsSweeper
 
     // -- JDBC drivers (runtime only) ------------------------------------------
     runtimeOnly("org.postgresql:postgresql:42.7.5")

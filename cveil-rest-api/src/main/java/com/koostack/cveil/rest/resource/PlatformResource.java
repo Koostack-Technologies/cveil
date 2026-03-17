@@ -15,6 +15,7 @@ import com.koostack.cveil.rest.dto.PlatformDtos.TenantResponse;
 import com.koostack.cveil.rest.dto.PlatformDtos.UpdatePlanRequest;
 import com.koostack.cveil.rest.interceptor.TenantScoped;
 import com.koostack.cveil.rest.ratelimit.RateLimitService;
+import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
@@ -30,6 +31,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
+import java.util.Map;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -62,6 +64,8 @@ public class PlatformResource {
     @Inject RateLimitService rateLimitService;
 
     @Inject CveilRequestHolder requestHolder;
+
+    @Inject MetricsHelper metrics;
 
     // -------------------------------------------------------------------
     // Role enforcement
@@ -275,6 +279,8 @@ public class PlatformResource {
         cqrs.coreDispatcher()
                 .dispatch(new DeleteTenantCommandActuator.DeleteTenantCommand(tenantId));
 
+        metrics.counter("tenant_deleted", "SYSTEM", Map.of("tenantId", tenantId));
+
         return Response.ok(MessageResponse.of("Tenant '" + tenantId + "' deleted successfully"))
                 .build();
     }
@@ -347,6 +353,8 @@ public class PlatformResource {
 
         // Evict cached rate limits so new limits take effect immediately
         rateLimitService.evictTenantCache(tenantId);
+
+        metrics.counter("tenant_plan_changed", "SYSTEM", Map.of("tenantId", tenantId));
 
         return Response.ok(
                         MessageResponse.of(

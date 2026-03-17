@@ -88,15 +88,6 @@ cveil:
     tls-ca-cert-path: ${cveil.test.redis.tls-ca-cert-path:}
     tls-verify-peer: ${cveil.test.redis.tls-verify-peer:true}
 
-  platform-db:
-    url: ${cveil.test.platform-db.url:jdbc:postgresql://localhost:5432/cveil_test}
-    dialect: POSTGRES
-    username: ${cveil.test.platform-db.username:cveil_test}
-    password: ${cveil.test.platform-db.password:cveil_test}
-    ssl-mode: ${cveil.test.platform-db.ssl-mode:disable}
-    ssl-cert-path: ${cveil.test.platform-db.ssl-cert-path:}
-    ssl-key-path: ${cveil.test.platform-db.ssl-key-path:}
-
   super-admin:
     bootstrap-key: test-bootstrap-key-for-integration-tests
     force-bootstrap: true

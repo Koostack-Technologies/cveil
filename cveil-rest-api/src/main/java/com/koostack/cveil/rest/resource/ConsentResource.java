@@ -16,6 +16,7 @@ import com.koostack.cveil.plugin.consent.jooq.DeleteSubjectAuditCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.EvaluateConsentQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.FindPolicyQueryActuator;
+import com.koostack.cveil.plugin.consent.jooq.GetDsarAuditLogQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GetSubjectConsentQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GetSubjectQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GrantConsentCommandActuator;
@@ -34,6 +35,7 @@ import com.koostack.cveil.rest.dto.AdminDtos.RegisterSubjectRequest;
 import com.koostack.cveil.rest.dto.AdminDtos.UpdateSubjectRequest;
 import com.koostack.cveil.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.cveil.rest.dto.CommonDtos.MessageResponse;
+import com.koostack.cveil.rest.dto.ConsentDtos;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchConsentResponse;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchGrantRequest;
 import com.koostack.cveil.rest.dto.ConsentDtos.BatchRevokeRequest;
@@ -64,6 +66,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -120,6 +123,8 @@ public class ConsentResource {
     @Inject CveilConfig cveilConfig;
 
     @Inject CveilRequestHolder requestHolder;
+
+    @Inject com.koostack.cveil.rest.util.MetricsHelper metrics;
 
     // -------------------------------------------------------------------
     // Mutating endpoints -- require consent:write
@@ -188,6 +193,8 @@ public class ConsentResource {
                         RequestContext.userAgent(),
                         request.expiresAt()));
 
+        metrics.counter(
+                "consent_grants", currentTenantId(), Map.of("purpose", scope.purposeName()));
         return Response.ok(MessageResponse.of("Consent granted")).build();
     }
 
@@ -252,6 +259,8 @@ public class ConsentResource {
                         RequestContext.ipAddress(),
                         RequestContext.userAgent()));
 
+        metrics.counter(
+                "consent_revocations", currentTenantId(), Map.of("purpose", scope.purposeName()));
         return Response.ok(MessageResponse.of("Consent revoked")).build();
     }
 
@@ -343,6 +352,7 @@ public class ConsentResource {
         BatchConsentResult result =
                 new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
 
+        metrics.counter("consent_grant_all", currentTenantId());
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
 
@@ -433,6 +443,7 @@ public class ConsentResource {
         BatchConsentResult result =
                 new BatchConsentResult(succeeded, errors.size(), List.copyOf(errors));
 
+        metrics.counter("consent_revoke_all", currentTenantId());
         return Response.ok(BatchConsentResponse.fromModel(result)).build();
     }
 
@@ -497,6 +508,7 @@ public class ConsentResource {
                         new EvaluateConsentQueryActuator.EvaluateConsentQuery(
                                 subjectId, coreScopes));
 
+        metrics.counter("consent_evaluations", currentTenantId());
         return Response.ok(EvaluateResponse.fromModel(response)).build();
     }
 
@@ -693,11 +705,86 @@ public class ConsentResource {
                     subjectId,
                     consent.entries().size());
 
+            metrics.counter("dsar_exports", currentTenantId());
             return Response.ok(export).build();
         } catch (Exception e) {
             LOG.error("Failed to export data for subject: {}", subjectId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(ErrorResponse.internal("Failed to export subject data"))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{id}/audit")
+    @Operation(
+            operationId = "getSubjectDsarAuditLog",
+            summary = "Get DSAR audit log for a subject",
+            description =
+                    "Returns the DSAR audit log entries for a subject, ordered by most recent"
+                            + " first. Each entry records a past erasure request with metadata"
+                            + " (policies deleted, cached keys deleted, status, actor, etc.).")
+    @APIResponses({
+        @APIResponse(
+                responseCode = "200",
+                description = "Audit log returned",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema =
+                                        @Schema(
+                                                implementation =
+                                                        ConsentDtos.DsarAuditLogResponse.class))),
+        @APIResponse(
+                responseCode = "500",
+                description = "Failed to retrieve audit log",
+                content =
+                        @Content(
+                                mediaType = MediaType.APPLICATION_JSON,
+                                schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response getSubjectDsarAuditLog(
+            @Context SecurityContext securityContext,
+            @Parameter(description = "The data subject identifier", required = true)
+                    @PathParam("id")
+                    String subjectId) {
+        Permissions.require(requestHolder.authorization(), Permissions.CONSENT_READ);
+
+        try {
+            @SuppressWarnings("unchecked")
+            List<com.koostack.cveil.plugin.consent.jooq.generated.tables.pojos.DsarAuditLog>
+                    entries =
+                            consentQueryDispatcher.dispatch(
+                                    new GetDsarAuditLogQueryActuator.GetDsarAuditLogQuery(
+                                            subjectId));
+
+            List<ConsentDtos.DsarAuditEntry> dtos =
+                    entries.stream()
+                            .map(
+                                    e ->
+                                            new ConsentDtos.DsarAuditEntry(
+                                                    e.getDeletionRequestId(),
+                                                    e.getPoliciesDeleted(),
+                                                    e.getCachedKeysDeleted(),
+                                                    e.getAuditEntriesDeleted(),
+                                                    e.getStatus(),
+                                                    e.getActor(),
+                                                    e.getIpAddress(),
+                                                    e.getUserAgent(),
+                                                    e.getCreatedAt() != null
+                                                            ? e.getCreatedAt()
+                                                                    .atZone(
+                                                                            java.time.ZoneOffset
+                                                                                    .UTC)
+                                                                    .toInstant()
+                                                            : null))
+                            .toList();
+
+            return Response.ok(new ConsentDtos.DsarAuditLogResponse(subjectId, dtos)).build();
+        } catch (Exception e) {
+            LOG.error("Failed to retrieve DSAR audit log for subject: {}", subjectId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponse.internal("Failed to retrieve DSAR audit log"))
                     .build();
         }
     }
@@ -863,6 +950,7 @@ public class ConsentResource {
                             status,
                             Instant.now());
 
+            metrics.counter("dsar_deletions", currentTenantId());
             return Response.ok(dto).build();
         } catch (Exception e) {
             LOG.error("Unexpected error during DSAR erasure for subject: {}", subjectId, e);
@@ -964,6 +1052,7 @@ public class ConsentResource {
         consentDispatcher.dispatch(
                 new RegisterSubjectCommandActuator.RegisterSubjectCommand(
                         req.subjectName(), req.description()));
+        metrics.counter("subject_created", currentTenantId());
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Subject registered: " + req.subjectName()))
                 .build();
@@ -992,6 +1081,7 @@ public class ConsentResource {
         Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
         consentDispatcher.dispatch(
                 new UpdateSubjectCommandActuator.UpdateSubjectCommand(name, req.description()));
+        metrics.counter("subject_updated", currentTenantId());
         return Response.ok(MessageResponse.of("Subject updated: " + name)).build();
     }
 
@@ -1025,6 +1115,7 @@ public class ConsentResource {
                     String name) {
         Permissions.require(requestHolder.authorization(), Permissions.CONSENT_GRANT);
         consentDispatcher.dispatch(new RemoveSubjectCommandActuator.RemoveSubjectCommand(name));
+        metrics.counter("subject_deleted", currentTenantId());
         return Response.ok(MessageResponse.of("Subject removed: " + name)).build();
     }
 
@@ -1075,6 +1166,7 @@ public class ConsentResource {
                     .build();
         }
 
+        metrics.counter("dsar_shred", currentTenantId());
         return Response.ok(MessageResponse.of("DSAR key shredded for subject: " + name)).build();
     }
 
@@ -1104,5 +1196,10 @@ public class ConsentResource {
 
     private static boolean isWildcardOrBlank(String value) {
         return value == null || value.isBlank() || ConsentScope.WILDCARD.equals(value);
+    }
+
+    private String currentTenantId() {
+        var identity = requestHolder.identity();
+        return identity != null ? identity.tenantId() : null;
     }
 }

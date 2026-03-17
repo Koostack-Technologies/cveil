@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * Creates a personal access token (PAT) and stores it in the platform database.
  *
  * <p>Generates a {@code cveil_}-prefixed token via {@link AccessTokenGenerator}, persists the
- * SHA-256 hash to the {@code platform_iam.access_token} table, and publishes an {@link
+ * SHA-256 hash to the {@code cveiliam.access_token} table, and publishes an {@link
  * AccessTokenCreatedEvent}.
  */
 public class CreateAccessTokenCommandActuator
@@ -63,7 +63,7 @@ public class CreateAccessTokenCommandActuator
 
         // Persist the token hash to the database
         String sql =
-                "INSERT INTO platform_iam.access_token"
+                "INSERT INTO cveiliam.access_token"
                         + " (token_hash, token_prefix, name, tenant_id, roles, status,"
                         + " expires_at, created_by, created_at)"
                         + " VALUES (?, ?, ?, ?, ?, 'active', ?, ?, CURRENT_TIMESTAMP)";

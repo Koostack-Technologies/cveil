@@ -56,8 +56,9 @@ public class AssignFieldCategoryCommandActuator
         Objects.requireNonNull(command.categoryName(), "categoryName must not be null");
 
         String tenantId = TenantContext.require();
-        String normalized = FieldAggregate.normalizeEntityName(command.entityName());
-        UUID aggregateId = FieldAggregate.deriveId(normalized, command.fieldName());
+        String normalizedEntity = FieldAggregate.normalizeEntityName(command.entityName());
+        String normalizedField = FieldAggregate.normalizeFieldName(command.fieldName());
+        UUID aggregateId = FieldAggregate.deriveId(normalizedEntity, normalizedField);
 
         // Hydrate current field state from event log (replaces query service call)
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
@@ -75,16 +76,16 @@ public class AssignFieldCategoryCommandActuator
         // Build snapshot for projections
         var snapshot =
                 new FieldSnapshot(
-                        command.fieldName(),
-                        normalized,
+                        normalizedField,
+                        normalizedEntity,
                         current != null ? current.description() : null,
                         List.copyOf(newCategories));
 
         // Publish domain event
         var payload =
                 new FieldCategoryAssignedEvent(
-                        normalized,
-                        command.fieldName(),
+                        normalizedEntity,
+                        normalizedField,
                         command.categoryName(),
                         command.categoryDescription(),
                         snapshot);
@@ -95,8 +96,8 @@ public class AssignFieldCategoryCommandActuator
 
         LOG.info(
                 "Field category assigned: field={}, entity={}, category={}",
-                command.fieldName(),
-                normalized,
+                normalizedField,
+                normalizedEntity,
                 command.categoryName());
         return null;
     }

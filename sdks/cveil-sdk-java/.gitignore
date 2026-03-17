@@ -1,0 +1,2 @@
+# WASM binary is a build artifact — compiled from crates/cveil-sdk-core by the buildWasm task
+src/main/resources/wasm/cveil_sdk_core.wasm

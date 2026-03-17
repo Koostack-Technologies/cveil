@@ -146,6 +146,38 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
+     * Migrate an existing cveil-backend client to enable DPoP-bound access tokens.
+     *
+     * <p>This is an idempotent migration — safe to call multiple times. It reads the current client
+     * attributes and adds {@code dpop.bound.access.tokens=true} if not already present.
+     *
+     * @param realmId the realm to migrate
+     */
+    public void migrateClientDpop(String realmId) {
+        try {
+            RealmResource realm = adminClient.realm(realmId);
+            List<ClientRepresentation> clients = realm.clients().findByClientId(cveilClientId);
+            if (clients.isEmpty()) {
+                LOG.warn("No cveil client found in realm '{}' — skipping DPoP migration", realmId);
+                return;
+            }
+            ClientRepresentation client = clients.get(0);
+            Map<String, String> attrs = client.getAttributes();
+            if (attrs != null && "true".equals(attrs.get("dpop.bound.access.tokens"))) {
+                LOG.debug("DPoP already enabled for client in realm '{}'", realmId);
+                return;
+            }
+            Map<String, String> updatedAttrs = new HashMap<>(attrs != null ? attrs : Map.of());
+            updatedAttrs.put("dpop.bound.access.tokens", "true");
+            client.setAttributes(updatedAttrs);
+            realm.clients().get(client.getId()).update(client);
+            LOG.info("DPoP enabled for cveil-backend client in realm '{}'", realmId);
+        } catch (Exception e) {
+            LOG.error("Failed to migrate DPoP for realm '{}': {}", realmId, e.getMessage(), e);
+        }
+    }
+
+    /**
      * Create a root admin user in the given realm with the {@code tenant-admin} role and the
      * Keycloak {@code UPDATE_PASSWORD} required action so the user sets their own password.
      *
@@ -338,7 +370,11 @@ public class KeycloakRealmProvisioner {
         client.setStandardFlowEnabled(false);
         client.setFullScopeAllowed(true); // Include all realm roles in access token
         client.setAttributes(
-                Map.of("access.token.lifespan", String.valueOf(ACCESS_TOKEN_LIFESPAN_SECONDS)));
+                Map.of(
+                        "access.token.lifespan",
+                        String.valueOf(ACCESS_TOKEN_LIFESPAN_SECONDS),
+                        "dpop.bound.access.tokens",
+                        "true"));
         // offline_access is already a realm-level optional scope and will be
         // assigned to new clients automatically — no need to set it explicitly.
 
@@ -464,9 +500,9 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Enables fine-grained user impersonation so the cveil-backend client can mint tokens on
-     * behalf of any user via {@code requested_subject} token exchange. Uses the Keycloak admin REST
-     * API directly because the Java admin client does not expose the users-management-permissions
+     * Enables fine-grained user impersonation so the cveil-backend client can mint tokens on behalf
+     * of any user via {@code requested_subject} token exchange. Uses the Keycloak admin REST API
+     * directly because the Java admin client does not expose the users-management-permissions
      * endpoint.
      */
     private void configureImpersonationPermission(RealmResource realmResource) {

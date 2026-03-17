@@ -25,7 +25,7 @@ import redis.clients.jedis.Pipeline;
 public class RedisEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(RedisEventPublisher.class);
-    public static final int DEFAULT_SHARD_COUNT = 8;
+    public static final int DEFAULT_SHARD_COUNT = 16;
 
     private final JedisProvider jedisProvider;
     private final String appName;

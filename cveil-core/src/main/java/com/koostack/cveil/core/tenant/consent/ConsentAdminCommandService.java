@@ -5,6 +5,7 @@ import com.koostack.cveil.core.tenant.consent.events.FieldSnapshot;
 import com.koostack.cveil.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.cveil.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
+import java.util.UUID;
 
 public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
@@ -117,7 +118,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
     void grantConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -130,7 +131,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
     void revokeConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -142,7 +143,7 @@ public interface ConsentAdminCommandService<T> extends Plugin<T> {
 
     void expireConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

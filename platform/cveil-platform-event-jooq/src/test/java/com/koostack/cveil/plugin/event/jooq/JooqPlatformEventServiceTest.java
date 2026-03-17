@@ -27,7 +27,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         service.publishEvent(
                 PublishDomainEventInput.of(tenantId, CoreEventTypes.TENANT_CREATED, key, payload));
 
-        setTestSearchPath(tenantId);
+        setTestSearchPath();
         EventRecord record =
                 dsl.selectFrom(EVENT)
                         .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
@@ -66,7 +66,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         Long version = service.getAggregateVersion(key);
         assertEquals(2L, version);
 
-        setTestSearchPath(tenantId);
+        setTestSearchPath();
         var events =
                 dsl.selectFrom(EVENT)
                         .where(EVENT.AGGREGATE_ID.eq(aggregateId.toString()))
@@ -95,7 +95,7 @@ class JooqPlatformEventServiceTest extends PlatformEventServiceTestBase {
         // Snapshot is triggered automatically at version 20 during publishEvent
         TimeUnit.SECONDS.sleep(2);
 
-        setTestSearchPath(tenantId);
+        setTestSearchPath();
         var snapshot =
                 dsl.selectFrom(AGGREGATE_SNAPSHOT)
                         .where(AGGREGATE_SNAPSHOT.AGGREGATE_ID.eq(aggregateId.toString()))

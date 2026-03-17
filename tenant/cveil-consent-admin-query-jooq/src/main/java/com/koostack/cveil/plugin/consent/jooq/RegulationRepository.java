@@ -38,11 +38,4 @@ public class RegulationRepository {
                 .orderBy(REGULATION.REGULATION_NAME)
                 .fetchInto(Regulation.class);
     }
-
-    public Optional<Regulation> findById(Long regulationId) {
-        return dsl.selectFrom(REGULATION)
-                .where(REGULATION.REGULATION_ID.eq(regulationId))
-                .and(REGULATION.TENANT_ID.eq(TenantContext.require()))
-                .fetchOptionalInto(Regulation.class);
-    }
 }

@@ -29,6 +29,7 @@ import java.util.logging.Logger;
  * <ol>
  *   <li><b>register-user</b> — creates the user in Keycloak. Compensation: deletes the KC user.
  *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes the tenant.
+ *   <li><b>assign-db-roles</b> — assigns tenant-admin role for the personal tenant.
  *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub + ACL user (non-fatal).
  *   <li><b>create-billing-profile</b> — creates billing profile.
  *   <li><b>create-subscription</b> — creates subscription on free plan.
@@ -56,6 +57,7 @@ public class RegisterUserOrchestrator
      * @param username the user's unique login name
      * @param email the user's email address
      * @param fullName the user's display name (nullable)
+     * @param displayName the tenant display name (nullable — falls back to username)
      * @param roles initial roles to assign (nullable)
      * @param temporaryPassword if true, user must change password on first login
      * @param password the user's initial password (nullable)
@@ -66,10 +68,34 @@ public class RegisterUserOrchestrator
             String username,
             String email,
             String fullName,
+            String displayName,
             Set<String> roles,
             boolean temporaryPassword,
             String password,
-            String tenantId) {}
+            String tenantId) {
+
+        /** Backward-compatible constructor without displayName. */
+        public RegisterUserCommand(
+                String realmId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                boolean temporaryPassword,
+                String password,
+                String tenantId) {
+            this(
+                    realmId,
+                    username,
+                    email,
+                    fullName,
+                    null,
+                    roles,
+                    temporaryPassword,
+                    password,
+                    tenantId);
+        }
+    }
 
     public record RegisterUserResult(
             String username,
@@ -90,19 +116,22 @@ public class RegisterUserOrchestrator
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher,
-            PermissionService permissionService) {
+            PermissionService permissionService,
+            CommandDispatcher consentDispatcher) {
         registerDispatcher(DISPATCHER_IAM, iamDispatcher);
         registerDispatcher(DISPATCHER_CORE, coreDispatcher);
         registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
         this.permissionService = permissionService;
+        // consentDispatcher accepted for backward compatibility but no longer used —
+        // governance seeding is now handled by the onboarding wizard.
     }
 
-    /** Backward-compatible constructor for callers without a PermissionService. */
+    /** Backward-compatible constructor for callers without a PermissionService or consent. */
     public RegisterUserOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher) {
-        this(iamDispatcher, coreDispatcher, billingDispatcher, null);
+        this(iamDispatcher, coreDispatcher, billingDispatcher, null, null);
     }
 
     // -----------------------------------------------------------------------
@@ -132,11 +161,13 @@ public class RegisterUserOrchestrator
                                     dispatcher(DISPATCHER_IAM).dispatch(cmd);
                             ctx.put("userResult", result);
                             ctx.put("keycloakUserId", result.keycloakUserId());
+                            ctx.put("userPreExisting", result.preExisting());
                         },
                         (in, ctx) -> {
                             try {
                                 String kcUserId = ctx.get("keycloakUserId");
-                                if (kcUserId != null) {
+                                Boolean preExisting = ctx.get("userPreExisting");
+                                if (kcUserId != null && !Boolean.TRUE.equals(preExisting)) {
                                     dispatcher(DISPATCHER_IAM)
                                             .dispatch(
                                                     new DeleteUserCommandActuator.DeleteUserCommand(
@@ -153,10 +184,17 @@ public class RegisterUserOrchestrator
                 SagaStep.of(
                         "create-tenant",
                         (in, ctx) -> {
+                            String tenantDisplayName =
+                                    in.displayName() != null && !in.displayName().isBlank()
+                                            ? in.displayName()
+                                            : in.username();
                             dispatcher(DISPATCHER_CORE)
                                     .dispatch(
                                             new CreateTenantCommandActuator.CreateTenantCommand(
-                                                    in.tenantId(), in.username(), "free", "user"));
+                                                    in.tenantId(),
+                                                    tenantDisplayName,
+                                                    "free",
+                                                    "user"));
                             ctx.put("tenantCreated", true);
                         },
                         (in, ctx) -> {
@@ -246,7 +284,7 @@ public class RegisterUserOrchestrator
                                     .dispatch(
                                             new CreateSubscriptionCommandActuator
                                                     .CreateSubscriptionCommand(
-                                                    in.tenantId(), "free"));
+                                                    in.tenantId(), "free", null, null, null));
                             ctx.put("subscriptionCreated", true);
                         }));
 

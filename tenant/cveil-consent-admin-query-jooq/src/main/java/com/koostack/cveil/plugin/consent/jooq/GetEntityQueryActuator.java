@@ -26,7 +26,7 @@ public class GetEntityQueryActuator
     public Optional<EntityView> execute(GetEntityQuery query) {
         return entityRepository
                 .findByName(query.entityName())
-                .map(e -> new EntityView(e.getEntityId(), e.getEntityName(), e.getDescription()));
+                .map(e -> new EntityView(e.getEntityUuid(), e.getEntityName(), e.getDescription()));
     }
 
     @Override

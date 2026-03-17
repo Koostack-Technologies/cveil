@@ -10,6 +10,7 @@ public record SubscriptionInfo(
         int subjectLimit,
         int burstLimit,
         String status,
+        String externalSubscriptionId,
         Instant periodStart,
         Instant periodEnd,
         boolean cancelAtPeriodEnd,

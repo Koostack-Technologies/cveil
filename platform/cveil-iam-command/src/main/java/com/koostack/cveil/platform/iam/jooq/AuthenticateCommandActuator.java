@@ -42,13 +42,24 @@ public class AuthenticateCommandActuator
      * @param realmId the Keycloak realm
      * @param email the user's email
      * @param password the user's password
+     * @param dpopProof optional DPoP proof JWT from the client (forwarded to Keycloak)
      */
-    public record AuthenticateCommand(String realmId, String email, String password) {}
+    public record AuthenticateCommand(
+            String realmId, String email, String password, String dpopProof) {
+        /** Convenience constructor without DPoP proof (backward compatible). */
+        public AuthenticateCommand(String realmId, String email, String password) {
+            this(realmId, email, password, null);
+        }
+    }
 
     @Override
     public AuthResult execute(AuthenticateCommand command) {
         AuthResult result =
-                authSupport.authenticate(command.realmId(), command.email(), command.password());
+                authSupport.authenticate(
+                        command.realmId(),
+                        command.email(),
+                        command.password(),
+                        command.dpopProof());
 
         // Publish domain event
         String userId = result.identity().subject();

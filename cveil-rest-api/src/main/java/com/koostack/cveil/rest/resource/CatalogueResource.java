@@ -32,6 +32,7 @@ import com.koostack.cveil.rest.dto.AdminDtos.UpdateEntityRequest;
 import com.koostack.cveil.rest.dto.CommonDtos.ErrorResponse;
 import com.koostack.cveil.rest.dto.CommonDtos.MessageResponse;
 import com.koostack.cveil.rest.interceptor.TenantScoped;
+import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.validation.Valid;
@@ -41,6 +42,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
@@ -73,6 +75,12 @@ public class CatalogueResource {
     QueryDispatcher consentQueryDispatcher;
 
     @Inject CveilRequestHolder requestHolder;
+
+    @Inject MetricsHelper metrics;
+
+    private String currentTenantId() {
+        return requestHolder.identity() != null ? requestHolder.identity().tenantId() : null;
+    }
 
     // -------------------------------------------------------------------
     // Fields
@@ -126,6 +134,10 @@ public class CatalogueResource {
                         req.entityName(),
                         req.description(),
                         req.entityDescription()));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "create_field", "entityType", "field"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Field registered: " + req.fieldName()))
                 .build();
@@ -151,6 +163,10 @@ public class CatalogueResource {
         Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new RemoveFieldCommandActuator.RemoveFieldCommand(fieldName, entityName));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "delete_field", "entityType", "field"));
         return Response.ok(MessageResponse.of("Field removed")).build();
     }
 
@@ -177,6 +193,10 @@ public class CatalogueResource {
                         req.categoryName(),
                         req.categoryDescription());
         consentDispatcher.dispatch(command);
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "add_field_category", "entityType", "field_category"));
         return Response.ok(
                         MessageResponse.of(
                                 "Category '"
@@ -209,6 +229,10 @@ public class CatalogueResource {
         consentDispatcher.dispatch(
                 new UnassignFieldCategoryCommandActuator.UnassignFieldCategoryCommand(
                         fieldName, entityName, categoryName));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "remove_field_category", "entityType", "field_category"));
         return Response.ok(MessageResponse.of("Category unassigned")).build();
     }
 
@@ -265,6 +289,49 @@ public class CatalogueResource {
                                 .build());
     }
 
+    @GET
+    @Path("/entities/{entityName}/fields")
+    @Operation(
+            operationId = "listFieldsByEntity",
+            summary = "List fields belonging to a specific entity")
+    @APIResponses({
+        @APIResponse(
+                responseCode = "200",
+                description = "List of fields for entity",
+                content =
+                        @Content(
+                                schema =
+                                        @Schema(
+                                                type = SchemaType.ARRAY,
+                                                implementation = FieldView.class))),
+        @APIResponse(
+                responseCode = "404",
+                description = "Entity not found",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+    })
+    public Response listFieldsByEntity(
+            @Context SecurityContext sc, @PathParam("entityName") String entityName) {
+        Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_READ);
+        Optional<EntityView> entity =
+                consentQueryDispatcher.dispatch(
+                        new GetEntityQueryActuator.GetEntityQuery(entityName));
+        if (entity.isEmpty()) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(ErrorResponse.of("NOT_FOUND", "Entity not found: " + entityName))
+                    .build();
+        }
+        List<FieldView> fields =
+                consentQueryDispatcher.dispatch(new ListFieldsQueryActuator.ListFieldsQuery());
+        List<FieldView> filtered =
+                fields.stream()
+                        .filter(
+                                f ->
+                                        f.entity() != null
+                                                && entityName.equals(f.entity().entityName()))
+                        .toList();
+        return Response.ok(filtered).build();
+    }
+
     @POST
     @Path("/entities")
     @Operation(operationId = "registerEntity", summary = "Register an entity (upsert)")
@@ -283,6 +350,10 @@ public class CatalogueResource {
         consentDispatcher.dispatch(
                 new RegisterEntityCommandActuator.RegisterEntityCommand(
                         req.entityName(), req.description()));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "create_entity", "entityType", "entity"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Entity registered: " + req.entityName()))
                 .build();
@@ -308,6 +379,10 @@ public class CatalogueResource {
         Permissions.require(requestHolder.authorization(), Permissions.CATALOGUE_WRITE);
         consentDispatcher.dispatch(
                 new UpdateEntityCommandActuator.UpdateEntityCommand(entityName, req.description()));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "update_entity", "entityType", "entity"));
         return Response.ok(MessageResponse.of("Entity updated: " + entityName)).build();
     }
 
@@ -346,6 +421,10 @@ public class CatalogueResource {
                             + "' — it still has fields assigned. Remove them first.");
         }
         consentDispatcher.dispatch(new RemoveEntityCommandActuator.RemoveEntityCommand(entityName));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "delete_entity", "entityType", "entity"));
         return Response.ok(MessageResponse.of("Entity removed")).build();
     }
 
@@ -422,6 +501,10 @@ public class CatalogueResource {
         consentDispatcher.dispatch(
                 new RegisterCategoryCommandActuator.RegisterCategoryCommand(
                         req.categoryName(), req.description()));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "create_category", "entityType", "category"));
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Category registered: " + req.categoryName()))
                 .build();
@@ -448,6 +531,10 @@ public class CatalogueResource {
         consentDispatcher.dispatch(
                 new UpdateCategoryCommandActuator.UpdateCategoryCommand(
                         categoryName, req.description()));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "update_category", "entityType", "category"));
         return Response.ok(MessageResponse.of("Category updated: " + categoryName)).build();
     }
 
@@ -490,6 +577,10 @@ public class CatalogueResource {
         }
         consentDispatcher.dispatch(
                 new RemoveCategoryCommandActuator.RemoveCategoryCommand(categoryName));
+        metrics.counter(
+                "catalogue_mutations",
+                currentTenantId(),
+                Map.of("operation", "delete_category", "entityType", "category"));
         return Response.ok(MessageResponse.of("Category removed")).build();
     }
 }

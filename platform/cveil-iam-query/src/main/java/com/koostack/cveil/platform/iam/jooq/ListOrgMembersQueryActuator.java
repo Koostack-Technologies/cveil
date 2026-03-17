@@ -19,8 +19,8 @@ public class ListOrgMembersQueryActuator
     private static final Logger LOG = LoggerFactory.getLogger(ListOrgMembersQueryActuator.class);
 
     private static final org.jooq.Table<?> ORG_MEMBERSHIP =
-            table(name("platform_iam", "org_membership"));
-    private static final org.jooq.Table<?> IAM_USER = table(name("platform_iam", "iam_user"));
+            table(name("cveiliam", "org_membership"));
+    private static final org.jooq.Table<?> IAM_USER = table(name("cveiliam", "iam_user"));
     private static final org.jooq.Field<String> M_ORG_ID = field(name("m", "org_id"), String.class);
     private static final org.jooq.Field<UUID> M_USER_ID = field(name("m", "user_id"), UUID.class);
     private static final org.jooq.Field<UUID> U_USER_ID = field(name("u", "user_id"), UUID.class);

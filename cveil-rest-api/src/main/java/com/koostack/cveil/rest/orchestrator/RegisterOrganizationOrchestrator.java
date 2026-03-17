@@ -3,8 +3,6 @@ package com.koostack.cveil.rest.orchestrator;
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.platform.iam.PermissionService;
-import com.koostack.cveil.platform.billing.jooq.CreateBillingProfileCommandActuator;
-import com.koostack.cveil.platform.billing.jooq.CreateSubscriptionCommandActuator;
 import com.koostack.cveil.platform.core.jooq.CreateTenantCommandActuator;
 import com.koostack.cveil.platform.core.jooq.DeleteTenantCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.AddOrgMemberCommandActuator;
@@ -34,9 +32,11 @@ import java.util.logging.Logger;
  *       Compensation: removes the role.
  *   <li><b>provision-redis</b> — provisions Redis stream + pub/sub (non-fatal).
  *   <li><b>create-tenant</b> — creates the tenant aggregate. Compensation: soft-deletes.
- *   <li><b>create-billing-profile</b> — creates billing profile.
- *   <li><b>create-subscription</b> — creates subscription.
  * </ol>
+ *
+ * <p>Billing profile and subscription creation are handled by {@link
+ * com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask} during onboarding step 3, which
+ * uses the user's real email rather than a synthetic billing address.
  */
 public class RegisterOrganizationOrchestrator
         extends AbstractOrchestrator<
@@ -67,19 +67,22 @@ public class RegisterOrganizationOrchestrator
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher,
-            PermissionService permissionService) {
+            PermissionService permissionService,
+            CommandDispatcher consentDispatcher) {
         registerDispatcher(DISPATCHER_IAM, iamDispatcher);
         registerDispatcher(DISPATCHER_CORE, coreDispatcher);
         registerDispatcher(DISPATCHER_BILLING, billingDispatcher);
         this.permissionService = permissionService;
+        // consentDispatcher accepted for backward compatibility but no longer used —
+        // governance seeding is now handled by the onboarding wizard.
     }
 
-    /** Backward-compatible constructor for callers without a PermissionService. */
+    /** Backward-compatible constructor for callers without PermissionService or consent. */
     public RegisterOrganizationOrchestrator(
             CommandDispatcher iamDispatcher,
             CommandDispatcher coreDispatcher,
             CommandDispatcher billingDispatcher) {
-        this(iamDispatcher, coreDispatcher, billingDispatcher, null);
+        this(iamDispatcher, coreDispatcher, billingDispatcher, null, null);
     }
 
     @Override
@@ -228,32 +231,8 @@ public class RegisterOrganizationOrchestrator
                             }
                         }));
 
-        // Step 7: Create billing profile
-        steps.add(
-                SagaStep.of(
-                        "create-billing-profile",
-                        (in, ctx) -> {
-                            String billingEmail = in.orgName() + "@billing.cveil.local";
-                            dispatcher(DISPATCHER_BILLING)
-                                    .dispatch(
-                                            new CreateBillingProfileCommandActuator
-                                                    .CreateBillingProfileCommand(
-                                                    in.orgName(), billingEmail));
-                            ctx.put("billingProfileCreated", true);
-                        }));
-
-        // Step 8: Create subscription
-        steps.add(
-                SagaStep.of(
-                        "create-subscription",
-                        (in, ctx) -> {
-                            dispatcher(DISPATCHER_BILLING)
-                                    .dispatch(
-                                            new CreateSubscriptionCommandActuator
-                                                    .CreateSubscriptionCommand(
-                                                    in.orgName(), in.plan()));
-                            ctx.put("subscriptionCreated", true);
-                        }));
+        // Billing profile and subscription creation is deferred to DeferredProvisioningTask
+        // to avoid duplicate creation and ensure the user's real email is used.
 
         return steps;
     }

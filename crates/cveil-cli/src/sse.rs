@@ -15,7 +15,7 @@ pub async fn run_sse_loop(
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     let base_url = config.api_base_url.trim_end_matches('/').to_string();
-    let url = format!("{base_url}/api/v1/events/invalidations");
+    let url = format!("{base_url}/api/v1/consent/events");
     let mut attempt: u32 = 0;
 
     loop {

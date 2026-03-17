@@ -3,10 +3,11 @@ package com.koostack.cveil.core.tenant.consent.events;
 import com.koostack.cveil.core.event.DomainEvent;
 import com.koostack.cveil.core.event.Shreddable;
 import java.time.Instant;
+import java.util.UUID;
 
 public record ConsentGrantedEvent(
         String subjectId,
-        long policyId,
+        UUID policyId,
         String purposeName,
         String policyType,
         String fieldName,

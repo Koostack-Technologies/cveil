@@ -1,3 +1,5 @@
 package com.koostack.cveil.core.models;
 
-public record CategoryView(long categoryId, String categoryName, String description) {}
+import java.util.UUID;
+
+public record CategoryView(UUID categoryId, String categoryName, String description) {}

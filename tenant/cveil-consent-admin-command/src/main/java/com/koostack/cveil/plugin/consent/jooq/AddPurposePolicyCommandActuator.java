@@ -51,14 +51,26 @@ public class AddPurposePolicyCommandActuator
         UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
-        PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
-
-        List<PurposeSnapshot.RegulationLinkSnapshot> regs = List.of();
-        List<PurposeSnapshot.PolicySnapshot> policies = new ArrayList<>();
-        if (current != null) {
-            regs = UpdatePurposeCommandActuator.toRegLinkSnapshots(current);
-            policies.addAll(UpdatePurposeCommandActuator.toPolicySnapshots(current));
+        PurposeAggregate current = null;
+        try {
+            current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);
+        } catch (Exception e) {
+            LOG.warn(
+                    "Could not hydrate purpose '{}' — snapshot will be partial: {}",
+                    command.purposeName(),
+                    e.getMessage());
+            LOG.debug("Hydration failure details for purpose '{}':", command.purposeName(), e);
         }
+
+        List<PurposeSnapshot.RegulationLinkSnapshot> regs =
+                current != null
+                        ? UpdatePurposeCommandActuator.toRegLinkSnapshots(current)
+                        : List.of();
+        List<PurposeSnapshot.PolicySnapshot> policies =
+                new ArrayList<>(
+                        current != null
+                                ? UpdatePurposeCommandActuator.toPolicySnapshots(current)
+                                : List.of());
         policies.add(
                 new PurposeSnapshot.PolicySnapshot(
                         command.policyType(),

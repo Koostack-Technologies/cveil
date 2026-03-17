@@ -414,19 +414,22 @@ pub fn cveil_shutdown() -> Result<String, String> {
 
 // ─── Time Helper ───────────────────────────────────────────────────
 
+// Browser builds: host provides time via an imported function.
+#[cfg(feature = "browser")]
+unsafe extern "C" {
+    /// Imported from the host environment (JavaScript `Date.now()`).
+    fn cveil_host_time_ms() -> u64;
+}
+
 /// Get current time in milliseconds.
-/// Uses std::time on native targets; on WASM this should be injected by the facade.
+/// Native/WASI: uses std::time. Browser feature: calls host-provided import.
 fn current_time_ms() -> u64 {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "browser")]
     {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)
+        unsafe { cveil_host_time_ms() }
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "browser"))]
     {
-        // WASI provides clock_time_get
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)

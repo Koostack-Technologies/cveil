@@ -25,7 +25,7 @@ public class ListJurisdictionsQueryActuator
                 .map(
                         j ->
                                 new JurisdictionView(
-                                        j.getJurisdictionId(),
+                                        j.getJurisdictionUuid(),
                                         j.getJurisdictionName(),
                                         j.getDescription()))
                 .toList();

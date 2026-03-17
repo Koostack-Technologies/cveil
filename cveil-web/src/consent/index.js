@@ -1,48 +1,15 @@
-// ── Tab switching ──────────────────────────────────────────────
-function showTab(name) {
-    document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.remove('border-cv-500', 'text-cv-500');
-        b.classList.add('border-transparent', 'text-gray-400');
-    });
-    document.getElementById('section-' + name).classList.remove('hidden');
-    const btn = document.getElementById('tab-' + name);
-    btn.classList.add('border-cv-500', 'text-cv-500');
-    btn.classList.remove('border-transparent', 'text-gray-400');
-    window.location.hash = name;
+import {
+    esc, showTab as _showTab, createApi, confirmDelete, closeDeleteModal, initDeleteModal,
+    activatePanel, closePanel, showMsg, fmtTime, ready,
+    retryUntilChanged, setTableLoading,
+} from '../shared/index.js';
 
-    if (name === 'graph' && !graphLoaded) loadGraph();
-    if (name === 'ledger') initSSE();
-    if (name === 'subjects' && !subjectsLoaded) loadSubjects();
-}
+import {
+    initPlayground, evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
+} from './playground.js';
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-function fmtTime(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-// ── Delete Modal ───────────────────────────────────────────────
-let pendingDeleteFn = null;
-function confirmDelete(msg, fn) {
-    document.getElementById('delete-modal-msg').textContent = msg;
-    document.getElementById('delete-modal').classList.remove('hidden');
-    pendingDeleteFn = fn;
-}
-function closeDeleteModal() {
-    document.getElementById('delete-modal').classList.add('hidden');
-    pendingDeleteFn = null;
-}
-document.getElementById('delete-modal-confirm').addEventListener('click', async () => {
-    if (pendingDeleteFn) { await pendingDeleteFn(); closeDeleteModal(); }
-});
-
-// ================================================================
-// GRAPH EXPLORER
-// ================================================================
-const GRAPH_API = '/api/v1/consent/graph';
+// ── Graph Explorer State ───────────────────────────────────────
+const graphApi = createApi('/api/v1/consent');
 const NODE_COLORS = {
     purpose: '#14b8a6',
     regulation: '#3b82f6',
@@ -58,6 +25,58 @@ let graphCursor = null;
 let graphHasMore = false;
 let simulation = null;
 
+// ── Ledger State ───────────────────────────────────────────────
+const SSE_URL = '/api/v1/consent/events';
+let eventSource = null;
+let sseInitialized = false;
+let ledgerPaused = false;
+let ledgerEvents = [];
+const MAX_EVENTS = 500;
+
+const ACTION_STYLES = {
+    GRANTED: { badge: 'bg-green-900/60 text-green-400 border border-green-500/30', dot: 'bg-green-500', label: 'Granted' },
+    REVOKED: { badge: 'bg-red-900/60 text-red-400 border border-red-500/30', dot: 'bg-red-500', label: 'Revoked' },
+    ALL_REVOKED: { badge: 'bg-red-900/60 text-red-400 border border-red-500/30', dot: 'bg-red-500', label: 'All Revoked' },
+    CONSENT_ENTRY_CHANGED: { badge: 'bg-amber-900/60 text-amber-400 border border-amber-500/30', dot: 'bg-amber-500', label: 'Changed' },
+};
+
+// ── Subjects State ─────────────────────────────────────────────
+const subjectsApi = createApi('/api/v1/subjects');
+let subjectsCache = [];
+let subjectsLoaded = false;
+
+async function fetchSubjectsList() {
+    return subjectsApi('');
+}
+
+async function reloadSubjects() {
+    setTableLoading('subjects-table', true);
+    subjectsCache = await retryUntilChanged(fetchSubjectsList, subjectsCache);
+    subjectsLoaded = true;
+    renderSubjects();
+    setTableLoading('subjects-table', false);
+}
+let currentSubject = null;
+
+// ── Tab switching (consent-specific hooks) ─────────────────────
+function showTab(name) {
+    _showTab(name);
+    if (name === 'graph' && !graphLoaded) loadGraph();
+    if (name === 'ledger') initSSE();
+    if (name === 'subjects' && !subjectsLoaded) loadSubjects();
+    if (name === 'playground') initPlayground();
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function getActionStyle(action) {
+    if (action === 'GRANTED') return ACTION_STYLES.GRANTED;
+    if (action === 'REVOKED' || action === 'ALL_REVOKED') return ACTION_STYLES.REVOKED;
+    return ACTION_STYLES.CONSENT_ENTRY_CHANGED;
+}
+
+// ================================================================
+// GRAPH EXPLORER
+// ================================================================
 function setGraphMode(mode) {
     graphMode = mode;
     document.getElementById('graph-mode-force').className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-colors ' +
@@ -80,9 +99,7 @@ async function loadGraph() {
     document.getElementById('graph-empty').classList.add('hidden');
 
     try {
-        const res = await fetch(`${GRAPH_API}?${params}`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await graphApi(`/graph?${params}`);
         graphData = data;
         graphCursor = data.pageInfo?.nextCursor || null;
         graphHasMore = data.pageInfo?.hasMore || false;
@@ -111,10 +128,8 @@ async function loadMoreGraph() {
     params.set('cursor', graphCursor);
 
     try {
-        const res = await fetch(`${GRAPH_API}?${params}`);
-        const data = await res.json();
+        const data = await graphApi(`/graph?${params}`);
 
-        // Merge new nodes/edges (deduplicate by type+name)
         const existingNodes = new Set(graphData.nodes.map(n => n.type + ':' + n.name));
         data.nodes.forEach(n => { if (!existingNodes.has(n.type + ':' + n.name)) graphData.nodes.push(n); });
         const existingEdges = new Set(graphData.edges.map(e => e.sourceType + ':' + e.sourceName + '->' + e.targetType + ':' + e.targetName));
@@ -126,7 +141,8 @@ async function loadMoreGraph() {
         renderGraph();
         updateGraphPagination();
     } catch (e) {
-        console.error('Failed to load more graph:', e);
+        const stats = document.getElementById('graph-stats');
+        if (stats) stats.textContent += ' \u2014 failed to load more';
     }
 }
 
@@ -152,6 +168,7 @@ function renderGraph() {
 }
 
 function renderForceGraph() {
+    const d3 = window.d3;
     const svg = d3.select('#graph-svg');
     svg.selectAll('*').remove();
     const container = document.getElementById('graph-container');
@@ -159,7 +176,6 @@ function renderForceGraph() {
     const height = container.clientHeight;
     svg.attr('viewBox', [0, 0, width, height]);
 
-    // Build node/link data
     const nodeMap = new Map();
     graphData.nodes.forEach((n, i) => {
         nodeMap.set(n.type + ':' + n.name, i);
@@ -182,17 +198,14 @@ function renderForceGraph() {
 
     const g = svg.append('g');
 
-    // Zoom
     svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', (event) => {
         g.attr('transform', event.transform);
     }));
 
-    // Links
     const link = g.append('g').selectAll('line')
         .data(links).join('line')
         .attr('stroke', '#374151').attr('stroke-width', 1).attr('stroke-opacity', 0.6);
 
-    // Nodes
     const node = g.append('g').selectAll('circle')
         .data(nodes).join('circle')
         .attr('r', d => d.type === 'subject' ? 6 : 8)
@@ -204,7 +217,6 @@ function renderForceGraph() {
             .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
             .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
 
-    // Labels
     const label = g.append('g').selectAll('text')
         .data(nodes).join('text')
         .text(d => d.name.length > 20 ? d.name.slice(0, 18) + '…' : d.name)
@@ -212,7 +224,6 @@ function renderForceGraph() {
         .attr('dx', 12).attr('dy', 4)
         .style('pointer-events', 'none');
 
-    // Tooltip
     node.on('mouseover', (event, d) => {
         const tt = document.getElementById('graph-tooltip');
         document.getElementById('tooltip-type').textContent = d.type;
@@ -228,7 +239,6 @@ function renderForceGraph() {
         document.getElementById('graph-tooltip').classList.add('hidden');
     });
 
-    // Simulation
     if (simulation) simulation.stop();
     simulation = d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links).id(d => d.id).distance(80))
@@ -244,6 +254,7 @@ function renderForceGraph() {
 }
 
 function renderTreeGraph() {
+    const d3 = window.d3;
     const svg = d3.select('#graph-svg');
     svg.selectAll('*').remove();
     const container = document.getElementById('graph-container');
@@ -251,7 +262,6 @@ function renderTreeGraph() {
     const height = container.clientHeight;
     svg.attr('viewBox', [0, 0, width, height]);
 
-    // Build hierarchy: jurisdiction → regulation → purpose → field/subject
     const typeOrder = ['jurisdiction', 'regulation', 'purpose', 'field', 'subject'];
     const root = { name: 'Consent Graph', type: 'root', children: [] };
     const typeGroups = {};
@@ -264,7 +274,6 @@ function renderTreeGraph() {
         }
     });
 
-    // Build adjacency from edges
     const childMap = new Map();
     graphData.edges.forEach(e => {
         const srcKey = e.sourceType + ':' + e.sourceName;
@@ -273,23 +282,21 @@ function renderTreeGraph() {
         childMap.get(srcKey).push(tgtKey);
     });
 
-    // Build tree from top-level nodes (jurisdictions first, then orphans)
     const visited = new Set();
     function buildNode(key) {
         if (visited.has(key)) return null;
         visited.add(key);
         const [type, ...nameParts] = key.split(':');
         const name = nameParts.join(':');
-        const node = { name, type, children: [] };
+        const treeNode = { name, type, children: [] };
         const children = childMap.get(key) || [];
         children.forEach(cKey => {
             const child = buildNode(cKey);
-            if (child) node.children.push(child);
+            if (child) treeNode.children.push(child);
         });
-        return node;
+        return treeNode;
     }
 
-    // Start with jurisdictions, then regulations, then any remaining
     typeOrder.forEach(type => {
         typeGroups[type]?.forEach(n => {
             const key = type + ':' + n.name;
@@ -314,7 +321,6 @@ function renderTreeGraph() {
         g.attr('transform', event.transform);
     }));
 
-    // Links
     g.selectAll('.tree-link')
         .data(hierarchy.links())
         .join('path')
@@ -323,7 +329,6 @@ function renderTreeGraph() {
         .attr('fill', 'none')
         .attr('stroke', '#374151').attr('stroke-width', 1.5);
 
-    // Nodes
     const nodeG = g.selectAll('.tree-node')
         .data(hierarchy.descendants())
         .join('g')
@@ -345,27 +350,6 @@ function renderTreeGraph() {
 // ================================================================
 // LEDGER FEED (SSE)
 // ================================================================
-const SSE_URL = '/api/v1/events/invalidations';
-let eventSource = null;
-let sseInitialized = false;
-let ledgerPaused = false;
-let ledgerEvents = [];
-const MAX_EVENTS = 500;
-
-const ACTION_STYLES = {
-    GRANTED: { badge: 'bg-green-900/60 text-green-400 border border-green-500/30', dot: 'bg-green-500', label: 'Granted' },
-    REVOKED: { badge: 'bg-red-900/60 text-red-400 border border-red-500/30', dot: 'bg-red-500', label: 'Revoked' },
-    ALL_REVOKED: { badge: 'bg-red-900/60 text-red-400 border border-red-500/30', dot: 'bg-red-500', label: 'All Revoked' },
-    CONSENT_ENTRY_CHANGED: { badge: 'bg-amber-900/60 text-amber-400 border border-amber-500/30', dot: 'bg-amber-500', label: 'Changed' },
-};
-
-function getActionStyle(action) {
-    if (action === 'GRANTED') return ACTION_STYLES.GRANTED;
-    if (action === 'REVOKED' || action === 'ALL_REVOKED') return ACTION_STYLES.REVOKED;
-    // Treat expired/unknown as amber
-    return ACTION_STYLES.CONSENT_ENTRY_CHANGED;
-}
-
 function initSSE() {
     if (sseInitialized) return;
     sseInitialized = true;
@@ -380,10 +364,8 @@ function initSSE() {
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                // Only show consent-relevant events
                 const consentActions = ['GRANTED', 'REVOKED', 'ALL_REVOKED', 'CONSENT_ENTRY_CHANGED'];
                 if (!consentActions.includes(data.action)) return;
-
                 addLedgerEvent(data);
             } catch (e) {
                 console.warn('Failed to parse SSE event:', e);
@@ -392,7 +374,6 @@ function initSSE() {
 
         eventSource.onerror = () => {
             updateSSEStatus('disconnected');
-            // EventSource auto-reconnects
             setTimeout(() => {
                 if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
                     updateSSEStatus('reconnecting');
@@ -434,7 +415,6 @@ function renderLedgerFeed() {
 
     if (filtered.length === 0) {
         empty.classList.remove('hidden');
-        // Remove all event items but keep the empty div
         feed.querySelectorAll('.ledger-event').forEach(el => el.remove());
         document.getElementById('ledger-count').textContent = '';
         return;
@@ -444,13 +424,13 @@ function renderLedgerFeed() {
     feed.innerHTML = filtered.map(ev => {
         const style = getActionStyle(ev.action);
         return `
-            <div class="ledger-event flex items-start gap-4 px-5 py-3 hover:bg-gray-800/30 transition-colors">
+            <div class="ledger-event flex items-start gap-4 px-5 py-3 hover:bg-gray-50 transition-colors">
                 <div class="mt-1.5 flex-shrink-0">
                     <span class="block w-2.5 h-2.5 rounded-full ${style.dot}"></span>
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${style.label}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${style.label}</span>
                         ${ev.subject ? `<span class="text-xs text-white font-mono truncate">${esc(ev.subject)}</span>` : ''}
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -469,7 +449,6 @@ function renderLedgerFeed() {
     document.getElementById('ledger-count').textContent = `${filtered.length} events shown` +
         (filtered.length < ledgerEvents.length ? ` (${ledgerEvents.length} total)` : '');
 
-    // Auto-scroll to top if not paused
     if (!ledgerPaused) feed.scrollTop = 0;
 }
 
@@ -499,16 +478,9 @@ function toggleLedgerPause() {
 // ================================================================
 // SUBJECTS
 // ================================================================
-const SUBJECTS_API = '/api/v1/subjects';
-let subjectsCache = [];
-let subjectsLoaded = false;
-let currentSubject = null;
-
 async function loadSubjects() {
     try {
-        const res = await fetch(SUBJECTS_API);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        subjectsCache = await res.json();
+        subjectsCache = await subjectsApi('');
         subjectsLoaded = true;
         renderSubjects();
     } catch (e) {
@@ -529,8 +501,8 @@ function renderSubjects(filter) {
         return;
     }
     tb.innerHTML = data.map(s => `
-        <tr class="hover:bg-gray-800/30 transition-colors cursor-pointer" onclick="viewSubject('${esc(s.subjectName)}')">
-            <td class="px-6 py-4 font-medium text-white font-mono">${esc(s.subjectName)}</td>
+        <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick="viewSubject('${esc(s.subjectName)}')">
+            <td class="px-6 py-4 font-medium text-gray-900 font-mono">${esc(s.subjectName)}</td>
             <td class="px-6 py-4 text-gray-400">${esc(s.description || '—')}</td>
             <td class="px-6 py-4 text-gray-500 text-xs">${fmtTime(s.createdAt)}</td>
             <td class="px-6 py-4 text-right" onclick="event.stopPropagation()">
@@ -544,7 +516,6 @@ function filterSubjects() {
     renderSubjects(document.getElementById('subjects-search').value.trim());
 }
 
-// Subject detail
 async function viewSubject(name) {
     currentSubject = name;
     document.getElementById('subject-detail').classList.remove('hidden');
@@ -567,15 +538,14 @@ function showDetailTab(tab) {
 
     if (tab === 'summary') loadSubjectSummary();
     else if (tab === 'history') loadSubjectHistory();
+    else if (tab === 'compliance') loadComplianceTab();
 }
 
 async function loadSubjectSummary() {
     const body = document.getElementById('subject-detail-body');
-    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading\u2026</p>';
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/summary`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/summary`);
         const entries = data.entries || [];
         if (!entries.length) {
             body.innerHTML = '<p class="text-gray-500 text-sm">No active consent entries for this subject.</p>';
@@ -587,7 +557,7 @@ async function loadSubjectSummary() {
                     const style = getActionStyle(e.action);
                     return `
                     <div class="flex items-center gap-4 py-3">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${esc(e.action)}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span>
                         <div class="flex-1 text-sm">
                             <span class="text-white">${esc(e.purposeName)}</span>
                             <span class="text-gray-500 mx-1">→</span>
@@ -605,11 +575,9 @@ async function loadSubjectSummary() {
 
 async function loadSubjectHistory() {
     const body = document.getElementById('subject-detail-body');
-    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading\u2026</p>';
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/history`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/history`);
         const entries = data.entries || [];
         if (!entries.length) {
             body.innerHTML = '<p class="text-gray-500 text-sm">No history for this subject.</p>';
@@ -628,17 +596,17 @@ async function loadSubjectHistory() {
                             <th class="py-2">Time</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-700/30">
+                    <tbody class="divide-y divide-gray-200">
                         ${entries.map(e => {
                             const style = getActionStyle(e.action);
                             return `
-                            <tr class="hover:bg-gray-800/20">
-                                <td class="py-2 pr-4"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
-                                <td class="py-2 pr-4 text-white">${esc(e.purposeName)}</td>
-                                <td class="py-2 pr-4 text-gray-400">${esc(e.policyType === 'FIELD' ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '') : e.categoryName || '')}</td>
+                            <tr class="hover:bg-gray-50">
+                                <td class="py-2 pr-4"><span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
+                                <td class="py-2 pr-4 text-gray-900">${esc(e.purposeName)}</td>
+                                <td class="py-2 pr-4 text-gray-600">${esc(e.policyType === 'FIELD' ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '') : e.categoryName || '')}</td>
                                 <td class="py-2 pr-4 text-gray-500">${esc(e.actor || '—')}</td>
-                                <td class="py-2 pr-4 text-gray-600 font-mono">${esc(e.ipAddress || '—')}</td>
-                                <td class="py-2 text-gray-600">${fmtTime(e.createdAt)}</td>
+                                <td class="py-2 pr-4 text-gray-500 font-mono">${esc(e.ipAddress || '—')}</td>
+                                <td class="py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
@@ -652,9 +620,7 @@ async function loadSubjectHistory() {
 async function exportSubjectData() {
     if (!currentSubject) return;
     try {
-        const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(currentSubject)}/export`);
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-        const data = await res.json();
+        const data = await subjectsApi(`/${encodeURIComponent(currentSubject)}/export`);
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -663,14 +629,292 @@ async function exportSubjectData() {
         a.click();
         URL.revokeObjectURL(url);
     } catch (e) {
-        alert('Export failed: ' + e.message);
+        showMsg(document.getElementById('pf-sub-msg'), 'Export failed: ' + e.message, true);
     }
 }
 
-// Subject CRUD panel
+// ── Compliance Tab ─────────────────────────────────────────────
+
+let complianceErasureComplete = false;
+
+async function loadComplianceTab() {
+    const body = document.getElementById('subject-detail-body');
+    body.innerHTML = '<p class="text-gray-500 text-sm">Loading…</p>';
+    complianceErasureComplete = false;
+
+    try {
+        const [exportData, auditData] = await Promise.all([
+            subjectsApi(`/${encodeURIComponent(currentSubject)}/export`).catch(() => null),
+            subjectsApi(`/${encodeURIComponent(currentSubject)}/audit`).catch(() => ({ entries: [] })),
+        ]);
+
+        const entries = exportData?.consent?.entries || [];
+        const auditEntries = auditData?.entries || [];
+        const hasErasureHistory = auditEntries.length > 0;
+
+        body.innerHTML = `
+            <div class="space-y-8">
+                <!-- Export Section -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-gray-900">Export Data</h4>
+                        <button onclick="exportSubjectData()" class="px-3 py-1.5 text-xs text-cv-600 border border-cv-500/30 rounded hover:bg-cv-500/10 transition-colors inline-flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download JSON
+                        </button>
+                    </div>
+                    ${entries.length ? `
+                    <div class="border border-gray-200 rounded-md overflow-hidden">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                                <tr>
+                                    <th class="px-4 py-2">Status</th>
+                                    <th class="px-4 py-2">Purpose</th>
+                                    <th class="px-4 py-2">Scope</th>
+                                    <th class="px-4 py-2">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${entries.slice(0, 20).map(e => {
+                                    const style = getActionStyle(e.action);
+                                    const scope = e.policyType === 'FIELD'
+                                        ? (e.entityName ? e.entityName + '/' : '') + (e.fieldName || '')
+                                        : e.categoryName || '';
+                                    return `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${style.badge}">${esc(e.action)}</span></td>
+                                        <td class="px-4 py-2 text-gray-900">${esc(e.purposeName)}</td>
+                                        <td class="px-4 py-2 text-gray-500">${esc(scope)}</td>
+                                        <td class="px-4 py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        ${entries.length > 20 ? `<div class="px-4 py-2 bg-gray-50 text-xs text-gray-500">Showing 20 of ${entries.length} entries. Download JSON for full export.</div>` : ''}
+                    </div>` : `<p class="text-gray-400 text-sm">No consent entries to export.</p>`}
+                </div>
+
+                <!-- Shred Section -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-1">Right to Erasure</h4>
+                    <p class="text-xs text-gray-500 mb-4">Permanently erase all data for this subject. This is a two-step, irreversible process.</p>
+
+                    <div class="space-y-4">
+                        <!-- Step 1 -->
+                        <div id="compliance-step1" class="border border-gray-200 rounded-md p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-semibold text-gray-400 uppercase">Step 1</span>
+                                        <span id="compliance-step1-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Not started</span>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-900">Revoke All Consent &amp; Purge Cache</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Revokes all consent, deletes cached decisions, removes the subject record, and logs an audit entry.</p>
+                                </div>
+                                <button onclick="openErasureModal()" id="compliance-step1-btn" class="px-3 py-2 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition-colors whitespace-nowrap">
+                                    Begin Erasure
+                                </button>
+                            </div>
+                            <div id="compliance-step1-result" class="hidden mt-3 text-xs"></div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div id="compliance-step2" class="border border-gray-200 rounded-md p-4 opacity-50">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-semibold text-gray-400 uppercase">Step 2</span>
+                                        <span id="compliance-step2-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Waiting for Step 1</span>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-900">Shred Encryption Key</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Deletes the per-subject encryption key — all encrypted event payloads become permanently unreadable.</p>
+                                </div>
+                                <button onclick="shredSubjectKey()" id="compliance-step2-btn" class="px-3 py-2 text-xs text-white bg-red-600 hover:bg-red-700 rounded transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Shred Key
+                                </button>
+                            </div>
+                            <div id="compliance-step2-result" class="hidden mt-3 text-xs"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audit Log Section -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-3">Erasure Audit Log</h4>
+                    ${auditEntries.length ? `
+                    <div class="border border-gray-200 rounded-md overflow-hidden">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+                                <tr>
+                                    <th class="px-4 py-2">Status</th>
+                                    <th class="px-4 py-2">Request ID</th>
+                                    <th class="px-4 py-2">Policies</th>
+                                    <th class="px-4 py-2">Cache Keys</th>
+                                    <th class="px-4 py-2">Actor</th>
+                                    <th class="px-4 py-2">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${auditEntries.map(e => `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
+                                            e.status === 'SUCCESS' || e.status === 'PENDING_SHRED'
+                                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                                : 'bg-red-50 text-red-700 border border-red-200'
+                                        }">${esc(e.status)}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-gray-500 font-mono">${esc((e.deletionRequestId || '').substring(0, 8))}…</td>
+                                    <td class="px-4 py-2 text-gray-700">${e.policiesDeleted}</td>
+                                    <td class="px-4 py-2 text-gray-700">${e.cachedKeysDeleted}</td>
+                                    <td class="px-4 py-2 text-gray-500">${esc(e.actor || '—')}</td>
+                                    <td class="px-4 py-2 text-gray-500">${fmtTime(e.createdAt)}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>` : `<p class="text-gray-400 text-sm">No erasure requests have been made for this subject.</p>`}
+                </div>
+            </div>`;
+    } catch (e) {
+        body.innerHTML = `<p class="text-red-500 text-sm">${esc(e.message)}</p>`;
+    }
+}
+
+function openErasureModal() {
+    if (!currentSubject) return;
+    const token = 'DELETE_' + currentSubject;
+    document.getElementById('erasure-modal-token').textContent = token;
+    document.getElementById('erasure-modal-input').value = '';
+    document.getElementById('erasure-modal-confirm').disabled = true;
+    const errEl = document.getElementById('erasure-modal-error');
+    errEl.textContent = '';
+    errEl.classList.add('hidden');
+    document.getElementById('erasure-modal').classList.remove('hidden');
+
+    const input = document.getElementById('erasure-modal-input');
+    input.setAttribute('placeholder', token);
+    input.oninput = () => {
+        document.getElementById('erasure-modal-confirm').disabled = input.value !== token;
+    };
+}
+
+function closeErasureModal() {
+    document.getElementById('erasure-modal').classList.add('hidden');
+}
+
+function initErasureModal() {
+    const btn = document.getElementById('erasure-modal-confirm');
+    btn.addEventListener('click', async () => {
+        const token = 'DELETE_' + currentSubject;
+        const input = document.getElementById('erasure-modal-input');
+        if (input.value !== token) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Erasing…';
+        const errEl = document.getElementById('erasure-modal-error');
+        errEl.classList.add('hidden');
+
+        try {
+            await beginErasureRequest();
+            closeErasureModal();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Begin Erasure';
+        }
+    });
+}
+
+async function beginErasureRequest() {
+    if (!currentSubject) return;
+    const token = 'DELETE_' + currentSubject;
+
+    const result = await subjectsApi(
+        `/${encodeURIComponent(currentSubject)}/audit?confirm=${encodeURIComponent(token)}`,
+        { method: 'DELETE' }
+    );
+
+    complianceErasureComplete = true;
+
+    // Update Step 1 UI
+    const s1Status = document.getElementById('compliance-step1-status');
+    s1Status.textContent = result.status || 'PENDING_SHRED';
+    s1Status.className = 'text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700';
+
+    const s1Result = document.getElementById('compliance-step1-result');
+    s1Result.classList.remove('hidden');
+    s1Result.innerHTML = `
+        <div class="bg-green-50 border border-green-200 rounded p-2 text-green-800">
+            Erasure complete — ${result.ledgerEntriesRevoked || 0} entries revoked, ${result.cachedKeysDeleted || 0} cache keys deleted.
+            <span class="font-mono text-xs text-green-600">Request: ${esc((result.deletionRequestId || '').substring(0, 8))}…</span>
+        </div>`;
+
+    const s1Btn = document.getElementById('compliance-step1-btn');
+    s1Btn.disabled = true;
+    s1Btn.classList.add('opacity-50', 'cursor-not-allowed');
+    s1Btn.textContent = 'Completed';
+
+    // Enable Step 2
+    document.getElementById('compliance-step2').classList.remove('opacity-50');
+    const s2Status = document.getElementById('compliance-step2-status');
+    s2Status.textContent = 'Ready';
+    s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
+    document.getElementById('compliance-step2-btn').disabled = false;
+}
+
+async function shredSubjectKey() {
+    if (!currentSubject || !complianceErasureComplete) return;
+
+    const btn = document.getElementById('compliance-step2-btn');
+    btn.disabled = true;
+    btn.textContent = 'Shredding…';
+
+    try {
+        await subjectsApi(
+            `/${encodeURIComponent(currentSubject)}/dsar-key`,
+            { method: 'DELETE' }
+        );
+
+        const s2Status = document.getElementById('compliance-step2-status');
+        s2Status.textContent = 'Shredded';
+        s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700';
+
+        btn.textContent = 'Completed';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        const s2Result = document.getElementById('compliance-step2-result');
+        s2Result.classList.remove('hidden');
+        s2Result.innerHTML = `
+            <div class="bg-green-50 border border-green-200 rounded p-2 text-green-800">
+                Encryption key permanently destroyed. All encrypted event payloads for this subject are now unreadable.
+            </div>`;
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Shred Key';
+
+        const s2Result = document.getElementById('compliance-step2-result');
+        s2Result.classList.remove('hidden');
+
+        if (e.message && e.message.includes('EVENTS_PENDING')) {
+            const s2Status = document.getElementById('compliance-step2-status');
+            s2Status.textContent = 'Events pending';
+            s2Status.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700';
+            s2Result.innerHTML = `
+                <div class="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800">
+                    Events are still being processed by the outbox. Please wait a moment and try again.
+                </div>`;
+        } else {
+            s2Result.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded p-2 text-red-800">
+                    Shred failed: ${esc(e.message)}
+                </div>`;
+        }
+    }
+}
+
 function openSubjectPanel(type, data) {
-    const overlay = document.getElementById('panel-overlay');
-    const panel = document.getElementById('panel');
     const title = document.getElementById('panel-title');
     const body = document.getElementById('panel-body');
 
@@ -682,13 +926,11 @@ function openSubjectPanel(type, data) {
         body.innerHTML = subjectForm(data);
     }
 
-    overlay.classList.remove('hidden');
-    requestAnimationFrame(() => panel.classList.remove('translate-x-full'));
+    activatePanel();
 }
 
 function closeSubjectPanel() {
-    document.getElementById('panel').classList.add('translate-x-full');
-    setTimeout(() => document.getElementById('panel-overlay').classList.add('hidden'), 300);
+    closePanel();
 }
 
 function subjectForm(existing) {
@@ -698,21 +940,21 @@ function subjectForm(existing) {
         <form onsubmit="saveSubject(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Subject Name</label>
+                    <label class="block text-sm text-gray-500 mb-1">Subject Name</label>
                     <input id="pf-sub-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Description</label>
+                    <label class="block text-sm text-gray-500 mb-1">Description</label>
                     <textarea id="pf-sub-desc" rows="3"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
                 <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
                     ${existing ? 'Update' : 'Register'}
                 </button>
-                <button type="button" onclick="closeSubjectPanel()" class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-gray-600 rounded-lg hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="button" onclick="closeSubjectPanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
             </div>
             <span id="pf-sub-msg" class="hidden"></span>
         </form>`;
@@ -725,46 +967,52 @@ async function saveSubject(e, isEdit, origName) {
     const msg = document.getElementById('pf-sub-msg');
     try {
         if (isEdit) {
-            const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(origName)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: desc }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+            await subjectsApi(`/${encodeURIComponent(origName)}`, { method: 'PUT', body: JSON.stringify({ description: desc }) });
         } else {
-            const res = await fetch(SUBJECTS_API, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ subjectName: name, description: desc }),
-            });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
+            await subjectsApi('', { method: 'POST', body: JSON.stringify({ subjectName: name, description: desc }) });
         }
         closeSubjectPanel();
-        loadSubjects();
+        await reloadSubjects();
     } catch (err) {
-        msg.textContent = err.message;
-        msg.className = 'text-sm mt-3 text-red-400';
-        msg.classList.remove('hidden');
+        showMsg(msg, err.message, true);
     }
 }
 
 function deleteSubject(name) {
     confirmDelete(`Delete subject "${name}"? This cannot be undone.`, async () => {
-        try {
-            const res = await fetch(`${SUBJECTS_API}/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || res.statusText);
-            loadSubjects();
-            if (currentSubject === name) closeSubjectDetail();
-        } catch (e) { alert(e.message); }
+        await subjectsApi(`/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        await reloadSubjects();
+        if (currentSubject === name) closeSubjectDetail();
     });
 }
 
 // ── Init ───────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    const hash = window.location.hash.replace('#', '');
-    if (['graph', 'ledger', 'subjects'].includes(hash)) {
-        showTab(hash);
-    } else {
-        loadGraph();
-    }
-});
+export function init() {
+    Object.assign(window, {
+        showTab, closeDeleteModal,
+        setGraphMode, loadGraph, resetGraph, loadMoreGraph,
+        applyLedgerFilters, toggleLedgerPause,
+        filterSubjects,
+        openSubjectPanel, closeSubjectPanel,
+        viewSubject, closeSubjectDetail,
+        showDetailTab, exportSubjectData,
+        saveSubject, deleteSubject,
+        // Compliance
+        openErasureModal, closeErasureModal,
+        beginErasureRequest, shredSubjectKey,
+        // Playground
+        evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
+    });
+
+    initDeleteModal();
+    initErasureModal();
+
+    ready(() => {
+        const hash = window.location.hash.replace('#', '');
+        if (['graph', 'ledger', 'subjects', 'playground'].includes(hash)) {
+            showTab(hash);
+        } else {
+            loadGraph();
+        }
+    });
+}

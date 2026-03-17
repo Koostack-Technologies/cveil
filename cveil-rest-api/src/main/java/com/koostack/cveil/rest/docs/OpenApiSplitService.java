@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.koostack.cveil.rest.billing.BillableEndpoints;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -134,9 +135,17 @@ public class OpenApiSplitService {
                 toRemove.add(path);
                 continue;
             }
-            boolean isPlatform = path.startsWith(PLATFORM_PATH_PREFIX);
-            if (keepPlatform != isPlatform) {
-                toRemove.add(path);
+
+            if (keepPlatform) {
+                // Platform spec: keep only platform endpoints
+                if (!path.startsWith(PLATFORM_PATH_PREFIX)) {
+                    toRemove.add(path);
+                }
+            } else {
+                // Tenant spec: keep only billable public API endpoints
+                if (!BillableEndpoints.isBillable(path)) {
+                    toRemove.add(path);
+                }
             }
         }
         toRemove.forEach(paths::remove);

@@ -26,6 +26,10 @@
 **/.gradle/
 **/.kotlin/
 
+# ---- Node.js / front-end build output (rebuilt inside the container) --------
+cveil-web/node_modules/
+cveil-web/dist/
+
 # ---- OS / editor temp files -------------------------------------------------
 .DS_Store
 Thumbs.db

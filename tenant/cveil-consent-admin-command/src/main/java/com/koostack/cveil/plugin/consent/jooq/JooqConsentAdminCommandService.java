@@ -9,6 +9,7 @@ import com.koostack.cveil.core.tenant.consent.events.PurposeSnapshot;
 import com.koostack.cveil.core.tenant.consent.events.RegulationSnapshot;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +69,7 @@ public class JooqConsentAdminCommandService
     private RevokeAllConsentCommandActuator revokeAllConsentActuator;
     private DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator;
     private ShredSubjectCommandActuator shredSubjectActuator;
+    private SeedConsentGovernanceCommandActuator seedConsentGovernanceActuator;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -248,6 +250,20 @@ public class JooqConsentAdminCommandService
             actuators.put(
                     ShredSubjectCommandActuator.ShredSubjectCommand.class, shredSubjectActuator);
         }
+
+        // Seed governance actuator — dispatches through this service (self-reference)
+        seedConsentGovernanceActuator =
+                new SeedConsentGovernanceCommandActuator(eventService, this);
+        actuators.put(
+                SeedConsentGovernanceCommandActuator.SeedConsentGovernanceCommand.class,
+                seedConsentGovernanceActuator);
+
+        // Parameterized seed actuator — seeds only user-selected governance data
+        var seedParameterizedActuator =
+                new SeedParameterizedGovernanceCommandActuator(eventService, this);
+        actuators.put(
+                SeedParameterizedGovernanceCommandActuator.SeedParameterizedGovernanceCommand.class,
+                seedParameterizedActuator);
 
         LOG.info(
                 "JooqConsentAdminCommandService configured (event-sourced, {} actuators)",
@@ -519,7 +535,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void grantConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -547,7 +563,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void revokeConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,
@@ -573,7 +589,7 @@ public class JooqConsentAdminCommandService
     @Override
     public void expireConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

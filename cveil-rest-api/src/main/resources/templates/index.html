@@ -5,7 +5,7 @@
     <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-16 sm:pb-20 text-center">
         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cv-900/30 border border-cv-500/20 text-cv-500 text-xs font-semibold uppercase tracking-wide mb-8">
             <span class="w-2 h-2 rounded-full bg-cv-500 animate-pulse"></span>
-            Enterprise SOC2 &amp; GDPR Ready
+            GDPR · CCPA · HIPAA Ready
         </div>
 
         <h1 class="text-3xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 max-w-4xl leading-tight">
@@ -15,33 +15,106 @@
 
         <p class="text-lg md:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
             Pass your compliance audits without derailing your product roadmap.
-            Drop-in APIs backed by an immutable ledger and sub-millisecond edge routing.
+            Drop-in SDKs with an immutable consent ledger and sub-millisecond in-process masking.
         </p>
 
         <div class="mb-20">
-            <a href="/signup" class="bg-cv-500 text-gray-900 hover:bg-cv-600 px-8 py-3.5 rounded-lg font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] inline-flex items-center justify-center gap-2">
+            <a href="/signup" class="bg-cv-500 text-gray-900 hover:bg-cv-600 px-8 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] inline-flex items-center justify-center gap-2">
                 Get Started Free
             </a>
         </div>
 
-        <!-- SDK Code Example -->
-        <div class="w-full max-w-3xl bg-[#0d1117] rounded-xl border border-gray-700 shadow-2xl overflow-hidden text-left relative">
-            <div class="absolute top-0 right-0 px-4 py-2 text-xs font-mono text-gray-500 border-b border-l border-gray-700 rounded-bl-lg bg-gray-800/50">Java SDK</div>
-            <div class="p-6 font-mono text-sm overflow-x-auto text-gray-300 leading-relaxed">
-                <p><span class="text-purple-400">import</span> dev.cveil.sdk.Cveil;</p>
-                <p><span class="text-purple-400">import</span> dev.cveil.sdk.ConsentResult;</p>
-                <br>
-                <p><span class="text-gray-500">// 1. Initialize with your isolated Workspace Key</span></p>
-                <p><span class="text-purple-400">var</span> cv = Cveil.builder()</p>
-                <p class="ml-4">.apiKey(<span class="text-green-300">"cv_live_sk_8f92..."</span>)</p>
-                <p class="ml-4">.build();</p>
-                <br>
-                <p><span class="text-gray-500">// 2. Check consent in &lt; 1ms at the Edge</span></p>
-                <p><span class="text-purple-400">boolean</span> allowed = cv.consent().evaluate(</p>
-                <p class="ml-4"><span class="text-green-300">"usr_9982"</span>, <span class="text-green-300">"marketing_emails"</span>);</p>
-                <br>
-                <p><span class="text-purple-400">if</span> (!allowed) <span class="text-blue-400">throw new</span> ForbiddenException(<span class="text-green-300">"Consent missing or expired."</span>);</p>
+        <!-- Masking Flow Visualization -->
+        <div class="w-full max-w-4xl" id="masking-demo">
+            <!-- Regulation Tabs -->
+            <div class="flex items-center justify-center gap-1 mb-4">
+                <button onclick="switchRegulation('ccpa')" id="tab-ccpa" class="masking-tab masking-tab-active px-4 py-2 rounded-t text-sm font-semibold transition-all">
+                    CCPA
+                </button>
+                <button onclick="switchRegulation('hipaa')" id="tab-hipaa" class="masking-tab px-4 py-2 rounded-t text-sm font-semibold transition-all">
+                    HIPAA
+                </button>
+                <button onclick="switchRegulation('gdpr')" id="tab-gdpr" class="masking-tab px-4 py-2 rounded-t text-sm font-semibold transition-all">
+                    GDPR
+                </button>
             </div>
+
+            <div class="bg-[#0d1117] rounded-md border border-gray-700 shadow-2xl overflow-hidden text-left">
+                <!-- Three-column header -->
+                <div class="grid grid-cols-3 border-b border-gray-700 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <div class="px-5 py-3 bg-gray-800/30">Your Raw Data</div>
+                    <div class="px-5 py-3 bg-gray-800/50 text-center border-x border-gray-700">
+                        <span id="regulation-label" class="text-red-400">CCPA · No Consent</span>
+                    </div>
+                    <div class="px-5 py-3 bg-gray-800/30 text-center">
+                        <span class="text-cv-500">Consent Granted</span>
+                    </div>
+                </div>
+
+                <!-- Data rows -->
+                <div class="divide-y divide-gray-800/60 font-mono text-sm">
+                    <!-- Email row -->
+                    <div class="grid grid-cols-3 items-center">
+                        <div class="px-5 py-3.5">
+                            <span class="text-gray-500">email: </span><span class="text-green-300">alice@acme.com</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center border-x border-gray-800/40 bg-red-950/10">
+                            <span id="masked-email" class="text-red-300">****@acme.com</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center bg-cv-950/10">
+                            <span class="text-cv-400">alice@acme.com</span>
+                        </div>
+                    </div>
+                    <!-- Phone row -->
+                    <div class="grid grid-cols-3 items-center">
+                        <div class="px-5 py-3.5">
+                            <span class="text-gray-500">phone: </span><span class="text-green-300">555-867-5309</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center border-x border-gray-800/40 bg-red-950/10">
+                            <span id="masked-phone" class="text-red-300">****5309</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center bg-cv-950/10">
+                            <span class="text-cv-400">555-867-5309</span>
+                        </div>
+                    </div>
+                    <!-- SSN row -->
+                    <div class="grid grid-cols-3 items-center">
+                        <div class="px-5 py-3.5">
+                            <span class="text-gray-500">ssn: </span><span class="text-green-300">412-55-6789</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center border-x border-gray-800/40 bg-red-950/10">
+                            <span id="masked-ssn" class="text-red-300">***</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center bg-cv-950/10">
+                            <span class="text-cv-400">412-55-6789</span>
+                        </div>
+                    </div>
+                    <!-- DOB row -->
+                    <div class="grid grid-cols-3 items-center">
+                        <div class="px-5 py-3.5">
+                            <span class="text-gray-500">dob: </span><span class="text-green-300">1990-04-12</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center border-x border-gray-800/40 bg-red-950/10">
+                            <span id="masked-dob" class="text-red-300">***</span>
+                        </div>
+                        <div class="px-5 py-3.5 text-center bg-cv-950/10">
+                            <span class="text-cv-400">1990-04-12</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategy legend -->
+                <div class="border-t border-gray-700 px-5 py-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-500">
+                    <span class="font-semibold text-gray-400">Masking strategies:</span>
+                    <span><span class="text-yellow-500/80 font-mono">RedactLocal</span> ****@domain.com</span>
+                    <span><span class="text-yellow-500/80 font-mono">RedactUpToLast4</span> ****5309</span>
+                    <span><span class="text-yellow-500/80 font-mono">Hash256</span> 2cf24d…</span>
+                    <span><span class="text-yellow-500/80 font-mono">RedactAll</span> ***</span>
+                    <span><span class="text-yellow-500/80 font-mono">Plaintext</span> original value</span>
+                </div>
+            </div>
+
+            <p class="text-gray-500 text-xs mt-3">Same data, different regulations — the masking adapts automatically per jurisdiction.</p>
         </div>
     </main>
 
@@ -49,41 +122,132 @@
     <section class="relative z-10 border-t border-gray-800 bg-gray-900/30 py-24">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-20">
-                <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4">Enterprise infrastructure, delivered as an API.</h2>
-                <p class="text-gray-400 max-w-2xl mx-auto text-lg">You focus on building your core product. We handle the strict data residency, audit logs, and compliance routing.</p>
+                <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4">Privacy infrastructure, delivered as an API.</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto text-lg">You focus on building your product. We handle the consent lifecycle, data masking, and regulatory compliance.</p>
             </div>
 
-            <div class="grid gap-10 sm:grid-cols-2 md:grid-cols-3">
+            <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- 1. Regulations -->
                 <div>
-                    <div class="w-12 h-12 bg-cv-900/50 rounded-xl flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
                     </div>
-                    <h3 class="text-xl font-semibold mb-3">Zero-Latency Edge</h3>
+                    <h3 class="text-xl font-semibold mb-3">27+ Regulations, Zero Config</h3>
                     <p class="text-gray-400 leading-relaxed">
-                        Consent checks live in the critical path of your application. Our global Rust proxies evaluate policies in sub-milliseconds, ensuring your API never slows down.
+                        GDPR, CCPA, HIPAA, COPPA, and 19 US state privacy laws ship pre-configured. Each regulation maps to jurisdictions with purpose-specific masking rules out of the box.
                     </p>
                 </div>
+                <!-- 2. Immutable Ledger -->
                 <div>
-                    <div class="w-12 h-12 bg-cv-900/50 rounded-xl flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                     </div>
-                    <h3 class="text-xl font-semibold mb-3">Auditor-Proof Ledger</h3>
+                    <h3 class="text-xl font-semibold mb-3">Immutable Consent Ledger</h3>
                     <p class="text-gray-400 leading-relaxed">
-                        Say goodbye to easily manipulated CRUD databases. Every grant and revocation is permanently recorded in a cryptographically verifiable Event Store.
+                        Every grant, revocation, and expiration is permanently recorded in an append-only ledger. When a subject requests deletion, one cryptographic key delete renders all their records unreadable — no audit trail broken.
                     </p>
                 </div>
+                <!-- 3. Masking Strategies -->
                 <div>
-                    <div class="w-12 h-12 bg-cv-900/50 rounded-xl flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                     </div>
-                    <h3 class="text-xl font-semibold mb-3">Strict Data Residency</h3>
+                    <h3 class="text-xl font-semibold mb-3">5 Masking Strategies</h3>
                     <p class="text-gray-400 leading-relaxed">
-                        Enterprise clients demand isolation. We dynamically provision physically isolated schemas and Redis streams for your workspaces to satisfy EU/US residency laws out of the box.
+                        RedactLocal, RedactUpToLast4, Hash256, RedactAll, and Plaintext — applied per field or category. Type-safe outputs: strings become <span class="font-mono text-gray-300">***</span>, numbers become <span class="font-mono text-gray-300">0</span>, booleans become <span class="font-mono text-gray-300">false</span>.
+                    </p>
+                </div>
+                <!-- 4. WASM Engine -->
+                <div>
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">In-Process WASM Engine</h3>
+                    <p class="text-gray-400 leading-relaxed">
+                        A Rust-compiled WebAssembly engine runs masking inside your application — no network hop required. Sub-millisecond evaluation with an LRU decision cache and conservative deny-by-default fallback.
+                    </p>
+                </div>
+                <!-- 5. SDKs -->
+                <div>
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Multi-Language SDKs</h3>
+                    <p class="text-gray-400 leading-relaxed">
+                        First-class JavaScript, Java, and Rust SDKs that auto-fetch missing consent decisions and stay in sync via real-time SSE cache invalidation. Full REST API with OpenAPI docs for everything else.
+                    </p>
+                </div>
+                <!-- 6. Graph Topology -->
+                <div>
+                    <div class="w-12 h-12 bg-cv-900/50 rounded-md flex items-center justify-center mb-6 text-cv-500 border border-cv-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Consent Graph Explorer</h3>
+                    <p class="text-gray-400 leading-relaxed">
+                        Visualize and manage purpose → regulation → field relationships in an interactive D3.js graph. Full governance console with entity cataloguing, category management, and policy configuration.
                     </p>
                 </div>
             </div>
         </div>
     </section>
+
+    <script>
+        const regulations = {
+            ccpa: {
+                label: 'CCPA · No Consent',
+                email: '****@acme.com',
+                phone: '****5309',
+                ssn: '***',
+                dob: '***'
+            },
+            hipaa: {
+                label: 'HIPAA · No Consent',
+                email: '****@acme.com',
+                phone: '***',
+                ssn: '***',
+                dob: '***'
+            },
+            gdpr: {
+                label: 'GDPR · No Consent',
+                email: '2cf24dba5f…',
+                phone: '***',
+                ssn: '***',
+                dob: '***'
+            }
+        };
+
+        function switchRegulation(reg) {
+            const data = regulations[reg];
+            document.getElementById('regulation-label').textContent = data.label;
+            document.getElementById('masked-email').textContent = data.email;
+            document.getElementById('masked-phone').textContent = data.phone;
+            document.getElementById('masked-ssn').textContent = data.ssn;
+            document.getElementById('masked-dob').textContent = data.dob;
+
+            document.querySelectorAll('.masking-tab').forEach(tab => {
+                tab.classList.remove('masking-tab-active');
+            });
+            document.getElementById('tab-' + reg).classList.add('masking-tab-active');
+        }
+    </script>
+
+    <style>
+        .masking-tab {
+            color: #6b7280;
+            background: transparent;
+            border: 1px solid transparent;
+        }
+        .masking-tab:hover {
+            color: #9ca3af;
+            background: rgba(13, 17, 23, 0.5);
+        }
+        .masking-tab-active {
+            color: #14b8a6;
+            background: #0d1117;
+            border-color: #374151;
+            border-bottom-color: #0d1117;
+        }
+    </style>
 
 {/content}
 {/include}

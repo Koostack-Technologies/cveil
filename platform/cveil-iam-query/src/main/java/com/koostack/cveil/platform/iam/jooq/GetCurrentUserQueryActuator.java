@@ -30,7 +30,7 @@ public class GetCurrentUserQueryActuator
     private static final Logger LOG = LoggerFactory.getLogger(GetCurrentUserQueryActuator.class);
 
     // -- user table fields --
-    private static final org.jooq.Table<?> IAM_USER = table(name("platform_iam", "iam_user"));
+    private static final org.jooq.Table<?> IAM_USER = table(name("cveiliam", "iam_user"));
     private static final org.jooq.Field<UUID> USER_ID = field(name("user_id"), UUID.class);
     private static final org.jooq.Field<String> USERNAME = field(name("username"), String.class);
     private static final org.jooq.Field<String> EMAIL = field(name("email"), String.class);
@@ -41,9 +41,9 @@ public class GetCurrentUserQueryActuator
 
     // -- org join fields --
     private static final org.jooq.Table<?> ORG_MEMBERSHIP =
-            table(name("platform_iam", "org_membership"));
+            table(name("cveiliam", "org_membership"));
     private static final org.jooq.Table<?> IAM_ORGANIZATION =
-            table(name("platform_iam", "iam_organization"));
+            table(name("cveiliam", "iam_organization"));
     private static final org.jooq.Field<UUID> M_USER_ID = field(name("m", "user_id"), UUID.class);
     private static final org.jooq.Field<String> M_ORG_ID = field(name("m", "org_id"), String.class);
     private static final org.jooq.Field<String> O_ORG_ID = field(name("o", "org_id"), String.class);

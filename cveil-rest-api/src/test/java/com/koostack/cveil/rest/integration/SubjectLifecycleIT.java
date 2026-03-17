@@ -35,7 +35,7 @@ public class SubjectLifecycleIT {
     private static final String TENANT_ID = "subject_lifecycle_it_tenant";
     private static final String BOOTSTRAP_KEY = "test-bootstrap-key-for-integration-tests";
 
-    private static final String ENTITY = "SlEntity";
+    private static final String ENTITY = "sl_entity";
     private static final String CATEGORY = "SlCategory";
     private static final String FIELD = "sl_field";
     private static final String PURPOSE = "sl_purpose";
@@ -74,7 +74,7 @@ public class SubjectLifecycleIT {
         @Order(2)
         @DisplayName("Login as tenant admin")
         void loginAsTenantAdmin() {
-            String email = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+            String email = TENANT_ID.replace("_", "-") + "@cveil-test.com";
             accessToken = IntegrationTestSupport.loginUser(email, "Test1234!");
             assertThat(accessToken).isNotBlank();
         }
@@ -236,7 +236,7 @@ public class SubjectLifecycleIT {
                             () -> {
                                 var rows =
                                         support.query(
-                                                "SELECT count(*) AS cnt FROM cveil_consent.policy"
+                                                "SELECT count(*) AS cnt FROM cveilconsent.policy"
                                                         + " WHERE tenant_id = ?",
                                                 TENANT_ID);
                                 int cnt = ((Number) rows.get(0).get("cnt")).intValue();

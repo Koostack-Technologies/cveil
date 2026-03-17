@@ -1,5 +1,5 @@
 {#include base.html}
-{#title}Plans{/title}
+{#title}Pricing{/title}
 {#content}
 
     <main class="relative z-10 flex-grow px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
@@ -12,9 +12,9 @@
             </div>
 
             <!-- Pricing Cards -->
-            <div class="grid md:grid-cols-3 gap-8 mb-20">
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
                 {#for tier in tiers}
-                <div class="relative rounded-2xl border {#if tier.highlighted}border-cv-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
+                <div class="relative rounded-md border {#if tier.highlighted}border-cv-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
                     {#if tier.highlighted}
                     <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-cv-500 text-gray-900 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Most Popular</div>
                     {/if}
@@ -32,29 +32,22 @@
                         <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-white font-medium">{tier.evaluations}</span>
-                                <span class="text-gray-400"> consent evaluations / mo</span>
+                                <span class="text-white font-medium">{tier.subjects}</span>
+                                <span class="text-gray-400"> managed subjects</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Overage: </span>
-                                <span class="text-white font-medium">{tier.overage}</span>
+                                <span class="text-white font-medium">{tier.apiRequests}</span>
+                                <span class="text-gray-400"> API requests / mo</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Data masking: </span>
-                                <span class="text-white font-medium">{tier.masking}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            <div>
-                                <span class="text-gray-400">Audit retention: </span>
-                                <span class="text-white font-medium">{tier.auditRetention}</span>
+                                <span class="text-gray-400">Governance: </span>
+                                <span class="text-white font-medium">{tier.governance}</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
@@ -72,26 +65,15 @@
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            {#if tier.sso}
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            {#else}
-                            <svg class="w-5 h-5 text-gray-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            {/if}
-                            <div>
-                                <span class="text-gray-400">SSO / SAML: </span>
-                                <span class="{#if tier.sso}text-white font-medium{#else}text-gray-600{/if}">{#if tier.sso}Included{#else}Not included{/if}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Uptime SLA: </span>
-                                <span class="text-white font-medium">{tier.sla}</span>
+                                <span class="text-gray-400">Overage: </span>
+                                <span class="text-white font-medium">{tier.overage}</span>
                             </div>
                         </div>
                     </div>
 
-                    <a href="#" class="{#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded-lg font-semibold text-center transition-all">
+                    <a href="/signup?plan={tier.planId}" class="{#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded font-semibold text-center transition-all">
                         {tier.cta}
                     </a>
                 </div>
@@ -99,10 +81,10 @@
             </div>
 
             <!-- Pay As You Go Note -->
-            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-xl p-8 text-center mb-16">
+            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-md p-8 text-center mb-16">
                 <h3 class="text-xl font-bold mb-3">Pay as you go, always</h3>
                 <p class="text-gray-400 leading-relaxed">
-                    Every plan includes a baseline quota of consent evaluations per month. Go beyond your limit and you're automatically billed at the overage rate — no hard cutoffs, no surprises. Usage resets on the first of each calendar month.
+                    Every paid plan includes a baseline quota of API requests per month. Go beyond your limit and you're billed at <span class="text-white font-medium">$0.002 per request</span> — no surprises. The free tier enforces a hard stop at its quota. Usage resets on the first of each calendar month.
                 </p>
             </div>
 
@@ -114,59 +96,47 @@
                         <thead>
                             <tr class="border-b border-gray-800">
                                 <th class="py-4 pr-4 font-medium text-gray-400">Feature</th>
-                                <th class="py-4 px-4 font-medium text-gray-400 text-center">Starter</th>
-                                <th class="py-4 px-4 font-medium text-cv-500 text-center">Pro</th>
-                                <th class="py-4 pl-4 font-medium text-gray-400 text-center">Enterprise</th>
+                                {#for tier in tiers}
+                                <th class="py-4 px-4 font-medium {#if tier.highlighted}text-cv-500{#else}text-gray-400{/if} text-center">{tier.name}</th>
+                                {/for}
                             </tr>
                         </thead>
                         <tbody class="text-gray-300">
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Monthly evaluations</td>
-                                <td class="py-3 px-4 text-center">50,000</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">500,000</td>
-                                <td class="py-3 pl-4 text-center">Unlimited</td>
+                                <td class="py-3 pr-4">Managed subjects</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.subjects}</td>
+                                {/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Overage rate</td>
-                                <td class="py-3 px-4 text-center">$0.002</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">$0.001</td>
-                                <td class="py-3 pl-4 text-center">Custom</td>
+                                <td class="py-3 pr-4">API requests / mo</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.apiRequests}</td>
+                                {/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Data masking</td>
-                                <td class="py-3 px-4 text-center">Basic</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">Full field-level</td>
-                                <td class="py-3 pl-4 text-center">Full + custom</td>
+                                <td class="py-3 pr-4">Governance</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.governance}</td>
+                                {/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Audit log retention</td>
-                                <td class="py-3 px-4 text-center">30 days</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">1 year</td>
-                                <td class="py-3 pl-4 text-center">Unlimited</td>
+                                <td class="py-3 pr-4">Overage</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.overage}</td>
+                                {/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
                                 <td class="py-3 pr-4">Support</td>
-                                <td class="py-3 px-4 text-center">Community</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">Priority (24h)</td>
-                                <td class="py-3 pl-4 text-center">Dedicated (1h)</td>
-                            </tr>
-                            <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Data residency</td>
-                                <td class="py-3 px-4 text-center">Shared</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">Dedicated region</td>
-                                <td class="py-3 pl-4 text-center">Custom / on-prem</td>
-                            </tr>
-                            <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">SSO / SAML</td>
-                                <td class="py-3 px-4 text-center text-gray-600">—</td>
-                                <td class="py-3 px-4 text-center text-cv-500">✓</td>
-                                <td class="py-3 pl-4 text-center text-cv-500">✓</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.support}</td>
+                                {/for}
                             </tr>
                             <tr>
-                                <td class="py-3 pr-4">Uptime SLA</td>
-                                <td class="py-3 px-4 text-center">99.9%</td>
-                                <td class="py-3 px-4 text-center font-medium text-white">99.95%</td>
-                                <td class="py-3 pl-4 text-center">99.99%</td>
+                                <td class="py-3 pr-4">Data residency</td>
+                                {#for tier in tiers}
+                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.residency}</td>
+                                {/for}
                             </tr>
                         </tbody>
                     </table>

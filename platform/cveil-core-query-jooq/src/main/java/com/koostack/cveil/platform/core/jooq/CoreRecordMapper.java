@@ -12,7 +12,7 @@ import org.jooq.Record;
 /** Shared jOOQ field constants and record-to-domain mapping utilities for core tenant queries. */
 public final class CoreRecordMapper {
 
-    static final org.jooq.Table<?> TENANT = table(name("platform_core", "tenant"));
+    static final org.jooq.Table<?> TENANT = table(name("cveiliam", "tenant"));
     static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
     static final org.jooq.Field<String> DISPLAY_NAME = field(name("display_name"), String.class);
     static final org.jooq.Field<String> PLAN = field(name("plan"), String.class);

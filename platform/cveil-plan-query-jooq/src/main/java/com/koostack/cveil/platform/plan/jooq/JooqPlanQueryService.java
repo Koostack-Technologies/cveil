@@ -15,7 +15,7 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
 
     private static final Logger LOG = LoggerFactory.getLogger(JooqPlanQueryService.class);
 
-    private static final org.jooq.Table<?> PLAN = table(name("platform_core", "plan"));
+    private static final org.jooq.Table<?> PLAN = table(name("cveilcore", "plan"));
     private static final org.jooq.Field<String> PLAN_ID = field(name("plan_id"), String.class);
     private static final org.jooq.Field<String> DISPLAY_NAME =
             field(name("display_name"), String.class);
@@ -26,12 +26,18 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
             field(name("subject_limit"), Long.class);
     private static final org.jooq.Field<Integer> BURST_LIMIT =
             field(name("burst_limit"), Integer.class);
+    private static final org.jooq.Field<Integer> JURISDICTION_LIMIT =
+            field(name("jurisdiction_limit"), Integer.class);
     private static final org.jooq.Field<Boolean> IS_PUBLIC =
             field(name("is_public"), Boolean.class);
     private static final org.jooq.Field<Boolean> IS_ACTIVE =
             field(name("is_active"), Boolean.class);
     private static final org.jooq.Field<Integer> SORT_ORDER =
             field(name("sort_order"), Integer.class);
+    private static final org.jooq.Field<String> STRIPE_PRODUCT_ID =
+            field(name("stripe_product_id"), String.class);
+    private static final org.jooq.Field<String> STRIPE_PRICE_ID =
+            field(name("stripe_price_id"), String.class);
 
     private DSLContext dsl;
     private RetryConfig retryConfig = RetryableQuery.DEFAULT;
@@ -107,8 +113,11 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
                 record.get(EVAL_LIMIT),
                 record.get(SUBJECT_LIMIT),
                 record.get(BURST_LIMIT),
+                record.get(JURISDICTION_LIMIT) != null ? record.get(JURISDICTION_LIMIT) : 3,
                 record.get(IS_PUBLIC),
                 record.get(IS_ACTIVE),
-                record.get(SORT_ORDER));
+                record.get(SORT_ORDER),
+                record.get(STRIPE_PRODUCT_ID),
+                record.get(STRIPE_PRICE_ID));
     }
 }

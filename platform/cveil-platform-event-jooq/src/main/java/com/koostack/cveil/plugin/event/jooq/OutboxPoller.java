@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jooq.DSLContext;
@@ -62,7 +61,7 @@ public class OutboxPoller {
     private volatile SubjectDsarService<?> subjectDsarService;
     private volatile String encryptionKey;
 
-    private ScheduledExecutorService scheduler;
+    private Thread schedulerThread;
     private ExecutorService workers;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -92,9 +91,11 @@ public class OutboxPoller {
     }
 
     /**
-     * Starts the outbox poller with virtual threads for per-tenant parallelism. Each tenant's
-     * publish batch runs on its own virtual thread (~1KB stack), eliminating the fixed-thread
-     * bottleneck when many tenants are active concurrently.
+     * Starts the outbox poller with virtual threads for per-tenant parallelism. The scheduler loop
+     * itself runs on a virtual thread so it is not susceptible to platform-thread starvation under
+     * heavy load (e.g. integration tests with many concurrent containers). Each tenant's publish
+     * batch runs on its own virtual thread (~1KB stack), eliminating the fixed-thread bottleneck
+     * when many tenants are active concurrently.
      */
     public void start() {
         if (!running.compareAndSet(false, true)) {
@@ -102,15 +103,22 @@ public class OutboxPoller {
             return;
         }
         workers = Executors.newVirtualThreadPerTaskExecutor();
-        scheduler =
-                Executors.newSingleThreadScheduledExecutor(
-                        r -> {
-                            Thread t = new Thread(r, "outbox-scheduler");
-                            t.setDaemon(true);
-                            return t;
-                        });
-        scheduler.scheduleWithFixedDelay(
-                this::discoverAndDispatch, 0, pollIntervalMs, TimeUnit.MILLISECONDS);
+        schedulerThread =
+                Thread.ofVirtual()
+                        .name("outbox-scheduler")
+                        .start(
+                                () -> {
+                                    while (running.get()
+                                            && !Thread.currentThread().isInterrupted()) {
+                                        discoverAndDispatch();
+                                        try {
+                                            Thread.sleep(pollIntervalMs);
+                                        } catch (InterruptedException e) {
+                                            Thread.currentThread().interrupt();
+                                            break;
+                                        }
+                                    }
+                                });
         log.info("OutboxPoller started with virtual threads, polling every {}ms", pollIntervalMs);
     }
 
@@ -119,10 +127,16 @@ public class OutboxPoller {
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        scheduler.shutdown();
+        if (schedulerThread != null) {
+            schedulerThread.interrupt();
+            try {
+                schedulerThread.join(5_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         workers.shutdown();
         try {
-            scheduler.awaitTermination(5, TimeUnit.SECONDS);
             workers.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -138,6 +152,12 @@ public class OutboxPoller {
     private void discoverAndDispatch() {
         try {
             List<String> tenants = discoverTenantsWithPendingEvents();
+            if (!tenants.isEmpty()) {
+                log.debug(
+                        "Outbox discovered {} tenant(s) with pending events: {}",
+                        tenants.size(),
+                        tenants);
+            }
             for (String tenantId : tenants) {
                 workers.submit(() -> TenantContext.runWhere(tenantId, this::publishBatch));
             }
@@ -296,7 +316,7 @@ public class OutboxPoller {
                 redisPublisher.publishBatchPipelined(streamKey, fieldsBatch);
             }
 
-            log.debug("Outbox relayed {} events to Redis stream {}", fieldsBatch.size(), streamKey);
+            log.info("Outbox relayed {} events to Redis stream {}", fieldsBatch.size(), streamKey);
         } catch (Exception e) {
             log.warn("Outbox publish failed — will retry", e);
         }

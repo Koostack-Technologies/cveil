@@ -24,4 +24,18 @@ public final class BillingEventTypes {
     public static final String SUBSCRIPTION_PLAN_CHANGED = "billing.subscription.plan-changed";
     public static final String SUBSCRIPTION_CANCELLED = "billing.subscription.cancelled";
     public static final String SUBSCRIPTION_RENEWED = "billing.subscription.renewed";
+
+    // -- Payment methods ------------------------------------------------------
+    public static final String PAYMENT_METHOD_ATTACHED = "billing.payment-method.attached";
+    public static final String PAYMENT_METHOD_DETACHED = "billing.payment-method.detached";
+    public static final String PAYMENT_METHOD_DEFAULT_CHANGED =
+            "billing.payment-method.default-changed";
+
+    // -- Invoices -------------------------------------------------------------
+    public static final String INVOICE_CREATED = "billing.invoice.created";
+    public static final String INVOICE_UPDATED = "billing.invoice.updated";
+    public static final String INVOICE_PAID = "billing.invoice.paid";
+
+    // -- Usage ----------------------------------------------------------------
+    public static final String USAGE_REPORTED = "billing.usage.reported";
 }

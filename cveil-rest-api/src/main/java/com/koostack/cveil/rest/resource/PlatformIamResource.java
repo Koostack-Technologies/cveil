@@ -1,6 +1,7 @@
 package com.koostack.cveil.rest.resource;
 
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
+import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdpUser;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
@@ -17,8 +18,10 @@ import com.koostack.cveil.rest.orchestrator.InviteOrgMemberOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterUserOrchestrator;
 import com.koostack.cveil.rest.orchestrator.UpdateOrganizationOrchestrator;
+import com.koostack.cveil.rest.util.MetricsHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -58,7 +61,13 @@ public class PlatformIamResource {
 
     @Inject PlatformCqrsHolder cqrs;
 
+    @Inject
+    @Named("consentDispatcher")
+    CommandDispatcher consentDispatcher;
+
     @Inject CveilRequestHolder requestHolder;
+
+    @Inject MetricsHelper metrics;
 
     // -----------------------------------------------------------------------
     // Users
@@ -88,7 +97,8 @@ public class PlatformIamResource {
                         cqrs.iamDispatcher(),
                         cqrs.coreDispatcher(),
                         cqrs.billingDispatcher(),
-                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                        consentDispatcher);
 
         var command =
                 new RegisterUserOrchestrator.RegisterUserCommand(
@@ -96,6 +106,7 @@ public class PlatformIamResource {
                         request.username(),
                         request.email(),
                         request.fullName(),
+                        request.displayName(),
                         Set.of(), // KC roles empty — DB-backed roles are authoritative
                         request.temporaryPassword(),
                         request.password(),
@@ -103,6 +114,7 @@ public class PlatformIamResource {
 
         try {
             RegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
+            metrics.counter("iam_user_created", "SYSTEM");
             return Response.status(Response.Status.CREATED)
                     .entity(UserRegisteredResponse.from(result))
                     .build();
@@ -205,6 +217,7 @@ public class PlatformIamResource {
         LOG.debug("PUT /platform/iam/users/{}/suspend", username);
         cqrs.iamDispatcher()
                 .dispatch(new SuspendUserCommandActuator.SuspendUserCommand(REALM, username));
+        metrics.counter("iam_user_suspended", "SYSTEM");
         return Response.ok(MessageResponse.of("User suspended")).build();
     }
 
@@ -219,6 +232,7 @@ public class PlatformIamResource {
         LOG.debug("PUT /platform/iam/users/{}/activate", username);
         cqrs.iamDispatcher()
                 .dispatch(new ActivateUserCommandActuator.ActivateUserCommand(REALM, username));
+        metrics.counter("iam_user_activated", "SYSTEM");
         return Response.ok(MessageResponse.of("User activated")).build();
     }
 
@@ -253,6 +267,7 @@ public class PlatformIamResource {
                 .dispatch(
                         new AssignRoleCommandActuator.AssignRoleCommand(
                                 REALM, username, request.role()));
+        metrics.counter("iam_role_assigned", "SYSTEM");
         return Response.ok(MessageResponse.of("Role assigned")).build();
     }
 
@@ -269,6 +284,7 @@ public class PlatformIamResource {
         LOG.debug("DELETE /platform/iam/users/{}/roles/{}", username, role);
         cqrs.iamDispatcher()
                 .dispatch(new RemoveRoleCommandActuator.RemoveRoleCommand(REALM, username, role));
+        metrics.counter("iam_role_removed", "SYSTEM");
         return Response.ok(MessageResponse.of("Role removed")).build();
     }
 
@@ -301,7 +317,8 @@ public class PlatformIamResource {
                         cqrs.iamDispatcher(),
                         cqrs.coreDispatcher(),
                         cqrs.billingDispatcher(),
-                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null);
+                        cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                        consentDispatcher);
 
         var command =
                 new RegisterOrganizationOrchestrator.RegisterOrgCommand(
@@ -310,6 +327,7 @@ public class PlatformIamResource {
         try {
             RegisterOrganizationOrchestrator.RegisterOrgResult result =
                     orchestrator.execute(command);
+            metrics.counter("iam_org_created", "SYSTEM");
             return Response.status(Response.Status.CREATED)
                     .entity(OrganizationRegisteredResponse.from(result))
                     .build();
@@ -416,6 +434,7 @@ public class PlatformIamResource {
                 .dispatch(
                         new AddOrgMemberCommandActuator.AddOrgMemberCommand(
                                 orgId, null, request.userId(), request.username()));
+        metrics.counter("iam_org_member_added", "SYSTEM");
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Member added to organization"))
                 .build();
@@ -440,6 +459,7 @@ public class PlatformIamResource {
                 .dispatch(
                         new RemoveOrgMemberCommandActuator.RemoveOrgMemberCommand(
                                 orgId, null, userId));
+        metrics.counter("iam_org_member_removed", "SYSTEM");
         return Response.ok(MessageResponse.of("Member removed from organization")).build();
     }
 
@@ -477,6 +497,7 @@ public class PlatformIamResource {
         try {
             InviteOrgMemberOrchestrator.InviteOrgMemberResult result =
                     orchestrator.execute(command);
+            metrics.counter("iam_org_member_invited", "SYSTEM");
             return Response.status(Response.Status.CREATED)
                     .entity(InviteOrgMemberResponse.from(result))
                     .build();
@@ -516,6 +537,7 @@ public class PlatformIamResource {
 
         try {
             UpdateOrganizationOrchestrator.UpdateOrgResult result = orchestrator.execute(command);
+            metrics.counter("iam_org_updated", "SYSTEM");
             return Response.ok(OrganizationUpdatedResponse.from(result)).build();
         } catch (OrchestratorException e) {
             LOG.error(
@@ -616,6 +638,7 @@ public class PlatformIamResource {
                         request.displayName(),
                         null,
                         requestedPermissions);
+        metrics.counter("iam_org_role_created", "SYSTEM");
         return Response.status(Response.Status.CREATED)
                 .entity(MessageResponse.of("Custom role '" + request.roleId() + "' created"))
                 .build();
@@ -641,6 +664,7 @@ public class PlatformIamResource {
         }
 
         cqrs.permissionService().deleteCustomRole(TenantIdDeriver.derive(orgName), roleId);
+        metrics.counter("iam_org_role_deleted", "SYSTEM");
         return Response.ok(MessageResponse.of("Custom role '" + roleId + "' deleted")).build();
     }
 
@@ -670,6 +694,7 @@ public class PlatformIamResource {
         String tenantId = TenantIdDeriver.derive(orgName);
         String grantedBy = requestHolder.identity().subject();
         cqrs.permissionService().assignRole(userId, tenantId, request.roleId(), grantedBy);
+        metrics.counter("iam_org_role_assigned", "SYSTEM");
         return Response.ok(
                         MessageResponse.of(
                                 "Role '" + request.roleId() + "' assigned to user " + userId))
@@ -700,6 +725,7 @@ public class PlatformIamResource {
 
         String tenantId = TenantIdDeriver.derive(orgName);
         cqrs.permissionService().removeRole(userId, tenantId, roleId);
+        metrics.counter("iam_org_role_removed", "SYSTEM");
         return Response.ok(MessageResponse.of("Role '" + roleId + "' removed from user " + userId))
                 .build();
     }
@@ -836,6 +862,7 @@ public class PlatformIamResource {
             CreateAccessTokenCommandActuator.CreateAccessTokenResult result =
                     cqrs.iamDispatcher().dispatch(command);
 
+            metrics.counter("iam_api_key_created", "SYSTEM");
             return Response.status(Response.Status.CREATED)
                     .entity(
                             new AccessTokenCreatedResponse(
@@ -909,6 +936,7 @@ public class PlatformIamResource {
                         .entity(ErrorResponse.of("not_found", "Token not found or already revoked"))
                         .build();
             }
+            metrics.counter("iam_api_key_revoked", "SYSTEM");
             return Response.ok(MessageResponse.of("Access token revoked")).build();
         } catch (Exception e) {
             LOG.error("Failed to revoke token: {}", e.getMessage(), e);
@@ -928,10 +956,10 @@ public class PlatformIamResource {
             operationId = "login",
             summary = "Authenticate a user",
             description = "Resource Owner Password Credentials grant against the cveil realm.")
-    public Response login(@Valid LoginRequest request) {
+    public Response login(@HeaderParam("DPoP") String dpopProof, @Valid LoginRequest request) {
         requireCqrs();
 
-        LOG.debug("POST /platform/iam/login email={}", request.email());
+        LOG.debug("POST /platform/iam/login email={}, dpop={}", request.email(), dpopProof != null);
 
         try {
             var result =
@@ -939,7 +967,11 @@ public class PlatformIamResource {
                             cqrs.iamDispatcher()
                                     .dispatch(
                                             new AuthenticateCommandActuator.AuthenticateCommand(
-                                                    REALM, request.email(), request.password()));
+                                                    REALM,
+                                                    request.email(),
+                                                    request.password(),
+                                                    dpopProof));
+            metrics.counter("iam_login", "SYSTEM");
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -951,10 +983,11 @@ public class PlatformIamResource {
     @POST
     @Path("/refresh")
     @Operation(operationId = "refresh", summary = "Refresh access token")
-    public Response refresh(@Valid RefreshTokenRequest request) {
+    public Response refresh(
+            @HeaderParam("DPoP") String dpopProof, @Valid RefreshTokenRequest request) {
         requireCqrs();
 
-        LOG.debug("POST /platform/iam/refresh");
+        LOG.debug("POST /platform/iam/refresh dpop={}", dpopProof != null);
 
         try {
             var result =
@@ -962,7 +995,8 @@ public class PlatformIamResource {
                             cqrs.iamDispatcher()
                                     .dispatch(
                                             new RefreshTokenCommandActuator.RefreshTokenCommand(
-                                                    REALM, request.refreshToken()));
+                                                    REALM, request.refreshToken(), dpopProof));
+            metrics.counter("iam_token_refreshed", "SYSTEM");
             return Response.ok(AuthResponse.from(result)).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -980,6 +1014,7 @@ public class PlatformIamResource {
         LOG.debug("POST /platform/iam/logout");
         cqrs.iamDispatcher()
                 .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, request.refreshToken()));
+        metrics.counter("iam_logout", "SYSTEM");
         return Response.ok(MessageResponse.of("Logged out")).build();
     }
 
@@ -1107,6 +1142,7 @@ public class PlatformIamResource {
                                     new UpdateUserProfileCommandActuator.UpdateUserProfileCommand(
                                             userId, request.fullName(), request.email()));
 
+            metrics.counter("iam_profile_updated", "SYSTEM");
             return Response.ok(MessageResponse.of("Profile updated for user " + result.userId()))
                     .build();
         } catch (IllegalArgumentException e) {
@@ -1138,6 +1174,7 @@ public class PlatformIamResource {
                     .dispatch(
                             new ChangePasswordCommandActuator.ChangePasswordCommand(
                                     userId, request.newPassword()));
+            metrics.counter("iam_password_changed", "SYSTEM");
             return Response.ok(MessageResponse.of("Password changed")).build();
         } catch (CveilAuthException e) {
             return Response.status(Response.Status.BAD_REQUEST)

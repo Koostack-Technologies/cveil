@@ -3,6 +3,8 @@ package com.koostack.cveil.rest.config;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.cqrs.QueryDispatcher;
 import com.koostack.cveil.core.platform.billing.BillingCommandService;
+import com.koostack.cveil.core.platform.billing.BillingQueryService;
+import com.koostack.cveil.core.platform.billing.PaymentProcessorService;
 import com.koostack.cveil.core.platform.core.CoreCommandService;
 import com.koostack.cveil.core.platform.core.CoreQueryService;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
@@ -29,6 +31,8 @@ public class PlatformCqrsHolder {
     private final PlanQueryService<?> planQueryService;
     private final TokenValidationService<?> tokenValidationService;
     private final PermissionService permissionService;
+    private final BillingQueryService<?> billingQueryService;
+    private final PaymentProcessorService<?> paymentProcessorService;
 
     @SuppressWarnings("rawtypes")
     public PlatformCqrsHolder(
@@ -47,6 +51,8 @@ public class PlatformCqrsHolder {
                 billingCommandService,
                 planQueryService,
                 tokenValidationService,
+                null,
+                null,
                 null);
     }
 
@@ -60,6 +66,31 @@ public class PlatformCqrsHolder {
             PlanQueryService planQueryService,
             TokenValidationService tokenValidationService,
             PermissionService permissionService) {
+        this(
+                iamDispatcher,
+                iamQueryService,
+                coreQueryService,
+                coreCommandService,
+                billingCommandService,
+                planQueryService,
+                tokenValidationService,
+                permissionService,
+                null,
+                null);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public PlatformCqrsHolder(
+            CommandDispatcher iamDispatcher,
+            IamQueryService iamQueryService,
+            CoreQueryService coreQueryService,
+            CoreCommandService coreCommandService,
+            BillingCommandService billingCommandService,
+            PlanQueryService planQueryService,
+            TokenValidationService tokenValidationService,
+            PermissionService permissionService,
+            BillingQueryService billingQueryService,
+            PaymentProcessorService paymentProcessorService) {
         this.iamDispatcher = iamDispatcher;
         this.iamQueryService = iamQueryService;
         this.coreQueryService = coreQueryService;
@@ -68,6 +99,8 @@ public class PlatformCqrsHolder {
         this.planQueryService = planQueryService;
         this.tokenValidationService = tokenValidationService;
         this.permissionService = permissionService;
+        this.billingQueryService = billingQueryService;
+        this.paymentProcessorService = paymentProcessorService;
     }
 
     /**
@@ -162,6 +195,18 @@ public class PlatformCqrsHolder {
         return (PlanQueryService<T>) planQueryService;
     }
 
+    /**
+     * Returns the plan query dispatcher for direct query-record dispatch.
+     *
+     * @throws IllegalStateException if the underlying service is not a QueryDispatcher
+     */
+    public QueryDispatcher planQueryDispatcher() {
+        if (planQueryService instanceof QueryDispatcher qd) {
+            return qd;
+        }
+        throw new IllegalStateException("Plan query service does not implement QueryDispatcher");
+    }
+
     @SuppressWarnings("unchecked")
     public <T> TokenValidationService<T> tokenValidationService() {
         return (TokenValidationService<T>) tokenValidationService;
@@ -175,5 +220,22 @@ public class PlatformCqrsHolder {
     /** Returns {@code true} if the permission service is available. */
     public boolean isPermissionServiceAvailable() {
         return permissionService != null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> BillingQueryService<T> billingQueryService() {
+        return (BillingQueryService<T>) billingQueryService;
+    }
+
+    public QueryDispatcher billingQueryDispatcher() {
+        if (billingQueryService instanceof QueryDispatcher qd) {
+            return qd;
+        }
+        throw new IllegalStateException("Billing query service does not implement QueryDispatcher");
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> PaymentProcessorService<T> paymentProcessorService() {
+        return (PaymentProcessorService<T>) paymentProcessorService;
     }
 }

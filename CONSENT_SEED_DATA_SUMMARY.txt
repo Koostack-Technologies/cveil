@@ -1,0 +1,308 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                   CONSENT GOVERNANCE SEED DATA SUMMARY                         ║
+║                                                                                ║
+║  SeedConsentGovernanceCommandActuator creates 94+ governance artifacts         ║
+║  in 3 phases across 1 tenant via CommandDispatcher                             ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+PHASE 1: STANDALONE ENTITIES (Independent, no cross-references)
+═══════════════════════════════════════════════════════════════════════════════════
+
+[17] CATEGORIES
+  ├─ PII
+  ├─ SENSITIVE_PII
+  ├─ HEALTH
+  ├─ FINANCIAL
+  ├─ BIOMETRIC
+  ├─ GENETIC
+  ├─ GEOLOCATION
+  ├─ CHILDREN
+  ├─ EDUCATION
+  ├─ RACIAL_ETHNIC
+  ├─ RELIGIOUS
+  ├─ SEXUAL_ORIENTATION
+  ├─ POLITICAL
+  ├─ COMMUNICATIONS
+  ├─ BEHAVIORAL
+  ├─ PROFESSIONAL
+  └─ CREDIT
+
+[27] REGULATIONS
+  ├─ FEDERAL (8)
+  │  ├─ HIPAA
+  │  ├─ COPPA
+  │  ├─ FERPA
+  │  ├─ GLBA
+  │  ├─ FCRA
+  │  ├─ TCPA
+  │  ├─ CAN_SPAM
+  │  └─ ECPA
+  └─ STATE (19)
+     ├─ CCPA (California)
+     ├─ VCDPA (Virginia)
+     ├─ CPA (Colorado)
+     ├─ CTDPA (Connecticut)
+     ├─ UCPA (Utah)
+     ├─ TDPSA (Texas)
+     ├─ FDBR (Florida)
+     ├─ ICDPA (Indiana)
+     ├─ IowaCDPA (Iowa)
+     ├─ TIPA (Tennessee)
+     ├─ MCDPA (Montana)
+     ├─ OCPA (Oregon)
+     ├─ DPDPA (Delaware)
+     ├─ NJDPA (New Jersey)
+     ├─ NHPA (New Hampshire)
+     ├─ KCDPA (Kentucky)
+     ├─ NDPA (Nebraska)
+     ├─ MODPA (Maryland)
+     └─ MNCDPA (Minnesota)
+
+[20] JURISDICTIONS
+  ├─ US_FEDERAL
+  ├─ CALIFORNIA
+  ├─ VIRGINIA
+  ├─ COLORADO
+  ├─ CONNECTICUT
+  ├─ UTAH
+  ├─ TEXAS
+  ├─ FLORIDA
+  ├─ INDIANA
+  ├─ IOWA
+  ├─ TENNESSEE
+  ├─ MONTANA
+  ├─ OREGON
+  ├─ DELAWARE
+  ├─ NEW_JERSEY
+  ├─ NEW_HAMPSHIRE
+  ├─ KENTUCKY
+  ├─ NEBRASKA
+  ├─ MARYLAND
+  └─ MINNESOTA
+
+[16] PURPOSES
+  ├─ SERVICE_DELIVERY
+  ├─ MARKETING
+  ├─ ANALYTICS
+  ├─ PERSONALIZATION
+  ├─ TARGETED_ADVERTISING
+  ├─ FRAUD_PREVENTION
+  ├─ CUSTOMER_SUPPORT
+  ├─ RESEARCH
+  ├─ THIRD_PARTY_SHARING
+  ├─ DATA_SALE
+  ├─ PROFILING
+  ├─ LEGAL_COMPLIANCE
+  ├─ HEALTHCARE_OPS
+  ├─ FINANCIAL_SERVICES
+  ├─ EMPLOYMENT
+  └─ EDUCATION_OPS
+
+[6] ENTITIES
+  ├─ customer
+  ├─ employee
+  ├─ user
+  ├─ patient
+  ├─ prospect
+  └─ vendor
+
+  [PHASE 1 TOTAL: 66 standalone entities]
+  [WAIT 5 seconds for projections to catch up...]
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+PHASE 2: FIRST-ORDER LINKS (Depend on Phase 1 entities)
+═══════════════════════════════════════════════════════════════════════════════════
+
+[27] REGULATION ↔ JURISDICTION LINKS
+  Federal regulations (8) → US_FEDERAL
+    HIPAA → US_FEDERAL
+    COPPA → US_FEDERAL
+    FERPA → US_FEDERAL
+    GLBA → US_FEDERAL
+    FCRA → US_FEDERAL
+    TCPA → US_FEDERAL
+    CAN_SPAM → US_FEDERAL
+    ECPA → US_FEDERAL
+
+  State regulations (19) → State jurisdictions (1:1 mapping)
+    CCPA → CALIFORNIA
+    VCDPA → VIRGINIA
+    CPA → COLORADO
+    CTDPA → CONNECTICUT
+    UCPA → UTAH
+    TDPSA → TEXAS
+    FDBR → FLORIDA
+    ICDPA → INDIANA
+    IowaCDPA → IOWA
+    TIPA → TENNESSEE
+    MCDPA → MONTANA
+    OCPA → OREGON
+    DPDPA → DELAWARE
+    NJDPA → NEW_JERSEY
+    NHPA → NEW_HAMPSHIRE
+    KCDPA → KENTUCKY
+    NDPA → NEBRASKA
+    MODPA → MARYLAND
+    MNCDPA → MINNESOTA
+
+[100+] PURPOSE ↔ REGULATION LINKS (with masking policies & lawful bases)
+  Each link: LinkPurposeToRegulationCommand(
+    purposeName,
+    regulationName,
+    lawfulBasis,     ← e.g., "Consent", "Legitimate Interest", "Legal Obligation"
+    onGranted,       ← Masking when consent GRANTED: PLAINTEXT, HASH256, REDACT_*
+    onDenied         ← Masking when consent DENIED: REDACT_ALL, PLAINTEXT, etc.
+  )
+
+  Key Examples:
+    HIPAA (6 purposes):
+      HEALTHCARE_OPS → HIPAA (lawful: TPO, onGranted: PLAINTEXT, onDenied: REDACT_ALL)
+      RESEARCH → HIPAA (lawful: Authorization, onGranted: PLAINTEXT, onDenied: REDACT_ALL)
+      MARKETING → HIPAA (lawful: Authorization, onGranted: PLAINTEXT, onDenied: REDACT_ALL)
+      ANALYTICS → HIPAA (lawful: De-identification, onGranted: PLAINTEXT, onDenied: HASH256)
+      THIRD_PARTY_SHARING → HIPAA (lawful: Authorization, onGranted: PLAINTEXT, onDenied: REDACT_ALL)
+      LEGAL_COMPLIANCE → HIPAA (lawful: Legal Obligation, onGranted: PLAINTEXT, onDenied: PLAINTEXT)
+
+    COPPA (6 purposes):
+      SERVICE_DELIVERY, MARKETING, ANALYTICS, TARGETED_ADVERTISING, THIRD_PARTY_SHARING, PERSONALIZATION
+      All with lawful basis "Verifiable Parental Consent", onDenied: REDACT_ALL
+
+    Standard State CPLs (16 states: VCDPA, CPA, CTDPA, UCPA, TDPSA, FDBR, ICDPA, TIPA, MCDPA, OCPA, DPDPA, NJDPA, NHPA, KCDPA, NDPA, MNCDPA):
+      Shared pattern:
+        SERVICE_DELIVERY: Contractual Necessity (PLAINTEXT/PLAINTEXT)
+        MARKETING: Consent (PLAINTEXT/REDACT_ALL)
+        ANALYTICS: Legitimate Interest (PLAINTEXT/HASH256)
+        [8 more purposes...]
+
+    IowaCDPA (9 purposes) — Narrower scope:
+      SERVICE_DELIVERY: Contractual Necessity (PLAINTEXT/PLAINTEXT)
+      MARKETING: Legitimate Interest (PLAINTEXT/HASH256)
+      ANALYTICS: Legitimate Interest (PLAINTEXT/HASH256)
+      [6 more with distinct lawful bases...]
+
+    MODPA/Maryland (11 purposes) — Stricter data minimization:
+      Requires explicit Consent for MARKETING, ANALYTICS, PERSONALIZATION, TARGETED_ADVERTISING
+      [more than standard CPLs...]
+
+    CCPA Override:
+      ANALYTICS → CCPA: Consent (overrides standard "Legitimate Interest")
+
+[~30] FIELDS (under __default__ entity)
+  PII:
+    email, phone_number, full_name, first_name, last_name, date_of_birth, mailing_address
+  Government ID:
+    ssn, passport_number, drivers_license, tax_id
+  Financial:
+    credit_card_number, bank_account_number, routing_number
+  Online Identifiers:
+    ip_address, device_id, cookie_id, browser_fingerprint
+  PHI (Health):
+    diagnosis, medication, treatment_record, insurance_id
+  Sensitive/Special:
+    race, ethnicity, religion, sexual_orientation
+  Employment:
+    salary, job_title, employee_id
+  Geolocation:
+    geolocation, zip_code
+  Biometric:
+    biometric_template, facial_scan, fingerprint
+  Education:
+    student_id, gpa, transcript
+
+  [PHASE 2 TOTAL: 157+ links + fields]
+  [WAIT 5 seconds for projections to catch up...]
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+PHASE 3: SECOND-ORDER ASSIGNMENTS & POLICIES (Depend on Phase 2 entities)
+═══════════════════════════════════════════════════════════════════════════════════
+
+[~50] FIELD ↔ CATEGORY ASSIGNMENTS
+  Example:
+    email → PII
+    ssn → SENSITIVE_PII
+    credit_card_number → FINANCIAL, SENSITIVE_PII (multiple assignments allowed)
+    diagnosis → HEALTH
+    race → SENSITIVE_PII, RACIAL_ETHNIC
+    ip_address → BEHAVIORAL
+    [50 total assignments...]
+
+[~46] PURPOSE → CATEGORY POLICIES
+  Structure: AddPurposePolicyCommand(purposeName, "CATEGORY", null, null, categoryName)
+
+  Mapping Examples:
+    MARKETING → [PII, BEHAVIORAL, GEOLOCATION, COMMUNICATIONS]
+    ANALYTICS → [BEHAVIORAL, GEOLOCATION]
+    PERSONALIZATION → [PII, BEHAVIORAL]
+    SERVICE_DELIVERY → [PII, FINANCIAL, COMMUNICATIONS]
+    TARGETED_ADVERTISING → [PII, BEHAVIORAL, GEOLOCATION]
+    FRAUD_PREVENTION → [PII, FINANCIAL, GEOLOCATION, BIOMETRIC]
+    CUSTOMER_SUPPORT → [PII, FINANCIAL, COMMUNICATIONS]
+    LEGAL_COMPLIANCE → [PII, SENSITIVE_PII, FINANCIAL, HEALTH, EDUCATION, BIOMETRIC, GENETIC, GEOLOCATION, BEHAVIORAL, COMMUNICATIONS, CHILDREN, CREDIT, PROFESSIONAL]
+    RESEARCH → [PII, HEALTH, BEHAVIORAL, EDUCATION]
+    THIRD_PARTY_SHARING → [PII, BEHAVIORAL, GEOLOCATION]
+    DATA_SALE → [PII, BEHAVIORAL, GEOLOCATION]
+    PROFILING → [PII, FINANCIAL, BEHAVIORAL, CREDIT]
+    HEALTHCARE_OPS → [PII, HEALTH, SENSITIVE_PII, BIOMETRIC, FINANCIAL]
+    FINANCIAL_SERVICES → [PII, FINANCIAL, CREDIT, SENSITIVE_PII]
+    EMPLOYMENT → [PII, PROFESSIONAL, FINANCIAL, SENSITIVE_PII]
+    EDUCATION_OPS → [PII, EDUCATION, CHILDREN]
+
+  [PHASE 3 TOTAL: ~96 assignments + policies]
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+TOTAL ARTIFACTS: 94+ across 3 phases
+═══════════════════════════════════════════════════════════════════════════════════
+  Phase 1: 66 standalone entities
+  Phase 2: 157+ links and fields
+  Phase 3: ~96 assignments and policies
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+DERIVATION LOGIC: Given Jurisdiction IDs
+═══════════════════════════════════════════════════════════════════════════════════
+
+1. REGULATIONS from Jurisdiction:
+   US_FEDERAL → [HIPAA, COPPA, FERPA, GLBA, FCRA, TCPA, CAN_SPAM, ECPA]
+   CALIFORNIA → [CCPA]
+   VIRGINIA → [VCDPA]
+   COLORADO → [CPA]
+   ... (1:1 mapping for each state)
+
+2. PURPOSES from Regulations:
+   Apply seedPurposeRegulationLinks() mapping
+   Filter by regulations from step 1
+   Example: CCPA → [SERVICE_DELIVERY, MARKETING, ANALYTICS (strict), PERSONALIZATION, ...]
+
+3. CATEGORIES from Purposes:
+   Look up seedPurposeCategoryPolicies()
+   Collect all categories referenced
+   Example: MARKETING → [PII, BEHAVIORAL, GEOLOCATION, COMMUNICATIONS]
+
+4. FIELDS: Seed all ~30 default fields (jurisdiction-independent in current design)
+
+5. FIELD-CATEGORY ASSIGNMENTS: Seed all ~50 default assignments (jurisdiction-independent)
+
+
+═══════════════════════════════════════════════════════════════════════════════════
+SPECIAL NOTES
+═══════════════════════════════════════════════════════════════════════════════════
+
+• NO "template," "preset," or "industry" concept exists in the codebase
+• The hardcoded seed is the ONLY governance initialization mechanism
+• All commands are dispatched through JooqConsentAdminCommandService.dispatch()
+• All commands trigger events → projections (async outbox → Redis → SQL/cache)
+• All dispatch calls wrapped in dispatchSafe() — duplicates caught and logged as warnings
+• MODPA and IowaCDPA have distinct patterns from standard state CPLs
+• CCPA has special override for ANALYTICS (Consent vs. Legitimate Interest)
+
+For parameterized seeding:
+  1. Extract hardcoded lists to configurable data structures (JSON/YAML/DB)
+  2. Create parametric seed actuator accepting template ID
+  3. Map template fields to command actuators dynamically
+  4. Maintain jurisdiction-regulation derivation mapping
+

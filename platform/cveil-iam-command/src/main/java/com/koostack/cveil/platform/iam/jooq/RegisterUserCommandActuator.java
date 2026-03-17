@@ -98,12 +98,24 @@ public class RegisterUserCommandActuator
      * @param username the user's login name
      * @param email the user's email
      * @param realmId the realm the user was registered in
+     * @param keycloakUserId the Keycloak-assigned user ID
+     * @param preExisting {@code true} if the user already existed in Keycloak (idempotent hit)
      */
     public record RegisterUserResult(
-            String username, String email, String realmId, String keycloakUserId) {
-        /** Backward-compatible constructor (no KC user ID). */
+            String username,
+            String email,
+            String realmId,
+            String keycloakUserId,
+            boolean preExisting) {
+        /** Backward-compatible constructor (no KC user ID, not pre-existing). */
         public RegisterUserResult(String username, String email, String realmId) {
-            this(username, email, realmId, null);
+            this(username, email, realmId, null, false);
+        }
+
+        /** Backward-compatible constructor (not pre-existing). */
+        public RegisterUserResult(
+                String username, String email, String realmId, String keycloakUserId) {
+            this(username, email, realmId, keycloakUserId, false);
         }
     }
 
@@ -122,7 +134,8 @@ public class RegisterUserCommandActuator
         Set<String> roles = command.roles() != null ? command.roles() : Set.of();
 
         // ---- Phase 1: Keycloak side-effect (before event) -------------------
-        String keycloakUserId = createKeycloakUser(command, roles);
+        KcUserResult kcResult = createKeycloakUser(command, roles);
+        String keycloakUserId = kcResult.userId();
 
         // ---- Phase 2: Publish domain event ----------------------------------
         // The Keycloak-assigned user ID is the canonical aggregate identity
@@ -150,15 +163,24 @@ public class RegisterUserCommandActuator
                                 payload));
 
         LOG.info(
-                "User registered: realmId={}, username={}, email={}, kcId={}",
+                "User registered: realmId={}, username={}, email={}, kcId={}, preExisting={}",
                 command.realmId(),
                 command.username(),
                 command.email(),
-                keycloakUserId);
+                keycloakUserId,
+                kcResult.preExisting());
 
         return new RegisterUserResult(
-                command.username(), command.email(), command.realmId(), keycloakUserId);
+                command.username(),
+                command.email(),
+                command.realmId(),
+                keycloakUserId,
+                kcResult.preExisting());
     }
+
+    // -- Internal result from KC user creation --------------------------------
+
+    private record KcUserResult(String userId, boolean preExisting) {}
 
     // -- Keycloak operations --------------------------------------------------
 
@@ -166,9 +188,9 @@ public class RegisterUserCommandActuator
      * Creates the user in Keycloak, assigns roles, and optionally triggers the password-setup
      * email. Idempotent — if the user already exists (by email) the call is a no-op.
      *
-     * @return the Keycloak-assigned user ID, or {@code null} if the user already existed
+     * @return a {@link KcUserResult} with the user ID and whether the user was pre-existing
      */
-    private String createKeycloakUser(RegisterUserCommand command, Set<String> roles) {
+    private KcUserResult createKeycloakUser(RegisterUserCommand command, Set<String> roles) {
         RealmResource realm = adminClient.realm(command.realmId());
 
         // Idempotent: check if user already exists
@@ -178,7 +200,7 @@ public class RegisterUserCommandActuator
                     "User already exists in realm '{}': email={}",
                     command.realmId(),
                     command.email());
-            return existing.get(0).getId();
+            return new KcUserResult(existing.get(0).getId(), true);
         }
 
         UserRepresentation user = new UserRepresentation();
@@ -238,13 +260,13 @@ public class RegisterUserCommandActuator
                     }
                 }
 
-                return createdUserId;
+                return new KcUserResult(createdUserId, false);
             } else if (response.getStatus() == 409) {
                 LOG.debug(
                         "User already exists (409) in realm '{}': email={}",
                         command.realmId(),
                         command.email());
-                return null;
+                return new KcUserResult(null, false);
             } else {
                 throw new RuntimeException(
                         "Keycloak user creation failed: HTTP " + response.getStatus());

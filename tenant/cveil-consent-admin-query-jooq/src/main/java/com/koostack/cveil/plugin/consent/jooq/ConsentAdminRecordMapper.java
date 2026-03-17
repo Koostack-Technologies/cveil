@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
@@ -38,21 +39,26 @@ public class ConsentAdminRecordMapper {
 
     public FieldView toFieldView(Field f) {
         FieldView.EntityView entityView = null;
-        if (f.getEntityId() != null) {
+        if (f.getEntityUuid() != null) {
             entityView =
-                    entityRepository
-                            .dao()
-                            .findOptionalById(f.getEntityId())
-                            .map(e -> new FieldView.EntityView(e.getEntityId(), e.getEntityName()))
+                    dsl.selectFrom(ENTITY)
+                            .where(ENTITY.ENTITY_UUID.eq(f.getEntityUuid()))
+                            .fetchOptionalInto(
+                                    com.koostack.cveil.plugin.consent.jooq.generated.tables.pojos
+                                            .Entity.class)
+                            .map(
+                                    e ->
+                                            new FieldView.EntityView(
+                                                    e.getEntityUuid(), e.getEntityName()))
                             .orElse(null);
         }
 
         var fieldCategories =
-                dsl.select(CATEGORY.CATEGORY_ID, CATEGORY.CATEGORY_NAME)
+                dsl.select(CATEGORY.CATEGORY_UUID, CATEGORY.CATEGORY_NAME)
                         .from(FIELD_CATEGORY)
                         .join(CATEGORY)
-                        .on(FIELD_CATEGORY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
-                        .where(FIELD_CATEGORY.FIELD_ID.eq(f.getFieldId()))
+                        .on(FIELD_CATEGORY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
+                        .where(FIELD_CATEGORY.FIELD_UUID.eq(f.getFieldUuid()))
                         .and(FIELD_CATEGORY.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
@@ -61,12 +67,12 @@ public class ConsentAdminRecordMapper {
                         .map(
                                 r ->
                                         new FieldView.CategoryView(
-                                                r.get(CATEGORY.CATEGORY_ID),
+                                                r.get(CATEGORY.CATEGORY_UUID),
                                                 r.get(CATEGORY.CATEGORY_NAME)))
                         .toList();
 
         return new FieldView(
-                f.getFieldId(), f.getFieldName(), f.getDescription(), entityView, categories);
+                f.getFieldUuid(), f.getFieldName(), f.getDescription(), entityView, categories);
     }
 
     // -- Purpose aggregate -----------------------------------------------------
@@ -80,8 +86,8 @@ public class ConsentAdminRecordMapper {
                                 PURPOSE_REGULATION.ON_DENIED)
                         .from(PURPOSE_REGULATION)
                         .join(REGULATION)
-                        .on(PURPOSE_REGULATION.REGULATION_ID.eq(REGULATION.REGULATION_ID))
-                        .where(PURPOSE_REGULATION.PURPOSE_ID.eq(p.getPurposeId()))
+                        .on(PURPOSE_REGULATION.REGULATION_UUID.eq(REGULATION.REGULATION_UUID))
+                        .where(PURPOSE_REGULATION.PURPOSE_UUID.eq(p.getPurposeUuid()))
                         .and(PURPOSE_REGULATION.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
@@ -102,12 +108,12 @@ public class ConsentAdminRecordMapper {
                                                         : null))
                         .toList();
 
-        var policyRecords = policyRepository.findByPurpose(p.getPurposeId());
+        var policyRecords = policyRepository.findByPurpose(p.getPurposeUuid());
         List<PurposeView.PolicyView> policies =
                 policyRecords.stream()
                         .map(
                                 r -> {
-                                    long policyId = r.get(POLICY.POLICY_ID);
+                                    UUID policyId = r.get(POLICY.POLICY_UUID);
                                     String policyType =
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
@@ -119,13 +125,13 @@ public class ConsentAdminRecordMapper {
                                     if (r.get(CATEGORY.CATEGORY_NAME) != null) {
                                         catRef =
                                                 new PurposeView.CategoryRef(
-                                                        r.get(POLICY.CATEGORY_ID),
+                                                        r.get(POLICY.CATEGORY_UUID),
                                                         r.get(CATEGORY.CATEGORY_NAME));
                                     }
                                     if (r.get(FIELD.FIELD_NAME) != null) {
                                         fieldRef =
                                                 new PurposeView.FieldRef(
-                                                        r.get(POLICY.FIELD_ID),
+                                                        r.get(POLICY.FIELD_UUID),
                                                         r.get(FIELD.FIELD_NAME),
                                                         r.get(ENTITY.ENTITY_NAME));
                                     }
@@ -136,20 +142,20 @@ public class ConsentAdminRecordMapper {
                         .toList();
 
         return new PurposeView(
-                p.getPurposeId(), p.getPurposeName(), p.getDescription(), regs, policies);
+                p.getPurposeUuid(), p.getPurposeName(), p.getDescription(), regs, policies);
     }
 
     // -- Regulation aggregate --------------------------------------------------
 
     public RegulationView toRegulationView(Regulation r) {
         var jurisdictions =
-                dsl.select(JURISDICTION.JURISDICTION_ID, JURISDICTION.JURISDICTION_NAME)
+                dsl.select(JURISDICTION.JURISDICTION_UUID, JURISDICTION.JURISDICTION_NAME)
                         .from(REGULATION_JURISDICTION)
                         .join(JURISDICTION)
                         .on(
-                                REGULATION_JURISDICTION.JURISDICTION_ID.eq(
-                                        JURISDICTION.JURISDICTION_ID))
-                        .where(REGULATION_JURISDICTION.REGULATION_ID.eq(r.getRegulationId()))
+                                REGULATION_JURISDICTION.JURISDICTION_UUID.eq(
+                                        JURISDICTION.JURISDICTION_UUID))
+                        .where(REGULATION_JURISDICTION.REGULATION_UUID.eq(r.getRegulationUuid()))
                         .and(REGULATION_JURISDICTION.TENANT_ID.eq(TenantContext.require()))
                         .fetch();
 
@@ -158,19 +164,19 @@ public class ConsentAdminRecordMapper {
                         .map(
                                 j ->
                                         new RegulationView.JurisdictionView(
-                                                j.get(JURISDICTION.JURISDICTION_ID),
+                                                j.get(JURISDICTION.JURISDICTION_UUID),
                                                 j.get(JURISDICTION.JURISDICTION_NAME)))
                         .toList();
 
         return new RegulationView(
-                r.getRegulationId(), r.getRegulationName(), r.getDescription(), juris);
+                r.getRegulationUuid(), r.getRegulationName(), r.getDescription(), juris);
     }
 
     // -- Subject ---------------------------------------------------------------
 
     public SubjectView toSubjectView(Subject s) {
         return new SubjectView(
-                s.getSubjectId(),
+                s.getSubjectUuid(),
                 s.getSubjectName(),
                 s.getDescription(),
                 toInstant(s.getCreatedAt()),
@@ -183,9 +189,9 @@ public class ConsentAdminRecordMapper {
 
     public SubjectConsentView.ConsentLedgerEntryView toLedgerEntryView(Record r, String subjectId) {
         return new SubjectConsentView.ConsentLedgerEntryView(
-                r.get(CONSENT_LEDGER.CONSENT_LEDGER_ID),
+                r.get(CONSENT_LEDGER.CONSENT_LEDGER_UUID),
                 subjectId,
-                r.get(CONSENT_LEDGER.POLICY_ID),
+                r.get(CONSENT_LEDGER.POLICY_UUID),
                 r.get(PURPOSE.PURPOSE_NAME),
                 r.get(POLICY.POLICY_TYPE) != null ? r.get(POLICY.POLICY_TYPE).getLiteral() : null,
                 r.get(FIELD.FIELD_NAME),

@@ -40,13 +40,13 @@ public class FindPolicyQueryActuator
                     .map(
                             r ->
                                     new PurposeView.PolicyView(
-                                            r.get(POLICY.POLICY_ID),
+                                            r.get(POLICY.POLICY_UUID),
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
                                                     : "FIELD",
                                             null,
                                             new PurposeView.FieldRef(
-                                                    r.get(POLICY.FIELD_ID),
+                                                    r.get(POLICY.FIELD_UUID),
                                                     query.fieldName(),
                                                     query.entityName())))
                     .orElse(null);
@@ -56,12 +56,12 @@ public class FindPolicyQueryActuator
                     .map(
                             r ->
                                     new PurposeView.PolicyView(
-                                            r.get(POLICY.POLICY_ID),
+                                            r.get(POLICY.POLICY_UUID),
                                             r.get(POLICY.POLICY_TYPE) != null
                                                     ? r.get(POLICY.POLICY_TYPE).toString()
                                                     : "CATEGORY",
                                             new PurposeView.CategoryRef(
-                                                    r.get(POLICY.CATEGORY_ID),
+                                                    r.get(POLICY.CATEGORY_UUID),
                                                     query.categoryName()),
                                             null))
                     .orElse(null);

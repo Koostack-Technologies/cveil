@@ -7,6 +7,7 @@ import com.koostack.cveil.plugin.consent.jooq.generated.tables.daos.FieldDao;
 import com.koostack.cveil.plugin.consent.jooq.generated.tables.pojos.Field;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jooq.DSLContext;
 
 /** Read-only repository for the {@code field} table. */
@@ -32,13 +33,13 @@ public class FieldRepository {
                 .fetchInto(Field.class);
     }
 
-    public Optional<Field> findByNameAndEntity(String fieldName, Long entityId) {
+    public Optional<Field> findByNameAndEntity(String fieldName, UUID entityUuid) {
         var condition = FIELD.FIELD_NAME.eq(fieldName);
 
-        if (entityId != null) {
-            condition = condition.and(FIELD.ENTITY_ID.eq(entityId));
+        if (entityUuid != null) {
+            condition = condition.and(FIELD.ENTITY_UUID.eq(entityUuid));
         } else {
-            condition = condition.and(FIELD.ENTITY_ID.isNull());
+            condition = condition.and(FIELD.ENTITY_UUID.isNull());
         }
 
         condition = condition.and(FIELD.TENANT_ID.eq(TenantContext.require()));
@@ -46,9 +47,9 @@ public class FieldRepository {
         return dsl.selectFrom(FIELD).where(condition).fetchOptionalInto(Field.class);
     }
 
-    public List<Field> findByEntity(Long entityId) {
+    public List<Field> findByEntity(UUID entityUuid) {
         return dsl.selectFrom(FIELD)
-                .where(FIELD.ENTITY_ID.eq(entityId))
+                .where(FIELD.ENTITY_UUID.eq(entityUuid))
                 .and(FIELD.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(FIELD.FIELD_NAME)
                 .fetchInto(Field.class);

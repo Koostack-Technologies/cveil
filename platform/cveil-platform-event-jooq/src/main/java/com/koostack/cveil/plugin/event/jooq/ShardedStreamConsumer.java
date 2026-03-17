@@ -37,13 +37,13 @@ import redis.clients.jedis.resps.StreamEntry;
  * Shard 1 ──reader(graph-projection)──┤
  *         ──reader(admin-projection)──┼──▶ Per-Tenant Ordered Executors
  *   ...                               │     → FIFO processing per tenant × handler
- * Shard 7 ──reader(graph-projection)──┤     → TenantContext.runWhere(tenantId, handler::onEvent)
+ * Shard 15──reader(graph-projection)──┤     → TenantContext.runWhere(tenantId, handler::onEvent)
  *         ──reader(admin-projection)──┘     → XACK after handler completes
  * </pre>
  *
  * <h2>Connection Usage</h2>
  *
- * <p>Total XREADGROUP connections = shardCount × handlerCount (default 8 × 2 = 16). This is O(1)
+ * <p>Total XREADGROUP connections = shardCount × handlerCount (default 16 × 2 = 32). This is O(1)
  * regardless of tenant count, solving the connection pool exhaustion that occurred with per-tenant
  * streams.
  *

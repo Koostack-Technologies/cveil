@@ -14,4 +14,5 @@ public final class PlanEventTypes {
     public static final String PLAN_UPDATED = "plan.updated";
     public static final String PLAN_DEACTIVATED = "plan.deactivated";
     public static final String PLAN_ACTIVATED = "plan.activated";
+    public static final String PLAN_STRIPE_SYNCED = "plan.stripe_synced";
 }

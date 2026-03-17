@@ -24,8 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * <p>Prior to the credential-validation hardening, the entire {@code cveil-rest-api} test suite
  * consisted exclusively of Mockito unit tests that never booted the Quarkus container. Because
  * {@code application.yml} was never loaded during tests, the fact that {@code CVEIL_DB_USERNAME},
- * {@code CVEIL_DB_PASSWORD}, {@code CVEIL_PLATFORM_DB_USERNAME}, and {@code
- * CVEIL_PLATFORM_DB_PASSWORD} defaulted to empty strings went completely unnoticed — tests passed
+ * {@code CVEIL_DB_PASSWORD} defaulted to empty strings went completely unnoticed — tests passed
  * with zero credentials configured.
  *
  * <p>The fix added a {@code requireNonBlank} validation inside {@code CveilProducers} that fails
@@ -39,9 +38,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
  *   <li>Blank / null {@code cveil.db.username} in production mode
  *   <li>Blank / null {@code cveil.db.password} in production mode
  *   <li>Blank / null {@code cveil.db.url} in production mode
- *   <li>Blank / null {@code cveil.platform-db.username} in production mode
- *   <li>Blank / null {@code cveil.platform-db.password} in production mode
- *   <li>Blank / null {@code cveil.platform-db.url} in production mode
  *   <li>Ensures embedded mode does NOT require credentials
  * </ul>
  *
@@ -59,8 +55,6 @@ class ProductionConfigValidationTest {
     @Mock private CveilConfig config;
 
     @Mock private CveilConfig.DbConfig dbConfig;
-
-    @Mock private CveilConfig.DbConfig platformDbConfig;
 
     @Mock private CveilConfig.RedisConfig redisConfig;
 
@@ -122,15 +116,6 @@ class ProductionConfigValidationTest {
         lenient().when(redisConfig.port()).thenReturn(6379);
         lenient().when(redisConfig.password()).thenReturn(Optional.empty());
         lenient().when(config.redis()).thenReturn(Optional.of(redisConfig));
-
-        // Platform DB — fully valid
-        lenient()
-                .when(platformDbConfig.url())
-                .thenReturn("jdbc:postgresql://localhost:5432/cveil");
-        lenient().when(platformDbConfig.dialect()).thenReturn("POSTGRES");
-        lenient().when(platformDbConfig.username()).thenReturn(Optional.of("platform_user"));
-        lenient().when(platformDbConfig.password()).thenReturn(Optional.of("platform_pass"));
-        lenient().when(config.platformDb()).thenReturn(Optional.of(platformDbConfig));
 
         // Super admin
         lenient().when(config.superAdmin()).thenReturn(Optional.empty());
@@ -265,101 +250,6 @@ class ProductionConfigValidationTest {
             assertTrue(
                     ex.getMessage().contains("cveil.db"),
                     "Error should mention cveil.db, got: " + ex.getMessage());
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Platform DB credential validation
-    // -----------------------------------------------------------------------
-
-    @Nested
-    @DisplayName("Platform DB credentials (cveil.platform-db.*)")
-    class PlatformDbCredentials {
-
-        @Test
-        @DisplayName("null username is rejected")
-        void nullUsernameRejected() {
-            givenValidProductionConfig();
-            when(platformDbConfig.username()).thenReturn(Optional.empty());
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db.username"),
-                    "Error should mention cveil.platform-db.username, got: " + ex.getMessage());
-            assertTrue(
-                    ex.getMessage().contains("CVEIL_PLATFORM_DB_USERNAME"),
-                    "Error should mention the env var CVEIL_PLATFORM_DB_USERNAME, got: "
-                            + ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("empty string username is rejected")
-        void emptyUsernameRejected() {
-            givenValidProductionConfig();
-            when(platformDbConfig.username()).thenReturn(Optional.of(""));
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db.username"),
-                    "Error should mention cveil.platform-db.username, got: " + ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("null password is rejected")
-        void nullPasswordRejected() {
-            givenValidProductionConfig();
-            when(platformDbConfig.password()).thenReturn(Optional.empty());
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db.password"),
-                    "Error should mention cveil.platform-db.password, got: " + ex.getMessage());
-            assertTrue(
-                    ex.getMessage().contains("CVEIL_PLATFORM_DB_PASSWORD"),
-                    "Error should mention the env var CVEIL_PLATFORM_DB_PASSWORD, got: "
-                            + ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("empty string password is rejected")
-        void emptyPasswordRejected() {
-            givenValidProductionConfig();
-            when(platformDbConfig.password()).thenReturn(Optional.of(""));
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db.password"),
-                    "Error should mention cveil.platform-db.password, got: " + ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("null platform db url is rejected")
-        void nullUrlRejected() {
-            givenValidProductionConfig();
-            when(platformDbConfig.url()).thenReturn(null);
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db.url"),
-                    "Error should mention cveil.platform-db.url, got: " + ex.getMessage());
-        }
-
-        @Test
-        @DisplayName("missing platform-db section entirely is rejected")
-        void missingPlatformDbSectionRejected() {
-            givenValidProductionConfig();
-            when(config.platformDb()).thenReturn(Optional.empty());
-
-            IllegalStateException ex =
-                    assertThrows(IllegalStateException.class, () -> producers.cveilInit());
-            assertTrue(
-                    ex.getMessage().contains("cveil.platform-db"),
-                    "Error should mention cveil.platform-db, got: " + ex.getMessage());
         }
     }
 

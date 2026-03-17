@@ -28,6 +28,8 @@ public record PlanAggregate(
         boolean isPublic,
         boolean isActive,
         int sortOrder,
+        String stripeProductId,
+        String stripePriceId,
         Long version)
         implements AggregateRoot {
 
@@ -65,6 +67,8 @@ public record PlanAggregate(
                             e.isPublic(),
                             e.isActive(),
                             e.sortOrder(),
+                            null,
+                            null,
                             1L);
                 }
                 case PlanEventTypes.PLAN_UPDATED -> {
@@ -81,6 +85,8 @@ public record PlanAggregate(
                             e.isPublic(),
                             current.isActive(),
                             e.sortOrder(),
+                            current.stripeProductId(),
+                            current.stripePriceId(),
                             current.version() + 1);
                 }
                 case PlanEventTypes.PLAN_DEACTIVATED -> {
@@ -96,6 +102,8 @@ public record PlanAggregate(
                             current.isPublic(),
                             false,
                             current.sortOrder(),
+                            current.stripeProductId(),
+                            current.stripePriceId(),
                             current.version() + 1);
                 }
                 case PlanEventTypes.PLAN_ACTIVATED -> {
@@ -111,6 +119,26 @@ public record PlanAggregate(
                             current.isPublic(),
                             true,
                             current.sortOrder(),
+                            current.stripeProductId(),
+                            current.stripePriceId(),
+                            current.version() + 1);
+                }
+                case PlanEventTypes.PLAN_STRIPE_SYNCED -> {
+                    var e = mapper.treeToValue(payloadNode, PlanStripeSyncedEvent.class);
+                    yield new PlanAggregate(
+                            current.tenantId(),
+                            current.aggregateId(),
+                            current.planId(),
+                            current.displayName(),
+                            current.description(),
+                            current.evalLimit(),
+                            current.subjectLimit(),
+                            current.burstLimit(),
+                            current.isPublic(),
+                            current.isActive(),
+                            current.sortOrder(),
+                            e.stripeProductId(),
+                            e.stripePriceId(),
                             current.version() + 1);
                 }
                 default -> current;

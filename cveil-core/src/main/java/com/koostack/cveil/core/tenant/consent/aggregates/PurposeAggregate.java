@@ -59,24 +59,39 @@ public record PurposeAggregate(
             }
             case ConsentEventTypes.PURPOSE_UPDATED -> {
                 var e = mapper.convertValue(payloadNode, PurposeUpdatedEvent.class);
+                if (current == null) {
+                    yield PurposeAggregate.create(null, e.purposeName(), e.description());
+                }
                 yield current.withDescription(e.description());
             }
             case ConsentEventTypes.PURPOSE_REGULATION_LINKED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegulationLinkedEvent.class);
+                if (current == null) {
+                    current = PurposeAggregate.create(null, e.purposeName(), null);
+                }
                 yield current.withRegulationLink(
                         e.regulationName(), e.lawfulBasis(), e.onGranted(), e.onDenied());
             }
             case ConsentEventTypes.PURPOSE_REGULATION_UNLINKED -> {
                 var e = mapper.convertValue(payloadNode, PurposeRegulationUnlinkedEvent.class);
+                if (current == null) {
+                    yield current; // nothing to unlink from
+                }
                 yield current.withoutRegulationLink(e.regulationName());
             }
             case ConsentEventTypes.PURPOSE_POLICY_ADDED -> {
                 var e = mapper.convertValue(payloadNode, PurposePolicyAddedEvent.class);
+                if (current == null) {
+                    current = PurposeAggregate.create(null, e.purposeName(), null);
+                }
                 yield current.withPolicy(
                         e.policyType(), e.fieldName(), e.entityName(), e.categoryName());
             }
             case ConsentEventTypes.PURPOSE_POLICY_REMOVED -> {
                 var e = mapper.convertValue(payloadNode, PurposePolicyRemovedEvent.class);
+                if (current == null) {
+                    yield current; // nothing to remove from
+                }
                 yield current.withoutPolicy(
                         e.policyType(), e.fieldName(), e.entityName(), e.categoryName());
             }

@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Query actuator that lists access tokens from the {@code platform_iam.access_token} table.
+ * Query actuator that lists access tokens from the {@code cveiliam.access_token} table.
  *
  * <p>Supports filtering by {@code created_by} (nullable — if null, lists all for the tenant).
  */
@@ -40,7 +40,7 @@ public class ListAccessTokensQueryActuator
         String sql =
                 "SELECT access_token_id, token_prefix, name, tenant_id, roles, status,"
                         + " expires_at, created_by, last_used_at, created_at"
-                        + " FROM platform_iam.access_token WHERE tenant_id = ?"
+                        + " FROM cveiliam.access_token WHERE tenant_id = ?"
                         + (filterByCreator ? " AND created_by = ?" : "")
                         + " ORDER BY created_at DESC";
 

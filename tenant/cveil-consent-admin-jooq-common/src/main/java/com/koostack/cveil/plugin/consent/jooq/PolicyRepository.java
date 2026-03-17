@@ -5,6 +5,7 @@ import static com.koostack.cveil.plugin.consent.jooq.generated.Tables.*;
 import com.koostack.cveil.core.models.TenantContext;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 
@@ -36,11 +37,11 @@ public class PolicyRepository {
                 .select(ENTITY.ENTITY_NAME)
                 .from(POLICY)
                 .join(PURPOSE)
-                .on(POLICY.PURPOSE_ID.eq(PURPOSE.PURPOSE_ID))
+                .on(POLICY.PURPOSE_UUID.eq(PURPOSE.PURPOSE_UUID))
                 .join(FIELD)
-                .on(POLICY.FIELD_ID.eq(FIELD.FIELD_ID))
+                .on(POLICY.FIELD_UUID.eq(FIELD.FIELD_UUID))
                 .join(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
+                .on(FIELD.ENTITY_UUID.eq(ENTITY.ENTITY_UUID))
                 .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
                 .and(FIELD.FIELD_NAME.eq(fieldName))
                 .and(ENTITY.ENTITY_NAME.eq(entityName))
@@ -59,9 +60,9 @@ public class PolicyRepository {
                 .select(CATEGORY.CATEGORY_NAME)
                 .from(POLICY)
                 .join(PURPOSE)
-                .on(POLICY.PURPOSE_ID.eq(PURPOSE.PURPOSE_ID))
+                .on(POLICY.PURPOSE_UUID.eq(PURPOSE.PURPOSE_UUID))
                 .join(CATEGORY)
-                .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
+                .on(POLICY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
                 .where(PURPOSE.PURPOSE_NAME.eq(purposeName))
                 .and(CATEGORY.CATEGORY_NAME.eq(categoryName))
                 .and(POLICY.TENANT_ID.eq(TenantContext.require()))
@@ -69,19 +70,19 @@ public class PolicyRepository {
     }
 
     /** Returns all policies for a given purpose, including joined field/category names. */
-    public List<Record> findByPurpose(Long purposeId) {
+    public List<Record> findByPurpose(UUID purposeUuid) {
         return dsl.select(POLICY.fields())
                 .select(FIELD.FIELD_NAME)
                 .select(ENTITY.ENTITY_NAME)
                 .select(CATEGORY.CATEGORY_NAME)
                 .from(POLICY)
                 .leftJoin(FIELD)
-                .on(POLICY.FIELD_ID.eq(FIELD.FIELD_ID))
+                .on(POLICY.FIELD_UUID.eq(FIELD.FIELD_UUID))
                 .leftJoin(ENTITY)
-                .on(FIELD.ENTITY_ID.eq(ENTITY.ENTITY_ID))
+                .on(FIELD.ENTITY_UUID.eq(ENTITY.ENTITY_UUID))
                 .leftJoin(CATEGORY)
-                .on(POLICY.CATEGORY_ID.eq(CATEGORY.CATEGORY_ID))
-                .where(POLICY.PURPOSE_ID.eq(purposeId))
+                .on(POLICY.CATEGORY_UUID.eq(CATEGORY.CATEGORY_UUID))
+                .where(POLICY.PURPOSE_UUID.eq(purposeUuid))
                 .and(POLICY.TENANT_ID.eq(TenantContext.require()))
                 .fetch();
     }

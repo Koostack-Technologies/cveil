@@ -5,10 +5,13 @@
 -- Platform events use tenant_id = 'platform'.
 -- Tenant events use the actual tenant_id.
 -- Supports digital shredder (shreddable + dsar_id) for tenant events.
+-- NOTE: H2 does not support PARTITION BY; production PostgreSQL schema
+--       hash-partitions this table into 16 partitions by tenant_id.
+--       The composite PK (event_id, tenant_id) mirrors the PG schema.
 -- ============================================================================
 
 CREATE TABLE event (
-    event_id        BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    event_id        BIGINT       GENERATED ALWAYS AS IDENTITY,
     tenant_id       VARCHAR(255) NOT NULL,
     aggregate_id    VARCHAR(255) NOT NULL,
     aggregate_type  VARCHAR(255) NOT NULL,
@@ -19,6 +22,7 @@ CREATE TABLE event (
     published       BOOLEAN      NOT NULL DEFAULT FALSE,
     shreddable      BOOLEAN      NOT NULL DEFAULT FALSE,
     dsar_id         UUID,
+    PRIMARY KEY (event_id, tenant_id),
     UNIQUE (tenant_id, aggregate_type, aggregate_id, version)
 );
 

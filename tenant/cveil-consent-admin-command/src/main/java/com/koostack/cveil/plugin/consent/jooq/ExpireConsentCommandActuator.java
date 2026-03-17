@@ -27,7 +27,7 @@ public class ExpireConsentCommandActuator
 
     public record ExpireConsentCommand(
             String subjectId,
-            long policyId,
+            UUID policyId,
             String purposeName,
             String policyType,
             String fieldName,

@@ -28,43 +28,99 @@
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="antialiased bg-gray-900 text-gray-100 h-screen flex overflow-hidden">
+<body class="antialiased bg-gray-50 text-gray-800 h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
     <aside class="hidden md:flex md:flex-col w-64 bg-[#0a0f1c] border-r border-gray-800">
         <!-- Logo -->
         <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
-            <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded">
+            <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
             <span class="text-lg font-bold tracking-tight text-white">Cveil</span>
         </div>
 
-        <!-- Workspace badge -->
+        <!-- Workspace switcher -->
         <div class="px-4 py-4">
-            <div class="bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2">
-                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
-                <p class="text-sm text-white font-mono truncate">{tenantId ?: 'default'}</p>
+            <div class="relative" id="ws-switcher">
+                <button onclick="document.getElementById('ws-dropdown').classList.toggle('hidden')"
+                        class="w-full bg-gray-800/60 border border-gray-700 rounded px-3 py-2 text-left hover:border-gray-600 transition-colors group">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm text-white font-mono truncate">{workspaceDisplayName ?: tenantId ?: 'default'}</p>
+                        <svg class="w-4 h-4 text-gray-500 group-hover:text-gray-300 shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                    </div>
+                    {#if activeOrgId}
+                    <p class="text-xs text-gray-500 font-mono truncate mt-0.5">{tenantId}</p>
+                    {/if}
+                </button>
+
+                <!-- Dropdown -->
+                <div id="ws-dropdown" class="hidden absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <!-- Personal workspace -->
+                    <form method="POST" action="/dashboard/switch-org" class="contents">
+                        <input type="hidden" name="orgName" value="personal">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors border-b border-gray-700 {#if !activeOrgId}bg-gray-700/40{/if}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-xs font-bold shrink-0">{initial ?: 'U'}</span>
+                                <div class="min-w-0">
+                                    <p class="text-sm text-white truncate">Personal</p>
+                                    <p class="text-xs text-gray-500 font-mono truncate">{personalTenantId ?: 'default'}</p>
+                                </div>
+                                {#if !activeOrgId}
+                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                {/if}
+                            </div>
+                        </button>
+                    </form>
+
+                    {#if organizations != null && organizations.size > 0}
+                    <div class="px-3 py-1.5">
+                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Organizations</p>
+                    </div>
+                    {#for org in organizations}
+                    <form method="POST" action="/dashboard/switch-org" class="contents">
+                        <input type="hidden" name="orgName" value="{org.orgName}">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors {#if activeOrgId == org.orgId}bg-gray-700/40{/if}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-purple-900/40 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xs font-bold shrink-0">{org.orgName.charAt(0)}</span>
+                                <div class="min-w-0">
+                                    <p class="text-sm text-white truncate">{org.displayName ?: org.orgName}</p>
+                                    <p class="text-xs text-gray-500 font-mono truncate">{org.orgName}</p>
+                                </div>
+                                {#if activeOrgId == org.orgId}
+                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                {/if}
+                            </div>
+                        </button>
+                    </form>
+                    {/for}
+                    {/if}
+                </div>
             </div>
         </div>
 
         <!-- Nav -->
         <nav class="flex-1 px-3 space-y-1 overflow-y-auto">
-            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
+            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
                 <svg class="w-5 h-5 {#if activeNav == 'overview'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
                 Overview
             </a>
-            <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
+            <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
                 <svg class="w-5 h-5 {#if activeNav == 'governance'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
                 Governance
             </a>
-            <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
+            <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
                 <svg class="w-5 h-5 {#if activeNav == 'consent'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                 Consent
             </a>
-            <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
+            <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
                 <svg class="w-5 h-5 {#if activeNav == 'catalogue'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 Catalogue
             </a>
-            <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm transition-colors">
+            <a href="/dashboard/billing" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'billing'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
+                <svg class="w-5 h-5 {#if activeNav == 'billing'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                Billing
+            </a>
+            <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm transition-colors">
                 <svg class="w-5 h-5 {#if activeNav == 'account'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                 Account
             </a>
@@ -83,9 +139,9 @@
     <div class="flex-1 flex flex-col overflow-hidden">
 
         <!-- Top header -->
-        <header class="h-16 flex items-center justify-between px-6 border-b border-gray-800 bg-[#0a0f1c]/80 backdrop-blur-md">
+        <header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 bg-white/80 backdrop-blur-md">
             <!-- Mobile menu button -->
-            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-gray-400 hover:text-white" aria-label="Toggle sidebar">
+            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-900" aria-label="Toggle sidebar">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
 
@@ -96,14 +152,14 @@
             <!-- User actions -->
             <div class="flex items-center gap-4">
                 <div class="text-right hidden sm:block">
-                    <p class="text-sm font-medium text-white">{username ?: 'User'}</p>
+                    <p class="text-sm font-medium text-gray-900">{username ?: 'User'}</p>
                     <p class="text-xs text-gray-500">{roles ?: 'member'}</p>
                 </div>
-                <div class="w-8 h-8 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center text-cv-500 text-sm font-bold">
+                <div class="w-8 h-8 rounded-full bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-sm font-bold">
                     {initial ?: 'U'}
                 </div>
                 <form method="POST" action="/logout" class="inline">
-                    <button type="submit" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800/60 transition-colors" title="Sign out">
+                    <button type="submit" class="text-gray-500 hover:text-gray-900 p-2 rounded hover:bg-gray-100 transition-colors" title="Sign out">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </button>
                 </form>
@@ -112,18 +168,19 @@
 
         <!-- Mobile sidebar overlay -->
         <div id="mobile-sidebar" class="hidden fixed inset-0 z-40 md:hidden">
-            <div class="fixed inset-0 bg-black/50" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
+            <div class="fixed inset-0 bg-black/30" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
             <aside class="relative w-64 h-full bg-[#0a0f1c] border-r border-gray-800 overflow-y-auto">
                 <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
-                    <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded">
+                    <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
                     <span class="text-lg font-bold tracking-tight text-white">Cveil</span>
                 </div>
                 <nav class="px-3 py-4 space-y-1">
-                    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Overview</a>
-                    <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Governance</a>
-                    <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Consent</a>
-                    <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Catalogue</a>
-                    <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded-lg {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Account</a>
+                    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Overview</a>
+                    <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Governance</a>
+                    <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Consent</a>
+                    <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Catalogue</a>
+                    <a href="/dashboard/billing" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'billing'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Billing</a>
+                    <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Account</a>
                 </nav>
             </aside>
         </div>
@@ -136,5 +193,17 @@
         </main>
     </div>
 
+    {#raw}
+    <script>
+        // Close workspace switcher dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            var switcher = document.getElementById('ws-switcher');
+            var dropdown = document.getElementById('ws-dropdown');
+            if (switcher && dropdown && !switcher.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    </script>
+    {/raw}
 </body>
 </html>

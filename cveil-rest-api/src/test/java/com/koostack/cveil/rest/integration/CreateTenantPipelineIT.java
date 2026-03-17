@@ -38,7 +38,7 @@ import org.junit.jupiter.api.TestMethodOrder;
  *   <li>POST /api/v1/platform/iam/users returns 201 with tenantId (derived from username)
  *   <li>Duplicate registration with same username/email is rejected
  *   <li>core.tenant.created and billing events present in unified event store
- *   <li>Tenant row materializes in platform_core.tenant
+ *   <li>Tenant row materializes in cveiliam.tenant
  *   <li>Billing profile and subscription rows exist
  *   <li>Unified consent tables and event table exist
  *   <li>Keycloak login succeeds for the tenant admin user
@@ -62,8 +62,7 @@ class CreateTenantPipelineIT {
 
     private static final String TENANT_ID = "pipeline_test_tenant_admin";
     private static final String TENANT_DISPLAY = "Pipeline Test Tenant";
-    private static final String ADMIN_EMAIL =
-            TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
+    private static final String ADMIN_EMAIL = TENANT_ID.replace("_", "-") + "-admin@cveil-test.com";
 
     private static volatile String accessToken;
 
@@ -77,9 +76,9 @@ class CreateTenantPipelineIT {
 
     private static Connection getDbConnection() throws SQLException {
         var config = org.eclipse.microprofile.config.ConfigProvider.getConfig();
-        String url = config.getValue("cveil.test.platform-db.url", String.class);
-        String user = config.getValue("cveil.test.platform-db.username", String.class);
-        String pass = config.getValue("cveil.test.platform-db.password", String.class);
+        String url = config.getValue("cveil.test.db.url", String.class);
+        String user = config.getValue("cveil.test.db.username", String.class);
+        String pass = config.getValue("cveil.test.db.password", String.class);
         return DriverManager.getConnection(url, user, pass);
     }
 
@@ -133,7 +132,7 @@ class CreateTenantPipelineIT {
                                         Statement st = conn.createStatement()) {
                                     ResultSet rs =
                                             st.executeQuery(
-                                                    "SELECT 1 FROM platform_core.tenant WHERE"
+                                                    "SELECT 1 FROM cveiliam.tenant WHERE"
                                                             + " tenant_id = '"
                                                             + TENANT_ID
                                                             + "'");
@@ -164,7 +163,7 @@ class CreateTenantPipelineIT {
     }
 
     // =======================================================================
-    // 2. Event Store Validation (unified cveil_event.event table)
+    // 2. Event Store Validation (unified cveilevent.event table)
     // =======================================================================
 
     @Nested
@@ -181,7 +180,7 @@ class CreateTenantPipelineIT {
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT COUNT(*) FROM cveil_event.event "
+                                "SELECT COUNT(*) FROM cveilevent.event "
                                         + "WHERE event_type = 'core.tenant.created' "
                                         + "AND payload::text LIKE '%"
                                         + TENANT_ID
@@ -201,7 +200,7 @@ class CreateTenantPipelineIT {
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT COUNT(*) FROM cveil_event.event "
+                                "SELECT COUNT(*) FROM cveilevent.event "
                                         + "WHERE event_type LIKE 'billing.%' "
                                         + "AND payload::text LIKE '%"
                                         + TENANT_ID
@@ -226,7 +225,7 @@ class CreateTenantPipelineIT {
 
         @Test
         @Order(1)
-        @DisplayName("Tenant row materializes in platform_core.tenant")
+        @DisplayName("Tenant row materializes in cveiliam.tenant")
         void tenantRowMaterializes() {
             await().atMost(ASYNC_TIMEOUT)
                     .pollInterval(POLL_INTERVAL)
@@ -237,8 +236,8 @@ class CreateTenantPipelineIT {
                                     ResultSet rs =
                                             stmt.executeQuery(
                                                     "SELECT tenant_id, plan, status FROM"
-                                                        + " platform_core.tenant WHERE tenant_id ="
-                                                        + " '"
+                                                            + " cveiliam.tenant WHERE tenant_id ="
+                                                            + " '"
                                                             + TENANT_ID
                                                             + "'");
                                     assertThat(rs.next())
@@ -262,8 +261,8 @@ class CreateTenantPipelineIT {
                                     ResultSet rs =
                                             stmt.executeQuery(
                                                     "SELECT tenant_id FROM"
-                                                        + " platform_billing.billing_profile WHERE"
-                                                        + " tenant_id = '"
+                                                            + " cveilbilling.billing_profile WHERE"
+                                                            + " tenant_id = '"
                                                             + TENANT_ID
                                                             + "'");
                                     assertThat(rs.next())
@@ -287,7 +286,7 @@ class CreateTenantPipelineIT {
                                             stmt.executeQuery(
                                                     "SELECT plan_tier, eval_limit_monthly,"
                                                         + " subject_limit, burst_limit_per_min FROM"
-                                                        + " platform_billing.subscription WHERE"
+                                                        + " cveilbilling.subscription WHERE"
                                                         + " tenant_id = '"
                                                             + TENANT_ID
                                                             + "'");
@@ -315,10 +314,10 @@ class CreateTenantPipelineIT {
                                     ResultSet rs =
                                             stmt.executeQuery(
                                                     "SELECT t.tenant_id, t.plan, b.tenant_id AS"
-                                                        + " billing_tid FROM platform_core.tenant t"
-                                                        + " JOIN platform_billing.billing_profile b"
-                                                        + " ON t.tenant_id = b.tenant_id WHERE"
-                                                        + " t.tenant_id = '"
+                                                            + " billing_tid FROM cveiliam.tenant t"
+                                                            + " JOIN cveilbilling.billing_profile b"
+                                                            + " ON t.tenant_id = b.tenant_id WHERE"
+                                                            + " t.tenant_id = '"
                                                             + TENANT_ID
                                                             + "'");
                                     assertThat(rs.next()).as("Tenant + billing join").isTrue();
@@ -334,20 +333,20 @@ class CreateTenantPipelineIT {
 
     @Nested
     @Order(4)
-    @DisplayName("4 — Unified consent tables exist in cveil_consent schema")
+    @DisplayName("4 — Unified consent tables exist in cveilconsent schema")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class UnifiedSchemaValidation {
 
         @Test
         @Order(1)
-        @DisplayName("All consent tables exist in cveil_consent schema")
+        @DisplayName("All consent tables exist in cveilconsent schema")
         void consentTablesExist() throws SQLException {
             try (Connection conn = getDbConnection();
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
                                 "SELECT table_name FROM information_schema.tables "
-                                        + "WHERE table_schema = 'cveil_consent' "
+                                        + "WHERE table_schema = 'cveilconsent' "
                                         + "AND table_name NOT LIKE 'flyway%' "
                                         + "ORDER BY table_name");
                 List<String> tables = new ArrayList<>();
@@ -374,17 +373,17 @@ class CreateTenantPipelineIT {
 
         @Test
         @Order(2)
-        @DisplayName("Unified event table exists in cveil_event schema")
+        @DisplayName("Unified event table exists in cveilevent schema")
         void unifiedEventTableExists() throws SQLException {
             try (Connection conn = getDbConnection();
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
                                 "SELECT COUNT(*) FROM information_schema.tables "
-                                        + "WHERE table_schema = 'cveil_event' "
+                                        + "WHERE table_schema = 'cveilevent' "
                                         + "AND table_name = 'event'");
                 rs.next();
-                assertThat(rs.getInt(1)).as("cveil_event.event table exists").isEqualTo(1);
+                assertThat(rs.getInt(1)).as("cveilevent.event table exists").isEqualTo(1);
             }
         }
     }
@@ -432,7 +431,7 @@ class CreateTenantPipelineIT {
                                         Statement stmt = conn.createStatement()) {
                                     ResultSet rs =
                                             stmt.executeQuery(
-                                                    "SELECT status FROM platform_core.tenant "
+                                                    "SELECT status FROM cveiliam.tenant "
                                                             + "WHERE tenant_id = '"
                                                             + TENANT_ID
                                                             + "'");
@@ -463,7 +462,7 @@ class CreateTenantPipelineIT {
                     Statement stmt = conn.createStatement()) {
                 ResultSet rs =
                         stmt.executeQuery(
-                                "SELECT plan_id, is_active FROM platform_core.plan ORDER BY"
+                                "SELECT plan_id, is_active FROM cveilcore.plan ORDER BY"
                                         + " sort_order");
                 List<String> planIds = new ArrayList<>();
                 while (rs.next()) {

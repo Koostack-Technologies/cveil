@@ -25,7 +25,9 @@ public class ListCategoriesQueryActuator
                 .map(
                         c ->
                                 new CategoryView(
-                                        c.getCategoryId(), c.getCategoryName(), c.getDescription()))
+                                        c.getCategoryUuid(),
+                                        c.getCategoryName(),
+                                        c.getDescription()))
                 .toList();
     }
 

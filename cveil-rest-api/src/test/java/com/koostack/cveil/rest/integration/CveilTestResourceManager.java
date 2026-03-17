@@ -43,13 +43,9 @@ import org.testcontainers.utility.DockerImageName;
  * {@code ${cveil.test.*}} placeholders:
  *
  * <ul>
- *   <li>{@code cveil.test.db.url} — JDBC URL for the consent database
+ *   <li>{@code cveil.test.db.url} — JDBC URL for the database
  *   <li>{@code cveil.test.db.username} — Postgres username
  *   <li>{@code cveil.test.db.password} — Postgres password
- *   <li>{@code cveil.test.platform-db.url} — JDBC URL for the platform database (same Postgres
- *       instance, same database — mirrors typical single-DB deployments)
- *   <li>{@code cveil.test.platform-db.username} — Postgres username (platform)
- *   <li>{@code cveil.test.platform-db.password} — Postgres password (platform)
  *   <li>{@code cveil.test.redis.host} — Redis hostname
  *   <li>{@code cveil.test.redis.port} — Redis port
  * </ul>
@@ -208,20 +204,15 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
         String clientSecret = bootstrapPlatformRealm(keycloakUrl);
 
         // -- Build property map -----------------------------------------------
-        // Both consent-db and platform-db point at the same Postgres instance
-        // (same as a typical single-database production deployment).
+        // Single unified database for all schemas (cveilcore, cveiliam,
+        // cveilbilling, cveilevent, cveilconsent, cveilmetrics).
 
         Map<String, String> props = new HashMap<>();
 
-        // Consent DB
+        // Database
         props.put("cveil.test.db.url", jdbcUrl);
         props.put("cveil.test.db.username", DB_USERNAME);
         props.put("cveil.test.db.password", DB_PASSWORD);
-
-        // Platform DB (same instance)
-        props.put("cveil.test.platform-db.url", jdbcUrl);
-        props.put("cveil.test.platform-db.username", DB_USERNAME);
-        props.put("cveil.test.platform-db.password", DB_PASSWORD);
 
         // Redis
         props.put("cveil.test.redis.host", redisHost);
