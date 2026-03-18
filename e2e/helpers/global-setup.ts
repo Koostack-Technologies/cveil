@@ -141,7 +141,7 @@ async function seedTestUser(): Promise<void> {
   const obStep1 = await fetch(`${BASE_URL}/onboarding`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: sessionCookie },
-    body: new URLSearchParams({ workspaceName: `e2e-workspace` }).toString(),
+    body: new URLSearchParams({ workspaceName: `e2e-ws-${Date.now()}` }).toString(),
     redirect: 'manual',
   });
   console.log(`  Onboarding step 1 (workspace): ${obStep1.status}`);

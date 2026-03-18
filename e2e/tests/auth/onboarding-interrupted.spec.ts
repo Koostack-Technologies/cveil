@@ -11,7 +11,7 @@ test.describe('Interrupted Onboarding @auth', () => {
     await page.waitForURL('**/onboarding**', { timeout: 30_000 });
 
     // Complete step 1 only
-    await page.fill('#workspaceName', 'interrupted-ws');
+    await page.fill('#workspaceName', `intr1-ws-${Date.now()}`);
     await page.click('button[type="submit"]');
     await page.waitForURL('**/onboarding/industry**');
 
@@ -33,7 +33,7 @@ test.describe('Interrupted Onboarding @auth', () => {
     await page.waitForURL('**/onboarding**', { timeout: 30_000 });
 
     // Complete step 1
-    await page.fill('#workspaceName', 'interrupted-ws2');
+    await page.fill('#workspaceName', `intr2-ws-${Date.now()}`);
     await page.click('button[type="submit"]');
 
     // Complete step 2

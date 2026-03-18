@@ -12,7 +12,7 @@ test.describe('Onboarding @auth', () => {
 
     // Step 1 — Workspace name
     await expect(page.locator('#workspaceName')).toBeVisible();
-    await page.fill('#workspaceName', 'my-workspace');
+    await page.fill('#workspaceName', `onboard-ws-${Date.now()}`);
     await page.click('button[type="submit"]');
 
     // Step 2 — Industry

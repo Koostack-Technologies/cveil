@@ -46,10 +46,11 @@ export async function fillLoginForm(page: Page, identifier: string, password: st
  * Complete the full onboarding wizard from step 1 through the
  * provisioning completion page.
  */
-export async function completeOnboarding(page: Page, workspaceName = 'e2e-workspace') {
+export async function completeOnboarding(page: Page, workspaceName?: string) {
+  const wsName = workspaceName ?? `e2e-ws-${Date.now()}`;
   // Step 1 — workspace name
   await page.waitForURL('**/onboarding**');
-  await page.fill('#workspaceName', workspaceName);
+  await page.fill('#workspaceName', wsName);
   await page.click('button[type="submit"]');
 
   // Step 2 — industry (HEALTHCARE has pre-selected jurisdictions)
