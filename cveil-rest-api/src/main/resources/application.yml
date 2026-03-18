@@ -9,6 +9,11 @@
 quarkus:
   http:
     port: 8080
+    proxy:
+      proxy-address-forwarding: true
+      allow-forwarded: false
+      enable-forwarded-host: true
+      enable-forwarded-prefix: true
     cors:
       # Regex allows all origins — required for the embeddable consent banner widget.
       # Security is enforced by DPoP/JWT tokens, not CORS. To restrict origins
