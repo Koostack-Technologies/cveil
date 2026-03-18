@@ -2,7 +2,7 @@
 -- V1: Unified Consent Administration Schema (multi-tenant)
 -- ============================================================================
 -- All consent tables include tenant_id for Postgres RLS isolation.
--- At runtime tables live in the 'cveil_consent' schema.
+-- At runtime tables live in the 'cveilconsent' schema.
 -- At jOOQ-codegen time tables live in H2's PUBLIC schema.
 -- Aggregates: Field, Purpose, Regulation, Subject, SubjectConsent, DSAR.
 --

@@ -14,7 +14,7 @@
 
 -- ── 1. Add new columns ──────────────────────────────────────────────────
 
-ALTER TABLE platform_core.plan
+ALTER TABLE plan
     ADD COLUMN IF NOT EXISTS member_limit           INTEGER NOT NULL DEFAULT -1,
     ADD COLUMN IF NOT EXISTS audit_retention_days    INTEGER NOT NULL DEFAULT 30,
     ADD COLUMN IF NOT EXISTS stripe_annual_price_id  VARCHAR(255);
@@ -22,7 +22,7 @@ ALTER TABLE platform_core.plan
 -- ── 2. Update plan operational limits ───────────────────────────────────
 
 -- Free / Starter: 10K API requests, 500 subjects, 30 burst/min, 3 jurisdictions, 5 members
-UPDATE platform_core.plan SET
+UPDATE plan SET
     eval_limit          = 10000,
     subject_limit       = 500,
     burst_limit         = 30,
@@ -33,7 +33,7 @@ UPDATE platform_core.plan SET
 WHERE plan_id = 'free';
 
 -- Growth: 500K API requests, 50K subjects, 200 burst/min, 7 jurisdictions, 20 members
-UPDATE platform_core.plan SET
+UPDATE plan SET
     eval_limit          = 500000,
     subject_limit       = 50000,
     burst_limit         = 200,
@@ -44,7 +44,7 @@ UPDATE platform_core.plan SET
 WHERE plan_id = 'pro';
 
 -- Business: 5M API requests, 500K subjects, 500 burst/min, unlimited jurisdictions, 100 members
-UPDATE platform_core.plan SET
+UPDATE plan SET
     eval_limit          = 5000000,
     subject_limit       = 500000,
     burst_limit         = 500,
@@ -55,7 +55,7 @@ UPDATE platform_core.plan SET
 WHERE plan_id = 'business';
 
 -- Enterprise: unlimited everything
-UPDATE platform_core.plan SET
+UPDATE plan SET
     eval_limit          = -1,
     subject_limit       = -1,
     burst_limit         = -1,
@@ -67,7 +67,7 @@ WHERE plan_id = 'enterprise';
 
 -- ── 3. Update display detail with revised pricing ───────────────────────
 
-UPDATE platform_core.plan_display_detail SET
+UPDATE plan_display_detail SET
     price       = 'Free',
     period      = '',
     overage     = 'Hard stop',
@@ -79,7 +79,7 @@ UPDATE platform_core.plan_display_detail SET
     updated_at  = CURRENT_TIMESTAMP
 WHERE plan_id = 'free';
 
-UPDATE platform_core.plan_display_detail SET
+UPDATE plan_display_detail SET
     price       = '$99',
     period      = '/mo',
     overage     = '$0.001 / request',
@@ -91,7 +91,7 @@ UPDATE platform_core.plan_display_detail SET
     updated_at  = CURRENT_TIMESTAMP
 WHERE plan_id = 'pro';
 
-UPDATE platform_core.plan_display_detail SET
+UPDATE plan_display_detail SET
     price       = '$499',
     period      = '/mo',
     overage     = '$0.0005 / request',
@@ -103,7 +103,7 @@ UPDATE platform_core.plan_display_detail SET
     updated_at  = CURRENT_TIMESTAMP
 WHERE plan_id = 'business';
 
-UPDATE platform_core.plan_display_detail SET
+UPDATE plan_display_detail SET
     price       = 'Custom',
     period      = '',
     overage     = 'Volume discount',

@@ -7,4 +7,4 @@
 -- per-tenant Redis stream/ACL isolation is still in effect.
 -- ============================================================================
 
-ALTER TABLE platform_core.tenant DROP COLUMN IF EXISTS schema_prefix;
+ALTER TABLE tenant DROP COLUMN IF EXISTS schema_prefix;

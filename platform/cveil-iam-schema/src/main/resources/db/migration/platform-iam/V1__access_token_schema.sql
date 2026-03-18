@@ -6,9 +6,7 @@
 -- storage, and carry a snapshot of the creator's Keycloak roles.
 -- ============================================================================
 
-CREATE SCHEMA IF NOT EXISTS platform_iam;
-
-CREATE TABLE platform_iam.access_token (
+CREATE TABLE access_token (
     access_token_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     token_hash          VARCHAR(255)  NOT NULL UNIQUE,
     token_prefix        VARCHAR(20)   NOT NULL,
@@ -24,6 +22,6 @@ CREATE TABLE platform_iam.access_token (
     updated_at          TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_access_token_tenant ON platform_iam.access_token(tenant_id);
-CREATE INDEX idx_access_token_created_by ON platform_iam.access_token(created_by);
-CREATE INDEX idx_access_token_status ON platform_iam.access_token(tenant_id, status);
+CREATE INDEX idx_access_token_tenant ON access_token(tenant_id);
+CREATE INDEX idx_access_token_created_by ON access_token(created_by);
+CREATE INDEX idx_access_token_status ON access_token(tenant_id, status);

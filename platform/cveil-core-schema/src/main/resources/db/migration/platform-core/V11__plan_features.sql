@@ -6,8 +6,8 @@
 -- to enforce plan-level access control on premium features.
 -- ============================================================================
 
-CREATE TABLE platform_core.plan_feature (
-    plan_id         VARCHAR(50)   NOT NULL REFERENCES platform_core.plan(plan_id) ON DELETE CASCADE,
+CREATE TABLE plan_feature (
+    plan_id         VARCHAR(50)   NOT NULL REFERENCES plan(plan_id) ON DELETE CASCADE,
     feature_key     VARCHAR(100)  NOT NULL,
     enabled         BOOLEAN       NOT NULL DEFAULT FALSE,
     limit_value     INTEGER,          -- NULL = unlimited when enabled; numeric = capped
@@ -25,7 +25,7 @@ CREATE TABLE platform_core.plan_feature (
 --   analytics         — analytics dashboard access
 
 -- Free tier: basic access only
-INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
+INSERT INTO plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
     ('free', 'webhooks',           FALSE, NULL),
     ('free', 'custom_banner',      TRUE,  1),      -- 1 site
     ('free', 'dsar',               FALSE, NULL),
@@ -35,7 +35,7 @@ INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_val
     ('free', 'analytics',          TRUE,  NULL);
 
 -- Growth tier: core features unlocked
-INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
+INSERT INTO plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
     ('pro', 'webhooks',           TRUE,  3),       -- 3 endpoints
     ('pro', 'custom_banner',      TRUE,  5),       -- 5 sites
     ('pro', 'dsar',               TRUE,  NULL),
@@ -45,7 +45,7 @@ INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_val
     ('pro', 'analytics',          TRUE,  NULL);
 
 -- Business tier: everything, higher limits
-INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
+INSERT INTO plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
     ('business', 'webhooks',           TRUE,  20),
     ('business', 'custom_banner',      TRUE,  NULL),    -- unlimited sites
     ('business', 'dsar',               TRUE,  NULL),
@@ -55,7 +55,7 @@ INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_val
     ('business', 'analytics',          TRUE,  NULL);
 
 -- Enterprise tier: unlimited everything
-INSERT INTO platform_core.plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
+INSERT INTO plan_feature (plan_id, feature_key, enabled, limit_value) VALUES
     ('enterprise', 'webhooks',           TRUE,  NULL),
     ('enterprise', 'custom_banner',      TRUE,  NULL),
     ('enterprise', 'dsar',               TRUE,  NULL),

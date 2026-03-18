@@ -1,6 +1,4 @@
-CREATE SCHEMA IF NOT EXISTS platform_core;
-
-CREATE TABLE platform_core.tenant (
+CREATE TABLE tenant (
                                       tenant_id           VARCHAR(255)  PRIMARY KEY,
                                       display_name        VARCHAR(500)  NOT NULL,
                                       plan                VARCHAR(50)   NOT NULL DEFAULT 'free',

@@ -18,7 +18,7 @@ import redis.clients.jedis.JedisPooled;
 
 /**
  * Platform metric projection — consumes from the {@code cveil:metrics:platform} Redis stream and
- * upserts into the {@code platform_metrics.telemetry} table.
+ * upserts into the {@code cveilmetrics.telemetry} table.
  */
 public class PlatformRedisMetricProjection implements MetricProjection<PlatformMetricsConfig> {
 

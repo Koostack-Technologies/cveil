@@ -5,11 +5,7 @@
 -- monthly_price_cents and annual_price_cents store Stripe-compatible
 -- integer amounts (in the plan's currency, assumed USD cents).
 -- NULL = not billable / custom pricing (enterprise).
---
--- Tables may live in either platform_core or cveilcore depending on
--- whether cleanup has run.  SET search_path to resolve either.
 -- ============================================================================
-SET search_path TO cveilcore, platform_core, public;
 
 ALTER TABLE plan
     ADD COLUMN IF NOT EXISTS monthly_price_cents  INTEGER,

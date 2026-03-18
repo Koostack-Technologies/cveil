@@ -10,21 +10,21 @@
 -- ── 1. Correct operational limits to match published pricing ────────────
 
 -- Free / Starter: 1,000 managed subjects (was 10,000)
-UPDATE platform_core.plan SET subject_limit = 1000, updated_at = CURRENT_TIMESTAMP
+UPDATE plan SET subject_limit = 1000, updated_at = CURRENT_TIMESTAMP
 WHERE plan_id = 'free';
 
 -- Growth: 7 jurisdictions (was 10)
-UPDATE platform_core.plan SET jurisdiction_limit = 7, updated_at = CURRENT_TIMESTAMP
+UPDATE plan SET jurisdiction_limit = 7, updated_at = CURRENT_TIMESTAMP
 WHERE plan_id = 'pro';
 
 -- Business: 20M API requests (was unlimited), unlimited governance
-UPDATE platform_core.plan SET eval_limit = 20000000, jurisdiction_limit = -1, updated_at = CURRENT_TIMESTAMP
+UPDATE plan SET eval_limit = 20000000, jurisdiction_limit = -1, updated_at = CURRENT_TIMESTAMP
 WHERE plan_id = 'business';
 
 -- ── 2. Create display-detail table ─────────────────────────────────────
 
-CREATE TABLE platform_core.plan_display_detail (
-    plan_id         VARCHAR(50)   PRIMARY KEY REFERENCES platform_core.plan(plan_id),
+CREATE TABLE plan_display_detail (
+    plan_id         VARCHAR(50)   PRIMARY KEY REFERENCES plan(plan_id),
     price           VARCHAR(50)   NOT NULL,
     period          VARCHAR(20)   NOT NULL DEFAULT '',
     overage         VARCHAR(100)  NOT NULL DEFAULT '',
@@ -39,7 +39,7 @@ CREATE TABLE platform_core.plan_display_detail (
 
 -- ── 3. Seed display detail for each plan tier ──────────────────────────
 
-INSERT INTO platform_core.plan_display_detail
+INSERT INTO plan_display_detail
     (plan_id, price, period, overage, governance, support, residency, cta, highlighted)
 VALUES
     ('free',

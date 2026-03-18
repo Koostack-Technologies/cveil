@@ -1,7 +1,6 @@
 -- ============================================================================
 -- V9: CHECK constraint on subscription.billing_interval
 -- ============================================================================
-SET search_path TO cveilbilling, platform_billing, public;
 
 DO $$ BEGIN
   ALTER TABLE subscription

@@ -1023,32 +1023,23 @@ public class CveilProducers {
         DataSource migrationDs =
                 JooqDataSourceFactory.createDataSource(eventConfig, "cveil-cqrs-migrations");
 
-        // -- Schema rename + migration ----------------------------------------
-        // Step 1: Rename old schema names → new names (for existing databases).
-        //         On fresh databases these are no-ops.
-        // Step 2: Create schemas that Flyway doesn't self-create (event, consent).
-        // Step 3: Run Flyway migrations with new schema names.
-        // Step 4: Clean up old-name schemas created by V1 SQL on fresh databases.
-        // Step 5: Move tenant table from cveilcore → cveiliam (domain boundary).
+        // -- Schema creation + Flyway migration --------------------------------
+        // Create all schemas upfront, then run Flyway migrations.
+        // All migration SQL uses unqualified table names; Flyway sets
+        // search_path via .schemas() so names resolve to the correct schema.
         try (var conn = migrationDs.getConnection();
                 var stmt = conn.createStatement()) {
-            // Step 1: rename old → new (existing databases)
-            renameSchemaIfNeeded(stmt, "platform_core", "cveilcore");
-            renameSchemaIfNeeded(stmt, "platform_billing", "cveilbilling");
-            renameSchemaIfNeeded(stmt, "platform_iam", "cveiliam");
-            renameSchemaIfNeeded(stmt, "cveil_event", "cveilevent");
-            renameSchemaIfNeeded(stmt, "cveil_consent", "cveilconsent");
-            renameSchemaIfNeeded(stmt, "platform_metrics", "cveilmetrics");
-
-            // Step 2: create schemas with new names (event + consent use unqualified SQL)
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilcore");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilbilling");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveiliam");
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilmetrics");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilevent");
             stmt.execute("CREATE SCHEMA IF NOT EXISTS cveilconsent");
         } catch (Exception e) {
-            throw new RuntimeException("Failed to prepare schemas", e);
+            throw new RuntimeException("Failed to create schemas", e);
         }
 
-        // Step 3: run Flyway migrations
-        // Simple-rename schemas (V1 SQL uses unqualified table names)
+        // Run Flyway migrations for each schema
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-event-postgresql",
@@ -1059,7 +1050,6 @@ public class CveilProducers {
                 "classpath:db/migration/consent",
                 "flyway_schema_history_consent",
                 "cveilconsent");
-        // Self-creating schemas (V1 SQL explicitly creates old-name schema + qualifies tables)
         runFlywayInSchema(
                 migrationDs,
                 "classpath:db/migration/platform-metrics",
@@ -1081,25 +1071,9 @@ public class CveilProducers {
                 "flyway_schema_history",
                 "cveiliam");
 
-        // Step 4: clean up old-name schemas created by V1 on fresh installs
-        try (var conn = migrationDs.getConnection();
-                var stmt = conn.createStatement()) {
-            cleanupOldSchema(conn, "platform_core", "cveilcore");
-            cleanupOldSchema(conn, "platform_billing", "cveilbilling");
-            cleanupOldSchema(conn, "platform_iam", "cveiliam");
-            cleanupOldSchema(conn, "platform_metrics", "cveilmetrics");
-
-            // Step 5: move tenant table from cveilcore → cveiliam
-            moveTableIfNeeded(stmt, "cveilcore", "tenant", "cveiliam");
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to finalize schema migration", e);
-        }
-
         // RLS policies — must run AFTER all schema migrations complete.
         // Uses 'public' schema for the flyway history table since RLS
         // policies span multiple schemas.
-        // Baseline at V2 so that V1/V2 (which reference old schema names) are
-        // skipped on fresh databases; V3 contains the full RLS setup.
         runFlyway(
                 migrationDs,
                 "classpath:db/migration/rls-policies",
@@ -1860,111 +1834,4 @@ public class CveilProducers {
                 result.success);
     }
 
-    /**
-     * Renames a PostgreSQL schema if the old name exists and the new name does not. This is a no-op
-     * on fresh databases (old schema doesn't exist) and on databases already migrated (old schema
-     * already renamed).
-     */
-    private void renameSchemaIfNeeded(java.sql.Statement stmt, String oldName, String newName)
-            throws java.sql.SQLException {
-        try (var rs =
-                stmt.executeQuery(
-                        "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
-                                + " schema_name = '"
-                                + oldName
-                                + "')"
-                                + " AND NOT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
-                                + " schema_name = '"
-                                + newName
-                                + "')")) {
-            if (rs.next() && rs.getBoolean(1)) {
-                LOG.info("Renaming schema {} → {}", oldName, newName);
-                stmt.execute("ALTER SCHEMA " + oldName + " RENAME TO " + newName);
-            }
-        }
-    }
-
-    /**
-     * On fresh installs, Flyway V1 migrations create old-name schemas (e.g. {@code platform_core})
-     * and put tables there, while the Flyway history table lives in the new-name schema. This
-     * method moves all tables and sequences from the old schema to the new one and drops the old
-     * schema.
-     */
-    private void cleanupOldSchema(java.sql.Connection conn, String oldName, String newName)
-            throws java.sql.SQLException {
-        try (var check =
-                conn.createStatement()
-                        .executeQuery(
-                                "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE"
-                                        + " schema_name = '"
-                                        + oldName
-                                        + "')")) {
-            if (!check.next() || !check.getBoolean(1)) return;
-        }
-        LOG.info("Cleaning up old schema {} → moving objects to {}", oldName, newName);
-        try (var stmt = conn.createStatement()) {
-            // Move tables
-            try (var tables =
-                    stmt.executeQuery(
-                            "SELECT table_name FROM information_schema.tables WHERE table_schema"
-                                    + " = '"
-                                    + oldName
-                                    + "' AND table_type = 'BASE TABLE'")) {
-                while (tables.next()) {
-                    String tbl = tables.getString(1);
-                    conn.createStatement()
-                            .execute(
-                                    "ALTER TABLE "
-                                            + oldName
-                                            + ".\""
-                                            + tbl
-                                            + "\" SET SCHEMA "
-                                            + newName);
-                }
-            }
-            // Move sequences
-            try (var seqs =
-                    stmt.executeQuery(
-                            "SELECT sequence_name FROM information_schema.sequences WHERE"
-                                    + " sequence_schema = '"
-                                    + oldName
-                                    + "'")) {
-                while (seqs.next()) {
-                    String seq = seqs.getString(1);
-                    conn.createStatement()
-                            .execute(
-                                    "ALTER SEQUENCE "
-                                            + oldName
-                                            + ".\""
-                                            + seq
-                                            + "\" SET SCHEMA "
-                                            + newName);
-                }
-            }
-            // Drop the now-empty old schema
-            conn.createStatement().execute("DROP SCHEMA IF EXISTS " + oldName + " CASCADE");
-        }
-    }
-
-    /**
-     * Moves a single table from one schema to another if it exists in the source schema. Used to
-     * relocate the {@code tenant} table from {@code cveilcore} to {@code cveiliam}.
-     */
-    private void moveTableIfNeeded(
-            java.sql.Statement stmt, String fromSchema, String table, String toSchema)
-            throws java.sql.SQLException {
-        try (var rs =
-                stmt.executeQuery(
-                        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE"
-                                + " table_schema = '"
-                                + fromSchema
-                                + "' AND table_name = '"
-                                + table
-                                + "')")) {
-            if (rs.next() && rs.getBoolean(1)) {
-                LOG.info("Moving table {}.{} → {}", fromSchema, table, toSchema);
-                stmt.execute("ALTER TABLE " + fromSchema + "." + table + " SET SCHEMA " + toSchema);
-            }
-        }
-    }
 }

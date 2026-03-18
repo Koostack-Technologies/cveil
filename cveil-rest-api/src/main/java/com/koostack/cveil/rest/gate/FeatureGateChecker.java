@@ -15,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * CDI-managed feature gate checker backed by the {@code platform_core.plan_feature} table.
+ * CDI-managed feature gate checker backed by the {@code cveilcore.plan_feature} table.
  *
  * <p>Caches feature flags per plan for 5 minutes to avoid per-request DB queries. Plan features
  * change only on plan updates or migrations, so aggressive caching is safe.

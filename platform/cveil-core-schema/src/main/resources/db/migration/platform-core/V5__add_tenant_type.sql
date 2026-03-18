@@ -6,8 +6,8 @@
 -- without joining into the IAM schema.
 -- ============================================================================
 
-ALTER TABLE platform_core.tenant
+ALTER TABLE tenant
     ADD COLUMN tenant_type VARCHAR(50) NOT NULL DEFAULT 'user'
         CHECK (tenant_type IN ('user', 'org'));
 
-CREATE INDEX idx_tenant_type ON platform_core.tenant(tenant_type);
+CREATE INDEX idx_tenant_type ON tenant(tenant_type);
