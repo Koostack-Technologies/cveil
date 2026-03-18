@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/authenticated-test';
 import { TABS, TABLES, PANEL, DELETE_MODAL } from '../../helpers';
 
 test.describe('Catalogue Module @catalogue', () => {
