@@ -35,7 +35,14 @@
             </div>
             {/if}
 
-            <form method="POST" action="/signup" class="space-y-5">
+            <div id="signup-error" class="mb-6 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400 hidden">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="signup-error-msg"></span>
+                </div>
+            </div>
+
+            <form id="signup-form" method="POST" action="/signup" class="space-y-5">
 
                 <input type="hidden" name="plan" value="{plan ?: ''}">
 
@@ -78,7 +85,7 @@
                            class="w-full rounded border border-gray-700 bg-gray-800/60 px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:border-cv-500 focus:ring-1 focus:ring-cv-500 outline-none transition-colors">
                 </div>
 
-                <button type="submit"
+                <button type="submit" id="signup-btn"
                         class="w-full bg-cv-500 text-gray-900 hover:bg-cv-600 px-6 py-3 rounded font-semibold text-base transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] mt-2">
                     Create Account
                 </button>
@@ -97,6 +104,175 @@
 
         </div>
     </main>
+
+    <script type="module">
+
+    const DPOP_STORAGE_KEY = 'cveil_dpop_jwk';
+    const ALG = 'ES256';
+
+    async function initDpopKeys() {
+        const stored = sessionStorage.getItem(DPOP_STORAGE_KEY);
+        if (stored) {
+            try { JSON.parse(stored); return; }
+            catch { sessionStorage.removeItem(DPOP_STORAGE_KEY); }
+        }
+        const kp = await crypto.subtle.generateKey(
+            { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+        const fullJwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+        sessionStorage.setItem(DPOP_STORAGE_KEY, JSON.stringify(fullJwk));
+    }
+
+    async function createDpopProof(method, url) {
+        const fullJwk = JSON.parse(sessionStorage.getItem(DPOP_STORAGE_KEY));
+        const { d, ...publicJwk } = fullJwk;
+        const privateKey = await crypto.subtle.importKey(
+            'jwk', fullJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+        const parsed = new URL(url);
+        const htu = parsed.origin + parsed.pathname;
+        const header = { alg: ALG, typ: 'dpop+jwt', jwk: publicJwk };
+        const payload = {
+            htm: method.toUpperCase(), htu,
+            jti: crypto.randomUUID(),
+            iat: Math.floor(Date.now() / 1000)
+        };
+        const enc = new TextEncoder();
+        function toBase64Url(str) {
+            const bytes = enc.encode(str);
+            let binary = '';
+            for (const b of bytes) binary += String.fromCharCode(b);
+            return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+        }
+        const headerB64 = toBase64Url(JSON.stringify(header));
+        const payloadB64 = toBase64Url(JSON.stringify(payload));
+        const sigInput = enc.encode(headerB64 + '.' + payloadB64);
+        const sigBuf = await crypto.subtle.sign(
+            { name: 'ECDSA', hash: 'SHA-256' }, privateKey, sigInput);
+        const sigBytes = new Uint8Array(sigBuf);
+        const sigB64 = btoa(String.fromCharCode(...sigBytes))
+            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+        return headerB64 + '.' + payloadB64 + '.' + sigB64;
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('signup-error');
+        const msgEl = document.getElementById('signup-error-msg');
+        msgEl.textContent = msg;
+        el.classList.remove('hidden');
+    }
+
+    document.getElementById('signup-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const fullName = document.getElementById('fullName').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const plan = document.querySelector('input[name="plan"]').value;
+        const btn = document.getElementById('signup-btn');
+
+        if (!username || !email || !password) {
+            showError('Username, email, and password are required.');
+            return;
+        }
+        if (password !== confirmPassword) {
+            showError('Passwords do not match.');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Creating account\u2026';
+        document.getElementById('signup-error').classList.add('hidden');
+
+        try {
+            // Step 1: Register user (server-side sync orchestration)
+            const formBody = new URLSearchParams({
+                username, email, fullName, password, confirmPassword, plan
+            });
+            const regRes = await fetch('/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json'
+                },
+                body: formBody.toString()
+            });
+            if (!regRes.ok) {
+                const err = await regRes.json().catch(function() { return {}; });
+                throw new Error(err.error || 'Registration failed. Please try again.');
+            }
+
+            // Step 2: DPoP login with the new credentials
+            btn.textContent = 'Signing in\u2026';
+            await initDpopKeys();
+
+            const loginUrl = window.location.origin + '/api/v1/platform/iam/login';
+            const dpopProof = await createDpopProof('POST', loginUrl);
+
+            const loginRes = await fetch(loginUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'DPoP': dpopProof
+                },
+                body: JSON.stringify({ email: email, password: password })
+            });
+            if (!loginRes.ok) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const data = await loginRes.json();
+
+            // Wipe stale auth state
+            document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
+            document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+            document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
+            sessionStorage.removeItem('cveil_access_token');
+            sessionStorage.removeItem('cveil_refresh_token');
+            sessionStorage.removeItem('cveil_token_type');
+            sessionStorage.removeItem('cveil_expires_at');
+            sessionStorage.removeItem(DPOP_STORAGE_KEY);
+
+            // Store fresh tokens
+            sessionStorage.setItem('cveil_access_token', data.accessToken);
+            sessionStorage.setItem('cveil_refresh_token', data.refreshToken);
+            sessionStorage.setItem('cveil_token_type', data.tokenType || 'DPoP');
+            sessionStorage.setItem('cveil_expires_at',
+                String(Date.now() + (data.expiresIn || 900) * 1000));
+
+            // Decode JWT to extract user context
+            var jwtParts = data.accessToken.split('.');
+            var sub = data.subject || '';
+            var jwtUsername = data.subject;
+            var jwtEmail = '';
+            if (jwtParts.length === 3) {
+                try {
+                    var payload = JSON.parse(atob(jwtParts[1].replace(/-/g,'+').replace(/_/g,'/')));
+                    sub = payload.sub || data.subject || '';
+                    jwtUsername = payload.preferred_username || payload.sub || data.subject;
+                    jwtEmail = payload.email || '';
+                } catch (ignored) { /* use fallback values */ }
+            }
+
+            // Set lightweight session cookie for server-rendered pages
+            document.cookie = 'cveil_session=' + btoa(JSON.stringify({
+                u: jwtUsername,
+                e: jwtEmail,
+                s: sub,
+                t: data.tokenType || 'DPoP'
+            })) + '; path=/; SameSite=Lax; max-age=' + (data.expiresIn || 900);
+
+            // Navigate to onboarding
+            var onboardingUrl = plan ? '/onboarding?plan=' + encodeURIComponent(plan) : '/onboarding';
+            window.location.href = onboardingUrl;
+        } catch (err) {
+            showError(err.message || 'An unexpected error occurred. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+        }
+    });
+    </script>
 
 {/content}
 {/include}

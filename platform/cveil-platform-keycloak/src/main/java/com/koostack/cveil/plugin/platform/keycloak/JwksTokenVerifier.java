@@ -117,20 +117,70 @@ public class JwksTokenVerifier {
         } catch (CveilAuthException e) {
             throw e;
         } catch (Exception e) {
-            throw new CveilAuthException("JWT verification failed: " + e.getMessage());
+            // Include JWT header in error for diagnosing algorithm / key mismatches
+            String headerInfo = "";
+            try {
+                SignedJWT jwt = SignedJWT.parse(token);
+                JWSHeader hdr = jwt.getHeader();
+                headerInfo =
+                        " (JWT alg="
+                                + hdr.getAlgorithm()
+                                + ", kid="
+                                + hdr.getKeyID()
+                                + ", jwksUrl="
+                                + jwksUrl
+                                + ")";
+            } catch (Exception ignored) {
+            }
+            throw new CveilAuthException("JWT verification failed: " + e.getMessage() + headerInfo);
         }
     }
 
     private JWTClaimsSet verifyAndParseClaims(String jwksUrl, String token)
             throws BadJOSEException, JOSEException, ParseException {
+        // Log JWT header for diagnostics (kid + alg)
+        try {
+            SignedJWT preParseJwt = SignedJWT.parse(token);
+            JWSHeader hdr = preParseJwt.getHeader();
+            LOG.debug(
+                    "Verifying JWT: alg={}, kid={}, jwksUrl={}",
+                    hdr.getAlgorithm(),
+                    hdr.getKeyID(),
+                    jwksUrl);
+        } catch (ParseException pe) {
+            LOG.warn("Failed to pre-parse JWT header for diagnostics: {}", pe.getMessage());
+        }
 
         JWKSet jwkSet = getJwks(jwksUrl, false);
+        LOG.debug(
+                "JWKS loaded: {} keys (url={})",
+                jwkSet.getKeys().size(),
+                jwksUrl);
+        if (jwkSet.getKeys().isEmpty()) {
+            LOG.warn("JWKS from {} contains zero keys — forcing refresh", jwksUrl);
+            jwkSet = getJwks(jwksUrl, true);
+            LOG.debug("JWKS after refresh: {} keys", jwkSet.getKeys().size());
+        }
         try {
             return processToken(jwkSet, token);
         } catch (BadJOSEException e) {
             // Key rotation: retry with a fresh JWKS fetch
-            LOG.debug("JWT verification failed, retrying with refreshed JWKS: {}", e.getMessage());
+            LOG.warn(
+                    "JWT verification failed (alg/kid mismatch?), retrying with refreshed JWKS."
+                            + " Error: {}. JWKS keys: {}",
+                    e.getMessage(),
+                    jwkSet.getKeys().stream()
+                            .map(k -> "kid=" + k.getKeyID() + " alg=" + k.getAlgorithm()
+                                    + " use=" + k.getKeyUse())
+                            .toList());
             jwkSet = getJwks(jwksUrl, true);
+            LOG.debug(
+                    "JWKS after forced refresh: {} keys: {}",
+                    jwkSet.getKeys().size(),
+                    jwkSet.getKeys().stream()
+                            .map(k -> "kid=" + k.getKeyID() + " alg=" + k.getAlgorithm()
+                                    + " use=" + k.getKeyUse())
+                            .toList());
             return processToken(jwkSet, token);
         }
     }
@@ -241,23 +291,39 @@ public class JwksTokenVerifier {
         if (!forceRefresh) {
             JWKSet cached = jwksCache.getIfPresent(jwksUrl);
             if (cached != null) {
+                LOG.debug("Using cached JWKS for {} ({} keys)", jwksUrl, cached.getKeys().size());
                 return cached;
             }
         }
 
         try {
-            LOG.debug("Fetching JWKS from: {}", jwksUrl);
+            LOG.debug("Fetching JWKS from: {} (forceRefresh={})", jwksUrl, forceRefresh);
             JWKSet jwkSet = JWKSet.load(URI.create(jwksUrl).toURL());
+            if (jwkSet.getKeys().isEmpty()) {
+                LOG.warn(
+                        "JWKS from {} returned 0 keys — realm may not have signing keys yet",
+                        jwksUrl);
+            } else {
+                LOG.debug(
+                        "Fetched {} keys from {}: {}",
+                        jwkSet.getKeys().size(),
+                        jwksUrl,
+                        jwkSet.getKeys().stream()
+                                .map(k -> "kid=" + k.getKeyID() + " kty=" + k.getKeyType()
+                                        + " alg=" + k.getAlgorithm() + " use=" + k.getKeyUse())
+                                .toList());
+            }
             jwksCache.put(jwksUrl, jwkSet);
             return jwkSet;
         } catch (IOException | ParseException e) {
+            LOG.warn("Failed to fetch JWKS from {}: {}", jwksUrl, e.getMessage());
             // If we have a stale cache entry, use it rather than failing
             JWKSet stale = jwksCache.getIfPresent(jwksUrl);
             if (stale != null) {
                 LOG.warn(
-                        "Failed to refresh JWKS from {}, using stale cache: {}",
+                        "Using stale JWKS cache for {} ({} keys)",
                         jwksUrl,
-                        e.getMessage());
+                        stale.getKeys().size());
                 return stale;
             }
             throw new CveilAuthException(

@@ -122,6 +122,9 @@ public class KeycloakIamQueryDispatcher
                 ListOrgMembersQueryActuator.ListOrgMembersQuery.class,
                 new ListOrgMembersQueryActuator(dsl));
         actuators.put(
+                CountOrgMembersQueryActuator.CountOrgMembersQuery.class,
+                new CountOrgMembersQueryActuator(dsl));
+        actuators.put(
                 GetCurrentUserQueryActuator.GetCurrentUserQuery.class,
                 new GetCurrentUserQueryActuator(dsl, adminClient, config));
 

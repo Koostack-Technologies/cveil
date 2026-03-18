@@ -161,7 +161,20 @@
 
             const data = await res.json();
 
-            // Store tokens for the DPoP-enabled dashboard
+            // Wipe all prior auth state so a fresh login never inherits stale tokens.
+            // 1. Expire old HttpOnly cookies from the pre-DPoP flow
+            document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
+            document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+            // 2. Expire the lightweight session cookie (may belong to a different user)
+            document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
+            // 3. Clear previous sessionStorage tokens and DPoP key pair
+            sessionStorage.removeItem('cveil_access_token');
+            sessionStorage.removeItem('cveil_refresh_token');
+            sessionStorage.removeItem('cveil_token_type');
+            sessionStorage.removeItem('cveil_expires_at');
+            sessionStorage.removeItem(DPOP_STORAGE_KEY);
+
+            // Store fresh tokens for the DPoP-enabled dashboard
             sessionStorage.setItem('cveil_access_token', data.accessToken);
             sessionStorage.setItem('cveil_refresh_token', data.refreshToken);
             sessionStorage.setItem('cveil_token_type', data.tokenType || 'DPoP');
@@ -170,20 +183,24 @@
 
             // Decode JWT payload to extract user context for server-rendered pages
             const jwtParts = data.accessToken.split('.');
+            let sub = data.subject || '';
             let username = data.subject;
             let email = '';
             if (jwtParts.length === 3) {
                 try {
                     const payload = JSON.parse(atob(jwtParts[1].replace(/-/g,'+').replace(/_/g,'/')));
+                    sub = payload.sub || data.subject || '';
                     username = payload.preferred_username || payload.sub || data.subject;
                     email = payload.email || '';
                 } catch { /* use fallback values */ }
             }
 
-            // Store lightweight session cookie for server-rendered template context
+            // Store lightweight session cookie for server-rendered template context.
+            // Includes 's' (Keycloak sub/UUID) so server-side org lookup works.
             document.cookie = 'cveil_session=' + btoa(JSON.stringify({
                 u: username,
                 e: email,
+                s: sub,
                 t: data.tokenType || 'DPoP'
             })) + '; path=/; SameSite=Lax; max-age=' + (data.expiresIn || 900);
 

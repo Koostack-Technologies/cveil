@@ -491,7 +491,7 @@ public class CveilProducers {
     }
 
     @Produces
-    @ApplicationScoped
+    @jakarta.enterprise.context.Dependent
     @Named("webhookDeliveryService")
     public WebhookDeliveryService webhookDeliveryService() {
         return this.webhookDeliveryService;
@@ -1302,7 +1302,20 @@ public class CveilProducers {
                         kcIamConfig,
                         orgService,
                         adminRedisPool));
-        iamCmdSvc.registerAuthActuators();
+        // Share the JwksTokenVerifier from the IdpProvider so login and API-request
+        // verification use the same JWKS cache (avoids kid-miss on fresh startup).
+        com.koostack.cveil.plugin.platform.keycloak.JwksTokenVerifier sharedJwksVerifier = null;
+        if (idpProviderInstance.isResolvable()) {
+            var idp = idpProviderInstance.get();
+            if (idp instanceof com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider kip) {
+                sharedJwksVerifier = kip.getJwksVerifier();
+            }
+        }
+        if (sharedJwksVerifier != null) {
+            iamCmdSvc.registerAuthActuators(sharedJwksVerifier);
+        } else {
+            iamCmdSvc.registerAuthActuators();
+        }
         LOG.info(
                 "Cveil REST API: IAM command service configured (orgService={}, redis={})",
                 orgService != null,

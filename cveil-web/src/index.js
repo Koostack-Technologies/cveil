@@ -13,10 +13,27 @@ import { setAccessToken, initDpopKeys } from './shared/index.js';
 const storedToken = typeof sessionStorage !== 'undefined'
     ? sessionStorage.getItem('cveil_access_token')
     : null;
-if (storedToken) {
+
+function isTokenExpired(token) {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return true;
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return !payload.exp || payload.exp * 1000 < Date.now();
+    } catch { return true; }
+}
+
+if (storedToken && !isTokenExpired(storedToken)) {
     setAccessToken(storedToken);
     // Pre-initialise the DPoP key pair (non-blocking)
     initDpopKeys().catch(() => {});
+} else if (storedToken) {
+    // Stale/expired token — clear so cookie-based auth takes over
+    sessionStorage.removeItem('cveil_access_token');
+    sessionStorage.removeItem('cveil_refresh_token');
+    sessionStorage.removeItem('cveil_token_type');
+    sessionStorage.removeItem('cveil_expires_at');
+    sessionStorage.removeItem('cveil_dpop_jwk');
 }
 
 export { billing, catalogue, consent, governance, reports, analytics, dsar };

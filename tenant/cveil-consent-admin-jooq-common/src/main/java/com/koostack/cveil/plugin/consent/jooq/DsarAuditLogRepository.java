@@ -130,10 +130,25 @@ public class DsarAuditLogRepository {
      * @return every DSAR deletion entry for the subject, possibly empty
      */
     public List<DsarAuditLog> findBySubject(String subjectId) {
+        return findBySubject(subjectId, 100, 0);
+    }
+
+    /**
+     * Returns a paginated DSAR deletion history for the given subject, ordered by {@code created_at
+     * DESC} (most recent first).
+     *
+     * @param subjectId the data subject identifier
+     * @param limit maximum number of results to return
+     * @param offset number of results to skip
+     * @return DSAR deletion entries for the subject within the requested page
+     */
+    public List<DsarAuditLog> findBySubject(String subjectId, int limit, int offset) {
         return dsl.selectFrom(DSAR_AUDIT_LOG)
                 .where(DSAR_AUDIT_LOG.SUBJECT_ID.eq(subjectId))
                 .and(DSAR_AUDIT_LOG.TENANT_ID.eq(TenantContext.require()))
                 .orderBy(DSAR_AUDIT_LOG.CREATED_AT.desc())
+                .limit(limit)
+                .offset(offset)
                 .fetchInto(DsarAuditLog.class);
     }
 

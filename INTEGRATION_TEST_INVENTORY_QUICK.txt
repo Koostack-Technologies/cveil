@@ -1,0 +1,203 @@
+================================================================================
+                  INTEGRATION TEST QUICK REFERENCE
+================================================================================
+
+LOCATION: /Users/mariahgordon/koostacktech/operio/cveil-rest-api/src/test/java/com/koostack/cveil/rest/integration/
+
+TOTAL TEST FILES: 17 active + 2 utility files = 19 total Java files
+
+================================================================================
+TEST UTILITIES (NOT test classes):
+================================================================================
+
+1. CveilTestResourceManager.java (370 lines)
+   - Manages Testcontainers: Postgres, Redis, Keycloak
+   - Implements QuarkusTestResourceLifecycleManager
+   - Methods: start(), stop(), bootstrapPlatformRealm()
+
+2. IntegrationTestSupport.java (882 lines)
+   - Shared test helpers for direct DB/Redis/Keycloak access
+   - Methods for asserting database state, event queries, stream access
+   - Keycloak admin client management
+
+================================================================================
+ACTIVE TEST FILES & METHOD COUNTS:
+================================================================================
+
+📄 ConsentDsarIntegrationIT.java
+   CLASS: ConsentDsarIntegrationIT
+   FEATURE: DSAR (Data Subject Access Request) endpoints
+   ENDPOINTS: POST/DELETE /api/v1/subjects/{id}, GET /api/v1/subjects/{id}/export
+   TEST METHODS: 10 direct tests
+   - testExportCompleteness, testExportEmptySubject, testExportAuditTrail
+   - testDeleteMissingConfirmation, testDeleteWrongConfirmation, testDeleteAtomicity
+   - testDeleteIdempotency, testDeleteAuditLogging, testDeleteAuthorization, testExportAuthorization
+
+📄 DsarTenantIsolationIT.java
+   CLASS: DsarTenantIsolationIT
+   FEATURE: DSAR multi-tenant isolation
+   ENDPOINTS: Same DSAR endpoints (cross-tenant)
+   TEST METHODS: 3 direct tests
+   - testExportTenantIsolation, testDeleteTenantIsolation, testDsarAuditPerTenant
+
+📄 PostgresSslIntegrationIT.java
+   CLASS: PostgresSslIntegrationIT
+   FEATURE: PostgreSQL JDBC SSL/TLS configuration
+   ENDPOINTS: N/A (infrastructure test)
+   TEST METHODS: 4 direct tests
+   - testSslModeParameterAppended, testExistingParametersPreserved
+   - testSslDisableModeBackwardCompatibility, testVerifyFullModeHostnameValidation
+
+📄 RedisTlsIntegrationIT.java
+   CLASS: RedisTlsIntegrationIT
+   FEATURE: Redis TLS configuration
+   ENDPOINTS: N/A (infrastructure test)
+   TEST METHODS: 3 direct tests (5 in comments)
+   - testTlsConfigurationBuilder, testRedisClientFactoryWithPasswordAndTls
+   - testRedisClientFactoryWithAclAndTls
+
+📄 CatalogueResourceIT.java (916 lines)
+   CLASS: CatalogueResourceIT
+   FEATURE: Catalogue CRUD (entities, categories, fields)
+   ENDPOINTS: /api/v1/catalogue/entities, /categories, /fields (POST/GET/PUT/DELETE)
+   NESTED CLASSES: 6
+   - SetupAndAuth (3 tests)
+   - EntityCrud (10 tests)
+   - CategoryCrud (7 tests)
+   - FieldAndCategoryAssignment (6 tests)
+   - DeletionConstraints (2 tests)
+   - OutboxVerification (5 tests)
+
+📄 GovernanceResourceIT.java (1,318 lines)
+   CLASS: GovernanceResourceIT
+   FEATURE: Governance CRUD (purposes, regulations, jurisdictions, policies)
+   ENDPOINTS: /api/v1/governance/purposes, /regulations, /jurisdictions, /policies (POST/GET/PUT/DELETE)
+   NESTED CLASSES: 9
+   - SetupAndAuth (3 tests)
+   - PurposeCrud (8 tests)
+   - RegulationCrud (8 tests)
+   - JurisdictionCrud (6 tests)
+   - PurposePolicyManagement (8 tests)
+   - PurposeRegulationLinking (6 tests)
+   - RegulationJurisdictionLinking (5 tests)
+   - DeletionConstraints (3 tests)
+   - EventStoreVerification (4 tests)
+
+📄 ConsentResourceIT.java (1,662 lines)
+   CLASS: ConsentResourceIT
+   FEATURE: Consent grant/revoke/evaluate operations
+   ENDPOINTS: /api/v1/subjects/{id}/consent/grant|revoke, /summary, /history, /evaluate
+   NESTED CLASSES: 11
+   - PrerequisitesSetup, SubjectManagement, SingleConsentGrant, SingleConsentRevoke
+   - BatchConsentOps, SubjectSummaryAndHistory, ConsentExpiration
+   - MultiSubjectIsolation, CrossResourceValidation, DsarVerification, OutboxConsistency
+
+📄 ConsentGraphProjectionIT.java (845 lines)
+   CLASS: ConsentGraphProjectionIT
+   FEATURE: Consent graph projection
+   ENDPOINTS: Consent endpoints + graph projections
+   NESTED CLASSES: 7
+   - Setup, DataSetup, CatalogueGraphNodes, GovernanceGraphNodes
+   - GrantConsentGraph, RevokeConsentGraph, SubjectErasureGraph
+
+📄 ProductionStackIT.java (1,674 lines)
+   CLASS: ProductionStackIT
+   FEATURE: End-to-end production stack integration
+   ENDPOINTS: All endpoints (comprehensive)
+   NESTED CLASSES: 12
+   - ContainerStartup, HealthEndpoints, AuthEnforcement, PlatformLifecycle
+   - AdminSchemaRegistration, ConsentSingleOps, ConsentBatchOps
+   - SubjectData, AuthEnforcementWithToken, RequestValidation
+   - MultiSubjectIsolation, FinalHealthCheck
+
+📄 CreateTenantPipelineIT.java (476 lines)
+   CLASS: CreateTenantPipelineIT
+   FEATURE: Tenant creation E2E (unified schema)
+   ENDPOINTS: POST /api/v1/platform/iam/users (creates tenant)
+   NESTED CLASSES: 7
+   - UserRegistrationHttp, EventStoreValidation, ProjectionValidation
+   - UnifiedSchemaValidation, TenantStatusValidation, KeycloakLogin, PlanValidation
+
+📄 PlatformIamResourceIT.java (737 lines)
+   CLASS: PlatformIamResourceIT
+   FEATURE: Platform IAM (user registration, lifecycle, RBAC, auth)
+   ENDPOINTS: /api/v1/platform/iam/users (POST/GET/PUT/DELETE)
+   NESTED CLASSES: 7
+   - RealmBootstrap, UserRegistration, UserLifecycle, RoleManagement
+   - ServiceAccounts, Authentication, Rbac
+
+📄 TenantIamResourceIT.java (980 lines)
+   CLASS: TenantIamResourceIT
+   FEATURE: Tenant IAM (user management within tenant scope)
+   ENDPOINTS: /api/v1/tenants/{tenantId}/iam/users
+   NESTED CLASSES: 9
+   - Provisioning, UserRegistration, UserLifecycle, RoleManagement
+   - ServiceAccounts, Authentication, CrossTenantIsolation, Rbac, Cleanup
+
+📄 RedisTenantAclIsolationIT.java (1,057 lines)
+   CLASS: RedisTenantAclIsolationIT
+   FEATURE: Redis ACL tenant isolation
+   ENDPOINTS: N/A (direct Redis ACL testing)
+   NESTED CLASSES: 10
+   - Setup, WriteIsolation, ReadIsolation, DeleteIsolation
+   - PlatformKeyIsolation, AdminAccess, AclReprovisioning
+   - CommandRestrictions, EndToEndConsentIsolation, Cleanup
+
+📄 CacheInvalidationIT.java (691 lines)
+   FEATURE: Cache invalidation via Pub/Sub
+   ENDPOINTS: All catalogue/governance endpoints + GET /api/v1/sse/{tenantId}
+   NESTED CLASSES: 6
+   - Setup, CatalogueInvalidations, GovernanceInvalidations
+   - ConsentInvalidations, SseAuth, SseStreamDelivery
+
+📄 GraphResourceIT.java (531 lines)
+   FEATURE: Graph query API
+   ENDPOINTS: POST /api/v1/graph/query + all prerequisite endpoints
+   NESTED CLASSES: 4
+   - Setup, DataSetup, GraphQuery, AuthEnforcement
+
+📄 SubjectLifecycleIT.java (690 lines)
+   FEATURE: Subject lifecycle (register, remove, DSAR, shred)
+   ENDPOINTS: POST/DELETE /api/v1/subjects/{id}, POST /api/v1/subjects/{id}/dsar-key/shred
+   NESTED CLASSES: 5
+   - Setup, Prerequisites, RemoveSubject, ShredDsarKey, DsarDeepVerification
+
+📄 PlatformLifecycleIT.java (283 lines)
+   FEATURE: Platform lifecycle (plan updates, tenant deletion)
+   ENDPOINTS: PATCH /api/v1/platform/tenants/{tenantId}/plan, DELETE /api/v1/platform/tenants/{tenantId}
+   NESTED CLASSES: 3
+   - Setup, UpdatePlan, DeleteTenant
+
+================================================================================
+KEY INFRASTRUCTURE & PATTERNS:
+================================================================================
+
+Test Framework: JUnit 5 + Quarkus Test + Testcontainers
+Libraries: RestAssured, Jedis (Redis), Keycloak Admin API, HikariCP, Awaitility
+Containers: PostgreSQL 16, Redis 7, Keycloak 26.0.8
+Isolation: Per-tenant schema routing, Redis ACL namespace separation
+Verification: 3 layers (API response, DB state, Event store)
+Ordering: @Order annotations on classes and methods for deterministic execution
+Bootstrap Key: test-bootstrap-key-for-integration-tests
+
+================================================================================
+ESTIMATED TEST METHOD TOTALS:
+================================================================================
+
+Direct Test Methods (not in nested classes): ~25
+Nested Test Classes: 90+
+Test Methods in Nested Classes: 250+
+TOTAL ESTIMATED TEST METHODS: 275+
+
+REST Endpoints Covered: 80+
+Services Integrated: 
+- Catalogue (Postgres + Redis)
+- Governance (Postgres + Redis)
+- Consent (Postgres + Redis)
+- DSAR (Postgres + Redis)
+- Platform IAM (Postgres + Keycloak)
+- Tenant IAM (Postgres + Keycloak)
+- Graph API (Postgres)
+- SSE/Invalidation (Redis Pub/Sub)
+
+================================================================================

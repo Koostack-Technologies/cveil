@@ -568,6 +568,40 @@ public interface CveilConfig {
         return multiTenant().map(MultiTenantConfig::enabled).orElse(false);
     }
 
+    /**
+     * Rate limit default configuration.
+     *
+     * <p>Provides configurable fallback values for tenants without an assigned plan. Overrides the
+     * hardcoded defaults (30 burst/min, 10,000 eval/month, 500 subjects/month).
+     *
+     * <pre>{@code
+     * cveil:
+     *   rate-limit:
+     *     default-burst: 30
+     *     default-eval: 10000
+     *     default-subject: 500
+     * }</pre>
+     */
+    Optional<RateLimitConfig> rateLimit();
+
+    /** Rate limit fallback defaults for tenants without a plan. */
+    interface RateLimitConfig {
+        /** Default burst limit (requests per minute). */
+        @WithName("default-burst")
+        @WithDefault("30")
+        int defaultBurst();
+
+        /** Default monthly evaluation limit. */
+        @WithName("default-eval")
+        @WithDefault("10000")
+        long defaultEval();
+
+        /** Default monthly subject limit. */
+        @WithName("default-subject")
+        @WithDefault("500")
+        long defaultSubject();
+    }
+
     /** Stripe payment processor configuration. */
     interface StripeConfig {
         /** Stripe secret API key (e.g. {@code sk_test_xxx} or {@code sk_live_xxx}). */

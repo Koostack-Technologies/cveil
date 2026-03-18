@@ -152,11 +152,9 @@
                 <div class="w-8 h-8 rounded-full bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-sm font-bold">
                     {initial ?: 'U'}
                 </div>
-                <form method="POST" action="/logout" class="inline">
-                    <button type="submit" class="text-gray-500 hover:text-gray-900 p-2 rounded hover:bg-gray-100 transition-colors" title="Sign out">
+                <button type="button" id="logout-btn" class="text-gray-500 hover:text-gray-900 p-2 rounded hover:bg-gray-100 transition-colors" title="Sign out">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </button>
-                </form>
             </div>
         </header>
 
@@ -198,6 +196,30 @@
             if (switcher && dropdown && !switcher.contains(e.target)) {
                 dropdown.classList.add('hidden');
             }
+        });
+
+        // Client-side logout: revoke token via API, clear all auth state, redirect
+        document.getElementById('logout-btn').addEventListener('click', async function() {
+            try {
+                var rt = sessionStorage.getItem('cveil_refresh_token');
+                if (rt) {
+                    await fetch('/api/v1/platform/iam/logout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refreshToken: rt })
+                    }).catch(function() {});
+                }
+                sessionStorage.removeItem('cveil_access_token');
+                sessionStorage.removeItem('cveil_refresh_token');
+                sessionStorage.removeItem('cveil_token_type');
+                sessionStorage.removeItem('cveil_expires_at');
+                sessionStorage.removeItem('cveil_dpop_jwk');
+                document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
+                document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax';
+                document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
+                document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+            } catch (e) {}
+            window.location.href = '/login';
         });
     </script>
 </body>

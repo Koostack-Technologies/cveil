@@ -160,7 +160,7 @@ public class SiteResource {
     @POST
     @Path("signup")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    @Produces(MediaType.TEXT_HTML)
+    @Produces({MediaType.TEXT_HTML, MediaType.APPLICATION_JSON})
     public Object processSignup(
             @FormParam("username") String username,
             @FormParam("email") String email,
@@ -171,13 +171,23 @@ public class SiteResource {
 
         LOG.debug("POST /signup username={}, email={}, plan={}", username, email, plan);
 
+        String accept = httpHeaders.getHeaderString("Accept");
+        boolean wantsJson = accept != null && accept.contains("application/json");
+
         if (username == null
                 || username.isBlank()
                 || email == null
                 || email.isBlank()
                 || password == null
                 || password.isBlank()) {
-            return signup.data("error", "Username, email, and password are required.")
+            String msg = "Username, email, and password are required.";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -185,7 +195,14 @@ public class SiteResource {
         }
 
         if (!password.equals(confirmPassword)) {
-            return signup.data("error", "Passwords do not match.")
+            String msg = "Passwords do not match.";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -193,9 +210,14 @@ public class SiteResource {
         }
 
         if (!cqrs.isCqrsAvailable()) {
-            return signup.data(
-                            "error",
-                            "Registration is temporarily unavailable. Please try again later.")
+            String msg = "Registration is temporarily unavailable. Please try again later.";
+            if (wantsJson) {
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -219,32 +241,28 @@ public class SiteResource {
 
             syncOrchestrator.execute(syncCommand);
 
-            // ── Auto-login and redirect to onboarding wizard ───────────────
-            // Deferred provisioning (governance + billing) runs after the user
-            // completes the onboarding wizard and selects their compliance profile.
-            try {
-                AuthResult auth =
-                        cqrs.iamDispatcher()
-                                .dispatch(
-                                        new AuthenticateCommandActuator.AuthenticateCommand(
-                                                REALM, email, password));
-                NewCookie[] cookies =
-                        AuthCookieHelper.setAuthCookies(
-                                auth.accessToken(), auth.refreshToken(), auth.expiresIn());
-                String onboardingUri =
-                        plan != null && !plan.isBlank()
-                                ? "/onboarding?plan=" + plan
-                                : "/onboarding";
-                return Response.seeOther(URI.create(onboardingUri)).cookie(cookies).build();
-            } catch (Exception loginEx) {
-                LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
-                return Response.seeOther(URI.create("/login")).build();
+            // ── JSON response: JS client will handle DPoP login separately ─
+            if (wantsJson) {
+                return Response.ok(java.util.Map.of(
+                                "registered", true,
+                                "email", email,
+                                "username", username))
+                        .type(MediaType.APPLICATION_JSON)
+                        .build();
             }
+
+            // ── HTML fallback: redirect to login (JS required for DPoP auth)
+            return Response.seeOther(URI.create("/login")).build();
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid username for tenant derivation: {}", e.getMessage());
-            return signup.data(
-                            "error",
-                            "Invalid username. Use letters and numbers only (e.g. janedoe).")
+            String msg = "Invalid username. Use letters and numbers only (e.g. janedoe).";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -258,6 +276,12 @@ public class SiteResource {
                     e.getMessage(),
                     e);
             String userMessage = extractUserFriendlySignupError(e);
+            if (wantsJson) {
+                return Response.status(Response.Status.CONFLICT)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", userMessage))
+                        .build();
+            }
             return signup.data("error", userMessage)
                     .data("username", username)
                     .data("email", email)
@@ -265,7 +289,14 @@ public class SiteResource {
                     .data("plan", plan);
         } catch (Exception e) {
             LOG.error("Unexpected error during registration: {}", e.getMessage(), e);
-            return signup.data("error", "An unexpected error occurred: " + summarizeException(e))
+            String msg = "An unexpected error occurred: " + summarizeException(e);
+            if (wantsJson) {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -855,45 +886,11 @@ public class SiteResource {
 
         LOG.debug("POST /login identifier={}", identifier);
 
-        if (identifier == null || identifier.isBlank() || password == null || password.isBlank()) {
-            return login.data("error", "Email/username and password are required.")
-                    .data("identifier", identifier);
-        }
-
-        if (!cqrs.isCqrsAvailable()) {
-            return login.data(
-                            "error",
-                            "Authentication is temporarily unavailable. Please try again later.")
-                    .data("identifier", identifier);
-        }
-
-        try {
-            AuthResult result =
-                    cqrs.iamDispatcher()
-                            .dispatch(
-                                    new AuthenticateCommandActuator.AuthenticateCommand(
-                                            REALM, identifier, password));
-            NewCookie[] authCookies =
-                    AuthCookieHelper.setAuthCookies(
-                            result.accessToken(), result.refreshToken(), result.expiresIn());
-
-            // Restore active-org cookie so returning users land in their workspace
-            NewCookie orgCookie = restoreActiveOrgCookie(result.accessToken());
-            if (orgCookie != null) {
-                return Response.seeOther(URI.create("/dashboard"))
-                        .cookie(authCookies[0], authCookies[1], orgCookie)
-                        .build();
-            }
-            return Response.seeOther(URI.create("/dashboard")).cookie(authCookies).build();
-        } catch (CveilAuthException e) {
-            LOG.debug("Login failed for identifier={}: {}", identifier, e.getMessage());
-            return login.data("error", "Invalid email/username or password.")
-                    .data("identifier", identifier);
-        } catch (Exception e) {
-            LOG.error("Unexpected error during login: {}", e.getMessage(), e);
-            return login.data("error", "An unexpected error occurred. Please try again.")
-                    .data("identifier", identifier);
-        }
+        // Server-side form submission is a fallback when JS is disabled.
+        // Since DPoP-based auth requires JavaScript, redirect to the login page
+        // so the JS flow can handle authentication properly.
+        return login.data("error", "Please enable JavaScript to sign in.")
+                .data("identifier", identifier);
     }
 
     // -----------------------------------------------------------------------
@@ -1155,22 +1152,8 @@ public class SiteResource {
     @Path("logout")
     @Produces(MediaType.TEXT_HTML)
     public Response processLogout() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String refreshToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.REFRESH_COOKIE);
-
-        // Revoke the refresh token in Keycloak (best-effort)
-        if (refreshToken != null && cqrs.isCqrsAvailable()) {
-            try {
-                cqrs.iamDispatcher()
-                        .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, refreshToken));
-            } catch (Exception e) {
-                LOG.warn("Token revocation during logout failed: {}", e.getMessage());
-            }
-        }
-
-        NewCookie[] cleared = AuthCookieHelper.clearAuthCookies();
-        // Also clear the DPoP session cookie (non-HttpOnly, set by JS login)
+        // Token revocation is handled client-side via POST /api/v1/platform/iam/logout
+        // before the browser navigates here. This server-side handler just clears cookies.
         NewCookie clearSession =
                 new NewCookie.Builder(AuthCookieHelper.SESSION_COOKIE)
                         .value("")
@@ -1179,8 +1162,10 @@ public class SiteResource {
                         .sameSite(NewCookie.SameSite.LAX)
                         .build();
         NewCookie clearOrg = AuthCookieHelper.clearActiveOrgCookie();
+        // Also expire legacy HttpOnly cookies in case they linger from an old session
+        NewCookie[] clearedAuth = AuthCookieHelper.clearAuthCookies();
         return Response.seeOther(URI.create("/login"))
-                .cookie(cleared[0], cleared[1], clearSession, clearOrg)
+                .cookie(clearedAuth[0], clearedAuth[1], clearSession, clearOrg)
                 .build();
     }
 
@@ -1338,38 +1323,31 @@ public class SiteResource {
     record UserContext(String username, String email, String jwtPayload) {}
 
     /**
-     * Resolves user context for server-rendered dashboard pages. Tries (in order):
-     *
-     * <ol>
-     *   <li>{@code cveil_access} cookie — decode the JWT payload (pre-DPoP flow)
-     *   <li>{@code cveil_session} cookie — lightweight base64 JSON set by DPoP login
-     * </ol>
+     * Resolves user context for server-rendered dashboard pages from the lightweight
+     * {@code cveil_session} cookie set by the DPoP login flow.
      *
      * @return resolved context, or {@code null} if the user is not authenticated
      */
     private UserContext resolveUserContext() {
         String cookieHeader = httpHeaders.getHeaderString("Cookie");
 
-        // Path 1: traditional JWT cookie
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-        if (accessToken != null) {
-            String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-            if (payload != null) {
-                String u = extractJsonString(payload, "preferred_username");
-                if (u == null) u = extractJsonString(payload, "sub");
-                String e = extractJsonString(payload, "email");
-                return new UserContext(u, e, payload);
-            }
-        }
-
-        // Path 2: lightweight DPoP session cookie
         String sessionJson = AuthCookieHelper.decodeSessionCookie(cookieHeader);
         if (sessionJson != null) {
             String u = extractJsonString(sessionJson, "u");
             String e = extractJsonString(sessionJson, "e");
+            String s = extractJsonString(sessionJson, "s");
             if (u != null) {
-                return new UserContext(u, e, null);
+                // Build a synthetic JWT-like payload with the sub claim so that
+                // resolveKeycloakUserId() returns the Keycloak UUID (not the username).
+                String syntheticPayload =
+                        s != null
+                                ? "{\"sub\":\""
+                                        + s
+                                        + "\",\"preferred_username\":\""
+                                        + u
+                                        + "\"}"
+                                : null;
+                return new UserContext(u, e, syntheticPayload);
             }
         }
 

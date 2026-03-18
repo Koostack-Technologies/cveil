@@ -5,6 +5,7 @@ import com.koostack.cveil.core.cqrs.Actuator;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.event.EventService;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
+import com.koostack.cveil.plugin.platform.keycloak.JwksTokenVerifier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -132,13 +133,16 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
     /**
      * Register auth actuators that depend on the query service. Must be called after {@link
      * #setQueryService(IamQueryService)}.
+     *
+     * @param sharedJwksVerifier shared JWKS verifier instance (from the IdpProvider) so the
+     *     login and API-request verification paths use the same cache
      */
-    public void registerAuthActuators() {
+    public void registerAuthActuators(JwksTokenVerifier sharedJwksVerifier) {
         if (keycloakConfig == null || keycloakAdmin == null) {
             LOG.warn("Cannot register auth actuators — keycloakConfig/keycloakAdmin not set");
             return;
         }
-        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin);
+        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, sharedJwksVerifier);
         actuators.put(
                 AuthenticateCommandActuator.AuthenticateCommand.class,
                 new AuthenticateCommandActuator(eventService, authSupport));
@@ -149,5 +153,13 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
                 LogoutCommandActuator.LogoutCommand.class,
                 new LogoutCommandActuator(eventService, authSupport));
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
+    }
+
+    /**
+     * @deprecated Use {@link #registerAuthActuators(JwksTokenVerifier)} to share the JWKS cache.
+     */
+    @Deprecated
+    public void registerAuthActuators() {
+        registerAuthActuators(new JwksTokenVerifier());
     }
 }

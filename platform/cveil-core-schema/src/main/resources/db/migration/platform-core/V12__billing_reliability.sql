@@ -1,25 +1,22 @@
 -- ============================================================================
 -- V12: Indexes and constraints for billing reliability
+--
+-- Tables may live in either platform_core (fresh install, pre-cleanup) or
+-- cveilcore (existing install, already renamed).  SET search_path so
+-- unqualified names resolve regardless.
 -- ============================================================================
+SET search_path TO cveilcore, platform_core, public;
 
--- ── 1. Index for FeatureGateChecker plan-level queries ──────────────────
--- The composite PK (plan_id, feature_key) covers exact lookups but
--- FeatureGateChecker queries all features for a plan_id.  The PK's
--- leading column already supports this, so this is a documentation
--- anchor confirming the access pattern is covered.
-
--- ── 2. CHECK constraint on plan_feature.limit_value ─────────────────────
+-- ── 1. CHECK constraint on plan_feature.limit_value ─────────────────────
 -- NULL = unlimited when enabled; -1 = explicitly unlimited; ≥ 0 = capped.
-ALTER TABLE platform_core.plan_feature
-    ADD CONSTRAINT chk_plan_feature_limit_value
-    CHECK (limit_value IS NULL OR limit_value >= -1);
+DO $$ BEGIN
+  ALTER TABLE plan_feature
+      ADD CONSTRAINT chk_plan_feature_limit_value
+      CHECK (limit_value IS NULL OR limit_value >= -1);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- ── 3. CHECK constraint on subscription.billing_interval ────────────────
-ALTER TABLE platform_billing.subscription
-    ADD CONSTRAINT chk_subscription_billing_interval
-    CHECK (billing_interval IN ('monthly', 'annual'));
-
--- ── 4. Partial index on plan(is_active) for active-plan queries ─────────
+-- ── 2. Partial index on plan(is_active) for active-plan queries ─────────
 CREATE INDEX IF NOT EXISTS idx_plan_is_active
-    ON platform_core.plan(is_active)
+    ON plan(is_active)
     WHERE is_active = TRUE;

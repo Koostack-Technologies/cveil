@@ -41,9 +41,18 @@ public final class KeycloakAuthSupport {
     private volatile String cachedClientSecret;
 
     public KeycloakAuthSupport(KeycloakConfig config, Keycloak adminClient) {
+        this(config, adminClient, new JwksTokenVerifier());
+    }
+
+    /**
+     * Constructor that accepts a shared {@link JwksTokenVerifier} so the JWKS cache
+     * is shared with other components (e.g. the {@code ApiKeyAuthFilter} verification path).
+     */
+    public KeycloakAuthSupport(
+            KeycloakConfig config, Keycloak adminClient, JwksTokenVerifier jwksVerifier) {
         this.config = config;
         this.adminClient = adminClient;
-        this.jwksVerifier = new JwksTokenVerifier();
+        this.jwksVerifier = jwksVerifier;
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     }
 

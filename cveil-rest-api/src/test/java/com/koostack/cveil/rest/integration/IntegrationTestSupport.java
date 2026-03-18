@@ -651,6 +651,37 @@ public class IntegrationTestSupport implements AutoCloseable {
     }
 
     /**
+     * Waits only for the tenant DB row to be ready (status + Redis ACL credentials populated).
+     * Unlike {@link #awaitTenantReady}, this skips the Redis stream consumer-group check, making it
+     * much faster for tests whose endpoints use direct JDBC and don't depend on stream consumers.
+     */
+    public void awaitTenantDbReady(String tenantId, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(200))
+                .until(
+                        () -> {
+                            try (Connection conn =
+                                    DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword)) {
+                                var rs =
+                                        conn.createStatement()
+                                                .executeQuery(
+                                                        "SELECT 1 FROM cveiliam.tenant WHERE"
+                                                                + " tenant_id = '"
+                                                                + tenantId
+                                                                + "' AND status IN ('created',"
+                                                                + " 'active', 'ACTIVE')"
+                                                                + " AND redis_acl_user IS NOT NULL"
+                                                                + " AND redis_acl_password IS NOT"
+                                                                + " NULL");
+                                return rs.next();
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        });
+    }
+
+    /**
      * Polls until an API key is usable for authentication (CQRS projection lag). Sends a
      * lightweight GET /api/v1/health request with the bearer token and waits until it returns a
      * non-401 status.

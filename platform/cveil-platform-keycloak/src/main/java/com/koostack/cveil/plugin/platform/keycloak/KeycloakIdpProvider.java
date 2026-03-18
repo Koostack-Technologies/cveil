@@ -105,6 +105,11 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         this.httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     }
 
+    /** Returns the shared JWKS verifier so other components can reuse its cache. */
+    public JwksTokenVerifier getJwksVerifier() {
+        return jwksVerifier;
+    }
+
     @Override
     public boolean isReady() {
         if (adminClient == null) {

@@ -12,6 +12,22 @@ export function setAccessToken(token) { _accessToken = token; }
 export function getAccessToken() { return _accessToken; }
 export function clearAccessToken() { _accessToken = null; }
 
+function clearAllAuthState() {
+    clearAccessToken();
+    sessionStorage.removeItem('cveil_access_token');
+    sessionStorage.removeItem('cveil_refresh_token');
+    sessionStorage.removeItem('cveil_token_type');
+    sessionStorage.removeItem('cveil_expires_at');
+    sessionStorage.removeItem('cveil_dpop_jwk');
+    // Clear non-HttpOnly cookies
+    document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
+    document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax';
+    // Expire legacy HttpOnly cookies (browser honours max-age=0 even from JS for non-HttpOnly;
+    // for HttpOnly the Set-Cookie from the server /logout response handles it)
+    document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
+    document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+}
+
 export function createApi(basePath) {
     return async function api(path, opts = {}) {
         const headers = { ...opts.headers };
@@ -36,6 +52,11 @@ export function createApi(basePath) {
             res = await fetch(basePath + path, { ...opts, headers });
         } catch (_) {
             throw new Error('Network error — please check your connection and try again.');
+        }
+        if (res.status === 401) {
+            clearAllAuthState();
+            window.location.href = '/login';
+            throw new Error('Session expired. Redirecting to login.');
         }
         if (!res.ok) {
             const err = await res.json().catch(() => ({ message: res.statusText }));

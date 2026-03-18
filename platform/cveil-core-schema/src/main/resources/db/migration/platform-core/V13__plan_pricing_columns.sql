@@ -5,20 +5,30 @@
 -- monthly_price_cents and annual_price_cents store Stripe-compatible
 -- integer amounts (in the plan's currency, assumed USD cents).
 -- NULL = not billable / custom pricing (enterprise).
+--
+-- Tables may live in either platform_core or cveilcore depending on
+-- whether cleanup has run.  SET search_path to resolve either.
 -- ============================================================================
+SET search_path TO cveilcore, platform_core, public;
 
-ALTER TABLE platform_core.plan
+ALTER TABLE plan
     ADD COLUMN IF NOT EXISTS monthly_price_cents  INTEGER,
     ADD COLUMN IF NOT EXISTS annual_price_cents   INTEGER;
 
 -- Populate from the pricing defined in V10 comments / original code constants
-UPDATE platform_core.plan SET monthly_price_cents = 0                WHERE plan_id = 'free';
-UPDATE platform_core.plan SET monthly_price_cents = 9900,  annual_price_cents = 94800  WHERE plan_id = 'pro';
-UPDATE platform_core.plan SET monthly_price_cents = 49900, annual_price_cents = 478800 WHERE plan_id = 'business';
+UPDATE plan SET monthly_price_cents = 0                WHERE plan_id = 'free';
+UPDATE plan SET monthly_price_cents = 9900,  annual_price_cents = 94800  WHERE plan_id = 'pro';
+UPDATE plan SET monthly_price_cents = 49900, annual_price_cents = 478800 WHERE plan_id = 'business';
 -- enterprise: NULL = custom pricing (no Stripe sync)
 
 -- Sanity constraint: price must be non-negative when present
-ALTER TABLE platform_core.plan
-    ADD CONSTRAINT chk_plan_monthly_price CHECK (monthly_price_cents IS NULL OR monthly_price_cents >= 0);
-ALTER TABLE platform_core.plan
-    ADD CONSTRAINT chk_plan_annual_price  CHECK (annual_price_cents IS NULL OR annual_price_cents >= 0);
+DO $$ BEGIN
+  ALTER TABLE plan
+      ADD CONSTRAINT chk_plan_monthly_price CHECK (monthly_price_cents IS NULL OR monthly_price_cents >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE plan
+      ADD CONSTRAINT chk_plan_annual_price  CHECK (annual_price_cents IS NULL OR annual_price_cents >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

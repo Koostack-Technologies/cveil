@@ -192,25 +192,17 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 3. Extract token from Authorization header (DPoP or Bearer), falling back to cookie
+        // 3. Extract token from Authorization header (DPoP or Bearer)
         String authHeader = ctx.getHeaderString("Authorization");
         boolean isDpopScheme = false;
         if (authHeader != null && authHeader.startsWith(DPOP_PREFIX)) {
             isDpopScheme = true;
         } else if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            // Fallback: read JWT from HttpOnly access cookie (server-rendered pages)
-            String cookieToken =
-                    AuthCookieHelper.readCookie(
-                            ctx.getHeaderString("Cookie"), AuthCookieHelper.ACCESS_COOKIE);
-            if (cookieToken != null && !cookieToken.isEmpty()) {
-                authHeader = BEARER_PREFIX + cookieToken;
-            } else {
-                abortUnauthorized(
-                        ctx,
-                        "Missing or invalid Authorization header —"
-                                + " expected 'Bearer <token>' or 'DPoP <token>'");
-                return;
-            }
+            abortUnauthorized(
+                    ctx,
+                    "Missing or invalid Authorization header —"
+                            + " expected 'Bearer <token>' or 'DPoP <token>'");
+            return;
         }
 
         String token =
@@ -294,6 +286,12 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         // 4e. JWT detection — if the token looks like a JWT (3 dot-separated
         //     base64url segments), verify via the tenant's IdpProvider.
         if (isJwt(token)) {
+            // Log token source for debugging auth issues (WARN for visibility)
+            String tokenSource = isDpopScheme ? "DPoP-header" :
+                    (ctx.getHeaderString("Authorization") != null ? "Bearer-header" : "cookie");
+            LOG.info("JWT auth: source={}, len={}, prefix={}…",
+                    tokenSource, token.length(),
+                    token.substring(0, Math.min(20, token.length())));
             verifyJwt(ctx, token, isDpopScheme);
             return;
         }
@@ -621,6 +619,25 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         try {
             IdpProvider<?> idpProvider = idpResolver.resolve(tenantId);
+
+            // Diagnostic: log JWT header for troubleshooting key-mismatch errors
+            try {
+                String[] jwtParts = token.split("\\.");
+                if (jwtParts.length >= 2) {
+                    String headerJson =
+                            new String(
+                                    Base64.getUrlDecoder().decode(jwtParts[0]),
+                                    StandardCharsets.UTF_8);
+                    LOG.debug(
+                            "JWT verification attempt: tenantId={}, isDpop={}, header={}",
+                            tenantId,
+                            isDpopScheme,
+                            headerJson);
+                }
+            } catch (Exception diagEx) {
+                LOG.debug("Could not decode JWT header for diagnostics: {}", diagEx.getMessage());
+            }
+
             IdentityContext identity = idpProvider.verifyToken(tenantId, token);
 
             // -- DPoP proof validation --
@@ -664,7 +681,26 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
             applyAuthentication(
                     ctx, identity, resolveRemoteAddress(ctx), ctx.getHeaderString("User-Agent"));
         } catch (CveilAuthException e) {
-            LOG.debug("JWT authentication failed: {}", e.getMessage());
+            // Log JWT header for diagnosing key/algorithm mismatch errors
+            String jwtDiag = "";
+            try {
+                String[] parts = token.split("\\.");
+                if (parts.length >= 2) {
+                    jwtDiag =
+                            " | JWT header: "
+                                    + new String(
+                                            Base64.getUrlDecoder().decode(parts[0]),
+                                            StandardCharsets.UTF_8);
+                }
+            } catch (Exception ignored) {
+            }
+            LOG.warn(
+                    "JWT authentication failed: {} (tenantId={}, isDpop={}{}){}",
+                    e.getMessage(),
+                    extractTenantFromJwt(token),
+                    isDpopScheme,
+                    jwtDiag,
+                    "");
             abortUnauthorized(ctx, e.getMessage());
         } catch (Exception e) {
             LOG.error("Unexpected error during JWT verification", e);
