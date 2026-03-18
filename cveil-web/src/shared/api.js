@@ -19,13 +19,11 @@ function clearAllAuthState() {
     sessionStorage.removeItem('cveil_token_type');
     sessionStorage.removeItem('cveil_expires_at');
     sessionStorage.removeItem('cveil_dpop_jwk');
-    // Clear non-HttpOnly cookies
-    document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
-    document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax';
-    // Expire legacy HttpOnly cookies (browser honours max-age=0 even from JS for non-HttpOnly;
-    // for HttpOnly the Set-Cookie from the server /logout response handles it)
-    document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
-    document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+    var sec = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
 }
 
 export function createApi(basePath) {

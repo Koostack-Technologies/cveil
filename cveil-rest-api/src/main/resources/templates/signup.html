@@ -256,12 +256,13 @@
             }
 
             // Set lightweight session cookie for server-rendered pages
+            var securePart = location.protocol === 'https:' ? '; Secure' : '';
             document.cookie = 'cveil_session=' + btoa(JSON.stringify({
                 u: jwtUsername,
                 e: jwtEmail,
                 s: sub,
                 t: data.tokenType || 'DPoP'
-            })) + '; path=/; SameSite=Lax; max-age=' + (data.expiresIn || 900);
+            })) + '; path=/; SameSite=Lax' + securePart + '; max-age=' + (data.expiresIn || 900);
 
             // Navigate to onboarding
             var onboardingUrl = plan ? '/onboarding?plan=' + encodeURIComponent(plan) : '/onboarding';

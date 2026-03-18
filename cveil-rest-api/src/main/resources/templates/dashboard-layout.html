@@ -214,10 +214,11 @@
                 sessionStorage.removeItem('cveil_token_type');
                 sessionStorage.removeItem('cveil_expires_at');
                 sessionStorage.removeItem('cveil_dpop_jwk');
-                document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
-                document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax';
-                document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax';
-                document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
             } catch (e) {}
             window.location.href = '/login';
         });
