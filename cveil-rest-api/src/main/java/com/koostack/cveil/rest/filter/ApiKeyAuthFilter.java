@@ -1019,6 +1019,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 // Dashboard uses cookie-based auth (checked in SiteResource)
                 normalized.equals("dashboard")
                 || normalized.equals("dashboard/")
+                || normalized.startsWith("dashboard/billing")
                 || normalized.startsWith("dashboard/account")
                 || normalized.startsWith("dashboard/governance")
                 || normalized.startsWith("dashboard/consent")

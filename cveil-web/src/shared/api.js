@@ -12,6 +12,11 @@ export function setAccessToken(token) { _accessToken = token; }
 export function getAccessToken() { return _accessToken; }
 export function clearAccessToken() { _accessToken = null; }
 
+function readCookie(name) {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 function clearAllAuthState() {
     clearAccessToken();
     sessionStorage.removeItem('cveil_access_token');
@@ -30,6 +35,12 @@ export function createApi(basePath) {
     return async function api(path, opts = {}) {
         const headers = { ...opts.headers };
         if (opts.body) headers['Content-Type'] = 'application/json';
+
+        // Send active org as explicit header so backend uses correct tenant
+        const activeOrg = readCookie('cveil_active_org');
+        if (activeOrg) {
+            headers['X-Org-Id'] = activeOrg;
+        }
 
         const fullUrl = new URL(basePath + path, window.location.origin).href;
         const method = (opts.method || 'GET').toUpperCase();

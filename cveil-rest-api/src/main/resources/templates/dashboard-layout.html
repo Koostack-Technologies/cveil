@@ -189,6 +189,20 @@
     </div>
 
     <script>
+        // Restore active-org cookie from server-resolved workspace context.
+        // After a 401 clearAllAuthState() deletes the cookie; the server
+        // auto-selects the correct org for page rendering but nothing restores
+        // the cookie — so subsequent JS API calls fall back to the personal
+        // tenant.  This ensures the cookie stays in sync.
+        (function() {
+            var tid = '{tenantId}';
+            var pid = '{personalTenantId}';
+            if (tid && tid !== pid) {
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_active_org=' + encodeURIComponent(tid) + '; path=/; max-age=31536000; SameSite=Lax' + sec;
+            }
+        })();
+
         // Close workspace switcher dropdown when clicking outside
         document.addEventListener('click', function(e) {
             var switcher = document.getElementById('ws-switcher');

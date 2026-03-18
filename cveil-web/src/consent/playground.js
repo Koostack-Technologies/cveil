@@ -6,6 +6,7 @@ import { WasmBridge } from './wasm-bridge.js';
 const catalogueApi = createApi('/api/v1/catalogue');
 const governanceApi = createApi('/api/v1/governance');
 const consentApi = createApi('/api/v1/subjects');
+const consentGraphApi = createApi('/api/v1/consent');
 
 // ── State ──────────────────────────────────────────────────────
 let entities = [];
@@ -81,15 +82,10 @@ async function initWasm() {
         let cursor = null;
         let hasMore = true;
         while (hasMore) {
-            const url = cursor
-                ? `/api/v1/consent/graph?limit=500&cursor=${encodeURIComponent(cursor)}`
-                : '/api/v1/consent/graph?limit=500';
-            const res = await fetch(url);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ message: res.statusText }));
-                throw new Error(err.message || 'Graph fetch failed');
-            }
-            const page = await res.json();
+            const qs = cursor
+                ? `/graph?limit=500&cursor=${encodeURIComponent(cursor)}`
+                : '/graph?limit=500';
+            const page = await consentGraphApi(qs);
             const result = JSON.parse(bridge.call1(w.cveil_ingest_graph_page, JSON.stringify(page)));
             hasMore = result.hasMore;
             cursor = page.pageInfo?.nextCursor || null;
