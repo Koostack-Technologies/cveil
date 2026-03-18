@@ -55,8 +55,7 @@ class BannerConfigResourceIT {
         @Order(2)
         @DisplayName("Register prerequisite purpose: marketing")
         void registerMarketingPurpose() {
-            given()
-                    .header("Authorization", "Bearer " + accessToken)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -80,8 +79,7 @@ class BannerConfigResourceIT {
         @Order(4)
         @DisplayName("Invalid token → 401")
         void invalidTokenReturns401() {
-            given()
-                    .header("Authorization", "Bearer invalid-token")
+            given().header("Authorization", "Bearer invalid-token")
                     .when()
                     .get("/api/v1/banner/configs")
                     .then()
@@ -107,8 +105,7 @@ class BannerConfigResourceIT {
         @DisplayName("POST /api/v1/banner/configs → 201 with siteId")
         void createBannerConfig() {
             Response response =
-                    given()
-                            .header("Authorization", auth())
+                    given().header("Authorization", auth())
                             .contentType(ContentType.JSON)
                             .body(
                                     """
@@ -133,7 +130,8 @@ class BannerConfigResourceIT {
             assertThat(message).contains("siteId:");
 
             // Extract siteId from message: "Banner configuration created with siteId: cvs_xxxx"
-            createdSiteId = message.substring(message.indexOf("siteId:") + "siteId:".length()).trim();
+            createdSiteId =
+                    message.substring(message.indexOf("siteId:") + "siteId:".length()).trim();
             assertThat(createdSiteId).startsWith("cvs_");
         }
     }
@@ -157,8 +155,7 @@ class BannerConfigResourceIT {
         void listBannerConfigs() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .header("Authorization", auth())
+            given().header("Authorization", auth())
                     .queryParam("limit", 50)
                     .queryParam("offset", 0)
                     .when()
@@ -184,8 +181,7 @@ class BannerConfigResourceIT {
         void publicConfigLookup() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .when()
                     .get("/api/v1/public/consent/config/" + createdSiteId)
                     .then()
@@ -216,8 +212,7 @@ class BannerConfigResourceIT {
         void updateBannerConfig() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .header("Authorization", auth())
+            given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """
@@ -236,8 +231,7 @@ class BannerConfigResourceIT {
         void publicConfigReflectsUpdate() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .when()
                     .get("/api/v1/public/consent/config/" + createdSiteId)
                     .then()
@@ -266,8 +260,7 @@ class BannerConfigResourceIT {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
             Response response =
-                    given()
-                            .header("Authorization", auth())
+                    given().header("Authorization", auth())
                             .when()
                             .get("/api/v1/banner/configs/" + createdSiteId + "/snippet")
                             .then()
@@ -300,8 +293,7 @@ class BannerConfigResourceIT {
         void deleteBannerConfig() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .header("Authorization", auth())
+            given().header("Authorization", auth())
                     .when()
                     .delete("/api/v1/banner/configs/" + createdSiteId)
                     .then()
@@ -315,8 +307,7 @@ class BannerConfigResourceIT {
         void publicConfigAfterDeletion() {
             assertNotNull(createdSiteId, "createdSiteId required from Phase 2");
 
-            given()
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .when()
                     .get("/api/v1/public/consent/config/" + createdSiteId)
                     .then()
@@ -341,8 +332,7 @@ class BannerConfigResourceIT {
         @Order(1)
         @DisplayName("GET public config for non-existent siteId → 404")
         void publicConfigNonExistent() {
-            given()
-                    .contentType(ContentType.JSON)
+            given().contentType(ContentType.JSON)
                     .when()
                     .get("/api/v1/public/consent/config/cvs_nonexistent_site")
                     .then()
@@ -353,8 +343,7 @@ class BannerConfigResourceIT {
         @Order(2)
         @DisplayName("DELETE non-existent siteId → 404")
         void deleteNonExistent() {
-            given()
-                    .header("Authorization", auth())
+            given().header("Authorization", auth())
                     .when()
                     .delete("/api/v1/banner/configs/cvs_nonexistent_site")
                     .then()
@@ -365,8 +354,7 @@ class BannerConfigResourceIT {
         @Order(3)
         @DisplayName("PUT non-existent siteId → 404")
         void updateNonExistent() {
-            given()
-                    .header("Authorization", auth())
+            given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
                     .body(
                             """

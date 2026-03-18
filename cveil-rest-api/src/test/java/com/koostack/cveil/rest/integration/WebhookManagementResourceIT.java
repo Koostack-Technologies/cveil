@@ -95,7 +95,8 @@ class WebhookManagementResourceIT {
         void missingUrl() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"events":["consent.subject.granted"],"description":"no url"}
                         """)
                     .when()
@@ -110,7 +111,8 @@ class WebhookManagementResourceIT {
         void emptyEvents() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://example.com/hook","events":[],"description":"empty events"}
                         """)
                     .when()
@@ -125,7 +127,8 @@ class WebhookManagementResourceIT {
         void invalidEventType() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://example.com/hook","events":["not.a.valid.event"],"description":"bad event"}
                         """)
                     .when()
@@ -140,7 +143,8 @@ class WebhookManagementResourceIT {
         void ssrfLocalhost() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"http://localhost:8080/hook","events":["test.ping"],"description":"ssrf"}
                         """)
                     .when()
@@ -155,7 +159,8 @@ class WebhookManagementResourceIT {
         void ssrfLoopback() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://127.0.0.1/hook","events":["test.ping"],"description":"ssrf"}
                         """)
                     .when()
@@ -170,7 +175,8 @@ class WebhookManagementResourceIT {
         void ssrfPrivateNetwork10() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://10.0.0.1/hook","events":["test.ping"],"description":"ssrf"}
                         """)
                     .when()
@@ -185,7 +191,8 @@ class WebhookManagementResourceIT {
         void ssrfPrivateNetwork192() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://192.168.1.1/hook","events":["test.ping"],"description":"ssrf"}
                         """)
                     .when()
@@ -200,7 +207,8 @@ class WebhookManagementResourceIT {
         void ssrfLinkLocal() {
             given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                         {"url":"https://169.254.169.254/latest/meta-data","events":["test.ping"],"description":"ssrf"}
                         """)
                     .when()
@@ -349,8 +357,7 @@ class WebhookManagementResourceIT {
 
             String description =
                     response.jsonPath()
-                            .getString(
-                                    "find { it.id == '%s' }.description".formatted(endpointId));
+                            .getString("find { it.id == '%s' }.description".formatted(endpointId));
             assertThat(description).isEqualTo("Updated endpoint");
 
             List<String> events =

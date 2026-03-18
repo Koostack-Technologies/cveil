@@ -45,8 +45,8 @@ public final class KeycloakAuthSupport {
     }
 
     /**
-     * Constructor that accepts a shared {@link JwksTokenVerifier} so the JWKS cache
-     * is shared with other components (e.g. the {@code ApiKeyAuthFilter} verification path).
+     * Constructor that accepts a shared {@link JwksTokenVerifier} so the JWKS cache is shared with
+     * other components (e.g. the {@code ApiKeyAuthFilter} verification path).
      */
     public KeycloakAuthSupport(
             KeycloakConfig config, Keycloak adminClient, JwksTokenVerifier jwksVerifier) {

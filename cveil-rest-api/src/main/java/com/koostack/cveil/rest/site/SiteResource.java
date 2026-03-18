@@ -2,12 +2,8 @@ package com.koostack.cveil.rest.site;
 
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
-import com.koostack.cveil.core.exception.CveilAuthException;
-import com.koostack.cveil.core.models.AuthResult;
 import com.koostack.cveil.core.platform.iam.IamQueryService.OrganizationInfo;
-import com.koostack.cveil.platform.iam.jooq.AuthenticateCommandActuator;
 import com.koostack.cveil.platform.iam.jooq.GetCurrentUserQueryActuator;
-import com.koostack.cveil.platform.iam.jooq.LogoutCommandActuator;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask;
 import com.koostack.cveil.rest.lifecycle.ProvisioningTracker;
@@ -243,10 +239,11 @@ public class SiteResource {
 
             // ── JSON response: JS client will handle DPoP login separately ─
             if (wantsJson) {
-                return Response.ok(java.util.Map.of(
-                                "registered", true,
-                                "email", email,
-                                "username", username))
+                return Response.ok(
+                                java.util.Map.of(
+                                        "registered", true,
+                                        "email", email,
+                                        "username", username))
                         .type(MediaType.APPLICATION_JSON)
                         .build();
             }
@@ -759,36 +756,6 @@ public class SiteResource {
             if (sub != null) return sub;
         }
         return uc.username();
-    }
-
-    /**
-     * Attempts to restore the active-org cookie on login by looking up the user's org memberships
-     * from the freshly issued access token. If the user belongs to exactly one org, that org is set
-     * as the active workspace so returning users land in the correct context.
-     */
-    private NewCookie restoreActiveOrgCookie(String accessToken) {
-        try {
-            if (!cqrs.isCqrsAvailable()) return null;
-            String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-            if (payload == null) return null;
-            String sub = extractJsonString(payload, "sub");
-            if (sub == null) return null;
-            var result =
-                    cqrs.iamQueryDispatcher()
-                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(sub));
-            if (result instanceof GetCurrentUserQueryActuator.CurrentUserResult cur
-                    && cur.organizations() != null
-                    && !cur.organizations().isEmpty()) {
-                // Pick the first (most common: single-org user)
-                String orgName = cur.organizations().get(0).orgName();
-                if (orgName != null) {
-                    return AuthCookieHelper.setActiveOrgCookie(orgName);
-                }
-            }
-        } catch (Exception e) {
-            LOG.debug("Could not restore active-org cookie on login: {}", e.getMessage());
-        }
-        return null;
     }
 
     /**
@@ -1323,8 +1290,8 @@ public class SiteResource {
     record UserContext(String username, String email, String jwtPayload) {}
 
     /**
-     * Resolves user context for server-rendered dashboard pages from the lightweight
-     * {@code cveil_session} cookie set by the DPoP login flow.
+     * Resolves user context for server-rendered dashboard pages from the lightweight {@code
+     * cveil_session} cookie set by the DPoP login flow.
      *
      * @return resolved context, or {@code null} if the user is not authenticated
      */
@@ -1341,11 +1308,7 @@ public class SiteResource {
                 // resolveKeycloakUserId() returns the Keycloak UUID (not the username).
                 String syntheticPayload =
                         s != null
-                                ? "{\"sub\":\""
-                                        + s
-                                        + "\",\"preferred_username\":\""
-                                        + u
-                                        + "\"}"
+                                ? "{\"sub\":\"" + s + "\",\"preferred_username\":\"" + u + "\"}"
                                 : null;
                 return new UserContext(u, e, syntheticPayload);
             }

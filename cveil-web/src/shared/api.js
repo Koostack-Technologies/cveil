@@ -31,6 +31,29 @@ function clearAllAuthState() {
     document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
 }
 
+/**
+ * Drop-in replacement for raw fetch() that attaches DPoP auth + X-Org-Id.
+ * Returns the raw Response so callers can check res.ok / res.json() as usual.
+ * Intended for use in HTML templates via CveilWeb.authFetch().
+ */
+export async function authFetch(url, opts = {}) {
+    const headers = { ...opts.headers };
+    const activeOrg = readCookie('cveil_active_org');
+    if (activeOrg) headers['X-Org-Id'] = activeOrg;
+
+    const method = (opts.method || 'GET').toUpperCase();
+    if (_accessToken) {
+        headers['Authorization'] = 'DPoP ' + _accessToken;
+        try {
+            const fullUrl = new URL(url, window.location.origin).href;
+            headers['DPoP'] = await getDpopProof(method, fullUrl, _accessToken);
+        } catch (e) {
+            headers['Authorization'] = 'Bearer ' + _accessToken;
+        }
+    }
+    return fetch(url, { ...opts, headers });
+}
+
 export function createApi(basePath) {
     return async function api(path, opts = {}) {
         const headers = { ...opts.headers };

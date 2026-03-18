@@ -112,7 +112,7 @@
         // Detect admin status, then load page data
         (async function init() {
             try {
-                var res = await fetch('/api/v1/platform/iam/me');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                 var me = await res.json();
                 var org = (me.organizations || []).find(function(o) { return o.orgId === ORG_ID; });
                 IS_ADMIN = org ? (org.isAdmin || (org.roles && org.roles.indexOf('org-admin') >= 0)) : false;
@@ -132,7 +132,7 @@
         async function loadMembers() {
             var container = document.getElementById('members-list');
             try {
-                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members');
                 if (!res.ok) {
                     container.innerHTML = '<p class="text-gray-500 text-sm">Unable to load members.</p>';
                     return;
@@ -176,7 +176,7 @@
             var container = document.getElementById('roles-' + userId);
             if (!container) return;
             try {
-                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + encodeURIComponent(userId) + '/roles');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + encodeURIComponent(userId) + '/roles');
                 if (!res.ok) return;
                 var assignments = await res.json();
                 if (Array.isArray(assignments) && assignments.length > 0) {
@@ -200,7 +200,7 @@
             msg.classList.add('hidden');
 
             try {
-                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/invites', {
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/invites', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: emailInput.value.trim() })
@@ -225,7 +225,7 @@
         async function removeMember(userId, displayName) {
             if (!confirm('Remove ' + displayName + ' from this organization?')) return;
             try {
-                var res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + userId, {
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/members/' + userId, {
                     method: 'DELETE'
                 });
                 if (res.ok) {
@@ -249,7 +249,7 @@
         async function loadServiceAccountStatus() {
             const container = document.getElementById('sa-toggle-container');
             try {
-                const res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account');
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account');
                 const data = await res.json();
                 renderSaToggle(data.enabled, data.clientId);
             } catch (err) {
@@ -281,7 +281,7 @@
             if (!enable && !confirm('Disable service account? The client and its secret will be deleted.')) return;
 
             try {
-                const res = await fetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account', {
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/organizations/' + ORG_ID + '/service-account', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ enabled: enable })

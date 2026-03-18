@@ -167,7 +167,9 @@
             document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax';
             // 2. Expire the lightweight session cookie (may belong to a different user)
             document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax';
-            // 3. Clear previous sessionStorage tokens and DPoP key pair
+            // 3. Expire stale active-org cookie (will be restored by dashboard on load)
+            document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax';
+            // 4. Clear previous sessionStorage tokens and DPoP key pair
             sessionStorage.removeItem('cveil_access_token');
             sessionStorage.removeItem('cveil_refresh_token');
             sessionStorage.removeItem('cveil_token_type');

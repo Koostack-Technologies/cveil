@@ -1281,7 +1281,10 @@ public class CveilProducers {
         com.koostack.cveil.plugin.platform.keycloak.JwksTokenVerifier sharedJwksVerifier = null;
         if (idpProviderInstance.isResolvable()) {
             var idp = idpProviderInstance.get();
-            if (idp instanceof com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider kip) {
+            if (idp
+                    instanceof
+                    com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider
+                    kip) {
                 sharedJwksVerifier = kip.getJwksVerifier();
             }
         }
@@ -1833,5 +1836,4 @@ public class CveilProducers {
                 result.migrationsExecuted,
                 result.success);
     }
-
 }

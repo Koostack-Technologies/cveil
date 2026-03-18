@@ -122,7 +122,9 @@ class DsarResourceIT {
                             .when()
                             .post("/api/v1/dsar/requests");
 
-            response.then().statusCode(201).body("message", containsString("DSAR request created:"));
+            response.then()
+                    .statusCode(201)
+                    .body("message", containsString("DSAR request created:"));
 
             // Extract UUID from message "DSAR request created: {uuid}"
             String message = response.jsonPath().getString("message");
@@ -150,7 +152,9 @@ class DsarResourceIT {
                             .when()
                             .post("/api/v1/dsar/requests");
 
-            response.then().statusCode(201).body("message", containsString("DSAR request created:"));
+            response.then()
+                    .statusCode(201)
+                    .body("message", containsString("DSAR request created:"));
 
             String message = response.jsonPath().getString("message");
             dsarDeletionRequestId = message.replace("DSAR request created: ", "").trim();
@@ -505,8 +509,7 @@ class DsarResourceIT {
             assertThat(actions).contains("CREATED", "STATUS_CHANGED");
 
             // Should have exactly 4 STATUS_CHANGED entries (one per transition)
-            long statusChanges =
-                    actions.stream().filter("STATUS_CHANGED"::equals).count();
+            long statusChanges = actions.stream().filter("STATUS_CHANGED"::equals).count();
             assertThat(statusChanges)
                     .as("Expected 4 STATUS_CHANGED entries for 4 transitions")
                     .isEqualTo(4);

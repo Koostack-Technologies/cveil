@@ -228,7 +228,8 @@ class BillingResourceIT {
         void createSubscriptionReturns503() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                             { "planTier": "pro" }
                             """)
                     .when()
@@ -244,7 +245,8 @@ class BillingResourceIT {
         void changeSubscriptionReturns503() {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
-                    .body("""
+                    .body(
+                            """
                             { "planTier": "business" }
                             """)
                     .when()

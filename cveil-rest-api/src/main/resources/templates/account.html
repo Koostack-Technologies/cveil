@@ -272,7 +272,7 @@
         // Load profile permissions on page load
         (async function loadProfilePermissions() {
             try {
-                var res = await fetch('/api/v1/platform/iam/me');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                 var me = await res.json();
                 // Update roles display
                 var rolesEl = document.getElementById('display-roles');
@@ -309,7 +309,7 @@
             msg.classList.add('hidden');
 
             try {
-                const res = await fetch('/api/v1/platform/iam/me', {
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -348,7 +348,7 @@
             msg.classList.add('hidden');
 
             try {
-                const res = await fetch('/api/v1/platform/iam/me/password', {
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me/password', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ newPassword: pw })
@@ -374,7 +374,7 @@
         async function loadOrganizations() {
             var container = document.getElementById('orgs-list');
             try {
-                var res = await fetch('/api/v1/platform/iam/me');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                 var data = await res.json();
                 var orgs = data.organizations || [];
                 if (orgs.length === 0) {
@@ -447,13 +447,13 @@
                 // Ensure we have org data for mapping tenantId → org name
                 if (cachedOrgs.length === 0) {
                     try {
-                        var meRes = await fetch('/api/v1/platform/iam/me');
+                        var meRes = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                         var me = await meRes.json();
                         cachedOrgs = me.organizations || [];
                     } catch (e) { /* fallback: show raw tenantId */ }
                 }
 
-                const res = await fetch('/api/v1/platform/iam/me/tokens');
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens');
                 const tokens = await res.json();
                 if (!Array.isArray(tokens) || tokens.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-gray-500 text-center">No access tokens. Create one to get started.</td></tr>';
@@ -517,7 +517,7 @@
             try {
                 var body = { name: name, expiresAt: expiresAt };
                 if (tenantId) body.tenantId = tenantId;
-                var res = await fetch('/api/v1/platform/iam/me/tokens', {
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
@@ -544,7 +544,7 @@
         async function revokeToken(tokenPrefix) {
             if (!confirm('Revoke this access token? This cannot be undone.')) return;
             try {
-                var res = await fetch('/api/v1/platform/iam/me/tokens/' + encodeURIComponent(tokenPrefix), { method: 'DELETE' });
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens/' + encodeURIComponent(tokenPrefix), { method: 'DELETE' });
                 if (res.ok) {
                     loadTokens();
                 } else {

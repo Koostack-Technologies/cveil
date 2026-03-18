@@ -64,12 +64,7 @@ class TenantMetricsResourceIT {
         @Order(2)
         @DisplayName("Unauthenticated request returns 401")
         void unauthenticatedReturns401() {
-            given()
-                    .contentType(ContentType.JSON)
-                    .when()
-                    .get(BASE_PATH)
-                    .then()
-                    .statusCode(401);
+            given().contentType(ContentType.JSON).when().get(BASE_PATH).then().statusCode(401);
         }
     }
 
@@ -90,8 +85,7 @@ class TenantMetricsResourceIT {
             String to = now.toString();
 
             Response response =
-                    given()
-                            .header("Authorization", "Bearer " + accessToken)
+                    given().header("Authorization", "Bearer " + accessToken)
                             .contentType(ContentType.JSON)
                             .queryParam("from", from)
                             .queryParam("to", to)
@@ -125,8 +119,7 @@ class TenantMetricsResourceIT {
             String to = now.toString();
 
             Response response =
-                    given()
-                            .header("Authorization", "Bearer " + accessToken)
+                    given().header("Authorization", "Bearer " + accessToken)
                             .contentType(ContentType.JSON)
                             .queryParam("from", from)
                             .queryParam("to", to)
@@ -156,8 +149,7 @@ class TenantMetricsResourceIT {
             String from = now.toString();
             String to = now.minus(Duration.ofDays(1)).toString();
 
-            given()
-                    .header("Authorization", "Bearer " + accessToken)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .queryParam("from", from)
                     .queryParam("to", to)
@@ -176,8 +168,7 @@ class TenantMetricsResourceIT {
             String from = now.minus(Duration.ofDays(91)).toString();
             String to = now.toString();
 
-            given()
-                    .header("Authorization", "Bearer " + accessToken)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .queryParam("from", from)
                     .queryParam("to", to)
@@ -192,8 +183,7 @@ class TenantMetricsResourceIT {
         @Order(3)
         @DisplayName("Invalid date format returns 400")
         void invalidDateFormatReturns400() {
-            given()
-                    .header("Authorization", "Bearer " + accessToken)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .queryParam("from", "not-a-date")
                     .queryParam("to", Instant.now().toString())
@@ -212,8 +202,7 @@ class TenantMetricsResourceIT {
             String from = now.toString();
             String to = now.minus(Duration.ofDays(1)).toString();
 
-            given()
-                    .header("Authorization", "Bearer " + accessToken)
+            given().header("Authorization", "Bearer " + accessToken)
                     .contentType(ContentType.JSON)
                     .queryParam("from", from)
                     .queryParam("to", to)
@@ -242,8 +231,7 @@ class TenantMetricsResourceIT {
             String to = now.toString();
 
             Response response =
-                    given()
-                            .header("Authorization", "Bearer " + accessToken)
+                    given().header("Authorization", "Bearer " + accessToken)
                             .contentType(ContentType.JSON)
                             .queryParam("from", from)
                             .queryParam("to", to)

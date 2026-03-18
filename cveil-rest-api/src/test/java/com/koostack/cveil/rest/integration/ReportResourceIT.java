@@ -77,23 +77,23 @@ class ReportResourceIT {
             try (var conn = support.openConnection()) {
                 try (var ps =
                         conn.prepareStatement(
-                                "INSERT INTO cveiliam.permission (permission_id, domain, description)"
-                                    + " VALUES ('reports:read', 'reports', 'Read compliance reports')"
-                                    + " ON CONFLICT DO NOTHING")) {
+                                "INSERT INTO cveiliam.permission (permission_id, domain,"
+                                        + " description) VALUES ('reports:read', 'reports', 'Read"
+                                        + " compliance reports') ON CONFLICT DO NOTHING")) {
                     ps.executeUpdate();
                 }
                 try (var ps =
                         conn.prepareStatement(
                                 "INSERT INTO cveiliam.role_permission (role_id, permission_id)"
-                                    + " VALUES ('tenant-admin', 'reports:read')"
-                                    + " ON CONFLICT DO NOTHING")) {
+                                        + " VALUES ('tenant-admin', 'reports:read')"
+                                        + " ON CONFLICT DO NOTHING")) {
                     ps.executeUpdate();
                 }
                 try (var ps =
                         conn.prepareStatement(
                                 "INSERT INTO cveiliam.role_permission (role_id, permission_id)"
-                                    + " VALUES ('org-admin', 'reports:read')"
-                                    + " ON CONFLICT DO NOTHING")) {
+                                        + " VALUES ('org-admin', 'reports:read')"
+                                        + " ON CONFLICT DO NOTHING")) {
                     ps.executeUpdate();
                 }
             }
@@ -235,9 +235,7 @@ class ReportResourceIT {
                             .when()
                             .get("/api/v1/reports/consent-summary");
 
-            response.then()
-                    .statusCode(200)
-                    .body("purposes.purposeName", hasItem(PURPOSE_NAME));
+            response.then().statusCode(200).body("purposes.purposeName", hasItem(PURPOSE_NAME));
 
             // Verify zero counts since no consents have been granted
             var purposes = response.jsonPath().getList("purposes");

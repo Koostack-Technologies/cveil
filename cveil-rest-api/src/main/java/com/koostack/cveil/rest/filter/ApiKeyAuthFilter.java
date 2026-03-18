@@ -287,10 +287,16 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         //     base64url segments), verify via the tenant's IdpProvider.
         if (isJwt(token)) {
             // Log token source for debugging auth issues (WARN for visibility)
-            String tokenSource = isDpopScheme ? "DPoP-header" :
-                    (ctx.getHeaderString("Authorization") != null ? "Bearer-header" : "cookie");
-            LOG.info("JWT auth: source={}, len={}, prefix={}…",
-                    tokenSource, token.length(),
+            String tokenSource =
+                    isDpopScheme
+                            ? "DPoP-header"
+                            : (ctx.getHeaderString("Authorization") != null
+                                    ? "Bearer-header"
+                                    : "cookie");
+            LOG.info(
+                    "JWT auth: source={}, len={}, prefix={}…",
+                    tokenSource,
+                    token.length(),
                     token.substring(0, Math.min(20, token.length())));
             verifyJwt(ctx, token, isDpopScheme);
             return;

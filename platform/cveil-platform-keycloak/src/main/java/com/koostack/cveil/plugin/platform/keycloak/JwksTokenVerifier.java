@@ -152,10 +152,7 @@ public class JwksTokenVerifier {
         }
 
         JWKSet jwkSet = getJwks(jwksUrl, false);
-        LOG.debug(
-                "JWKS loaded: {} keys (url={})",
-                jwkSet.getKeys().size(),
-                jwksUrl);
+        LOG.debug("JWKS loaded: {} keys (url={})", jwkSet.getKeys().size(), jwksUrl);
         if (jwkSet.getKeys().isEmpty()) {
             LOG.warn("JWKS from {} contains zero keys — forcing refresh", jwksUrl);
             jwkSet = getJwks(jwksUrl, true);
@@ -170,16 +167,28 @@ public class JwksTokenVerifier {
                             + " Error: {}. JWKS keys: {}",
                     e.getMessage(),
                     jwkSet.getKeys().stream()
-                            .map(k -> "kid=" + k.getKeyID() + " alg=" + k.getAlgorithm()
-                                    + " use=" + k.getKeyUse())
+                            .map(
+                                    k ->
+                                            "kid="
+                                                    + k.getKeyID()
+                                                    + " alg="
+                                                    + k.getAlgorithm()
+                                                    + " use="
+                                                    + k.getKeyUse())
                             .toList());
             jwkSet = getJwks(jwksUrl, true);
             LOG.debug(
                     "JWKS after forced refresh: {} keys: {}",
                     jwkSet.getKeys().size(),
                     jwkSet.getKeys().stream()
-                            .map(k -> "kid=" + k.getKeyID() + " alg=" + k.getAlgorithm()
-                                    + " use=" + k.getKeyUse())
+                            .map(
+                                    k ->
+                                            "kid="
+                                                    + k.getKeyID()
+                                                    + " alg="
+                                                    + k.getAlgorithm()
+                                                    + " use="
+                                                    + k.getKeyUse())
                             .toList());
             return processToken(jwkSet, token);
         }
@@ -309,8 +318,16 @@ public class JwksTokenVerifier {
                         jwkSet.getKeys().size(),
                         jwksUrl,
                         jwkSet.getKeys().stream()
-                                .map(k -> "kid=" + k.getKeyID() + " kty=" + k.getKeyType()
-                                        + " alg=" + k.getAlgorithm() + " use=" + k.getKeyUse())
+                                .map(
+                                        k ->
+                                                "kid="
+                                                        + k.getKeyID()
+                                                        + " kty="
+                                                        + k.getKeyType()
+                                                        + " alg="
+                                                        + k.getAlgorithm()
+                                                        + " use="
+                                                        + k.getKeyUse())
                                 .toList());
             }
             jwksCache.put(jwksUrl, jwkSet);
@@ -321,9 +338,7 @@ public class JwksTokenVerifier {
             JWKSet stale = jwksCache.getIfPresent(jwksUrl);
             if (stale != null) {
                 LOG.warn(
-                        "Using stale JWKS cache for {} ({} keys)",
-                        jwksUrl,
-                        stale.getKeys().size());
+                        "Using stale JWKS cache for {} ({} keys)", jwksUrl, stale.getKeys().size());
                 return stale;
             }
             throw new CveilAuthException(

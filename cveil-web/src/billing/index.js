@@ -7,6 +7,8 @@ import * as chart from './usage-chart.js';
 import { createApi, esc, showMsg, activatePanel, closePanel } from '../shared/index.js';
 
 const API_BASE = '/api/v1/metrics';
+const metricsApi = createApi('/api/v1/metrics');
+const governanceApi = createApi('/api/v1/governance');
 const billingApi = createApi('/api/v1/billing');
 let currentDays = 7;
 
@@ -79,16 +81,11 @@ function getTimeRange() {
     return { from: from.toISOString(), to: to.toISOString() };
 }
 
-async function fetchJson(url) {
+async function fetchJson(apiCall) {
     try {
-        const res = await fetch(url);
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ message: res.statusText }));
-            throw new Error(err.message || res.statusText);
-        }
-        return await res.json();
+        return await apiCall;
     } catch (e) {
-        console.warn('Metrics fetch failed:', url, e.message);
+        console.warn('Metrics fetch failed:', e.message);
         return null;
     }
 }
@@ -100,11 +97,11 @@ async function refresh() {
 
     // Fetch summary + detail in parallel
     const [summary, detail, endpoints, govJurisdictions, govRegulations] = await Promise.all([
-        fetchJson(`${API_BASE}/summary?from=${from}&to=${to}`),
-        fetchJson(`${API_BASE}?from=${from}&to=${to}&pageSize=500`),
-        fetchJson(`${API_BASE}?from=${from}&to=${to}&metricName=api_billable_request&pageSize=500`),
-        fetchJson('/api/v1/governance/jurisdictions'),
-        fetchJson('/api/v1/governance/regulations'),
+        fetchJson(metricsApi(`/summary?from=${from}&to=${to}`)),
+        fetchJson(metricsApi(`?from=${from}&to=${to}&pageSize=500`)),
+        fetchJson(metricsApi(`?from=${from}&to=${to}&metricName=api_billable_request&pageSize=500`)),
+        fetchJson(governanceApi('/jurisdictions')),
+        fetchJson(governanceApi('/regulations')),
     ]);
 
     if (!summary && !detail && !endpoints) {

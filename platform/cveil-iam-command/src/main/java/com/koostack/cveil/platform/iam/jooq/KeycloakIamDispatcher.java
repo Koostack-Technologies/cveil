@@ -134,15 +134,16 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
      * Register auth actuators that depend on the query service. Must be called after {@link
      * #setQueryService(IamQueryService)}.
      *
-     * @param sharedJwksVerifier shared JWKS verifier instance (from the IdpProvider) so the
-     *     login and API-request verification paths use the same cache
+     * @param sharedJwksVerifier shared JWKS verifier instance (from the IdpProvider) so the login
+     *     and API-request verification paths use the same cache
      */
     public void registerAuthActuators(JwksTokenVerifier sharedJwksVerifier) {
         if (keycloakConfig == null || keycloakAdmin == null) {
             LOG.warn("Cannot register auth actuators — keycloakConfig/keycloakAdmin not set");
             return;
         }
-        var authSupport = new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, sharedJwksVerifier);
+        var authSupport =
+                new KeycloakAuthSupport(keycloakConfig, keycloakAdmin, sharedJwksVerifier);
         actuators.put(
                 AuthenticateCommandActuator.AuthenticateCommand.class,
                 new AuthenticateCommandActuator(eventService, authSupport));
