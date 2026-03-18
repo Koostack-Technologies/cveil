@@ -6,9 +6,15 @@
         <div class="max-w-7xl mx-auto">
 
             <!-- Page Header -->
-            <div class="text-center mb-16">
+            <div class="text-center mb-12">
                 <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">Simple, transparent pricing</h1>
-                <p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, scale as you grow. Every plan includes the full consent engine, immutable audit ledger, and data masking — pay only for what you use beyond your quota.</p>
+                <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-8">Start free, scale as you grow. Every plan includes the full consent engine, immutable audit ledger, and data masking.</p>
+
+                <!-- Billing Toggle -->
+                <div class="inline-flex items-center gap-3 bg-gray-800/60 rounded-full p-1">
+                    <button id="btn-monthly" onclick="toggleBilling('monthly')" class="px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900">Monthly</button>
+                    <button id="btn-annual" onclick="toggleBilling('annual')" class="px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white">Annual <span class="text-cv-400 text-xs ml-1">Save 20%</span></button>
+                </div>
             </div>
 
             <!-- Pricing Cards -->
@@ -23,8 +29,8 @@
                         <h3 class="text-xl font-bold mb-2">{tier.name}</h3>
                         <p class="text-gray-400 text-sm mb-6">{tier.description}</p>
                         <div class="flex items-baseline gap-1">
-                            <span class="text-4xl font-bold">{tier.price}</span>
-                            <span class="text-gray-500">{tier.period}</span>
+                            <span class="text-4xl font-bold" data-monthly-price="{tier.price}" data-annual-price="{tier.price}">{tier.price}</span>
+                            <span class="text-gray-500" data-monthly-period="{tier.period}" data-annual-period="{tier.period}">{tier.period}</span>
                         </div>
                     </div>
 
@@ -32,15 +38,36 @@
                         <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-white font-medium">{tier.subjects}</span>
-                                <span class="text-gray-400"> managed subjects</span>
+                                <span class="text-white font-medium">{tier.apiRequests}</span>
+                                <span class="text-gray-400"> API requests / mo</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
                             <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-white font-medium">{tier.apiRequests}</span>
-                                <span class="text-gray-400"> API requests / mo</span>
+                                <span class="text-white font-medium">{tier.subjects}</span>
+                                <span class="text-gray-400"> consent records</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-white font-medium">{tier.members}</span>
+                                <span class="text-gray-400"> team members</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Burst: </span>
+                                <span class="text-white font-medium">{tier.burst}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <div>
+                                <span class="text-gray-400">Audit retention: </span>
+                                <span class="text-white font-medium">{tier.auditRetention}</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
@@ -57,23 +84,9 @@
                                 <span class="text-white font-medium">{tier.support}</span>
                             </div>
                         </div>
-                        <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            <div>
-                                <span class="text-gray-400">Data residency: </span>
-                                <span class="text-white font-medium">{tier.residency}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            <div>
-                                <span class="text-gray-400">Overage: </span>
-                                <span class="text-white font-medium">{tier.overage}</span>
-                            </div>
-                        </div>
                     </div>
 
-                    <a href="/signup?plan={tier.planId}" class="{#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded font-semibold text-center transition-all">
+                    <a href="/signup?plan={tier.planId}" class="plan-cta {#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded font-semibold text-center transition-all" data-plan="{tier.planId}">
                         {tier.cta}
                     </a>
                 </div>
@@ -84,15 +97,15 @@
             <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-md p-8 text-center mb-16">
                 <h3 class="text-xl font-bold mb-3">Pay as you go, always</h3>
                 <p class="text-gray-400 leading-relaxed">
-                    Every paid plan includes a baseline quota of API requests per month. Go beyond your limit and you're billed at <span class="text-white font-medium">$0.002 per request</span> — no surprises. The free tier enforces a hard stop at its quota. Usage resets on the first of each calendar month.
+                    Every paid plan includes a baseline quota of API requests per month. Growth plans enforce a hard stop at their limit. Business plans bill at the per-request overage rate — no surprises. Usage resets on the first of each calendar month.
                 </p>
             </div>
 
             <!-- Feature Comparison -->
-            <div class="max-w-4xl mx-auto">
+            <div class="max-w-5xl mx-auto">
                 <h2 class="text-2xl font-bold mb-8 text-center">Full feature comparison</h2>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm min-w-[500px]">
+                    <table class="w-full text-left text-sm min-w-[600px]">
                         <thead>
                             <tr class="border-b border-gray-800">
                                 <th class="py-4 pr-4 font-medium text-gray-400">Feature</th>
@@ -103,40 +116,60 @@
                         </thead>
                         <tbody class="text-gray-300">
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">Managed subjects</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.subjects}</td>
-                                {/for}
+                                <td class="py-3 pr-4">API requests / mo</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.apiRequests}</td>{/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
-                                <td class="py-3 pr-4">API requests / mo</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.apiRequests}</td>
-                                {/for}
+                                <td class="py-3 pr-4">Consent records</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.subjects}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Burst rate</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.burst}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Team members</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.members}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Audit retention</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.auditRetention}</td>{/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
                                 <td class="py-3 pr-4">Governance</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.governance}</td>
-                                {/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.governance}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Webhooks</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Consent banner</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">DSAR workflow</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Compliance reports</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                            </tr>
+                            <tr class="border-b border-gray-800/50">
+                                <td class="py-3 pr-4">Analytics dashboard</td>
+                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
                                 <td class="py-3 pr-4">Overage</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.overage}</td>
-                                {/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.overage}</td>{/for}
                             </tr>
                             <tr class="border-b border-gray-800/50">
                                 <td class="py-3 pr-4">Support</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.support}</td>
-                                {/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.support}</td>{/for}
                             </tr>
                             <tr>
                                 <td class="py-3 pr-4">Data residency</td>
-                                {#for tier in tiers}
-                                <td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.residency}</td>
-                                {/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.residency}</td>{/for}
                             </tr>
                         </tbody>
                     </table>
@@ -145,6 +178,52 @@
 
         </div>
     </main>
+
+    <script>
+    // Annual pricing data (derived from plan matrix)
+    const annualPrices = { 'free': 'Free', 'pro': '$79', 'business': '$399', 'enterprise': 'Custom' };
+    const monthlyPrices = { 'free': 'Free', 'pro': '$99', 'business': '$499', 'enterprise': 'Custom' };
+    const annualPeriod = '/mo billed annually';
+    let currentInterval = 'monthly';
+
+    function toggleBilling(interval) {
+        currentInterval = interval;
+        const btnMonthly = document.getElementById('btn-monthly');
+        const btnAnnual = document.getElementById('btn-annual');
+
+        if (interval === 'annual') {
+            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900';
+            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white';
+        } else {
+            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900';
+            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white';
+        }
+
+        // Update displayed prices
+        document.querySelectorAll('[data-monthly-price]').forEach(el => {
+            const card = el.closest('[class*="rounded-md"]');
+            const cta = card ? card.querySelector('.plan-cta') : null;
+            const planId = cta ? cta.dataset.plan : '';
+            const prices = interval === 'annual' ? annualPrices : monthlyPrices;
+            el.textContent = prices[planId] || el.dataset.monthlyPrice;
+        });
+
+        document.querySelectorAll('[data-monthly-period]').forEach(el => {
+            const card = el.closest('[class*="rounded-md"]');
+            const cta = card ? card.querySelector('.plan-cta') : null;
+            const planId = cta ? cta.dataset.plan : '';
+            if (planId === 'free' || planId === 'enterprise') return;
+            el.textContent = interval === 'annual' ? annualPeriod : '/mo';
+        });
+
+        // Update CTA links
+        document.querySelectorAll('.plan-cta').forEach(a => {
+            const base = a.href.split('?')[0];
+            const plan = a.dataset.plan;
+            a.href = base + '?plan=' + plan + (interval === 'annual' ? '&interval=annual' : '');
+        });
+    }
+    </script>
 
 {/content}
 {/include}

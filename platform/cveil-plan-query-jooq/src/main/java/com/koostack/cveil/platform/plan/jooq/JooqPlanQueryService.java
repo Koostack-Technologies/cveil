@@ -38,6 +38,16 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
             field(name("stripe_product_id"), String.class);
     private static final org.jooq.Field<String> STRIPE_PRICE_ID =
             field(name("stripe_price_id"), String.class);
+    private static final org.jooq.Field<Integer> MEMBER_LIMIT =
+            field(name("member_limit"), Integer.class);
+    private static final org.jooq.Field<Integer> AUDIT_RETENTION_DAYS =
+            field(name("audit_retention_days"), Integer.class);
+    private static final org.jooq.Field<String> STRIPE_ANNUAL_PRICE_ID =
+            field(name("stripe_annual_price_id"), String.class);
+    private static final org.jooq.Field<Integer> MONTHLY_PRICE_CENTS =
+            field(name("monthly_price_cents"), Integer.class);
+    private static final org.jooq.Field<Integer> ANNUAL_PRICE_CENTS =
+            field(name("annual_price_cents"), Integer.class);
 
     private DSLContext dsl;
     private RetryConfig retryConfig = RetryableQuery.DEFAULT;
@@ -114,10 +124,15 @@ public class JooqPlanQueryService implements PlanQueryService<JooqPlanQueryConfi
                 record.get(SUBJECT_LIMIT),
                 record.get(BURST_LIMIT),
                 record.get(JURISDICTION_LIMIT) != null ? record.get(JURISDICTION_LIMIT) : 3,
+                record.get(MEMBER_LIMIT) != null ? record.get(MEMBER_LIMIT) : -1,
+                record.get(AUDIT_RETENTION_DAYS) != null ? record.get(AUDIT_RETENTION_DAYS) : 30,
                 record.get(IS_PUBLIC),
                 record.get(IS_ACTIVE),
                 record.get(SORT_ORDER),
                 record.get(STRIPE_PRODUCT_ID),
-                record.get(STRIPE_PRICE_ID));
+                record.get(STRIPE_PRICE_ID),
+                record.get(STRIPE_ANNUAL_PRICE_ID),
+                record.get(MONTHLY_PRICE_CENTS),
+                record.get(ANNUAL_PRICE_CENTS));
     }
 }

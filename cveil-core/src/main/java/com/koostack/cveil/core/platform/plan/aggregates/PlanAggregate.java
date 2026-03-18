@@ -25,11 +25,14 @@ public record PlanAggregate(
         long evalLimit,
         long subjectLimit,
         int burstLimit,
+        int memberLimit,
+        int auditRetentionDays,
         boolean isPublic,
         boolean isActive,
         int sortOrder,
         String stripeProductId,
         String stripePriceId,
+        String stripeAnnualPriceId,
         Long version)
         implements AggregateRoot {
 
@@ -64,9 +67,12 @@ public record PlanAggregate(
                             e.evalLimit(),
                             e.subjectLimit(),
                             e.burstLimit(),
+                            -1, // memberLimit — default unlimited for event-created plans
+                            30, // auditRetentionDays — default 30
                             e.isPublic(),
                             e.isActive(),
                             e.sortOrder(),
+                            null,
                             null,
                             null,
                             1L);
@@ -82,11 +88,14 @@ public record PlanAggregate(
                             e.evalLimit(),
                             e.subjectLimit(),
                             e.burstLimit(),
+                            current.memberLimit(),
+                            current.auditRetentionDays(),
                             e.isPublic(),
                             current.isActive(),
                             e.sortOrder(),
                             current.stripeProductId(),
                             current.stripePriceId(),
+                            current.stripeAnnualPriceId(),
                             current.version() + 1);
                 }
                 case PlanEventTypes.PLAN_DEACTIVATED -> {
@@ -99,11 +108,14 @@ public record PlanAggregate(
                             current.evalLimit(),
                             current.subjectLimit(),
                             current.burstLimit(),
+                            current.memberLimit(),
+                            current.auditRetentionDays(),
                             current.isPublic(),
                             false,
                             current.sortOrder(),
                             current.stripeProductId(),
                             current.stripePriceId(),
+                            current.stripeAnnualPriceId(),
                             current.version() + 1);
                 }
                 case PlanEventTypes.PLAN_ACTIVATED -> {
@@ -116,11 +128,14 @@ public record PlanAggregate(
                             current.evalLimit(),
                             current.subjectLimit(),
                             current.burstLimit(),
+                            current.memberLimit(),
+                            current.auditRetentionDays(),
                             current.isPublic(),
                             true,
                             current.sortOrder(),
                             current.stripeProductId(),
                             current.stripePriceId(),
+                            current.stripeAnnualPriceId(),
                             current.version() + 1);
                 }
                 case PlanEventTypes.PLAN_STRIPE_SYNCED -> {
@@ -134,11 +149,16 @@ public record PlanAggregate(
                             current.evalLimit(),
                             current.subjectLimit(),
                             current.burstLimit(),
+                            current.memberLimit(),
+                            current.auditRetentionDays(),
                             current.isPublic(),
                             current.isActive(),
                             current.sortOrder(),
                             e.stripeProductId(),
                             e.stripePriceId(),
+                            e.stripeAnnualPriceId() != null
+                                    ? e.stripeAnnualPriceId()
+                                    : current.stripeAnnualPriceId(),
                             current.version() + 1);
                 }
                 default -> current;

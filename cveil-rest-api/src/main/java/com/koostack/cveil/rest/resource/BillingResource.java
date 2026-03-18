@@ -164,17 +164,39 @@ public class BillingResource {
                     .setDefaultPaymentMethod(profile.paymentProcessorCustomerId(), paymentMethodId);
         }
 
-        // Record locally via command
-        cqrs.billingCommandService()
-                .attachPaymentMethod(
-                        tenantId,
-                        detail.externalId(),
-                        detail.type(),
-                        detail.brand(),
-                        detail.last4(),
-                        detail.expMonth(),
-                        detail.expYear(),
-                        setDefault);
+        // Record locally via command — compensate in Stripe if local persistence fails
+        try {
+            cqrs.billingCommandService()
+                    .attachPaymentMethod(
+                            tenantId,
+                            detail.externalId(),
+                            detail.type(),
+                            detail.brand(),
+                            detail.last4(),
+                            detail.expMonth(),
+                            detail.expYear(),
+                            setDefault);
+        } catch (Exception e) {
+            LOG.error(
+                    "Local command failed after Stripe attach for pm {} — "
+                            + "compensating by detaching from Stripe",
+                    paymentMethodId,
+                    e);
+            try {
+                cqrs.paymentProcessorService().detachPaymentMethod(paymentMethodId);
+            } catch (Exception compensateEx) {
+                LOG.error(
+                        "Compensating Stripe detach also failed for pm {} — "
+                                + "manual intervention required",
+                        paymentMethodId,
+                        compensateEx);
+            }
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "internal_error", "Failed to record payment method locally"))
+                    .build();
+        }
 
         LOG.info("Payment method {} attached for tenant {}", paymentMethodId, tenantId);
         return Response.ok(Map.of("status", "attached", "paymentMethodId", paymentMethodId))
@@ -413,7 +435,20 @@ public class BillingResource {
         }
 
         // Create subscription via payment processor SPI
-        String priceId = plan.stripePriceId();
+        String interval = request.effectiveInterval();
+        String priceId;
+        if ("annual".equals(interval)
+                && plan.stripeAnnualPriceId() != null
+                && !plan.stripeAnnualPriceId().isBlank()) {
+            priceId = plan.stripeAnnualPriceId();
+        } else {
+            priceId = plan.stripePriceId();
+            if ("annual".equals(interval)) {
+                LOG.warn(
+                        "Annual price not available for plan {} — falling back to monthly",
+                        plan.planId());
+            }
+        }
         if (priceId == null || priceId.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(
@@ -504,7 +539,15 @@ public class BillingResource {
                     .build();
         }
 
-        String priceId = plan.stripePriceId();
+        String changeInterval = request.effectiveInterval();
+        String priceId;
+        if ("annual".equals(changeInterval)
+                && plan.stripeAnnualPriceId() != null
+                && !plan.stripeAnnualPriceId().isBlank()) {
+            priceId = plan.stripeAnnualPriceId();
+        } else {
+            priceId = plan.stripePriceId();
+        }
         if (priceId == null || priceId.isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(

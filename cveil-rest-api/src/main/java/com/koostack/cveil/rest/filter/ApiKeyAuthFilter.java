@@ -974,13 +974,22 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("login/")
                 || normalized.equals("logout")
                 || normalized.equals("logout/")
+                // Public consent banner API (unauthenticated — tenant resolved from siteId)
+                || normalized.startsWith("api/v1/public/consent/")
+                ||
+                // Public DSAR self-service submission (unauthenticated)
+                normalized.startsWith("api/v1/public/dsar/")
+                ||
                 // Dashboard uses cookie-based auth (checked in SiteResource)
-                || normalized.equals("dashboard")
+                normalized.equals("dashboard")
                 || normalized.equals("dashboard/")
                 || normalized.startsWith("dashboard/account")
                 || normalized.startsWith("dashboard/governance")
                 || normalized.startsWith("dashboard/consent")
                 || normalized.startsWith("dashboard/catalogue")
+                || normalized.startsWith("dashboard/reports")
+                || normalized.startsWith("dashboard/analytics")
+                || normalized.startsWith("dashboard/dsar")
                 || normalized.startsWith("dashboard/organizations/")
                 || normalized.startsWith("dashboard/switch-org"));
     }

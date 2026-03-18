@@ -99,10 +99,12 @@ async function refresh() {
     if (loading) { loading.textContent = 'Loading\u2026'; loading.className = 'text-sm text-gray-400'; }
 
     // Fetch summary + detail in parallel
-    const [summary, detail, endpoints] = await Promise.all([
+    const [summary, detail, endpoints, govJurisdictions, govRegulations] = await Promise.all([
         fetchJson(`${API_BASE}/summary?from=${from}&to=${to}`),
         fetchJson(`${API_BASE}?from=${from}&to=${to}&pageSize=500`),
-        fetchJson(`${API_BASE}?from=${from}&to=${to}&metricName=api_requests&pageSize=500`),
+        fetchJson(`${API_BASE}?from=${from}&to=${to}&metricName=api_billable_request&pageSize=500`),
+        fetchJson('/api/v1/governance/jurisdictions'),
+        fetchJson('/api/v1/governance/regulations'),
     ]);
 
     if (!summary && !detail && !endpoints) {
@@ -115,6 +117,7 @@ async function refresh() {
     updateChart(detail);
     updateTopEndpoints(endpoints);
     updatePlanLimits(summary);
+    updateGovernanceCounts(govJurisdictions, govRegulations);
 }
 
 // -----------------------------------------------------------------------
@@ -131,7 +134,7 @@ function sumMetrics(summaries, names) {
 function updateSummaryCards(summaryResp) {
     const summaries = summaryResp?.summaries || [];
 
-    setText('card-total-requests', fmtNum(sumMetrics(summaries, ['api_billed_requests'])));
+    setText('card-total-requests', fmtNum(sumMetrics(summaries, ['api_billable_request'])));
     setText('card-consent-ops', fmtNum(sumMetrics(summaries, CONSENT_METRICS)));
     setText('card-subject-ops', fmtNum(sumMetrics(summaries, SUBJECT_METRICS)));
     setText('card-dsar-ops', fmtNum(sumMetrics(summaries, DSAR_METRICS)));
@@ -161,12 +164,15 @@ function updateTopEndpoints(endpointsResp) {
         return;
     }
 
-    // Aggregate by path dimension
+    // Aggregate by resource dimension (billable requests use resource, not path)
     const byPath = {};
     for (const row of rows) {
-        const path = row.dimensions?.path || row.dimensions?.method || 'unknown';
-        if (!byPath[path]) byPath[path] = { count: 0, latencySum: 0, latencyCount: 0 };
-        byPath[path].count += row.metricValue;
+        if (row.metricName !== 'api_billable_request') continue;
+        const resource = row.dimensions?.resource || row.dimensions?.path || 'unknown';
+        const method = row.dimensions?.method || '';
+        const key = method ? `${method} ${resource}` : resource;
+        if (!byPath[key]) byPath[key] = { count: 0, latencySum: 0, latencyCount: 0 };
+        byPath[key].count += row.metricValue;
     }
 
     // Also look for api_latency_ms rows
@@ -204,7 +210,7 @@ function updateTopEndpoints(endpointsResp) {
 
 function updatePlanLimits(summaryResp) {
     const summaries = summaryResp?.summaries || [];
-    const totalRequests = sumMetrics(summaries, ['api_requests']);
+    const totalRequests = sumMetrics(summaries, ['api_billable_request']);
     const totalSubjects = sumMetrics(summaries, ['subject_created']);
 
     const reqLimit = subscriptionCache?.evalLimit || 10000;
@@ -225,6 +231,17 @@ function updatePlanLimits(summaryResp) {
         setText('limit-subjects', `${fmtNum(totalSubjects)} / ${fmtNum(subLimit)}`);
         setWidth('limit-subjects-bar', Math.min(100, (totalSubjects / subLimit) * 100));
     }
+}
+
+// -----------------------------------------------------------------------
+// Governance counts (jurisdictions + regulations)
+// -----------------------------------------------------------------------
+
+function updateGovernanceCounts(jurisdictionsResp, regulationsResp) {
+    const jCount = Array.isArray(jurisdictionsResp) ? jurisdictionsResp.length : 0;
+    const rCount = Array.isArray(regulationsResp) ? regulationsResp.length : 0;
+    setText('card-jurisdictions', fmtNum(jCount));
+    setText('card-regulations', fmtNum(rCount));
 }
 
 // -----------------------------------------------------------------------

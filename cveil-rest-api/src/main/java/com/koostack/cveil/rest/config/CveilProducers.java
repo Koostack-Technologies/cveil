@@ -26,6 +26,8 @@ import com.koostack.cveil.platform.core.jooq.JooqCoreCommandConfig;
 import com.koostack.cveil.platform.core.jooq.JooqCoreDispatcher;
 import com.koostack.cveil.platform.core.jooq.JooqCoreQueryConfig;
 // TenantManager imports removed — provisioning pipeline eliminated (Phase 8)
+import com.koostack.cveil.platform.webhook.WebhookDeliveryService;
+import com.koostack.cveil.platform.webhook.WebhookEventHandler;
 import com.koostack.cveil.plugin.consent.jooq.ConsentAdminCommandConfig;
 import com.koostack.cveil.plugin.consent.jooq.CountSubjectCacheKeysQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.DeleteSubjectCacheKeysQueryActuator;
@@ -157,6 +159,8 @@ public class CveilProducers {
     Instance<IdpProvider> idpProviderInstance;
 
     @Inject Instance<AuthzProvider<?>> authzProviderInstance;
+
+    @Inject com.koostack.cveil.rest.ratelimit.RateLimitService rateLimitService;
 
     // -----------------------------------------------------------------------
     // Primary Cveil bean
@@ -396,6 +400,25 @@ public class CveilProducers {
                 paymentProcessorService);
     }
 
+    /** Feature gate checker — stored for cache invalidation wiring. */
+    private com.koostack.cveil.rest.gate.FeatureGateChecker featureGateCheckerInstance;
+
+    /**
+     * Produces the {@link FeatureGateChecker} CDI bean backed by the platform DSLContext. Returns
+     * {@code null} if the platform database is not configured (embedded mode).
+     */
+    @Produces
+    @ApplicationScoped
+    public com.koostack.cveil.rest.gate.FeatureGateChecker featureGateChecker() {
+        if (platformDsl == null) {
+            LOG.debug("Cveil REST API: FeatureGateChecker not available (no platform DSL)");
+            return null;
+        }
+        featureGateCheckerInstance =
+                new com.koostack.cveil.rest.gate.FeatureGateChecker(platformDsl);
+        return featureGateCheckerInstance;
+    }
+
     /**
      * Produces the consent admin {@link CommandDispatcher} for direct command-record dispatch from
      * REST resources. Returns {@code null} in embedded mode where the consent command service is
@@ -465,6 +488,13 @@ public class CveilProducers {
         }
         LOG.debug("Cveil REST API: billing CommandDispatcher not available (embedded mode)");
         return null;
+    }
+
+    @Produces
+    @ApplicationScoped
+    @Named("webhookDeliveryService")
+    public WebhookDeliveryService webhookDeliveryService() {
+        return this.webhookDeliveryService;
     }
 
     /**
@@ -651,6 +681,7 @@ public class CveilProducers {
     private SubscriptionManager adminSubscriptionManager;
     private com.koostack.cveil.tenant.consent.projection.decision.ExpiredConsentReaper
             expiredConsentReaper;
+    private WebhookDeliveryService webhookDeliveryService;
 
     /** Platform DataSource for RLS-aware DSLContext creation. */
     private DataSource platformDataSource;
@@ -777,6 +808,16 @@ public class CveilProducers {
             LOG.warn(
                     "Cveil REST API: admin projection handler NOT wired — platform datasource"
                             + " not available");
+        }
+
+        // Outbound webhook handler: delivers domain events to tenant-registered endpoints.
+        if (platformDsl != null) {
+            this.webhookDeliveryService = new WebhookDeliveryService(platformDsl);
+            WebhookEventHandler webhookHandler = new WebhookEventHandler(webhookDeliveryService);
+            consumer.registerHandler(WebhookEventHandler.GROUP_NAME, webhookHandler);
+            LOG.info(
+                    "Cveil REST API: webhook delivery handler wired (group={})",
+                    WebhookEventHandler.GROUP_NAME);
         }
 
         // SSE publisher: reads from Redis Pub/Sub and publishes to SSE clients.
@@ -1283,6 +1324,20 @@ public class CveilProducers {
 
         CoreProjectionHandler coreProjection = new CoreProjectionHandler(platformDsl);
         BillingProjectionHandler billingProjection = new BillingProjectionHandler(platformDsl);
+
+        // Wire cache invalidation: evict FeatureGateChecker and RateLimitService caches
+        // when plan or tenant-plan changes are projected.
+        var fgc = featureGateCheckerInstance;
+        var rls = rateLimitService;
+        coreProjection.setPlanChangeListener(
+                (planId, tenantId) -> {
+                    if (fgc != null && planId != null) {
+                        fgc.evict(planId);
+                    }
+                    if (rls != null && tenantId != null) {
+                        rls.evictTenantCache(tenantId);
+                    }
+                });
 
         com.koostack.cveil.platform.iam.jooq.IamProjectionHandler iamProjection =
                 new com.koostack.cveil.platform.iam.jooq.IamProjectionHandler(

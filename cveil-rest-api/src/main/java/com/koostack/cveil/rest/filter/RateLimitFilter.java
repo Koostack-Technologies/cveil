@@ -146,6 +146,12 @@ public class RateLimitFilter implements ContainerRequestFilter, ContainerRespons
     private static final Set<String> CONSENT_WRITE_PATH_SEGMENTS =
             Set.of("/grant", "/revoke", "/grant-batch", "/revoke-batch");
 
+    /**
+     * URI path prefix identifying public (unauthenticated) API endpoints that should be
+     * rate-limited by client IP rather than tenant identity.
+     */
+    private static final String PUBLIC_API_PREFIX = "/api/v1/public/";
+
     // -----------------------------------------------------------------------
     // Injected dependencies
     // -----------------------------------------------------------------------
@@ -164,6 +170,7 @@ public class RateLimitFilter implements ContainerRequestFilter, ContainerRespons
 
     /**
      * Checks burst and (for evaluation endpoints) monthly rate limits for the authenticated tenant.
+     * For unauthenticated public endpoints, enforces IP-based rate limits.
      *
      * <p>If a limit is exceeded, the request is aborted with HTTP 429 (Too Many Requests) and
      * appropriate headers. Otherwise, the rate-limit results are stored as request properties for
@@ -179,8 +186,22 @@ public class RateLimitFilter implements ContainerRequestFilter, ContainerRespons
             return;
         }
 
-        // Skip unauthenticated requests (public paths, auth failures)
+        // Public endpoints: IP-based rate limiting (banner, DSAR submission)
         if (!requestHolder.isAuthenticated()) {
+            String path = ctx.getUriInfo().getPath();
+            String normalized = path.startsWith("/") ? path : "/" + path;
+            if (normalized.startsWith(PUBLIC_API_PREFIX)) {
+                String clientIp = extractClientIp(ctx);
+                RateLimitResult ipResult = rateLimitService.checkPublicIpBurst(clientIp);
+                ctx.setProperty(PROP_BURST_RESULT, ipResult);
+                if (ipResult.burstExceeded()) {
+                    LOG.info(
+                            "RateLimitFilter: public IP burst limit exceeded for IP '{}'",
+                            clientIp);
+                    publishRateLimitMetric("public", "ip_burst");
+                    abortTooManyRequests(ctx, ipResult);
+                }
+            }
             return;
         }
 
@@ -397,5 +418,27 @@ public class RateLimitFilter implements ContainerRequestFilter, ContainerRespons
         } catch (Exception e) {
             LOG.debug("Best-effort rate-limit metric publish failed", e);
         }
+    }
+
+    /**
+     * Extracts the client IP from the request, checking the {@code X-Forwarded-For} header first
+     * (for reverse-proxy/load-balancer setups like Railway), then falling back to the remote
+     * address.
+     */
+    private static String extractClientIp(ContainerRequestContext ctx) {
+        String xff = ctx.getHeaderString("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            // Take the first (leftmost) IP — closest to the real client
+            String firstIp = xff.split(",")[0].trim();
+            if (!firstIp.isEmpty()) {
+                return firstIp;
+            }
+        }
+        String xRealIp = ctx.getHeaderString("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
+        // Fallback — JAX-RS doesn't expose remote addr directly; use a sentinel
+        return "unknown";
     }
 }

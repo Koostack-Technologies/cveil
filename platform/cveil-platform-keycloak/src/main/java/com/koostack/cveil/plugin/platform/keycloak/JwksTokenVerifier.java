@@ -1,9 +1,12 @@
 package com.koostack.cveil.plugin.platform.keycloak;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdentityContext;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -12,47 +15,88 @@ import com.nimbusds.jose.proc.JWSKeySelector;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import java.io.IOException;
 import java.net.URI;
 import java.text.ParseException;
-import java.time.Instant;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * JWKS-based JWT verifier that caches key sets per issuer URL.
+ * JWKS-based JWT verifier that caches key sets per issuer URL using Caffeine.
  *
  * <p>This verifier is generic — it works with any OIDC-compliant IdP (Keycloak, Auth0, Okta, Azure
  * AD) by fetching their JWKS endpoint.
  *
  * <h2>Caching</h2>
  *
- * <p>JWKS key sets are cached per issuer with a configurable TTL. On a {@code kid} miss (e.g. after
- * key rotation), the cache is refreshed and verification retried once.
+ * <p>JWKS key sets are cached per issuer URL using a Caffeine cache with a configurable TTL and a
+ * maximum of 100 entries. On a {@code kid} miss (e.g. after key rotation), the cache is refreshed
+ * and verification retried once.
+ *
+ * <h2>Claim Validation (Defense-in-Depth)</h2>
+ *
+ * <p>In addition to cryptographic JWKS signature verification, this verifier optionally validates:
+ *
+ * <ul>
+ *   <li><strong>{@code iss} (issuer)</strong> — must match a configurable regex pattern (e.g.
+ *       {@code https://keycloak\.example\.com/realms/.+})
+ *   <li><strong>{@code aud} (audience)</strong> — must contain the expected audience value (e.g.
+ *       the Keycloak client ID {@code cveil-backend})
+ * </ul>
+ *
+ * <p>These checks prevent token confusion attacks where a valid token from an unrelated issuer or
+ * intended for a different audience could be accepted.
  */
 public class JwksTokenVerifier {
 
     private static final Logger LOG = LoggerFactory.getLogger(JwksTokenVerifier.class);
 
     private static final long DEFAULT_CACHE_TTL_MS = 300_000; // 5 minutes
+    private static final int MAX_CACHE_ENTRIES = 100;
 
-    private final long cacheTtlMs;
-    private final ConcurrentHashMap<String, CachedJwks> jwksCache = new ConcurrentHashMap<>();
+    private final Cache<String, JWKSet> jwksCache;
+
+    /** Optional compiled regex for validating the {@code iss} claim. Null to skip validation. */
+    private final Pattern expectedIssuerPattern;
+
+    /** Optional audience value that must appear in the {@code aud} claim. Null to skip. */
+    private final String expectedAudience;
 
     public JwksTokenVerifier() {
-        this(DEFAULT_CACHE_TTL_MS);
+        this(DEFAULT_CACHE_TTL_MS, null, null);
     }
 
     public JwksTokenVerifier(long cacheTtlMs) {
-        this.cacheTtlMs = cacheTtlMs;
+        this(cacheTtlMs, null, null);
+    }
+
+    /**
+     * Full constructor with claim validation support.
+     *
+     * @param cacheTtlMs JWKS cache TTL in milliseconds
+     * @param expectedIssuerPattern regex for validating the {@code iss} claim, or null to skip
+     * @param expectedAudience audience value that must appear in {@code aud}, or null to skip
+     */
+    public JwksTokenVerifier(
+            long cacheTtlMs, String expectedIssuerPattern, String expectedAudience) {
+        this.jwksCache =
+                Caffeine.newBuilder()
+                        .maximumSize(MAX_CACHE_ENTRIES)
+                        .expireAfterWrite(Duration.ofMillis(cacheTtlMs))
+                        .build();
+        this.expectedIssuerPattern =
+                expectedIssuerPattern != null ? Pattern.compile(expectedIssuerPattern) : null;
+        this.expectedAudience = expectedAudience;
     }
 
     /**
@@ -68,6 +112,7 @@ public class JwksTokenVerifier {
     public IdentityContext verify(String jwksUrl, String token, String tenantId) {
         try {
             JWTClaimsSet claims = verifyAndParseClaims(jwksUrl, token);
+            validateClaims(claims);
             return extractIdentity(claims, token, tenantId);
         } catch (CveilAuthException e) {
             throw e;
@@ -90,16 +135,58 @@ public class JwksTokenVerifier {
         }
     }
 
+    /**
+     * Validates the {@code iss} and {@code aud} claims against configured expectations.
+     *
+     * <p>These checks are defense-in-depth — the JWKS signature already constrains the token to a
+     * specific signing key. Claim validation adds protection against token confusion where
+     * different services share the same IdP but should not accept each other's tokens.
+     */
+    private void validateClaims(JWTClaimsSet claims) {
+        // Validate issuer
+        if (expectedIssuerPattern != null) {
+            String issuer = claims.getIssuer();
+            if (issuer == null || !expectedIssuerPattern.matcher(issuer).matches()) {
+                LOG.warn(
+                        "JWT issuer mismatch: got '{}', expected pattern '{}'",
+                        issuer,
+                        expectedIssuerPattern.pattern());
+                throw new CveilAuthException("JWT issuer does not match expected pattern");
+            }
+        }
+
+        // Validate audience
+        if (expectedAudience != null) {
+            List<String> audience = claims.getAudience();
+            if (audience == null || !audience.contains(expectedAudience)) {
+                LOG.warn(
+                        "JWT audience mismatch: got '{}', expected '{}'",
+                        audience,
+                        expectedAudience);
+                throw new CveilAuthException("JWT audience does not contain expected value");
+            }
+        }
+    }
+
     private JWTClaimsSet processToken(JWKSet jwkSet, String token)
             throws BadJOSEException, JOSEException, ParseException {
 
+        // Read the signing algorithm from the JWT header rather than hardcoding RS256.
+        // Keycloak 26+ may use RS256, PS256, ES256 or EdDSA depending on realm key config.
+        SignedJWT signedJwt = SignedJWT.parse(token);
+        JWSHeader header = signedJwt.getHeader();
+        JWSAlgorithm alg = header.getAlgorithm();
+        if (alg == null) {
+            throw new BadJOSEException("JWT header missing 'alg' claim");
+        }
+
         JWKSource<SecurityContext> keySource = new ImmutableJWKSet<>(jwkSet);
         JWSKeySelector<SecurityContext> keySelector =
-                new JWSVerificationKeySelector<>(JWSAlgorithm.RS256, keySource);
+                new JWSVerificationKeySelector<>(alg, keySource);
 
         ConfigurableJWTProcessor<SecurityContext> processor = new DefaultJWTProcessor<>();
         processor.setJWSKeySelector(keySelector);
-        return processor.process(token, null);
+        return processor.process(signedJwt, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -151,25 +238,27 @@ public class JwksTokenVerifier {
     }
 
     private JWKSet getJwks(String jwksUrl, boolean forceRefresh) {
-        CachedJwks cached = jwksCache.get(jwksUrl);
-
-        if (!forceRefresh && cached != null && !cached.isExpired(cacheTtlMs)) {
-            return cached.jwkSet();
+        if (!forceRefresh) {
+            JWKSet cached = jwksCache.getIfPresent(jwksUrl);
+            if (cached != null) {
+                return cached;
+            }
         }
 
         try {
             LOG.debug("Fetching JWKS from: {}", jwksUrl);
             JWKSet jwkSet = JWKSet.load(URI.create(jwksUrl).toURL());
-            jwksCache.put(jwksUrl, new CachedJwks(jwkSet, Instant.now()));
+            jwksCache.put(jwksUrl, jwkSet);
             return jwkSet;
         } catch (IOException | ParseException e) {
-            // If we have a stale cache, use it rather than failing
-            if (cached != null) {
+            // If we have a stale cache entry, use it rather than failing
+            JWKSet stale = jwksCache.getIfPresent(jwksUrl);
+            if (stale != null) {
                 LOG.warn(
                         "Failed to refresh JWKS from {}, using stale cache: {}",
                         jwksUrl,
                         e.getMessage());
-                return cached.jwkSet();
+                return stale;
             }
             throw new CveilAuthException(
                     "Failed to fetch JWKS from " + jwksUrl + ": " + e.getMessage());
@@ -178,17 +267,11 @@ public class JwksTokenVerifier {
 
     /** Evict cached JWKS for a specific URL (e.g. on realm deletion). */
     public void evict(String jwksUrl) {
-        jwksCache.remove(jwksUrl);
+        jwksCache.invalidate(jwksUrl);
     }
 
     /** Clear all cached JWKS. */
     public void clearCache() {
-        jwksCache.clear();
-    }
-
-    private record CachedJwks(JWKSet jwkSet, Instant fetchedAt) {
-        boolean isExpired(long ttlMs) {
-            return Instant.now().toEpochMilli() - fetchedAt.toEpochMilli() > ttlMs;
-        }
+        jwksCache.invalidateAll();
     }
 }

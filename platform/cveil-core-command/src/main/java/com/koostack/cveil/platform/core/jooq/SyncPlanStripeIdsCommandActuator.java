@@ -29,7 +29,17 @@ public class SyncPlanStripeIdsCommandActuator
     }
 
     public record SyncPlanStripeIdsCommand(
-            String planId, String stripeProductId, String stripePriceId) {}
+            String planId,
+            String stripeProductId,
+            String stripePriceId,
+            String stripeAnnualPriceId) {
+
+        /** Backwards-compatible constructor without annual price ID. */
+        public SyncPlanStripeIdsCommand(
+                String planId, String stripeProductId, String stripePriceId) {
+            this(planId, stripeProductId, stripePriceId, null);
+        }
+    }
 
     @Override
     public Void execute(SyncPlanStripeIdsCommand command) {
@@ -42,7 +52,10 @@ public class SyncPlanStripeIdsCommandActuator
 
         var payload =
                 new PlanStripeSyncedEvent(
-                        command.planId(), command.stripeProductId(), command.stripePriceId());
+                        command.planId(),
+                        command.stripeProductId(),
+                        command.stripePriceId(),
+                        command.stripeAnnualPriceId());
 
         eventPublisher()
                 .publishEvent(

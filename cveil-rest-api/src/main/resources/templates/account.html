@@ -113,45 +113,6 @@
     <section id="section-organizations" class="hidden">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-semibold">Organizations</h2>
-            <button onclick="showCreateOrgForm()" id="create-org-toggle-btn"
-                class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
-                + New Organization
-            </button>
-        </div>
-
-        <!-- Create org form (hidden by default) -->
-        <div id="create-org-form-container" class="hidden mb-6">
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Create Organization</h3>
-                <form id="create-org-form" onsubmit="createOrganization(event)" class="space-y-4">
-                    <div>
-                        <label for="org-name" class="block text-sm text-gray-500 mb-1">Name <span class="text-gray-600">(slug, used as identifier)</span></label>
-                        <input type="text" id="org-name" name="name" required
-                            pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]"
-                            minlength="2" maxlength="255"
-                            placeholder="my-organization"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none font-mono">
-                        <p class="text-gray-600 text-xs mt-1">Lowercase letters, numbers, and hyphens only.</p>
-                    </div>
-                    <div>
-                        <label for="org-display-name" class="block text-sm text-gray-500 mb-1">Display Name <span class="text-gray-600">(optional)</span></label>
-                        <input type="text" id="org-display-name" name="displayName" maxlength="255"
-                            placeholder="My Organization"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button type="submit" id="create-org-btn"
-                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
-                            Create Organization
-                        </button>
-                        <button type="button" onclick="hideCreateOrgForm()"
-                            class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 text-sm font-medium transition-colors">
-                            Cancel
-                        </button>
-                        <span id="create-org-msg" class="text-sm hidden"></span>
-                    </div>
-                </form>
-            </div>
         </div>
 
         <div id="orgs-list" class="space-y-3">
@@ -410,52 +371,6 @@
         // -------------------------------------------------------------------
         // Organizations
         // -------------------------------------------------------------------
-        function showCreateOrgForm() {
-            document.getElementById('create-org-form-container').classList.remove('hidden');
-            document.getElementById('create-org-toggle-btn').classList.add('hidden');
-            document.getElementById('org-name').focus();
-        }
-
-        function hideCreateOrgForm() {
-            document.getElementById('create-org-form-container').classList.add('hidden');
-            document.getElementById('create-org-toggle-btn').classList.remove('hidden');
-            document.getElementById('create-org-form').reset();
-            var msg = document.getElementById('create-org-msg');
-            msg.classList.add('hidden');
-        }
-
-        async function createOrganization(e) {
-            e.preventDefault();
-            var btn = document.getElementById('create-org-btn');
-            var msg = document.getElementById('create-org-msg');
-            btn.disabled = true;
-            btn.textContent = 'Creating…';
-            msg.classList.add('hidden');
-
-            try {
-                var res = await fetch('/api/v1/platform/iam/organizations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: document.getElementById('org-name').value.trim(),
-                        displayName: document.getElementById('org-display-name').value.trim() || null
-                    })
-                });
-                var data = await res.json();
-                if (res.ok) {
-                    hideCreateOrgForm();
-                    loadOrganizations();
-                } else {
-                    showMsg(msg, data.message || 'Failed to create organization', 'text-red-400');
-                }
-            } catch (err) {
-                showMsg(msg, 'Network error', 'text-red-400');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Create Organization';
-            }
-        }
-
         async function loadOrganizations() {
             var container = document.getElementById('orgs-list');
             try {

@@ -53,9 +53,9 @@
         </div>
 
         <!-- Summary cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
             <div class="bg-white shadow-sm border border-gray-200 rounded-md p-4">
-                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Total API Requests</p>
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Billable Requests</p>
                 <p id="card-total-requests" class="text-2xl font-bold text-gray-900">—</p>
                 <p id="card-total-requests-trend" class="text-xs text-gray-400 mt-1"></p>
             </div>
@@ -79,6 +79,14 @@
                 <p id="card-rate-limits" class="text-2xl font-bold text-amber-500">—</p>
                 <p id="card-rate-limits-trend" class="text-xs text-gray-400 mt-1"></p>
             </div>
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Jurisdictions</p>
+                <p id="card-jurisdictions" class="text-2xl font-bold text-emerald-600">—</p>
+            </div>
+            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Regulations</p>
+                <p id="card-regulations" class="text-2xl font-bold text-indigo-500">—</p>
+            </div>
         </div>
 
         <!-- Line chart -->
@@ -100,7 +108,7 @@
 
         <!-- Top endpoints table -->
         <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-            <h3 class="text-sm font-semibold text-gray-700 mb-4">Top Endpoints</h3>
+            <h3 class="text-sm font-semibold text-gray-700 mb-4">Top Billable Endpoints</h3>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>

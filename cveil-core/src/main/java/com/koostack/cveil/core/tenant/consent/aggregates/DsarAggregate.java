@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.cveil.core.models.AggregateRoot;
 import com.koostack.cveil.core.tenant.consent.ConsentEventTypes;
 import com.koostack.cveil.core.tenant.consent.events.SubjectAuditDeletedEvent;
+import com.koostack.cveil.core.tenant.consent.events.SubjectDataDeletedEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -38,6 +39,11 @@ public record DsarAggregate(
         return switch (eventType) {
             case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> {
                 var e = mapper.convertValue(payloadNode, SubjectAuditDeletedEvent.class);
+                var base = current != null ? current : DsarAggregate.create(null, e.subjectId());
+                yield base.withDeletionRequest(e.deletionRequestId());
+            }
+            case ConsentEventTypes.SUBJECT_DATA_DELETED -> {
+                var e = mapper.convertValue(payloadNode, SubjectDataDeletedEvent.class);
                 var base = current != null ? current : DsarAggregate.create(null, e.subjectId());
                 yield base.withDeletionRequest(e.deletionRequestId());
             }
