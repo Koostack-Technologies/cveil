@@ -99,6 +99,11 @@ public class FeatureGateFilter implements ContainerRequestFilter {
             return;
         }
 
+        // Skip dashboard HTML pages (feature gates apply to API endpoints only)
+        if (normalized.startsWith("/dashboard")) {
+            return;
+        }
+
         String featureKey = resolveFeatureKey(normalized);
         if (featureKey == null) {
             // No feature gate applies to this endpoint

@@ -1033,6 +1033,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.startsWith("dashboard/reports")
                 || normalized.startsWith("dashboard/analytics")
                 || normalized.startsWith("dashboard/dsar")
+                || normalized.startsWith("dashboard/webhooks")
                 || normalized.startsWith("dashboard/organizations/")
                 || normalized.startsWith("dashboard/switch-org"));
     }

@@ -12,6 +12,7 @@ export const NAV = {
   analytics: 'aside a[href="/dashboard/analytics"]',
   dsar: 'aside a[href="/dashboard/dsar"]',
   account: 'aside a[href="/dashboard/account"]',
+  webhooks: 'aside a[href="/dashboard/webhooks"]',
 } as const;
 
 /** Module tab button selectors (by id). */
@@ -158,4 +159,31 @@ export const REPORTS = {
   auditPageInfo: '#audit-page-info',
   auditPrev: '#audit-prev',
   auditNext: '#audit-next',
+} as const;
+
+/** Webhooks page selectors. */
+export const WEBHOOKS = {
+  loading: '#webhooks-loading',
+  empty: '#webhooks-empty',
+  tableWrap: '#webhooks-table-wrap',
+  tbody: '#webhooks-tbody',
+  createBtn: '#btn-create-webhook',
+  modal: '#webhook-modal',
+  modalTitle: '#webhook-modal-title',
+  urlInput: '#webhook-url',
+  descInput: '#webhook-desc',
+  eventsContainer: '#webhook-events',
+  formError: '#webhook-form-error',
+  submitBtn: '#webhook-submit-btn',
+  editIdInput: '#webhook-edit-id',
+  secretModal: '#secret-modal',
+  secretValue: '#secret-value',
+} as const;
+
+/** Sidebar navigation group selectors. */
+export const NAV_GROUPS = {
+  workspace: '.nav-group[data-group="workspace"]',
+  privacy: '.nav-group[data-group="privacy"]',
+  insights: '.nav-group[data-group="insights"]',
+  settings: '.nav-group[data-group="settings"]',
 } as const;
