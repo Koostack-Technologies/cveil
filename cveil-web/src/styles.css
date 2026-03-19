@@ -1,0 +1,404 @@
+/* ── Cveil Design System: "The Sentinel Aesthetic" ───────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+/* ── Tailwind content sources ──────────────────────────────────────────── */
+@source "../src/**/*.js";
+@source "../../cveil-rest-api/src/main/resources/templates/**/*.html";
+
+/* ── Design Tokens (@theme) ────────────────────────────────────────────── */
+@theme {
+  /* ─ Surface Hierarchy (The "No-Line" tonal stack) ─ */
+  --color-surface-lowest: #060e20;
+  --color-surface-base: #0b1326;
+  --color-surface-low: #131b2e;
+  --color-surface-container: #171f33;
+  --color-surface-high: #222a3d;
+  --color-surface-highest: #2c3549;
+  --color-surface-dim: #0e1528;
+  --color-surface-variant: #1a2236;
+  --color-surface-tint: rgba(79, 219, 200, 0.06);
+
+  /* ─ Primary (Teal) ─ */
+  --color-primary: #4fdbc8;
+  --color-primary-container: #14b8a6;
+  --color-primary-dim: #0d9488;
+  --color-on-primary: #042f2e;
+  --color-on-primary-container: #ccfbf1;
+
+  /* ─ Secondary ─ */
+  --color-secondary: #8b9faf;
+  --color-secondary-container: #1a3a2a;
+  --color-on-secondary: #0b1326;
+  --color-on-secondary-container: #a7f3d0;
+
+  /* ─ Error ─ */
+  --color-error: #f87171;
+  --color-error-container: #3b1218;
+  --color-on-error: #1c0508;
+  --color-on-error-container: #fecaca;
+
+  /* ─ Warning ─ */
+  --color-warning: #fbbf24;
+  --color-warning-container: #3b2f08;
+  --color-on-warning-container: #fef3c7;
+
+  /* ─ Text / On-Surface ─ */
+  --color-on-surface: #e8eaed;
+  --color-on-surface-variant: #9ca3af;
+  --color-on-surface-muted: #6b7280;
+
+  /* ─ Outline ─ */
+  --color-outline-variant: #3c4947;
+  --color-ghost-border: rgba(60, 73, 71, 0.15);
+
+  /* ─ Font Families ─ */
+  --font-display: 'Manrope', system-ui, sans-serif;
+  --font-interface: 'Inter', system-ui, sans-serif;
+  --font-technical: 'Space Grotesk', ui-monospace, monospace;
+
+  /* ─ Spacing (extended) ─ */
+  --spacing-section: 6rem;
+}
+
+/* ── Base Styles ───────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-interface);
+  background-color: var(--color-surface-base);
+  color: var(--color-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography Utilities ──────────────────────────────────────────────── */
+@utility font-display {
+  font-family: var(--font-display);
+}
+@utility font-interface {
+  font-family: var(--font-interface);
+}
+@utility font-technical {
+  font-family: var(--font-technical);
+}
+
+/* display-lg → headline-sm: Manrope */
+@utility text-display-lg {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+@utility text-display-md {
+  font-family: var(--font-display);
+  font-size: 2.75rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+@utility text-display-sm {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+@utility text-headline-lg {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+@utility text-headline-md {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+@utility text-headline-sm {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+/* title-lg → body-sm: Inter */
+@utility text-title-lg {
+  font-family: var(--font-interface);
+  font-size: 1.125rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+@utility text-title-md {
+  font-family: var(--font-interface);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+@utility text-title-sm {
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+@utility text-body-lg {
+  font-family: var(--font-interface);
+  font-size: 1rem;
+  line-height: 1.6;
+  font-weight: 400;
+}
+@utility text-body-md {
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+@utility text-body-sm {
+  font-family: var(--font-interface);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* label-md / label-sm: Space Grotesk */
+@utility text-label-md {
+  font-family: var(--font-technical);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+@utility text-label-sm {
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Component Classes ─────────────────────────────────────────────────── */
+
+/* Buttons */
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-on-primary);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-container));
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  &:hover { opacity: 0.9; }
+  &:active { transform: scale(0.98); }
+}
+
+@utility btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  background-color: var(--color-surface-highest);
+  border: 1px solid var(--color-ghost-border);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  &:hover { background-color: var(--color-surface-high); }
+}
+
+@utility btn-tertiary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  &:hover { background-color: var(--color-surface-high); }
+}
+
+@utility btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-on-error-container);
+  background-color: var(--color-error-container);
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  &:hover { opacity: 0.9; }
+}
+
+/* Status Chips */
+@utility chip-critical {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-error-container);
+  background-color: var(--color-error-container);
+  border-radius: 9999px;
+}
+
+@utility chip-safe {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-secondary-container);
+  background-color: var(--color-secondary-container);
+  border-radius: 9999px;
+}
+
+@utility chip-warning {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-warning-container);
+  background-color: var(--color-warning-container);
+  border-radius: 9999px;
+}
+
+@utility chip-neutral {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-on-surface-variant);
+  background-color: var(--color-surface-high);
+  border-radius: 9999px;
+}
+
+@utility chip-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  font-family: var(--font-technical);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #bfdbfe;
+  background-color: #1e2a4a;
+  border-radius: 9999px;
+}
+
+/* Input Fields */
+@utility input-field {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-interface);
+  font-size: 0.875rem;
+  color: var(--color-on-surface);
+  background-color: var(--color-surface-low);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  &::placeholder { color: var(--color-on-surface-muted); }
+  &:focus {
+    border-color: rgba(79, 219, 200, 0.4);
+    box-shadow: 0 0 0 3px var(--color-surface-tint);
+  }
+}
+
+/* Glass Panel (Modals, Hover Menus) */
+@utility glass-panel {
+  background-color: rgba(26, 34, 54, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-ghost-border);
+  border-radius: 0.5rem;
+}
+
+/* Data Glass (large summary containers) */
+@utility data-glass {
+  background-color: var(--color-surface-variant);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-ghost-border);
+}
+
+/* Pulse Monitor (real-time health indicator) */
+@utility pulse-monitor {
+  position: relative;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: var(--color-primary);
+}
+.pulse-monitor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: var(--color-primary);
+  animation: pulse-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes pulse-ping {
+  0% { transform: scale(1); opacity: 0.75; }
+  75%, 100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Ghost Border utility */
+@utility ghost-border {
+  border: 1px solid var(--color-ghost-border);
+}
+
+/* ── Utility overrides for the dark surface system ─────────────────────── */
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-surface-base); }
+::-webkit-scrollbar-thumb { background: var(--color-surface-high); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-surface-highest); }
+
+/* Selection */
+::selection {
+  background-color: rgba(79, 219, 200, 0.25);
+  color: var(--color-on-surface);
+}
