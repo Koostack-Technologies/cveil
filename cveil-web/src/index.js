@@ -6,6 +6,7 @@ import * as governance from './governance/index.js';
 import * as reports from './reports/index.js';
 import * as analytics from './analytics/index.js';
 import * as dsar from './dsar/index.js';
+import * as webhooks from './webhooks/index.js';
 import { setAccessToken, initDpopKeys, authFetch } from './shared/index.js';
 
 // Bootstrap DPoP: restore access token from sessionStorage so that
@@ -37,4 +38,4 @@ if (storedToken && !isTokenExpired(storedToken)) {
     sessionStorage.removeItem('cveil_dpop_jwk');
 }
 
-export { billing, catalogue, consent, governance, reports, analytics, dsar, authFetch };
+export { billing, catalogue, consent, governance, reports, analytics, dsar, webhooks, authFetch };

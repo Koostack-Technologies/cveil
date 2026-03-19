@@ -78,6 +78,8 @@ public class SiteResource {
 
     @Inject Template dsar;
 
+    @Inject Template webhooks;
+
     @Inject Template setup;
 
     @Inject
@@ -977,6 +979,25 @@ public class SiteResource {
         if (onboardingRedirect != null) return onboardingRedirect;
 
         return applyDashboardData(dsar.instance(), uc, ws, "dsar").data("v", BUILD_VERSION);
+    }
+
+    @GET
+    @Path("dashboard/webhooks")
+    @Produces(MediaType.TEXT_HTML)
+    public Object webhooksPage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
+
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
+        if (onboardingRedirect != null) return onboardingRedirect;
+
+        return applyDashboardData(webhooks.instance(), uc, ws, "webhooks")
+                .data("v", BUILD_VERSION);
     }
 
     @GET
