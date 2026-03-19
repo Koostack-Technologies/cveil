@@ -57,23 +57,23 @@ async function loadEntities() {
         renderEntities();
     } catch (e) {
         document.getElementById('entities-table').innerHTML =
-            `<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="3" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
 function renderEntities() {
     const tb = document.getElementById('entities-table');
     if (!entitiesCache.length) {
-        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No entities defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-on-surface-muted">No entities defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = entitiesCache.map(e => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(e.entityName)}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(e.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(e.entityName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(e.description || '—')}</td>
             <td class="px-6 py-4 text-right">
-                <button onclick='openPanel("entity-edit", ${JSON.stringify(e).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
-                <button onclick='deleteEntity("${esc(e.entityName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='openPanel("entity-edit", ${JSON.stringify(e).replace(/'/g,"&#39;")})' class="text-on-surface-muted hover:text-primary mr-3 transition-colors text-xs font-medium">Edit</button>
+                <button onclick='deleteEntity("${esc(e.entityName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -85,21 +85,21 @@ function entityForm(existing) {
         <form onsubmit="saveEntity(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Name</label>
                     <input id="pf-ent-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full input-field disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-ent-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full input-field">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-ent-msg" class="hidden"></span>
         </form>`;
@@ -135,30 +135,30 @@ async function loadFields() {
         renderFields();
     } catch (e) {
         document.getElementById('fields-table').innerHTML =
-            `<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="5" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
 function renderFields() {
     const tb = document.getElementById('fields-table');
     if (!fieldsCache.length) {
-        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No fields defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-on-surface-muted">No fields defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = fieldsCache.map(f => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(f.fieldName)}</td>
-            <td class="px-6 py-4 text-gray-400">${f.entity ? esc(f.entity.entityName) : '<span class="text-gray-600">—</span>'}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(f.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(f.fieldName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${f.entity ? esc(f.entity.entityName) : '<span class="text-on-surface-variant">—</span>'}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(f.description || '—')}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(f.categories || []).map(c => badge(c.categoryName, 'purple')).join('')}
                     <button onclick='openPanel("field-categories", ${JSON.stringify(f).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-on-surface-muted hover:text-primary border border-dashed border-on-surface-muted/20 hover:border-primary/40 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
-                <button onclick='deleteField("${f.entity ? esc(f.entity.entityName) : ''}", "${esc(f.fieldName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='deleteField("${f.entity ? esc(f.entity.entityName) : ''}", "${esc(f.fieldName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -171,33 +171,33 @@ function fieldForm() {
         <form onsubmit="saveField(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Field Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Field Name</label>
                     <input id="pf-fld-name" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                        class="w-full input-field" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Entity</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Entity</label>
                     <select id="pf-fld-entity" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                        class="w-full input-field">
                         <option value="">Select entity…</option>
                         ${entityOptions}
                     </select>
-                    ${!entitiesCache.length ? '<p class="text-xs text-amber-400 mt-1">No entities registered. Add an entity first.</p>' : ''}
+                    ${!entitiesCache.length ? '<p class="text-xs text-warning mt-1">No entities registered. Add an entity first.</p>' : ''}
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-fld-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full input-field"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Entity Description <span class="text-gray-600">(optional, used if entity is new)</span></label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Entity Description <span class="text-on-surface-variant">(optional, used if entity is new)</span></label>
                     <textarea id="pf-fld-ent-desc" rows="2"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full input-field"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">Create</button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">Create</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-fld-msg" class="hidden"></span>
         </form>`;
@@ -232,7 +232,7 @@ async function loadCategories() {
         renderCategories();
     } catch (e) {
         document.getElementById('categories-table').innerHTML =
-            `<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="3" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
@@ -245,24 +245,24 @@ function fieldCategoriesForm(field) {
         .join('');
 
     return `
-        <p class="text-sm text-gray-500 mb-4">Manage categories for field <strong class="text-gray-900">${esc(field.fieldName)}</strong> on entity <strong class="text-gray-900">${esc(entityName)}</strong></p>
+        <p class="text-sm text-on-surface-muted mb-4">Manage categories for field <strong class="text-on-surface">${esc(field.fieldName)}</strong> on entity <strong class="text-on-surface">${esc(entityName)}</strong></p>
         <div id="fc-list" class="space-y-2 mb-6">
             ${(field.categories || []).map(c => `
-                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    <span class="text-sm text-gray-900">${esc(c.categoryName)}</span>
+                <div class="flex items-center justify-between bg-surface-base border border-on-surface-muted/10 rounded-md px-3 py-2">
+                    <span class="text-sm text-on-surface">${esc(c.categoryName)}</span>
                     <button onclick="unassignFieldCategory('${esc(entityName)}','${esc(field.fieldName)}','${esc(c.categoryName)}')"
-                        class="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
-                </div>`).join('') || '<p class="text-sm text-gray-500">No categories assigned.</p>'}
+                        class="text-xs text-error hover:text-error transition-colors">Remove</button>
+                </div>`).join('') || '<p class="text-sm text-on-surface-muted">No categories assigned.</p>'}
         </div>
-        <hr class="border-gray-200 mb-4">
-        <p class="text-sm text-gray-500 mb-3">Assign a category</p>
+        <hr class="border-on-surface-muted/10 mb-4">
+        <p class="text-sm text-on-surface-muted mb-3">Assign a category</p>
         <form onsubmit="assignFieldCategory(event, '${esc(entityName)}', '${esc(field.fieldName)}')">
             <div class="flex gap-2">
-                <select id="fc-select" class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                <select id="fc-select" class="flex-1 input-field">
                     <option value="">Select…</option>
                     ${availableOptions}
                 </select>
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Assign</button>
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">Assign</button>
             </div>
             <span id="fc-msg" class="hidden"></span>
         </form>`;
@@ -295,16 +295,16 @@ async function unassignFieldCategory(entityName, fieldName, categoryName) {
 function renderCategories() {
     const tb = document.getElementById('categories-table');
     if (!categoriesCache.length) {
-        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No categories defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-on-surface-muted">No categories defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = categoriesCache.map(c => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(c.categoryName)}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(c.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(c.categoryName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(c.description || '—')}</td>
             <td class="px-6 py-4 text-right">
-                <button onclick='openPanel("category-edit", ${JSON.stringify(c).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
-                <button onclick='deleteCategory("${esc(c.categoryName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='openPanel("category-edit", ${JSON.stringify(c).replace(/'/g,"&#39;")})' class="text-on-surface-muted hover:text-primary mr-3 transition-colors text-xs font-medium">Edit</button>
+                <button onclick='deleteCategory("${esc(c.categoryName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -316,21 +316,21 @@ function categoryForm(existing) {
         <form onsubmit="saveCategory(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Name</label>
                     <input id="pf-cat-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full input-field disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-cat-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full input-field">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-cat-msg" class="hidden"></span>
         </form>`;

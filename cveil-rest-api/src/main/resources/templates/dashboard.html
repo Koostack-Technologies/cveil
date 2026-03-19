@@ -5,30 +5,30 @@
 
             <!-- Welcome section -->
             <div class="mb-8">
-                <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-2">
-                    Welcome back, <span class="text-cv-500">{username ?: 'there'}</span>
+                <h1 class="text-2xl sm:text-3xl font-display font-bold tracking-tight mb-2">
+                    Welcome back, <span class="text-primary">{username ?: 'there'}</span>
                 </h1>
-                <p class="text-gray-500">Here's an overview of your Cveil workspace.</p>
+                <p class="text-on-surface-muted">Here's an overview of your Cveil workspace.</p>
             </div>
 
             <!-- Workspace info card -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
-                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Workspace Details</h2>
+            <div class="bg-surface-container border border-surface-high rounded-md p-6 mb-8">
+                <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide mb-4">Workspace Details</h2>
                 <dl class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
                     <div>
-                        <dt class="text-gray-500 mb-1">Workspace</dt>
-                        <dd class="text-gray-900 font-medium">{workspaceDisplayName ?: 'Personal'}</dd>
-                        <dd class="text-gray-500 font-mono text-xs mt-0.5">{tenantId ?: '—'}</dd>
+                        <dt class="text-on-surface-muted mb-1">Workspace</dt>
+                        <dd class="text-on-surface font-medium">{workspaceDisplayName ?: 'Personal'}</dd>
+                        <dd class="text-on-surface-muted font-technical text-xs mt-0.5">{tenantId ?: '—'}</dd>
                     </div>
                     <div>
-                        <dt class="text-gray-500 mb-1">Plan</dt>
-                        <dd class="text-cv-500 font-medium">Free</dd>
+                        <dt class="text-on-surface-muted mb-1">Plan</dt>
+                        <dd class="text-primary font-medium">Free</dd>
                     </div>
                     <div>
-                        <dt class="text-gray-500 mb-1">Status</dt>
+                        <dt class="text-on-surface-muted mb-1">Status</dt>
                         <dd class="flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                            <span class="text-green-400 font-medium">Active</span>
+                            <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                            <span class="text-secondary font-medium">Active</span>
                         </dd>
                     </div>
                 </dl>
@@ -38,28 +38,28 @@
             <h2 class="text-lg font-semibold mb-4">Quick Start</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
-                <a href="/docs" class="group bg-white shadow-sm border border-gray-200 rounded-md p-5 hover:border-cv-500/40 transition-colors">
-                    <div class="w-10 h-10 rounded bg-cv-50 border border-cv-500/20 flex items-center justify-center mb-3">
-                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                <a href="/docs" class="group bg-surface-container border border-surface-high rounded-md p-5 hover:border-primary/40 transition-colors">
+                    <div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                     </div>
-                    <h3 class="text-gray-900 font-medium mb-1 group-hover:text-cv-500 transition-colors">Read the Docs</h3>
-                    <p class="text-gray-500 text-sm">Learn how to integrate Cveil into your application.</p>
+                    <h3 class="text-on-surface font-medium mb-1 group-hover:text-primary transition-colors">Read the Docs</h3>
+                    <p class="text-on-surface-muted text-sm">Learn how to integrate Cveil into your application.</p>
                 </a>
 
-                <a href="/api/v1/docs" class="group bg-white shadow-sm border border-gray-200 rounded-md p-5 hover:border-cv-500/40 transition-colors">
-                    <div class="w-10 h-10 rounded bg-cv-50 border border-cv-500/20 flex items-center justify-center mb-3">
-                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <a href="/api/v1/docs" class="group bg-surface-container border border-surface-high rounded-md p-5 hover:border-primary/40 transition-colors">
+                    <div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                     </div>
-                    <h3 class="text-gray-900 font-medium mb-1 group-hover:text-cv-500 transition-colors">API Explorer</h3>
-                    <p class="text-gray-500 text-sm">Try out endpoints interactively with the Swagger UI.</p>
+                    <h3 class="text-on-surface font-medium mb-1 group-hover:text-primary transition-colors">API Explorer</h3>
+                    <p class="text-on-surface-muted text-sm">Try out endpoints interactively with the Swagger UI.</p>
                 </a>
 
-                <a href="/dashboard/account#tokens" class="group bg-white shadow-sm border border-gray-200 rounded-md p-5 hover:border-cv-500/40 transition-colors">
-                    <div class="w-10 h-10 rounded bg-cv-50 border border-cv-500/20 flex items-center justify-center mb-3">
-                        <svg class="w-5 h-5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                <a href="/dashboard/account#tokens" class="group bg-surface-container border border-surface-high rounded-md p-5 hover:border-primary/40 transition-colors">
+                    <div class="w-10 h-10 rounded bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
+                        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
                     </div>
-                    <h3 class="text-gray-900 font-medium mb-1 group-hover:text-cv-500 transition-colors">Access Tokens</h3>
-                    <p class="text-gray-500 text-sm">Generate tokens to authenticate API calls.</p>
+                    <h3 class="text-on-surface font-medium mb-1 group-hover:text-primary transition-colors">Access Tokens</h3>
+                    <p class="text-on-surface-muted text-sm">Generate tokens to authenticate API calls.</p>
                 </a>
 
             </div>

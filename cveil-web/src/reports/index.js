@@ -28,11 +28,11 @@ export async function loadConsentSummary() {
 function renderConsentSummaryChart(container, purposes) {
     container.innerHTML = '';
     if (!purposes.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm">No purposes configured yet.</p>';
+        container.innerHTML = '<p class="text-on-surface-muted text-sm">No purposes configured yet.</p>';
         return;
     }
     const d3 = window.d3;
-    if (!d3) { container.innerHTML = '<p class="text-gray-400 text-sm">D3.js not loaded.</p>'; return; }
+    if (!d3) { container.innerHTML = '<p class="text-on-surface-muted text-sm">D3.js not loaded.</p>'; return; }
 
     const margin = { top: 20, right: 20, bottom: 60, left: 50 };
     const width = container.clientWidth - margin.left - margin.right;
@@ -69,7 +69,7 @@ function renderConsentSummaryChart(container, purposes) {
     const legend = svg.append('g').attr('transform', `translate(${width - 150}, -10)`);
     keys.forEach((key, i) => {
         legend.append('rect').attr('x', i * 55).attr('width', 10).attr('height', 10).attr('fill', colors[key]);
-        legend.append('text').attr('x', i * 55 + 14).attr('y', 9).text(key).style('font-size', '10px').attr('fill', '#666');
+        legend.append('text').attr('x', i * 55 + 14).attr('y', 9).text(key).style('font-size', '10px').attr('fill', '#9ca3af');
     });
 }
 
@@ -93,7 +93,7 @@ export async function loadConsentActivity() {
 function renderActivityChart(container, data) {
     container.innerHTML = '';
     if (!data.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm">No activity data for this period.</p>';
+        container.innerHTML = '<p class="text-on-surface-muted text-sm">No activity data for this period.</p>';
         return;
     }
     const d3 = window.d3;
@@ -128,7 +128,7 @@ function renderActivityChart(container, data) {
     const legend = svg.append('g').attr('transform', `translate(${width - 130}, -10)`);
     [['Grants', '#10b981'], ['Revocations', '#ef4444']].forEach(([label, color], i) => {
         legend.append('rect').attr('x', i * 80).attr('width', 10).attr('height', 10).attr('fill', color);
-        legend.append('text').attr('x', i * 80 + 14).attr('y', 9).text(label).style('font-size', '10px').attr('fill', '#666');
+        legend.append('text').attr('x', i * 80 + 14).attr('y', 9).text(label).style('font-size', '10px').attr('fill', '#9ca3af');
     });
 }
 
@@ -155,14 +155,14 @@ export async function loadAuditLog() {
         const data = await api('/audit-log' + params);
         const events = data.events || [];
         if (!events.length) {
-            body.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-gray-400">No events found.</td></tr>';
+            body.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-on-surface-muted">No events found.</td></tr>';
         } else {
             body.innerHTML = events.map(e =>
                 `<tr class="text-xs">
-                    <td class="py-2 pr-4 text-gray-500">${new Date(e.createdAt).toLocaleString()}</td>
-                    <td class="py-2 pr-4"><span class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-mono">${esc(e.eventType)}</span></td>
-                    <td class="py-2 pr-4 text-gray-500 font-mono">${esc(e.aggregateType)}/${esc(e.aggregateId?.substring(0,8) || '')}</td>
-                    <td class="py-2 text-gray-400">v${e.version}</td>
+                    <td class="py-2 pr-4 text-on-surface-muted">${new Date(e.createdAt).toLocaleString()}</td>
+                    <td class="py-2 pr-4"><span class="px-1.5 py-0.5 bg-surface-container rounded-md text-on-surface font-technical">${esc(e.eventType)}</span></td>
+                    <td class="py-2 pr-4 text-on-surface-muted font-technical">${esc(e.aggregateType)}/${esc(e.aggregateId?.substring(0,8) || '')}</td>
+                    <td class="py-2 text-on-surface-muted">v${e.version}</td>
                 </tr>`
             ).join('');
         }
@@ -170,7 +170,7 @@ export async function loadAuditLog() {
         document.getElementById('audit-prev').disabled = auditOffset === 0;
         document.getElementById('audit-next').disabled = events.length < auditLimit;
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-red-500">${esc(e.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 

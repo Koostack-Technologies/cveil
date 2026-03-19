@@ -78,23 +78,23 @@ async function loadJurisdictions() {
         renderJurisdictions();
     } catch (e) {
         document.getElementById('jurisdictions-table').innerHTML =
-            `<tr><td colspan="3" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="3" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
 function renderJurisdictions() {
     const tb = document.getElementById('jurisdictions-table');
     if (!jurisdictionsCache.length) {
-        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No jurisdictions defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-on-surface-muted">No jurisdictions defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = jurisdictionsCache.map(j => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(j.jurisdictionName)}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(j.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(j.jurisdictionName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(j.description || '—')}</td>
             <td class="px-6 py-4 text-right">
-                <button onclick='openPanel("jurisdiction-edit", ${JSON.stringify(j).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-cv-500 mr-3 transition-colors text-xs font-medium">Edit</button>
-                <button onclick='deleteJurisdiction("${esc(j.jurisdictionName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='openPanel("jurisdiction-edit", ${JSON.stringify(j).replace(/'/g,"&#39;")})' class="text-on-surface-muted hover:text-primary mr-3 transition-colors text-xs font-medium">Edit</button>
+                <button onclick='deleteJurisdiction("${esc(j.jurisdictionName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -106,21 +106,21 @@ function jurisdictionForm(existing) {
         <form onsubmit="saveJurisdiction(event, ${existing ? 'true' : 'false'}, '${n}')">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Name</label>
                     <input id="pf-jur-name" value="${n}" ${existing ? 'disabled' : ''} required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none disabled:opacity-50" />
+                        class="w-full input-field disabled:opacity-50" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-jur-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">${d}</textarea>
+                        class="w-full input-field">${d}</textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">
                     ${existing ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-jur-msg" class="hidden"></span>
         </form>`;
@@ -156,29 +156,29 @@ async function loadRegulations() {
         renderRegulations();
     } catch (e) {
         document.getElementById('regulations-table').innerHTML =
-            `<tr><td colspan="4" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="4" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
 function renderRegulations() {
     const tb = document.getElementById('regulations-table');
     if (!regulationsCache.length) {
-        tb.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No regulations defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-on-surface-muted">No regulations defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = regulationsCache.map(r => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(r.regulationName)}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(r.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(r.regulationName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(r.description || '—')}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(r.activeJurisdictions || []).map(j => badge(j.jurisdictionName, 'teal')).join('')}
                     <button onclick='openPanel("regulation-jurisdictions", ${JSON.stringify(r).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-on-surface-muted hover:text-primary border border-dashed border-on-surface-muted/20 hover:border-primary/40 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
-                <button onclick='deleteRegulation("${esc(r.regulationName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='deleteRegulation("${esc(r.regulationName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -188,21 +188,21 @@ function regulationForm() {
         <form onsubmit="saveRegulation(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Name</label>
                     <input id="pf-reg-name" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                        class="w-full input-field" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-reg-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full input-field"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">
                     Create
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-reg-msg" class="hidden"></span>
         </form>`;
@@ -235,24 +235,24 @@ function regulationJurisdictionsForm(reg) {
         .join('');
 
     return `
-        <p class="text-sm text-gray-500 mb-4">Manage jurisdictions for <strong class="text-gray-900">${esc(reg.regulationName)}</strong></p>
+        <p class="text-sm text-on-surface-muted mb-4">Manage jurisdictions for <strong class="text-on-surface">${esc(reg.regulationName)}</strong></p>
         <div id="rj-list" class="space-y-2 mb-6">
             ${(reg.activeJurisdictions || []).map(j => `
-                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    <span class="text-sm text-gray-900">${esc(j.jurisdictionName)}</span>
+                <div class="flex items-center justify-between bg-surface-base ghost-border rounded-md px-3 py-2">
+                    <span class="text-sm text-on-surface">${esc(j.jurisdictionName)}</span>
                     <button onclick="removeJurisdictionFromRegulation('${esc(reg.regulationName)}','${esc(j.jurisdictionName)}')"
-                        class="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
-                </div>`).join('') || '<p class="text-sm text-gray-500">No jurisdictions linked.</p>'}
+                        class="text-xs text-error hover:text-error transition-colors">Remove</button>
+                </div>`).join('') || '<p class="text-sm text-on-surface-muted">No jurisdictions linked.</p>'}
         </div>
-        <hr class="border-gray-200 mb-4">
-        <p class="text-sm text-gray-500 mb-3">Add a jurisdiction</p>
+        <hr class="border-on-surface-muted/10 mb-4">
+        <p class="text-sm text-on-surface-muted mb-3">Add a jurisdiction</p>
         <form onsubmit="addJurisdictionToRegulation(event, '${esc(reg.regulationName)}')">
             <div class="flex gap-2">
-                <select id="rj-select" class="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                <select id="rj-select" class="flex-1 input-field">
                     <option value="">Select…</option>
                     ${availableOptions}
                 </select>
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Add</button>
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">Add</button>
             </div>
             <span id="rj-msg" class="hidden"></span>
         </form>`;
@@ -290,35 +290,35 @@ async function loadPurposes() {
         renderPolicies();
     } catch (e) {
         document.getElementById('purposes-table').innerHTML =
-            `<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">${esc(e.message)}</td></tr>`;
+            `<tr><td colspan="5" class="px-6 py-8 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
 function renderPurposes() {
     const tb = document.getElementById('purposes-table');
     if (!purposesCache.length) {
-        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No purposes defined yet.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-on-surface-muted">No purposes defined yet.</td></tr>';
         return;
     }
     tb.innerHTML = purposesCache.map(p => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(p.purposeName)}</td>
-            <td class="px-6 py-4 text-gray-400">${esc(p.description || '—')}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(p.purposeName)}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${esc(p.description || '—')}</td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(p.regulations || []).map(r => badge(r.regulationName, 'blue')).join('')}
                     <button onclick='openPanel("purpose-regulations", ${JSON.stringify(p).replace(/'/g,"&#39;")})'
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-gray-500 hover:text-cv-500 border border-dashed border-gray-300 hover:border-cv-500 transition-colors">+ manage</button>
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-on-surface-muted hover:text-primary border border-dashed border-on-surface-muted/20 hover:border-primary/40 transition-colors">+ manage</button>
                 </div>
             </td>
             <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                     ${(p.policies || []).map(pol => badge(pol.policyType === 'FIELD' ? (pol.field ? pol.field.entityName + '/' + pol.field.fieldName : 'field') : (pol.category ? pol.category.categoryName : 'category'), 'purple')).join('')}
-                    <span class="text-xs text-gray-500">${(p.policies || []).length}</span>
+                    <span class="text-xs text-on-surface-muted">${(p.policies || []).length}</span>
                 </div>
             </td>
             <td class="px-6 py-4 text-right">
-                <button onclick='deletePurpose("${esc(p.purposeName)}")' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Delete</button>
+                <button onclick='deletePurpose("${esc(p.purposeName)}")' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -328,21 +328,21 @@ function purposeForm() {
         <form onsubmit="savePurpose(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Name</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Name</label>
                     <input id="pf-pur-name" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                        class="w-full input-field" />
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Description</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Description</label>
                     <textarea id="pf-pur-desc" rows="3"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none"></textarea>
+                        class="w-full input-field"></textarea>
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">
                     Create
                 </button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-pur-msg" class="hidden"></span>
         </form>`;
@@ -375,35 +375,35 @@ function purposeRegulationsForm(purpose) {
         .join('');
 
     return `
-        <p class="text-sm text-gray-500 mb-4">Manage regulation links for <strong class="text-gray-900">${esc(purpose.purposeName)}</strong></p>
+        <p class="text-sm text-on-surface-muted mb-4">Manage regulation links for <strong class="text-on-surface">${esc(purpose.purposeName)}</strong></p>
         <div id="pr-list" class="space-y-2 mb-6">
             ${(purpose.regulations || []).map(r => `
-                <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <div class="flex items-center justify-between bg-surface-base ghost-border rounded-md px-3 py-2">
                     <div>
-                        <span class="text-sm text-gray-900">${esc(r.regulationName)}</span>
-                        ${r.lawfulBasis ? `<span class="ml-2 text-xs text-gray-500">basis: ${esc(r.lawfulBasis)}</span>` : ''}
+                        <span class="text-sm text-on-surface">${esc(r.regulationName)}</span>
+                        ${r.lawfulBasis ? `<span class="ml-2 text-xs text-on-surface-muted">basis: ${esc(r.lawfulBasis)}</span>` : ''}
                     </div>
                     <button onclick="unlinkPurposeRegulation('${esc(purpose.purposeName)}','${esc(r.regulationName)}')"
-                        class="text-xs text-red-400 hover:text-red-300 transition-colors">Unlink</button>
-                </div>`).join('') || '<p class="text-sm text-gray-500">No regulations linked.</p>'}
+                        class="text-xs text-error hover:text-error transition-colors">Unlink</button>
+                </div>`).join('') || '<p class="text-sm text-on-surface-muted">No regulations linked.</p>'}
         </div>
-        <hr class="border-gray-200 mb-4">
-        <p class="text-sm text-gray-500 mb-3">Link a regulation</p>
+        <hr class="border-on-surface-muted/10 mb-4">
+        <p class="text-sm text-on-surface-muted mb-3">Link a regulation</p>
         <form onsubmit="linkPurposeRegulation(event, '${esc(purpose.purposeName)}')">
             <div class="space-y-3">
-                <select id="pr-select" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                <select id="pr-select" class="w-full input-field">
                     <option value="">Select regulation…</option>
                     ${availableOptions}
                 </select>
                 <input id="pr-basis" placeholder="Lawful basis (e.g. consent, legitimate_interest)"
-                    class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                    class="w-full input-field" />
                 <div class="grid grid-cols-2 gap-3">
                     <input id="pr-granted" placeholder="On Granted action"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                        class="w-full input-field" />
                     <input id="pr-denied" placeholder="On Denied action"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none" />
+                        class="w-full input-field" />
                 </div>
-                <button type="submit" class="w-full px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm rounded-lg transition-colors">Link</button>
+                <button type="submit" class="w-full px-4 py-2 btn-primary transition-colors">Link</button>
             </div>
             <span id="pr-msg" class="hidden"></span>
         </form>`;
@@ -446,17 +446,17 @@ function renderPolicies() {
     });
 
     if (!allPolicies.length) {
-        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No policies defined yet. Add policies from the Purposes tab.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-on-surface-muted">No policies defined yet. Add policies from the Purposes tab.</td></tr>';
         return;
     }
     tb.innerHTML = allPolicies.map(pol => `
-        <tr class="hover:bg-gray-50 transition-colors">
-            <td class="px-6 py-4 font-medium text-gray-900">${esc(pol.purposeName)}</td>
+        <tr class="hover:bg-surface-container transition-colors">
+            <td class="px-6 py-4 font-medium text-on-surface">${esc(pol.purposeName)}</td>
             <td class="px-6 py-4">${badge(pol.policyType, pol.policyType === 'FIELD' ? 'teal' : 'purple')}</td>
-            <td class="px-6 py-4 text-gray-400">${pol.policyType === 'FIELD' ? esc((pol.field ? pol.field.fieldName : '—')) : esc((pol.category ? pol.category.categoryName : '—'))}</td>
-            <td class="px-6 py-4 text-gray-400">${pol.policyType === 'FIELD' && pol.field ? esc(pol.field.entityName) : '—'}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${pol.policyType === 'FIELD' ? esc((pol.field ? pol.field.fieldName : '—')) : esc((pol.category ? pol.category.categoryName : '—'))}</td>
+            <td class="px-6 py-4 text-on-surface-muted">${pol.policyType === 'FIELD' && pol.field ? esc(pol.field.entityName) : '—'}</td>
             <td class="px-6 py-4 text-right">
-                <button onclick='removePolicy("${esc(pol.purposeName)}", ${JSON.stringify(pol).replace(/'/g,"&#39;")})' class="text-gray-400 hover:text-red-400 transition-colors text-xs font-medium">Remove</button>
+                <button onclick='removePolicy("${esc(pol.purposeName)}", ${JSON.stringify(pol).replace(/'/g,"&#39;")})' class="text-on-surface-muted hover:text-error transition-colors text-xs font-medium">Remove</button>
             </td>
         </tr>`).join('');
 }
@@ -475,43 +475,43 @@ function policyForm() {
         <form onsubmit="addPolicy(event)">
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Purpose</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Purpose</label>
                     <select id="pf-pol-purpose" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                        class="w-full input-field">
                         <option value="">Select purpose…</option>
                         ${purposesCache.map(p => `<option value="${esc(p.purposeName)}">${esc(p.purposeName)}</option>`).join('')}
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-500 mb-1">Policy Type</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Policy Type</label>
                     <select id="pf-pol-type" onchange="togglePolicyFields()" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                        class="w-full input-field">
                         <option value="FIELD">Field</option>
                         <option value="CATEGORY">Category</option>
                     </select>
                 </div>
                 <div id="pf-pol-field-group">
-                    <label class="block text-sm text-gray-500 mb-1">Field</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Field</label>
                     <select id="pf-pol-field-select" required
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                        class="w-full input-field">
                         <option value="">Select field…</option>
                         ${fieldOptions}
                     </select>
-                    ${!fieldsCache.length ? '<p class="text-xs text-amber-400 mt-1">No fields registered. Add fields in the Catalogue first.</p>' : ''}
+                    ${!fieldsCache.length ? '<p class="text-xs text-warning mt-1">No fields registered. Add fields in the Catalogue first.</p>' : ''}
                 </div>
                 <div id="pf-pol-cat-group" class="hidden">
-                    <label class="block text-sm text-gray-500 mb-1">Category</label>
+                    <label class="block text-sm text-on-surface-muted mb-1">Category</label>
                     <select id="pf-pol-cat-select"
-                        class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-cv-500 focus:outline-none">
+                        class="w-full input-field">
                         <option value="">Select category…</option>
                         ${categoryOptions}
                     </select>
-                    ${!categoriesCache.length ? '<p class="text-xs text-amber-400 mt-1">No categories registered. Add categories in the Catalogue first.</p>' : ''}
+                    ${!categoriesCache.length ? '<p class="text-xs text-warning mt-1">No categories registered. Add categories in the Catalogue first.</p>' : ''}
                 </div>
             </div>
             <div class="mt-6 flex gap-3">
-                <button type="submit" class="px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded-lg transition-colors">Add Policy</button>
-                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                <button type="submit" class="px-4 py-2 btn-primary transition-colors">Add Policy</button>
+                <button type="button" onclick="closePanel()" class="px-4 py-2 text-sm btn-secondary transition-colors">Cancel</button>
             </div>
             <span id="pf-pol-msg" class="hidden"></span>
         </form>`;

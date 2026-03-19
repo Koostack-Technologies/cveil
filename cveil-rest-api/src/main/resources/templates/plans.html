@@ -8,85 +8,85 @@
             <!-- Page Header -->
             <div class="text-center mb-12">
                 <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">Simple, transparent pricing</h1>
-                <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-8">Start free, scale as you grow. Every plan includes the full consent engine, immutable audit ledger, and data masking.</p>
+                <p class="text-lg text-on-surface-muted max-w-2xl mx-auto mb-8">Start free, scale as you grow. Every plan includes the full consent engine, immutable audit ledger, and data masking.</p>
 
                 <!-- Billing Toggle -->
-                <div class="inline-flex items-center gap-3 bg-gray-800/60 rounded-full p-1">
-                    <button id="btn-monthly" onclick="toggleBilling('monthly')" class="px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900">Monthly</button>
-                    <button id="btn-annual" onclick="toggleBilling('annual')" class="px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white">Annual <span class="text-cv-400 text-xs ml-1">Save 20%</span></button>
+                <div class="inline-flex items-center gap-3 bg-surface-container/60 rounded-full p-1">
+                    <button id="btn-monthly" onclick="toggleBilling('monthly')" class="px-5 py-2 rounded-full text-sm font-medium transition-all bg-primary text-on-primary">Monthly</button>
+                    <button id="btn-annual" onclick="toggleBilling('annual')" class="px-5 py-2 rounded-full text-sm font-medium transition-all text-on-surface-muted hover:text-on-surface">Annual <span class="text-primary text-xs ml-1">Save 20%</span></button>
                 </div>
             </div>
 
             <!-- Pricing Cards -->
             <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
                 {#for tier in tiers}
-                <div class="relative rounded-md border {#if tier.highlighted}border-cv-500 shadow-[0_0_30px_rgba(20,184,166,0.15)]{#else}border-gray-800{/if} bg-gray-900/50 p-8 flex flex-col">
+                <div class="relative rounded-md border {#if tier.highlighted}border-primary shadow-[0_0_30px_rgba(79,219,200,0.15)]{#else}border-surface-high{/if} bg-surface-low/50 p-8 flex flex-col">
                     {#if tier.highlighted}
-                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-cv-500 text-gray-900 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Most Popular</div>
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-on-primary px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Most Popular</div>
                     {/if}
 
                     <div class="mb-8">
                         <h3 class="text-xl font-bold mb-2">{tier.name}</h3>
-                        <p class="text-gray-400 text-sm mb-6">{tier.description}</p>
+                        <p class="text-on-surface-variant text-sm mb-6">{tier.description}</p>
                         <div class="flex items-baseline gap-1">
                             <span class="text-4xl font-bold" data-monthly-price="{tier.price}" data-annual-price="{tier.price}">{tier.price}</span>
-                            <span class="text-gray-500" data-monthly-period="{tier.period}" data-annual-period="{tier.period}">{tier.period}</span>
+                            <span class="text-on-surface-muted" data-monthly-period="{tier.period}" data-annual-period="{tier.period}">{tier.period}</span>
                         </div>
                     </div>
 
                     <div class="space-y-4 mb-8 flex-grow">
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
                                 <span class="text-white font-medium">{tier.apiRequests}</span>
-                                <span class="text-gray-400"> API requests / mo</span>
+                                <span class="text-on-surface-variant"> API requests / mo</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
                                 <span class="text-white font-medium">{tier.subjects}</span>
-                                <span class="text-gray-400"> consent records</span>
+                                <span class="text-on-surface-variant"> consent records</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
                                 <span class="text-white font-medium">{tier.members}</span>
-                                <span class="text-gray-400"> team members</span>
+                                <span class="text-on-surface-variant"> team members</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Burst: </span>
+                                <span class="text-on-surface-variant">Burst: </span>
                                 <span class="text-white font-medium">{tier.burst}</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Audit retention: </span>
+                                <span class="text-on-surface-variant">Audit retention: </span>
                                 <span class="text-white font-medium">{tier.auditRetention}</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Governance: </span>
+                                <span class="text-on-surface-variant">Governance: </span>
                                 <span class="text-white font-medium">{tier.governance}</span>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-cv-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg class="w-5 h-5 text-primary mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             <div>
-                                <span class="text-gray-400">Support: </span>
+                                <span class="text-on-surface-variant">Support: </span>
                                 <span class="text-white font-medium">{tier.support}</span>
                             </div>
                         </div>
                     </div>
 
-                    <a href="/signup?plan={tier.planId}" class="plan-cta {#if tier.highlighted}bg-cv-500 text-gray-900 hover:bg-cv-600 shadow-[0_0_20px_rgba(20,184,166,0.3)]{#else}bg-gray-800 text-white hover:bg-gray-700 border border-gray-700{/if} px-6 py-3 rounded font-semibold text-center transition-all" data-plan="{tier.planId}">
+                    <a href="/signup?plan={tier.planId}" class="plan-cta {#if tier.highlighted}bg-primary text-on-primary hover:bg-primary-container shadow-[0_0_20px_rgba(79,219,200,0.3)]{#else}bg-surface-high text-on-surface hover:bg-surface-highest border border-surface-high{/if} px-6 py-3 rounded font-semibold text-center transition-all" data-plan="{tier.planId}">
                         {tier.cta}
                     </a>
                 </div>
@@ -94,9 +94,9 @@
             </div>
 
             <!-- Pay As You Go Note -->
-            <div class="max-w-3xl mx-auto bg-gray-800/30 border border-gray-700 rounded-md p-8 text-center mb-16">
+            <div class="max-w-3xl mx-auto bg-surface-container/30 border border-surface-high rounded-md p-8 text-center mb-16">
                 <h3 class="text-xl font-bold mb-3">Pay as you go, always</h3>
-                <p class="text-gray-400 leading-relaxed">
+                <p class="text-on-surface-variant leading-relaxed">
                     Every paid plan includes a baseline quota of API requests per month. Growth plans enforce a hard stop at their limit. Business plans bill at the per-request overage rate — no surprises. Usage resets on the first of each calendar month.
                 </p>
             </div>
@@ -107,63 +107,63 @@
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm min-w-[600px]">
                         <thead>
-                            <tr class="border-b border-gray-800">
-                                <th class="py-4 pr-4 font-medium text-gray-400">Feature</th>
+                            <tr class="border-b border-surface-high">
+                                <th class="py-4 pr-4 font-medium text-on-surface-variant">Feature</th>
                                 {#for tier in tiers}
-                                <th class="py-4 px-4 font-medium {#if tier.highlighted}text-cv-500{#else}text-gray-400{/if} text-center">{tier.name}</th>
+                                <th class="py-4 px-4 font-medium {#if tier.highlighted}text-primary{#else}text-on-surface-variant{/if} text-center">{tier.name}</th>
                                 {/for}
                             </tr>
                         </thead>
-                        <tbody class="text-gray-300">
-                            <tr class="border-b border-gray-800/50">
+                        <tbody class="text-on-surface-variant">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">API requests / mo</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.apiRequests}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Consent records</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.subjects}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Burst rate</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.burst}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Team members</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.members}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Audit retention</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.auditRetention}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Governance</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.governance}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Webhooks</td>
-                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-on-surface-muted">—</span>{#else}<svg class="w-5 h-5 text-primary inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Consent banner</td>
-                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-primary inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">DSAR workflow</td>
-                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-on-surface-muted">—</span>{#else}<svg class="w-5 h-5 text-primary inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Compliance reports</td>
-                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-gray-600">—</span>{#else}<svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center">{#if tier.planId == 'free'}<span class="text-on-surface-muted">—</span>{#else}<svg class="w-5 h-5 text-primary inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>{/if}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Analytics dashboard</td>
-                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-cv-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
+                                {#for tier in tiers}<td class="py-3 px-4 text-center"><svg class="w-5 h-5 text-primary inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Overage</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.overage}</td>{/for}
                             </tr>
-                            <tr class="border-b border-gray-800/50">
+                            <tr class="border-b border-surface-high/50">
                                 <td class="py-3 pr-4">Support</td>
                                 {#for tier in tiers}<td class="py-3 px-4 text-center {#if tier.highlighted}font-medium text-white{/if}">{tier.support}</td>{/for}
                             </tr>
@@ -192,11 +192,11 @@
         const btnAnnual = document.getElementById('btn-annual');
 
         if (interval === 'annual') {
-            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900';
-            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white';
+            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-primary text-on-primary';
+            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-on-surface-muted hover:text-on-surface';
         } else {
-            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-cv-500 text-gray-900';
-            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-gray-400 hover:text-white';
+            btnMonthly.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all bg-primary text-on-primary';
+            btnAnnual.className = 'px-5 py-2 rounded-full text-sm font-medium transition-all text-on-surface-muted hover:text-on-surface';
         }
 
         // Update displayed prices

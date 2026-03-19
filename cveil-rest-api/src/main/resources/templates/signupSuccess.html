@@ -6,30 +6,30 @@
         <div class="w-full max-w-lg">
 
             <!-- Success icon -->
-            <div class="mx-auto mb-6 w-16 h-16 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center">
-                <svg class="w-8 h-8 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <div class="mx-auto mb-6 w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
             </div>
 
             <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Account Created</h1>
-            <p class="text-gray-400 text-lg mb-8">
+            <p class="text-on-surface-variant text-lg mb-8">
                 Welcome aboard, <span class="text-white font-medium">{username ?: 'there'}</span>! Your workspace is ready.
             </p>
 
             <!-- Account details card -->
-            <div class="bg-gray-800/40 border border-gray-700 rounded-md p-6 text-left mb-10">
-                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Your Details</h2>
+            <div class="bg-surface-container/40 border border-surface-high rounded-md p-6 text-left mb-10">
+                <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-4">Your Details</h2>
                 <dl class="space-y-3 text-sm">
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Username</dt>
-                        <dd class="text-white font-mono">{username ?: '—'}</dd>
+                        <dt class="text-on-surface-muted">Username</dt>
+                        <dd class="text-on-surface font-technical">{username ?: '—'}</dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Workspace ID</dt>
-                        <dd class="text-white font-mono">{tenantId ?: '—'}</dd>
+                        <dt class="text-on-surface-muted">Workspace ID</dt>
+                        <dd class="text-on-surface font-technical">{tenantId ?: '—'}</dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Plan</dt>
-                        <dd class="text-cv-500 font-medium">Free</dd>
+                        <dt class="text-on-surface-muted">Plan</dt>
+                        <dd class="text-primary font-medium">Free</dd>
                     </div>
                 </dl>
             </div>
@@ -39,30 +39,30 @@
                 <h2 class="text-lg font-semibold mb-4">Next Steps</h2>
                 <ol class="space-y-4">
                     <li class="flex gap-3">
-                        <span class="shrink-0 w-7 h-7 rounded-full bg-cv-900/50 border border-cv-500/20 text-cv-500 text-xs font-bold flex items-center justify-center">1</span>
+                        <span class="shrink-0 w-7 h-7 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center">1</span>
                         <div>
-                            <p class="text-white font-medium">Read the documentation</p>
-                            <p class="text-gray-400 text-sm">Learn how to integrate Cveil into your application.</p>
+                            <p class="text-on-surface font-medium">Read the documentation</p>
+                            <p class="text-on-surface-variant text-sm">Learn how to integrate Cveil into your application.</p>
                         </div>
                     </li>
                     <li class="flex gap-3">
-                        <span class="shrink-0 w-7 h-7 rounded-full bg-cv-900/50 border border-cv-500/20 text-cv-500 text-xs font-bold flex items-center justify-center">2</span>
+                        <span class="shrink-0 w-7 h-7 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center">2</span>
                         <div>
-                            <p class="text-white font-medium">Explore the API</p>
-                            <p class="text-gray-400 text-sm">Try out endpoints interactively in the API Explorer.</p>
+                            <p class="text-on-surface font-medium">Explore the API</p>
+                            <p class="text-on-surface-variant text-sm">Try out endpoints interactively in the API Explorer.</p>
                         </div>
                     </li>
                     <li class="flex gap-3">
-                        <span class="shrink-0 w-7 h-7 rounded-full bg-cv-900/50 border border-cv-500/20 text-cv-500 text-xs font-bold flex items-center justify-center">3</span>
+                        <span class="shrink-0 w-7 h-7 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center">3</span>
                         <div>
-                            <p class="text-white font-medium">Create an API key</p>
-                            <p class="text-gray-400 text-sm">Generate a key for your workspace to start making API calls.</p>
+                            <p class="text-on-surface font-medium">Create an API key</p>
+                            <p class="text-on-surface-variant text-sm">Generate a key for your workspace to start making API calls.</p>
                         </div>
                     </li>
                 </ol>
             </div>
 
-            <a href="/docs" class="bg-cv-500 text-gray-900 hover:bg-cv-600 px-8 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] inline-flex items-center justify-center gap-2">
+            <a href="/docs" class="bg-primary text-on-primary hover:bg-primary-container px-8 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(79,219,200,0.3)] inline-flex items-center justify-center gap-2">
                 Get Started
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
             </a>

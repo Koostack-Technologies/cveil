@@ -4,18 +4,18 @@
 {#content}
 
     <!-- Sub-navigation tabs -->
-    <div class="border-b border-gray-200 mb-8">
+    <div class="mb-8">
         <nav class="flex gap-6 -mb-px">
             <button onclick="showTab('entities')" id="tab-entities"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-cv-500 text-cv-500 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-primary text-primary transition-colors">
                 Entities
             </button>
             <button onclick="showTab('fields')" id="tab-fields"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
                 Fields
             </button>
             <button onclick="showTab('categories')" id="tab-categories"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
                 Categories
             </button>
         </nav>
@@ -28,24 +28,24 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Entities</h2>
-                <p class="text-sm text-gray-500 mt-1">Data entities such as users, orders, or transactions.</p>
+                <p class="text-sm text-on-surface-muted mt-1">Data entities such as users, orders, or transactions.</p>
             </div>
-            <button onclick="openPanel('entity-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded transition-colors">
+            <button onclick="openPanel('entity-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
                 <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Entity
             </button>
         </div>
-        <div class="bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden">
+        <div class="bg-surface-low rounded-md overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
+                <thead class="bg-surface-base text-on-surface-muted uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Name</th>
                         <th class="px-6 py-3">Description</th>
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="entities-table" class="divide-y divide-gray-200">
-                    <tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
+                <tbody id="entities-table" class="divide-y divide-surface-high">
+                    <tr><td colspan="3" class="px-6 py-8 text-center text-on-surface-muted">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -58,16 +58,16 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Fields</h2>
-                <p class="text-sm text-gray-500 mt-1">Sensitive data fields tracked within entities.</p>
+                <p class="text-sm text-on-surface-muted mt-1">Sensitive data fields tracked within entities.</p>
             </div>
-            <button onclick="openPanel('field-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded transition-colors">
+            <button onclick="openPanel('field-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
                 <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Field
             </button>
         </div>
-        <div class="bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden">
+        <div class="bg-surface-low rounded-md overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
+                <thead class="bg-surface-base text-on-surface-muted uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Field Name</th>
                         <th class="px-6 py-3">Entity</th>
@@ -76,8 +76,8 @@
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="fields-table" class="divide-y divide-gray-200">
-                    <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
+                <tbody id="fields-table" class="divide-y divide-surface-high">
+                    <tr><td colspan="5" class="px-6 py-8 text-center text-on-surface-muted">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -90,24 +90,24 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-xl font-semibold">Categories</h2>
-                <p class="text-sm text-gray-500 mt-1">Classification labels for sensitive fields (e.g. PII, PHI, financial).</p>
+                <p class="text-sm text-on-surface-muted mt-1">Classification labels for sensitive fields (e.g. PII, PHI, financial).</p>
             </div>
-            <button onclick="openPanel('category-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-cv-500 hover:bg-cv-600 text-white text-sm font-medium rounded transition-colors">
+            <button onclick="openPanel('category-add')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
                 <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Category
             </button>
         </div>
-        <div class="bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden">
+        <div class="bg-surface-low rounded-md overflow-hidden">
             <table class="w-full text-sm text-left">
-                <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wide">
+                <thead class="bg-surface-base text-on-surface-muted uppercase text-xs tracking-wide">
                     <tr>
                         <th class="px-6 py-3">Name</th>
                         <th class="px-6 py-3">Description</th>
                         <th class="px-6 py-3 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="categories-table" class="divide-y divide-gray-200">
-                    <tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">Loading…</td></tr>
+                <tbody id="categories-table" class="divide-y divide-surface-high">
+                    <tr><td colspan="3" class="px-6 py-8 text-center text-on-surface-muted">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -117,10 +117,10 @@
     <!-- Slide-out Panel (shared)                                      -->
     <!-- ============================================================ -->
     <div id="panel-overlay" class="hidden fixed inset-0 z-40 bg-black/30 transition-opacity" onclick="closePanel()"></div>
-    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-white border-l border-gray-200 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-surface-low shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4">
             <h3 id="panel-title" class="text-lg font-semibold"></h3>
-            <button onclick="closePanel()" class="text-gray-500 hover:text-gray-900 p-1 rounded hover:bg-gray-100 transition-colors">
+            <button onclick="closePanel()" class="text-on-surface-muted hover:text-on-surface p-1 rounded-md hover:bg-surface-container transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
@@ -131,12 +131,12 @@
     <!-- Delete Confirmation Modal                                     -->
     <!-- ============================================================ -->
     <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-        <div class="bg-white border border-gray-200 rounded-md p-6 max-w-sm w-full mx-4 shadow-lg">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
-            <p id="delete-modal-msg" class="text-sm text-gray-500 mb-6"></p>
+        <div class="bg-surface-low rounded-md p-6 max-w-sm w-full mx-4 shadow-lg">
+            <h3 class="text-lg font-semibold text-on-surface mb-2">Confirm Delete</h3>
+            <p id="delete-modal-msg" class="text-sm text-on-surface-muted mb-6"></p>
             <div class="flex gap-3 justify-end">
-                <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-100 transition-colors">Cancel</button>
-                <button id="delete-modal-confirm" class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded transition-colors">Delete</button>
+                <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface ghost-border rounded-md hover:bg-surface-container transition-colors">Cancel</button>
+                <button id="delete-modal-confirm" class="px-4 py-2 text-sm text-on-surface bg-red-600 hover:bg-red-700 rounded-md transition-colors">Delete</button>
             </div>
         </div>
     </div>

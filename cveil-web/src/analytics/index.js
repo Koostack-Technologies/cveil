@@ -70,7 +70,7 @@ async function loadApiUsageChart(from) {
             value: r.metricValue || 0
         })), '#6366f1', 'Requests');
     } catch (e) {
-        el.innerHTML = `<p class="text-gray-400 text-sm">No API usage data available.</p>`;
+        el.innerHTML = `<p class="text-on-surface-muted text-sm">No API usage data available.</p>`;
     }
 }
 
@@ -84,7 +84,7 @@ async function loadConsentFlowChart(from) {
         const data = await reportsApi(`/consent-activity?from=${from}&interval=1d`);
         renderStackedBarChart(el, data.data || []);
     } catch (e) {
-        el.innerHTML = `<p class="text-gray-400 text-sm">No consent activity data.</p>`;
+        el.innerHTML = `<p class="text-on-surface-muted text-sm">No consent activity data.</p>`;
     }
 }
 
@@ -98,7 +98,7 @@ async function loadConsentDistribution() {
         const data = await reportsApi('/consent-summary');
         renderDonutChart(el, (data.purposes || []).filter(p => p.total > 0));
     } catch (e) {
-        el.innerHTML = `<p class="text-gray-400 text-sm">No consent data available.</p>`;
+        el.innerHTML = `<p class="text-on-surface-muted text-sm">No consent data available.</p>`;
     }
 }
 
@@ -108,7 +108,7 @@ function renderLineChart(container, data, color, label) {
     container.innerHTML = '';
     const d3 = window.d3;
     if (!d3 || !data.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm text-center pt-20">No data available.</p>';
+        container.innerHTML = '<p class="text-on-surface-muted text-sm text-center pt-20">No data available.</p>';
         return;
     }
 
@@ -142,7 +142,7 @@ function renderStackedBarChart(container, data) {
     container.innerHTML = '';
     const d3 = window.d3;
     if (!d3 || !data.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm text-center pt-20">No data available.</p>';
+        container.innerHTML = '<p class="text-on-surface-muted text-sm text-center pt-20">No data available.</p>';
         return;
     }
 
@@ -179,7 +179,7 @@ function renderStackedBarChart(container, data) {
     const legend = svg.append('g').attr('transform', `translate(${width - 130}, -10)`);
     [['Grants', '#10b981'], ['Revocations', '#ef4444']].forEach(([lbl, clr], i) => {
         legend.append('rect').attr('x', i * 80).attr('width', 10).attr('height', 10).attr('fill', clr);
-        legend.append('text').attr('x', i * 80 + 14).attr('y', 9).text(lbl).style('font-size', '10px').attr('fill', '#666');
+        legend.append('text').attr('x', i * 80 + 14).attr('y', 9).text(lbl).style('font-size', '10px').attr('fill', '#9ca3af');
     });
 }
 
@@ -187,7 +187,7 @@ function renderDonutChart(container, purposes) {
     container.innerHTML = '';
     const d3 = window.d3;
     if (!d3 || !purposes.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm text-center pt-20">No consent data yet.</p>';
+        container.innerHTML = '<p class="text-on-surface-muted text-sm text-center pt-20">No consent data yet.</p>';
         return;
     }
 
@@ -206,14 +206,14 @@ function renderDonutChart(container, purposes) {
     svg.selectAll('path').data(pie(purposes)).enter().append('path')
         .attr('d', arc)
         .attr('fill', (_, i) => color(i))
-        .attr('stroke', '#fff').attr('stroke-width', 2);
+        .attr('stroke', '#0b1326').attr('stroke-width', 2);
 
     // Labels
     const labelArc = d3.arc().innerRadius(radius * 0.8).outerRadius(radius * 0.8);
     svg.selectAll('text').data(pie(purposes)).enter().append('text')
         .attr('transform', d => `translate(${labelArc.centroid(d)})`)
         .attr('text-anchor', 'middle')
-        .style('font-size', '10px').attr('fill', '#333')
+        .style('font-size', '10px').attr('fill', '#e8eaed')
         .text(d => d.data.total > 0 ? d.data.purposeName : '');
 }
 

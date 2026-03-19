@@ -6,104 +6,104 @@
             <!-- Header -->
             <div class="mb-8">
                 <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Compliance Reports</h1>
-                <p class="text-gray-500">Consent summaries, audit trails, and governance snapshots for regulatory compliance.</p>
+                <p class="text-on-surface-muted">Consent summaries, audit trails, and governance snapshots for regulatory compliance.</p>
             </div>
 
             <!-- Report Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <!-- Consent Summary -->
-                <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
+                <div class="bg-surface-low rounded-md p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Consent Summary</h2>
-                        <button onclick="CveilWeb.reports.loadConsentSummary()" class="text-xs text-cv-500 hover:text-cv-600 font-medium">Refresh</button>
+                        <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide">Consent Summary</h2>
+                        <button onclick="CveilWeb.reports.loadConsentSummary()" class="text-xs text-primary hover:text-primary-container font-medium">Refresh</button>
                     </div>
-                    <div id="consent-summary-chart" class="h-64 flex items-center justify-center text-gray-400">
+                    <div id="consent-summary-chart" class="h-64 flex items-center justify-center text-on-surface-muted">
                         <p>Loading...</p>
                     </div>
                 </div>
 
                 <!-- Consent Activity -->
-                <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
+                <div class="bg-surface-low rounded-md p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Consent Activity</h2>
-                        <select id="activity-range" onchange="CveilWeb.reports.loadConsentActivity()" class="text-xs border border-gray-300 rounded px-2 py-1">
+                        <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide">Consent Activity</h2>
+                        <select id="activity-range" onchange="CveilWeb.reports.loadConsentActivity()" class="text-xs ghost-border rounded-md px-2 py-1">
                             <option value="7d">Last 7 days</option>
                             <option value="30d" selected>Last 30 days</option>
                             <option value="90d">Last 90 days</option>
                         </select>
                     </div>
-                    <div id="consent-activity-chart" class="h-64 flex items-center justify-center text-gray-400">
+                    <div id="consent-activity-chart" class="h-64 flex items-center justify-center text-on-surface-muted">
                         <p>Loading...</p>
                     </div>
                 </div>
             </div>
 
             <!-- Governance Snapshot -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
+            <div class="bg-surface-low rounded-md p-6 mb-8">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Governance Snapshot</h2>
-                    <button onclick="CveilWeb.reports.loadGovernanceSnapshot()" class="text-xs text-cv-500 hover:text-cv-600 font-medium">Refresh</button>
+                    <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide">Governance Snapshot</h2>
+                    <button onclick="CveilWeb.reports.loadGovernanceSnapshot()" class="text-xs text-primary hover:text-primary-container font-medium">Refresh</button>
                 </div>
                 <div id="governance-snapshot" class="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                    <div class="text-center p-4 bg-gray-50 rounded">
-                        <div id="gov-jurisdictions" class="text-2xl font-bold text-gray-900">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Jurisdictions</div>
+                    <div class="text-center p-4 bg-surface-base rounded-md">
+                        <div id="gov-jurisdictions" class="text-2xl font-bold text-on-surface">—</div>
+                        <div class="text-xs text-on-surface-muted mt-1">Jurisdictions</div>
                     </div>
-                    <div class="text-center p-4 bg-gray-50 rounded">
-                        <div id="gov-regulations" class="text-2xl font-bold text-gray-900">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Regulations</div>
+                    <div class="text-center p-4 bg-surface-base rounded-md">
+                        <div id="gov-regulations" class="text-2xl font-bold text-on-surface">—</div>
+                        <div class="text-xs text-on-surface-muted mt-1">Regulations</div>
                     </div>
-                    <div class="text-center p-4 bg-gray-50 rounded">
-                        <div id="gov-purposes" class="text-2xl font-bold text-gray-900">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Purposes</div>
+                    <div class="text-center p-4 bg-surface-base rounded-md">
+                        <div id="gov-purposes" class="text-2xl font-bold text-on-surface">—</div>
+                        <div class="text-xs text-on-surface-muted mt-1">Purposes</div>
                     </div>
-                    <div class="text-center p-4 bg-gray-50 rounded">
-                        <div id="gov-entities" class="text-2xl font-bold text-gray-900">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Entities</div>
+                    <div class="text-center p-4 bg-surface-base rounded-md">
+                        <div id="gov-entities" class="text-2xl font-bold text-on-surface">—</div>
+                        <div class="text-xs text-on-surface-muted mt-1">Entities</div>
                     </div>
-                    <div class="text-center p-4 bg-gray-50 rounded">
-                        <div id="gov-subjects" class="text-2xl font-bold text-gray-900">—</div>
-                        <div class="text-xs text-gray-500 mt-1">Subjects</div>
+                    <div class="text-center p-4 bg-surface-base rounded-md">
+                        <div id="gov-subjects" class="text-2xl font-bold text-on-surface">—</div>
+                        <div class="text-xs text-on-surface-muted mt-1">Subjects</div>
                     </div>
                 </div>
             </div>
 
             <!-- Audit Log -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-8">
+            <div class="bg-surface-low rounded-md p-6 mb-8">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Audit Log</h2>
+                    <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide">Audit Log</h2>
                     <div class="flex gap-2">
-                        <input type="text" id="audit-subject" placeholder="Filter by subject..." class="text-xs border border-gray-300 rounded px-2 py-1 w-40">
-                        <button onclick="CveilWeb.reports.loadAuditLog()" class="text-xs bg-cv-500 text-white rounded px-3 py-1 hover:bg-cv-600">Search</button>
+                        <input type="text" id="audit-subject" placeholder="Filter by subject..." class="text-xs ghost-border rounded-md px-2 py-1 w-40">
+                        <button onclick="CveilWeb.reports.loadAuditLog()" class="text-xs bg-primary-container text-on-surface rounded-md px-3 py-1 hover:bg-primary-dim">Search</button>
                     </div>
                 </div>
                 <div id="audit-log-table" class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="text-left text-gray-500 border-b">
+                            <tr class="text-left text-on-surface-muted border-b">
                                 <th class="py-2 pr-4">Time</th>
                                 <th class="py-2 pr-4">Event Type</th>
                                 <th class="py-2 pr-4">Aggregate</th>
                                 <th class="py-2">Version</th>
                             </tr>
                         </thead>
-                        <tbody id="audit-log-body" class="divide-y divide-gray-100">
-                            <tr><td colspan="4" class="py-8 text-center text-gray-400">Loading...</td></tr>
+                        <tbody id="audit-log-body" class="divide-y divide-surface-high">
+                            <tr><td colspan="4" class="py-8 text-center text-on-surface-muted">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="mt-4 flex justify-between items-center">
-                    <button id="audit-prev" onclick="CveilWeb.reports.auditPrev()" class="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50" disabled>← Previous</button>
-                    <span id="audit-page-info" class="text-xs text-gray-400"></span>
-                    <button id="audit-next" onclick="CveilWeb.reports.auditNext()" class="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50">Next →</button>
+                    <button id="audit-prev" onclick="CveilWeb.reports.auditPrev()" class="text-xs text-on-surface-muted hover:text-on-surface disabled:opacity-50" disabled>← Previous</button>
+                    <span id="audit-page-info" class="text-xs text-on-surface-muted"></span>
+                    <button id="audit-next" onclick="CveilWeb.reports.auditNext()" class="text-xs text-on-surface-muted hover:text-on-surface disabled:opacity-50">Next →</button>
                 </div>
             </div>
 
             <!-- Export -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Export</h2>
+            <div class="bg-surface-low rounded-md p-6">
+                <h2 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide mb-4">Export</h2>
                 <div class="flex gap-3">
-                    <a href="/api/v1/reports/export/consent-summary" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium text-gray-700 transition-colors">
+                    <a href="/api/v1/reports/export/consent-summary" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-container hover:bg-surface-high rounded-md text-sm font-medium text-on-surface transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         Consent Summary CSV
                     </a>

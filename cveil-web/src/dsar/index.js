@@ -56,22 +56,22 @@ export async function loadRequests() {
         const total = data.total || 0;
 
         if (!requests.length) {
-            body.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-gray-400">No DSAR requests found.</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-on-surface-muted">No DSAR requests found.</td></tr>';
         } else {
             body.innerHTML = requests.map(r => {
                 const isOverdue = r.dueDate && new Date(r.dueDate) < new Date() && !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(r.status);
-                return `<tr class="text-sm ${isOverdue ? 'bg-red-50' : ''}">
+                return `<tr class="text-sm ${isOverdue ? 'bg-error-container' : ''}">
                     <td class="py-3 px-4">
-                        <div class="font-medium text-gray-900">${esc(r.requesterEmail)}</div>
-                        ${r.requesterName ? `<div class="text-xs text-gray-500">${esc(r.requesterName)}</div>` : ''}
+                        <div class="font-medium text-on-surface">${esc(r.requesterEmail)}</div>
+                        ${r.requesterName ? `<div class="text-xs text-on-surface-muted">${esc(r.requesterName)}</div>` : ''}
                     </td>
-                    <td class="py-3 px-4"><span class="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-700">${esc(r.requestType)}</span></td>
+                    <td class="py-3 px-4"><span class="px-2 py-0.5 text-xs font-medium rounded-md bg-surface-container text-on-surface">${esc(r.requestType)}</span></td>
                     <td class="py-3 px-4">${statusBadge(r.status)}</td>
-                    <td class="py-3 px-4 text-gray-500 font-mono text-xs">${esc(r.subjectId || '—')}</td>
-                    <td class="py-3 px-4 text-xs text-gray-500 ${isOverdue ? 'text-red-600 font-medium' : ''}">${r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—'}</td>
-                    <td class="py-3 px-4 text-xs text-gray-500">${new Date(r.createdAt).toLocaleDateString()}</td>
+                    <td class="py-3 px-4 text-on-surface-muted font-technical text-xs">${esc(r.subjectId || '—')}</td>
+                    <td class="py-3 px-4 text-xs text-on-surface-muted ${isOverdue ? 'text-error font-medium' : ''}">${r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—'}</td>
+                    <td class="py-3 px-4 text-xs text-on-surface-muted">${new Date(r.createdAt).toLocaleDateString()}</td>
                     <td class="py-3 px-4">
-                        <button onclick="CveilWeb.dsar.showDetail('${r.id}')" class="text-cv-600 hover:text-cv-800 text-xs font-medium">View</button>
+                        <button onclick="CveilWeb.dsar.showDetail('${r.id}')" class="text-primary hover:text-primary text-xs font-medium">View</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -84,7 +84,7 @@ export async function loadRequests() {
         document.getElementById('dsar-prev').disabled = currentPage <= 1;
         document.getElementById('dsar-next').disabled = end >= total;
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-red-500">${esc(e.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-error">${esc(e.message)}</td></tr>`;
     }
 }
 
@@ -125,7 +125,7 @@ export async function createRequest(event) {
 export async function showDetail(requestId) {
     const content = document.getElementById('dsar-detail-content');
     document.getElementById('dsar-detail-modal')?.classList.remove('hidden');
-    content.innerHTML = '<p class="text-gray-400">Loading...</p>';
+    content.innerHTML = '<p class="text-on-surface-muted">Loading...</p>';
 
     try {
         const [request, activity] = await Promise.all([
@@ -136,20 +136,20 @@ export async function showDetail(requestId) {
         content.innerHTML = `
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-3 text-sm">
-                    <div><span class="text-gray-500">Type:</span> <span class="font-medium">${esc(request.requestType)}</span></div>
-                    <div><span class="text-gray-500">Status:</span> ${statusBadge(request.status)}</div>
-                    <div><span class="text-gray-500">Email:</span> ${esc(request.requesterEmail)}</div>
-                    <div><span class="text-gray-500">Name:</span> ${esc(request.requesterName || '—')}</div>
-                    <div><span class="text-gray-500">Subject:</span> <code class="text-xs">${esc(request.subjectId || '—')}</code></div>
-                    <div><span class="text-gray-500">Due:</span> ${request.dueDate ? new Date(request.dueDate).toLocaleDateString() : '—'}</div>
+                    <div><span class="text-on-surface-muted">Type:</span> <span class="font-medium">${esc(request.requestType)}</span></div>
+                    <div><span class="text-on-surface-muted">Status:</span> ${statusBadge(request.status)}</div>
+                    <div><span class="text-on-surface-muted">Email:</span> ${esc(request.requesterEmail)}</div>
+                    <div><span class="text-on-surface-muted">Name:</span> ${esc(request.requesterName || '—')}</div>
+                    <div><span class="text-on-surface-muted">Subject:</span> <code class="text-xs">${esc(request.subjectId || '—')}</code></div>
+                    <div><span class="text-on-surface-muted">Due:</span> ${request.dueDate ? new Date(request.dueDate).toLocaleDateString() : '—'}</div>
                 </div>
-                ${request.notes ? `<div class="text-sm"><span class="text-gray-500">Notes:</span><p class="mt-1 text-gray-700 bg-gray-50 rounded p-2 text-xs">${esc(request.notes)}</p></div>` : ''}
-                ${request.adminNotes ? `<div class="text-sm"><span class="text-gray-500">Admin Notes:</span><p class="mt-1 text-gray-700 bg-blue-50 rounded p-2 text-xs">${esc(request.adminNotes)}</p></div>` : ''}
+                ${request.notes ? `<div class="text-sm"><span class="text-on-surface-muted">Notes:</span><p class="mt-1 text-on-surface bg-surface-container rounded-md p-2 text-xs">${esc(request.notes)}</p></div>` : ''}
+                ${request.adminNotes ? `<div class="text-sm"><span class="text-on-surface-muted">Admin Notes:</span><p class="mt-1 text-on-surface bg-[#1e2a4a] rounded-md p-2 text-xs">${esc(request.adminNotes)}</p></div>` : ''}
 
-                <div class="border-t pt-4">
+                <div class="border-t border-ghost-border pt-4">
                     <div class="flex items-center gap-2 mb-3">
-                        <label class="text-sm text-gray-500">Update Status:</label>
-                        <select id="dsar-status-select" class="text-sm border border-gray-300 rounded px-2 py-1">
+                        <label class="text-sm text-on-surface-muted">Update Status:</label>
+                        <select id="dsar-status-select" class="text-sm input-field">
                             ${(() => {
                                 const allowed = allowedTransitions[request.status] || [];
                                 if (!allowed.length) return `<option value="${esc(request.status)}" selected>${esc(request.status)} (final)</option>`;
@@ -158,24 +158,24 @@ export async function showDetail(requestId) {
                                 ).join('');
                             })()}
                         </select>
-                        <button onclick="CveilWeb.dsar.updateStatus('${request.id}')" class="px-3 py-1 bg-cv-600 text-white text-xs rounded hover:bg-cv-700"${(allowedTransitions[request.status] || []).length ? '' : ' disabled'}>Update</button>
+                        <button onclick="CveilWeb.dsar.updateStatus('${request.id}')" class="btn-primary text-xs"${(allowedTransitions[request.status] || []).length ? '' : ' disabled'}>Update</button>
                     </div>
                 </div>
 
-                <div class="border-t pt-4">
-                    <h3 class="text-sm font-medium text-gray-700 mb-2">Activity Log</h3>
+                <div class="border-t border-ghost-border pt-4">
+                    <h3 class="text-sm font-medium text-on-surface mb-2">Activity Log</h3>
                     ${(activity || []).length ? activity.map(a => `
-                        <div class="flex gap-2 text-xs py-1.5 border-b border-gray-50">
-                            <span class="text-gray-400 whitespace-nowrap">${new Date(a.createdAt).toLocaleString()}</span>
-                            <span class="px-1.5 py-0.5 bg-gray-100 rounded font-mono">${esc(a.action)}</span>
-                            <span class="text-gray-500">${esc(a.details || '')}</span>
+                        <div class="flex gap-2 text-xs py-1.5">
+                            <span class="text-on-surface-muted whitespace-nowrap">${new Date(a.createdAt).toLocaleString()}</span>
+                            <span class="px-1.5 py-0.5 bg-surface-container rounded-md font-technical">${esc(a.action)}</span>
+                            <span class="text-on-surface-muted">${esc(a.details || '')}</span>
                         </div>
-                    `).join('') : '<p class="text-xs text-gray-400">No activity yet.</p>'}
+                    `).join('') : '<p class="text-xs text-on-surface-muted">No activity yet.</p>'}
                 </div>
             </div>
         `;
     } catch (e) {
-        content.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`;
+        content.innerHTML = `<p class="text-error">${esc(e.message)}</p>`;
     }
 }
 
@@ -204,16 +204,16 @@ export async function updateStatus(requestId) {
 
 function statusBadge(status) {
     const colors = {
-        PENDING: 'bg-yellow-100 text-yellow-800',
-        IN_REVIEW: 'bg-blue-100 text-blue-800',
-        APPROVED: 'bg-indigo-100 text-indigo-800',
-        IN_PROGRESS: 'bg-blue-100 text-blue-800',
-        COMPLETED: 'bg-green-100 text-green-800',
-        REJECTED: 'bg-red-100 text-red-800',
-        CANCELLED: 'bg-gray-100 text-gray-600'
+        PENDING: 'bg-warning-container text-on-warning-container',
+        IN_REVIEW: 'chip-info',
+        APPROVED: 'bg-[#1e1a4a] text-[#c7d2fe]',
+        IN_PROGRESS: 'chip-info',
+        COMPLETED: 'chip-safe',
+        REJECTED: 'chip-critical',
+        CANCELLED: 'chip-neutral'
     };
-    const cls = colors[status] || 'bg-gray-100 text-gray-700';
-    return `<span class="px-2 py-0.5 text-xs font-medium rounded ${cls}">${status}</span>`;
+    const cls = colors[status] || 'chip-neutral';
+    return `<span class="px-2 py-0.5 text-xs font-medium rounded-full font-technical uppercase ${cls}">${status}</span>`;
 }
 
 function setText(id, text) {

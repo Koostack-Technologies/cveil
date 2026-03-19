@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:copy": "vite build && cp dist/cveil-web.iife.js ../cveil-rest-api/src/main/resources/META-INF/resources/js/cveil-web.iife.js",
+    "build:copy": "vite build && cp dist/cveil-web.iife.js ../cveil-rest-api/src/main/resources/META-INF/resources/js/cveil-web.iife.js && cp dist/cveil-web.css ../cveil-rest-api/src/main/resources/META-INF/resources/css/cveil-web.css",
     "build:wasm": "cd ../crates && cargo build -p cveil-sdk-core --target wasm32-unknown-unknown --features browser --release && mkdir -p ../sdks/cveil-sdk-js/wasm/browser && cp target/wasm32-unknown-unknown/release/cveil_sdk_core.wasm ../sdks/cveil-sdk-js/wasm/browser/ && cp target/wasm32-unknown-unknown/release/cveil_sdk_core.wasm ../cveil-rest-api/src/main/resources/META-INF/resources/wasm/",
     "preview": "vite preview"
   },
@@ -15,6 +15,8 @@
     "vite": "^6.2.0"
   },
   "dependencies": {
-    "jose": "^6.2.1"
+    "@tailwindcss/vite": "^4.2.2",
+    "jose": "^6.2.1",
+    "tailwindcss": "^4.2.2"
   }
 }
