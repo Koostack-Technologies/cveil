@@ -30,6 +30,10 @@ export const TABS = {
   entities: '#tab-entities',
   fields: '#tab-fields',
   categories: '#tab-categories',
+  // Account
+  profile: '#tab-profile',
+  organizations: '#tab-organizations',
+  tokens: '#tab-tokens',
 } as const;
 
 /** Table body selectors by module section. */
@@ -42,6 +46,24 @@ export const TABLES = {
   entities: '#entities-table',
   fields: '#fields-table',
   categories: '#categories-table',
+  tokens: '#tokens-table-body',
+} as const;
+
+/** Access token page selectors. */
+export const TOKEN = {
+  createBtn: '#token-create-btn',
+  createModal: '#create-token-modal',
+  nameInput: '#token-name',
+  scopeDisplay: '#token-scope-display',
+  expiryOptions: '#expiry-options',
+  createMsg: '#create-token-msg',
+  submitBtn: '#create-token-submit',
+  // show-once modal after creation
+  resultModal: '#token-modal',
+  resultValue: '#token-value',
+  resultName: '#token-result-name',
+  resultExpires: '#token-result-expires',
+  resultCloseBtn: '#token-modal button:has-text("I\'ve copied the token")',
 } as const;
 
 /** Side panel selectors. */

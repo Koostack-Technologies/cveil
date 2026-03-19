@@ -901,7 +901,9 @@ public class SiteResource {
         String fullName =
                 uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
 
-        return applyDashboardData(account.instance(), uc, ws, "account").data("fullName", fullName);
+        return applyDashboardData(account.instance(), uc, ws, "account")
+                .data("fullName", fullName)
+                .data("v", BUILD_VERSION);
     }
 
     @GET
