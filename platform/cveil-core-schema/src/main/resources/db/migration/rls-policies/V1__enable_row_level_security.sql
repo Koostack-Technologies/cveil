@@ -6,15 +6,15 @@
 -- RLS policies filter rows using current_setting('app.tenant_id', true).
 --
 -- Schemas covered:
---   cveil_consent  — all consent administration tables
---   cveil_event    — unified event store (event, aggregate_snapshot)
---   cveil_metrics  — telemetry table
---   platform_iam    — access_token, role_assignment (tenant-scoped subset)
+--   cveilconsent   — all consent administration tables
+--   cveilevent     — unified event store (event, aggregate_snapshot)
+--   cveilmetrics   — telemetry table
+--   cveiliam       — access_token, role_assignment (tenant-scoped subset)
 --
 -- Tables NOT covered (platform-global, no tenant_id):
---   platform_core.tenant, platform_core.plan
---   platform_iam.platform_user, platform_iam.verification_token
---   platform_billing.* (uses tenant_id but accessed by billing service)
+--   cveilcore.tenant, cveilcore.plan
+--   cveiliam.platform_user, cveiliam.verification_token
+--   cveilbilling.* (uses tenant_id but accessed by billing service)
 -- ============================================================================
 
 -- 1. Create application role (RLS applies to non-superusers only)
@@ -26,14 +26,14 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- 2. cveil_consent schema
+-- 2. cveilconsent schema
 -- ============================================================================
-GRANT USAGE ON SCHEMA cveil_consent TO cveil_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveil_consent TO cveil_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveil_consent TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cveil_consent
+GRANT USAGE ON SCHEMA cveilconsent TO cveil_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveilconsent TO cveil_app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveilconsent TO cveil_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilconsent
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cveil_consent
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilconsent
     GRANT USAGE ON SEQUENCES TO cveil_app;
 
 DO $$
@@ -42,14 +42,14 @@ DECLARE
 BEGIN
     FOR tbl IN
         SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'cveil_consent'
+        WHERE table_schema = 'cveilconsent'
           AND table_type = 'BASE TABLE'
           AND table_name NOT LIKE 'flyway_%'
     LOOP
-        EXECUTE format('ALTER TABLE cveil_consent.%I ENABLE ROW LEVEL SECURITY', tbl);
-        EXECUTE format('ALTER TABLE cveil_consent.%I FORCE ROW LEVEL SECURITY', tbl);
+        EXECUTE format('ALTER TABLE cveilconsent.%I ENABLE ROW LEVEL SECURITY', tbl);
+        EXECUTE format('ALTER TABLE cveilconsent.%I FORCE ROW LEVEL SECURITY', tbl);
         EXECUTE format(
-            'CREATE POLICY tenant_isolation ON cveil_consent.%I '
+            'CREATE POLICY tenant_isolation ON cveilconsent.%I '
             || 'USING (tenant_id = current_setting(''app.tenant_id'', true)) '
             || 'WITH CHECK (tenant_id = current_setting(''app.tenant_id'', true))',
             tbl
@@ -58,75 +58,75 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- 3. cveil_event schema
+-- 3. cveilevent schema
 -- ============================================================================
-GRANT USAGE ON SCHEMA cveil_event TO cveil_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveil_event TO cveil_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveil_event TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cveil_event
+GRANT USAGE ON SCHEMA cveilevent TO cveil_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveilevent TO cveil_app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveilevent TO cveil_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilevent
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA cveil_event
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilevent
     GRANT USAGE ON SEQUENCES TO cveil_app;
 
-ALTER TABLE cveil_event.event ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cveil_event.event FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON cveil_event.event
+ALTER TABLE cveilevent.event ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cveilevent.event FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON cveilevent.event
     USING (tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
-ALTER TABLE cveil_event.aggregate_snapshot ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cveil_event.aggregate_snapshot FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON cveil_event.aggregate_snapshot
+ALTER TABLE cveilevent.aggregate_snapshot ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cveilevent.aggregate_snapshot FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON cveilevent.aggregate_snapshot
     USING (tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
 -- ============================================================================
--- 4. cveil_metrics schema (platform_metrics)
+-- 4. cveilmetrics schema
 -- ============================================================================
-GRANT USAGE ON SCHEMA platform_metrics TO cveil_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA platform_metrics TO cveil_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA platform_metrics TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA platform_metrics
+GRANT USAGE ON SCHEMA cveilmetrics TO cveil_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveilmetrics TO cveil_app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveilmetrics TO cveil_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilmetrics
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA platform_metrics
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveilmetrics
     GRANT USAGE ON SEQUENCES TO cveil_app;
 
-ALTER TABLE platform_metrics.telemetry ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_metrics.telemetry FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_metrics.telemetry
+ALTER TABLE cveilmetrics.telemetry ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cveilmetrics.telemetry FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON cveilmetrics.telemetry
     USING (tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
 -- ============================================================================
--- 5. platform_iam schema (tenant-scoped tables only)
+-- 5. cveiliam schema (tenant-scoped tables only)
 -- ============================================================================
-GRANT USAGE ON SCHEMA platform_iam TO cveil_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA platform_iam TO cveil_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA platform_iam TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA platform_iam
+GRANT USAGE ON SCHEMA cveiliam TO cveil_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveiliam TO cveil_app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA cveiliam TO cveil_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveiliam
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO cveil_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA platform_iam
+ALTER DEFAULT PRIVILEGES IN SCHEMA cveiliam
     GRANT USAGE ON SEQUENCES TO cveil_app;
 
 -- RLS on access_token (has tenant_id)
-ALTER TABLE platform_iam.access_token ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_iam.access_token FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_iam.access_token
+ALTER TABLE cveiliam.access_token ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cveiliam.access_token FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON cveiliam.access_token
     USING (tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
 
 -- RLS on role_assignment (has tenant_id — NULL means platform-scope)
-ALTER TABLE platform_iam.role_assignment ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_iam.role_assignment FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON platform_iam.role_assignment
+ALTER TABLE cveiliam.role_assignment ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cveiliam.role_assignment FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON cveiliam.role_assignment
     USING (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id', true))
     WITH CHECK (tenant_id IS NULL OR tenant_id = current_setting('app.tenant_id', true));
 
 -- ============================================================================
 -- 6. Grant platform-global schema access (no RLS — admin operations)
 -- ============================================================================
-GRANT USAGE ON SCHEMA platform_core TO cveil_app;
-GRANT SELECT ON ALL TABLES IN SCHEMA platform_core TO cveil_app;
+GRANT USAGE ON SCHEMA cveilcore TO cveil_app;
+GRANT SELECT ON ALL TABLES IN SCHEMA cveilcore TO cveil_app;
 
-GRANT USAGE ON SCHEMA platform_billing TO cveil_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA platform_billing TO cveil_app;
+GRANT USAGE ON SCHEMA cveilbilling TO cveil_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cveilbilling TO cveil_app;

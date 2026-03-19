@@ -17,6 +17,9 @@ public record PlanPricingTier(
         String period,
         String subjects,
         String apiRequests,
+        String burst,
+        String members,
+        String auditRetention,
         String overage,
         String governance,
         String support,
@@ -39,6 +42,11 @@ public record PlanPricingTier(
                 detail.period(),
                 formatLimit(plan.subjectLimit()),
                 formatLimit(plan.evalLimit()),
+                formatLimit(plan.burstLimit()) + " / min",
+                plan.isMemberUnlimited() ? "Unlimited" : String.valueOf(plan.memberLimit()),
+                plan.isAuditRetentionUnlimited()
+                        ? "Unlimited"
+                        : formatRetention(plan.auditRetentionDays()),
                 detail.overage(),
                 detail.governance(),
                 detail.support(),
@@ -48,7 +56,15 @@ public record PlanPricingTier(
     }
 
     private static String formatLimit(long limit) {
-        if (limit < 0) return "Custom";
+        if (limit < 0) return "Unlimited";
         return String.format(Locale.US, "%,d", limit);
+    }
+
+    private static String formatRetention(int days) {
+        if (days >= 365 && days % 365 == 0) {
+            int years = days / 365;
+            return years == 1 ? "1 year" : years + " years";
+        }
+        return days + " days";
     }
 }

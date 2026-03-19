@@ -1,0 +1,16 @@
+{
+  "name": "@cveil/consent-banner",
+  "version": "0.1.0",
+  "description": "Embeddable consent banner widget for Cveil consent management",
+  "type": "module",
+  "main": "dist/cveil-banner.min.js",
+  "files": ["dist/"],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

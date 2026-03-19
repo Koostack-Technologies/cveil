@@ -8,5 +8,12 @@ import com.koostack.cveil.core.event.DomainEvent;
  * <p>Consumed by the core projection handler to persist the Stripe Product + Price IDs on the
  * {@code cveilcore.plan} read model.
  */
-public record PlanStripeSyncedEvent(String planId, String stripeProductId, String stripePriceId)
-        implements DomainEvent {}
+public record PlanStripeSyncedEvent(
+        String planId, String stripeProductId, String stripePriceId, String stripeAnnualPriceId)
+        implements DomainEvent {
+
+    /** Backwards-compatible constructor for events without annual price. */
+    public PlanStripeSyncedEvent(String planId, String stripeProductId, String stripePriceId) {
+        this(planId, stripeProductId, stripePriceId, null);
+    }
+}

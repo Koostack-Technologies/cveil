@@ -11,8 +11,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPooled;
@@ -64,6 +66,7 @@ public class ShardedStreamConsumer implements AutoCloseable {
     private static final long MIN_BACKOFF_MS = 1_000;
     private static final long MAX_BACKOFF_MS = 30_000;
     private static final String STREAM_KEY_PREFIX = "cveil:stream:shard:";
+    private static final long IDLE_EVICTION_MINUTES = 10;
 
     /** A registered handler with its consumer group name. */
     record HandlerRegistration(String groupName, StreamEventHandler handler) {}
@@ -87,13 +90,32 @@ public class ShardedStreamConsumer implements AutoCloseable {
     private final List<Future<?>> readerFutures = new ArrayList<>();
 
     /**
-     * Per-tenant-per-handler ordered executors. Each executor is a single-thread virtual-thread
-     * executor that processes submitted tasks in FIFO order. This guarantees that events for the
-     * same tenant within the same handler group are processed in stream order, while different
-     * tenants proceed in parallel. Key format: {@code groupName + ":" + tenantId}.
+     * Per-tenant-per-handler ordered executors with last-access tracking. Each executor is a
+     * single-thread virtual-thread executor that processes submitted tasks in FIFO order. This
+     * guarantees that events for the same tenant within the same handler group are processed in
+     * stream order, while different tenants proceed in parallel. Key format: {@code groupName + ":"
+     * + tenantId}.
      */
-    private final ConcurrentHashMap<String, ExecutorService> tenantExecutors =
+    private final ConcurrentHashMap<String, TrackedExecutor> tenantExecutors =
             new ConcurrentHashMap<>();
+
+    /** Periodic sweep that evicts idle per-tenant executors to bound memory. */
+    private ScheduledExecutorService evictionScheduler;
+
+    /** Wraps an ExecutorService with last-access tracking for idle eviction. */
+    record TrackedExecutor(ExecutorService executor, AtomicLong lastUsedNanos) {
+        TrackedExecutor(ExecutorService executor) {
+            this(executor, new AtomicLong(System.nanoTime()));
+        }
+
+        void touch() {
+            lastUsedNanos.set(System.nanoTime());
+        }
+
+        boolean isIdleLongerThan(long nanos) {
+            return (System.nanoTime() - lastUsedNanos.get()) > nanos;
+        }
+    }
 
     /**
      * @param jedisProvider Redis connection provider (admin pool)
@@ -143,6 +165,21 @@ public class ShardedStreamConsumer implements AutoCloseable {
         }
 
         readerExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+        // Periodic eviction of idle per-tenant executors to prevent unbounded growth.
+        evictionScheduler =
+                Executors.newSingleThreadScheduledExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "webhook-executor-evictor");
+                            t.setDaemon(true);
+                            return t;
+                        });
+        long evictionNanos = TimeUnit.MINUTES.toNanos(IDLE_EVICTION_MINUTES);
+        evictionScheduler.scheduleAtFixedRate(
+                () -> evictIdleExecutors(evictionNanos),
+                IDLE_EVICTION_MINUTES,
+                IDLE_EVICTION_MINUTES,
+                TimeUnit.MINUTES);
 
         // Create consumer groups on all shards for all handlers
         for (int shard = 0; shard < shardCount; shard++) {
@@ -196,22 +233,25 @@ public class ShardedStreamConsumer implements AutoCloseable {
 
         // Shut down executors
         readerExecutor.shutdown();
-        for (ExecutorService exec : tenantExecutors.values()) {
-            exec.shutdown();
+        if (evictionScheduler != null) {
+            evictionScheduler.shutdownNow();
+        }
+        for (TrackedExecutor tracked : tenantExecutors.values()) {
+            tracked.executor().shutdown();
         }
         try {
             if (!readerExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
                 readerExecutor.shutdownNow();
             }
-            for (ExecutorService exec : tenantExecutors.values()) {
-                if (!exec.awaitTermination(5, TimeUnit.SECONDS)) {
-                    exec.shutdownNow();
+            for (TrackedExecutor tracked : tenantExecutors.values()) {
+                if (!tracked.executor().awaitTermination(5, TimeUnit.SECONDS)) {
+                    tracked.executor().shutdownNow();
                 }
             }
         } catch (InterruptedException e) {
             readerExecutor.shutdownNow();
-            for (ExecutorService exec : tenantExecutors.values()) {
-                exec.shutdownNow();
+            for (TrackedExecutor tracked : tenantExecutors.values()) {
+                tracked.executor().shutdownNow();
             }
             Thread.currentThread().interrupt();
         }
@@ -322,49 +362,80 @@ public class ShardedStreamConsumer implements AutoCloseable {
 
         // Per-tenant-per-handler executor ensures FIFO event ordering within a tenant.
         String executorKey = reg.groupName() + ":" + (tenantId != null ? tenantId : "__none__");
-        ExecutorService executor =
+        TrackedExecutor tracked =
                 tenantExecutors.computeIfAbsent(
                         executorKey,
-                        k -> Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
+                        k ->
+                                new TrackedExecutor(
+                                        Executors.newSingleThreadExecutor(
+                                                Thread.ofVirtual().factory())));
+        tracked.touch();
 
-        executor.submit(
-                () -> {
-                    String messageId = entry.getID().toString();
-                    try {
-                        if (tenantId != null) {
-                            TenantContext.runWhere(
-                                    tenantId,
-                                    () ->
-                                            reg.handler()
-                                                    .onEvent(
-                                                            streamKey,
-                                                            messageId,
-                                                            entry.getFields()));
-                        } else {
-                            reg.handler().onEvent(streamKey, messageId, entry.getFields());
-                        }
-                    } catch (Exception e) {
-                        log.warn(
-                                "Handler failed for entry {} on stream '{}' (tenant='{}', "
-                                        + "group='{}') — acknowledging to prevent blocking",
-                                messageId,
-                                streamKey,
-                                tenantId,
-                                reg.groupName(),
-                                e);
-                    } finally {
-                        try {
-                            JedisPooled jedis = jedisProvider.get();
-                            jedis.xack(streamKey, reg.groupName(), entry.getID());
-                        } catch (Exception ackEx) {
-                            log.error(
-                                    "Failed to XACK message {} on stream '{}'",
-                                    messageId,
-                                    streamKey,
-                                    ackEx);
-                        }
-                    }
-                });
+        tracked.executor()
+                .submit(
+                        () -> {
+                            String messageId = entry.getID().toString();
+                            try {
+                                if (tenantId != null) {
+                                    TenantContext.runWhere(
+                                            tenantId,
+                                            () ->
+                                                    reg.handler()
+                                                            .onEvent(
+                                                                    streamKey,
+                                                                    messageId,
+                                                                    entry.getFields()));
+                                } else {
+                                    reg.handler().onEvent(streamKey, messageId, entry.getFields());
+                                }
+                            } catch (Exception e) {
+                                log.warn(
+                                        "Handler failed for entry {} on stream '{}' (tenant='{}', "
+                                                + "group='{}') — acknowledging to prevent blocking",
+                                        messageId,
+                                        streamKey,
+                                        tenantId,
+                                        reg.groupName(),
+                                        e);
+                            } finally {
+                                try {
+                                    JedisPooled jedis = jedisProvider.get();
+                                    jedis.xack(streamKey, reg.groupName(), entry.getID());
+                                } catch (Exception ackEx) {
+                                    log.error(
+                                            "Failed to XACK message {} on stream '{}'",
+                                            messageId,
+                                            streamKey,
+                                            ackEx);
+                                }
+                            }
+                        });
+    }
+
+    /**
+     * Removes per-tenant executors that have been idle longer than the threshold. This prevents
+     * unbounded growth of the executor map in multi-tenant deployments where tenants may be active
+     * only transiently.
+     */
+    private void evictIdleExecutors(long idleThresholdNanos) {
+        int evicted = 0;
+        var iterator = tenantExecutors.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            TrackedExecutor tracked = entry.getValue();
+            if (tracked.isIdleLongerThan(idleThresholdNanos)) {
+                iterator.remove();
+                tracked.executor().shutdown();
+                evicted++;
+            }
+        }
+        if (evicted > 0) {
+            log.debug(
+                    "Evicted {} idle tenant executors (threshold={}min, remaining={})",
+                    evicted,
+                    TimeUnit.NANOSECONDS.toMinutes(idleThresholdNanos),
+                    tenantExecutors.size());
+        }
     }
 
     private void ensureConsumerGroup(String streamKey, String groupName) {

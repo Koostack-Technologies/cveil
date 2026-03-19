@@ -12,48 +12,48 @@
         <div class="w-full max-w-3xl">
 
             <!-- Step indicator -->
-            <div class="flex items-center justify-center gap-2 mb-8 text-sm text-gray-500">
-                <span class="flex items-center gap-1.5 text-white">
-                    <span class="w-6 h-6 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center text-xs">
-                        <svg class="w-3.5 h-3.5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+            <div class="flex items-center justify-center gap-2 mb-8 text-sm text-on-surface-muted">
+                <span class="flex items-center gap-1.5 text-on-surface">
+                    <span class="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-xs">
+                        <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                     </span>
                     Workspace
                 </span>
-                <span class="w-8 h-px bg-gray-700"></span>
-                <span class="flex items-center gap-1.5 text-white">
-                    <span class="w-6 h-6 rounded-full bg-cv-900/50 border border-cv-500/30 flex items-center justify-center text-xs">
-                        <svg class="w-3.5 h-3.5 text-cv-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5 text-on-surface">
+                    <span class="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-xs">
+                        <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
                     </span>
                     Industry
                 </span>
-                <span class="w-8 h-px bg-gray-700"></span>
-                <span class="flex items-center gap-1.5 text-cv-500 font-medium">
-                    <span class="w-6 h-6 rounded-full bg-cv-500 text-gray-900 flex items-center justify-center text-xs font-bold">3</span>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5 text-primary font-medium">
+                    <span class="w-6 h-6 rounded-full bg-primary text-surface-lowest flex items-center justify-center text-xs font-bold">3</span>
                     Compliance
                 </span>
             </div>
 
-            <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-3">
+            <h1 class="text-3xl sm:text-4xl font-display font-bold tracking-tight text-center mb-3">
                 Review your compliance profile
             </h1>
-            <p class="text-gray-400 text-center text-lg mb-4">
-                Based on <span class="text-white font-medium">{presetName}</span>, we recommend these jurisdictions and regulations.
+            <p class="text-on-surface-muted text-center text-lg mb-4">
+                Based on <span class="text-on-surface font-medium">{presetName}</span>, we recommend these jurisdictions and regulations.
             </p>
 
             <!-- Tier limit bar -->
-            <div class="bg-gray-800/40 border border-gray-700 rounded-md px-5 py-3 mb-8 flex items-center justify-between">
+            <div class="bg-surface-container/40 border border-surface-high rounded-md px-5 py-3 mb-8 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <span class="text-sm text-gray-400">Jurisdictions</span>
-                    <span id="tier-count" class="text-sm font-mono font-semibold text-cv-500">{initialChecked} of {tierLimit}</span>
-                    <span class="text-sm text-gray-500">on Free plan</span>
+                    <span class="text-sm text-on-surface-muted">Jurisdictions</span>
+                    <span id="tier-count" class="text-sm font-technical font-semibold text-primary">{initialChecked} of {tierLimit}</span>
+                    <span class="text-sm text-on-surface-muted">on Free plan</span>
                 </div>
-                <div class="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div id="tier-bar" class="tier-bar h-full bg-cv-500 rounded-full" style="width: {tierPercent}%"></div>
+                <div class="w-32 h-2 bg-surface-high rounded-full overflow-hidden">
+                    <div id="tier-bar" class="tier-bar h-full bg-primary rounded-full" style="width: {tierPercent}%"></div>
                 </div>
             </div>
 
             {#if error}
-            <div class="mb-6 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div class="mb-6 rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-error">
                 <div class="flex items-center gap-2">
                     <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     <span>{error}</span>
@@ -65,25 +65,25 @@
 
                 <!-- Jurisdictions -->
                 <div class="mb-8">
-                    <h2 class="text-lg font-semibold text-white mb-4">Jurisdictions</h2>
+                    <h2 class="text-lg font-semibold text-on-surface mb-4">Jurisdictions</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {#each jurisdictions}
-                        <label class="flex items-center gap-3 bg-gray-800/40 border border-gray-700 rounded-md px-4 py-3 cursor-pointer hover:border-gray-600 transition-colors {#if it.locked}jurisdiction-locked{/if}"
+                        <label class="flex items-center gap-3 bg-surface-container/40 border border-surface-high rounded-md px-4 py-3 cursor-pointer hover:border-surface-highest transition-colors {#if it.locked}jurisdiction-locked{/if}"
                                id="jur-label-{it.id}">
                             {#if it.locked}
-                            <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <svg class="w-4 h-4 text-on-surface-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             {#else}
                             <input type="checkbox" name="jurisdictions" value="{it.id}"
                                    {#if it.checked}checked{/if}
                                    onchange="updateTierCount()"
-                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-cv-500 focus:ring-cv-500 focus:ring-offset-gray-900 shrink-0">
+                                   class="w-4 h-4 rounded border-outline-variant bg-surface-container text-primary focus:ring-primary focus:ring-offset-surface-lowest shrink-0">
                             {/if}
                             <div class="flex-grow min-w-0">
-                                <span class="text-sm text-white block truncate">{it.name}</span>
-                                <span class="text-xs text-gray-500 block truncate">{it.description}</span>
+                                <span class="text-sm text-on-surface block truncate">{it.name}</span>
+                                <span class="text-xs text-on-surface-muted block truncate">{it.description}</span>
                             </div>
                             {#if it.locked}
-                            <span class="text-xs text-gray-500 shrink-0 whitespace-nowrap">Upgrade</span>
+                            <span class="text-xs text-on-surface-muted shrink-0 whitespace-nowrap">Upgrade</span>
                             {/if}
                         </label>
                         {/each}
@@ -92,11 +92,11 @@
 
                 <!-- Derived regulations preview -->
                 <div class="mb-8">
-                    <h2 class="text-lg font-semibold text-white mb-2">Auto-derived regulations</h2>
-                    <p class="text-sm text-gray-500 mb-4">These regulations are automatically included based on your jurisdiction selections.</p>
+                    <h2 class="text-lg font-semibold text-on-surface mb-2">Auto-derived regulations</h2>
+                    <p class="text-sm text-on-surface-muted mb-4">These regulations are automatically included based on your jurisdiction selections.</p>
                     <div id="regulations-preview" class="flex flex-wrap gap-2">
                         {#each regulations}
-                        <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-cv-900/40 border border-cv-500/20 text-cv-500"
+                        <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-primary/10 border border-primary/20 text-primary"
                               data-jurisdictions="{it.jurisdictions}">{it.name}</span>
                         {/each}
                     </div>
@@ -104,15 +104,15 @@
 
                 <!-- Entities -->
                 <div class="mb-8">
-                    <h2 class="text-lg font-semibold text-white mb-2">Data subjects</h2>
-                    <p class="text-sm text-gray-500 mb-4">What types of people does your organization collect data from?</p>
+                    <h2 class="text-lg font-semibold text-on-surface mb-2">Data subjects</h2>
+                    <p class="text-sm text-on-surface-muted mb-4">What types of people does your organization collect data from?</p>
                     <div class="flex flex-wrap gap-3">
                         {#each entities}
-                        <label class="flex items-center gap-2 bg-gray-800/40 border border-gray-700 rounded-md px-4 py-2.5 cursor-pointer hover:border-gray-600 transition-colors">
+                        <label class="flex items-center gap-2 bg-surface-container/40 border border-surface-high rounded-md px-4 py-2.5 cursor-pointer hover:border-surface-highest transition-colors">
                             <input type="checkbox" name="entities" value="{it.id}"
                                    {#if it.checked}checked{/if}
-                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-cv-500 focus:ring-cv-500 focus:ring-offset-gray-900">
-                            <span class="text-sm text-white capitalize">{it.id}</span>
+                                   class="w-4 h-4 rounded border-outline-variant bg-surface-container text-primary focus:ring-primary focus:ring-offset-surface-lowest">
+                            <span class="text-sm text-on-surface capitalize">{it.id}</span>
                         </label>
                         {/each}
                     </div>
@@ -120,7 +120,7 @@
 
                 <!-- Submit -->
                 <button type="submit"
-                        class="w-full bg-cv-500 text-gray-900 hover:bg-cv-600 px-6 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] flex items-center justify-center gap-2">
+                        class="btn-primary w-full px-6 py-3.5 text-lg flex items-center justify-center gap-2">
                     Set up my workspace
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
                 </button>
@@ -140,15 +140,15 @@ function updateTierCount() {
     barEl.style.width = Math.min(100, (checked / TIER_LIMIT) * 100) + '%';
 
     if (checked > TIER_LIMIT) {
-        countEl.classList.remove('text-cv-500');
-        countEl.classList.add('text-red-400');
-        barEl.classList.remove('bg-cv-500');
-        barEl.classList.add('bg-red-400');
+        countEl.classList.remove('text-primary');
+        countEl.classList.add('text-error');
+        barEl.classList.remove('bg-primary');
+        barEl.classList.add('bg-error');
     } else {
-        countEl.classList.remove('text-red-400');
-        countEl.classList.add('text-cv-500');
-        barEl.classList.remove('bg-red-400');
-        barEl.classList.add('bg-cv-500');
+        countEl.classList.remove('text-error');
+        countEl.classList.add('text-primary');
+        barEl.classList.remove('bg-error');
+        barEl.classList.add('bg-primary');
     }
 
     // Disable unchecked boxes when at the limit to prevent over-selection

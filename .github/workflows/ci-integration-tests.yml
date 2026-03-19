@@ -1,0 +1,97 @@
+# =============================================================================
+# Cveil — Integration Tests
+#
+# Runs integration tests that require external services (databases, caches).
+# Java integration tests use Testcontainers to spin up Postgres + Redis.
+# Rust integration tests exercise the cveil-cli HTTP server.
+#
+# Includes:
+#   - Java/JVM integration tests (*IT.java) across all Gradle subprojects
+#   - Rust integration tests (crates/cveil-cli/tests/)
+#
+# Triggers:
+#   - Push to main/develop branches
+#   - Pull requests targeting main/develop
+#   - Manual dispatch
+# =============================================================================
+
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Java / JVM integration tests (Testcontainers: Postgres + Redis)
+  # ---------------------------------------------------------------------------
+  java-integration:
+    name: Java Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run integration tests (only *IT)
+        run: ./gradlew test -PintegrationOnly --no-daemon
+        env:
+          DOCKER_API_VERSION: '1.44'
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-integration-test-reports
+          path: '**/build/reports/tests/test/'
+          retention-days: 14
+
+      - name: Upload test results (JUnit XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-integration-test-results
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Rust integration tests (cveil-cli HTTP server)
+  # ---------------------------------------------------------------------------
+  rust-integration:
+    name: Rust Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            crates/target
+          key: rust-integration-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-integration-${{ runner.os }}-
+
+      - name: Run Rust integration tests
+        working-directory: crates
+        run: cargo test --test '*' --workspace

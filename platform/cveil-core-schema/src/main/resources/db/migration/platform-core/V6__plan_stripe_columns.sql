@@ -5,6 +5,6 @@
 -- bidirectional sync between the plan catalog and the payment processor.
 -- ============================================================================
 
-ALTER TABLE platform_core.plan
+ALTER TABLE plan
     ADD COLUMN IF NOT EXISTS stripe_product_id  VARCHAR(255),
     ADD COLUMN IF NOT EXISTS stripe_price_id    VARCHAR(255);

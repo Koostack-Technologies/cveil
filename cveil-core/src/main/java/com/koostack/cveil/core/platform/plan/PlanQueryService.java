@@ -23,15 +23,77 @@ public interface PlanQueryService<T> extends Plugin<T> {
             long subjectLimit,
             int burstLimit,
             int jurisdictionLimit,
+            int memberLimit,
+            int auditRetentionDays,
             boolean isPublic,
             boolean isActive,
             int sortOrder,
             String stripeProductId,
-            String stripePriceId) {
+            String stripePriceId,
+            String stripeAnnualPriceId,
+            Integer monthlyPriceCents,
+            Integer annualPriceCents) {
+
+        /** Backwards-compatible constructor without pricing columns. */
+        public PlanInfo(
+                String planId,
+                String displayName,
+                String description,
+                long evalLimit,
+                long subjectLimit,
+                int burstLimit,
+                int jurisdictionLimit,
+                int memberLimit,
+                int auditRetentionDays,
+                boolean isPublic,
+                boolean isActive,
+                int sortOrder,
+                String stripeProductId,
+                String stripePriceId,
+                String stripeAnnualPriceId) {
+            this(
+                    planId,
+                    displayName,
+                    description,
+                    evalLimit,
+                    subjectLimit,
+                    burstLimit,
+                    jurisdictionLimit,
+                    memberLimit,
+                    auditRetentionDays,
+                    isPublic,
+                    isActive,
+                    sortOrder,
+                    stripeProductId,
+                    stripePriceId,
+                    stripeAnnualPriceId,
+                    null,
+                    null);
+        }
+
+        /** Returns true if this plan has a billable price (non-null, non-zero monthly). */
+        public boolean isBillable() {
+            return monthlyPriceCents != null && monthlyPriceCents > 0;
+        }
+
+        /** Returns true if this plan has an annual pricing option. */
+        public boolean hasAnnualPricing() {
+            return annualPriceCents != null && annualPriceCents > 0;
+        }
 
         /** Returns true if jurisdictions are unlimited on this plan (-1). */
         public boolean isJurisdictionUnlimited() {
             return jurisdictionLimit < 0;
+        }
+
+        /** Returns true if team members are unlimited on this plan (-1). */
+        public boolean isMemberUnlimited() {
+            return memberLimit < 0;
+        }
+
+        /** Returns true if audit retention is unlimited on this plan (-1). */
+        public boolean isAuditRetentionUnlimited() {
+            return auditRetentionDays < 0;
         }
     }
 

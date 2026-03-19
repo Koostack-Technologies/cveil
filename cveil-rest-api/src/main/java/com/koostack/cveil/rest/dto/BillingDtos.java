@@ -123,6 +123,7 @@ public final class BillingDtos {
     public record SubscriptionResponse(
             String planTier,
             String status,
+            String billingInterval,
             int evalLimit,
             int subjectLimit,
             int burstLimit,
@@ -133,6 +134,7 @@ public final class BillingDtos {
             return new SubscriptionResponse(
                     s.planTier(),
                     s.status(),
+                    s.billingInterval() != null ? s.billingInterval() : "monthly",
                     s.evalLimit(),
                     s.subjectLimit(),
                     s.burstLimit(),
@@ -156,11 +158,29 @@ public final class BillingDtos {
 
     @Schema(description = "Request to subscribe to a plan")
     public record CreateSubscriptionRequest(
-            @Schema(description = "Plan tier to subscribe to", required = true) String planTier) {}
+            @Schema(description = "Plan tier to subscribe to", required = true) String planTier,
+            @Schema(
+                            description = "Billing interval: 'monthly' or 'annual'",
+                            defaultValue = "monthly")
+                    String billingInterval) {
+
+        /** Defaults to monthly if not specified. */
+        public String effectiveInterval() {
+            return "annual".equalsIgnoreCase(billingInterval) ? "annual" : "monthly";
+        }
+    }
 
     @Schema(description = "Request to change subscription plan")
     public record ChangeSubscriptionRequest(
-            @Schema(description = "New plan tier", required = true) String planTier) {}
+            @Schema(description = "New plan tier", required = true) String planTier,
+            @Schema(description = "Billing interval: 'monthly' or 'annual'")
+                    String billingInterval) {
+
+        /** Defaults to monthly if not specified. */
+        public String effectiveInterval() {
+            return "annual".equalsIgnoreCase(billingInterval) ? "annual" : "monthly";
+        }
+    }
 
     // -- Stripe publishable key -----------------------------------------------
 

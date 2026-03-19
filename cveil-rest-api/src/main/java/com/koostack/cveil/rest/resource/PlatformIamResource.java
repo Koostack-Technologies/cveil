@@ -69,6 +69,10 @@ public class PlatformIamResource {
 
     @Inject MetricsHelper metrics;
 
+    @Inject
+    jakarta.enterprise.inject.Instance<com.koostack.cveil.rest.gate.FeatureGateChecker>
+            featureGateInstance;
+
     // -----------------------------------------------------------------------
     // Users
     // -----------------------------------------------------------------------
@@ -427,6 +431,14 @@ public class PlatformIamResource {
         requireCqrs();
         String orgName = resolveOrgName(orgId);
         requireOrgAdmin(sc, orgName);
+
+        // Enforce team member limit based on the tenant's plan
+        String memberLimitError = checkMemberLimit(orgId);
+        if (memberLimitError != null) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(ErrorResponse.of("plan_limit", memberLimitError))
+                    .build();
+        }
 
         LOG.debug("POST /platform/iam/organizations/{}/members userId={}", orgId, request.userId());
 
@@ -1274,8 +1286,53 @@ public class PlatformIamResource {
 
     private void requireCqrs() {
         if (!cqrs.isCqrsAvailable()) {
-            throw new IllegalStateException(
-                    "Platform CQRS services not available — is cveil.mode=production?");
+            throw new jakarta.ws.rs.WebApplicationException(
+                    "Platform CQRS services not available — is cveil.mode=production?",
+                    Response.Status.SERVICE_UNAVAILABLE);
+        }
+    }
+
+    /**
+     * Checks if the organization has reached its plan's team member limit.
+     *
+     * @return an error message if the limit is reached, or {@code null} if the add is allowed
+     */
+    private String checkMemberLimit(String orgId) {
+        try {
+            // Resolve the tenant's plan
+            if (!requestHolder.isAuthenticated()) return null;
+            String tenantId = requestHolder.identity().tenantId();
+            if (tenantId == null) return null;
+
+            var tenant = cqrs.coreQueryService().getTenant(tenantId);
+            if (tenant == null) return null;
+
+            String planId = tenant.plan();
+            if (planId == null || planId.isBlank()) return null;
+
+            var plan = cqrs.planQueryService().getPlan(planId);
+            if (plan == null || plan.isMemberUnlimited()) return null;
+
+            int memberLimit = plan.memberLimit();
+            if (memberLimit <= 0) return null;
+
+            // Use COUNT query instead of fetching full member list
+            Integer currentCount =
+                    (Integer)
+                            cqrs.iamQueryDispatcher()
+                                    .dispatch(
+                                            new CountOrgMembersQueryActuator.CountOrgMembersQuery(
+                                                    orgId));
+
+            if (currentCount != null && currentCount >= memberLimit) {
+                return String.format(
+                        "Team member limit reached (%d/%d). Upgrade your plan to add more members.",
+                        currentCount, memberLimit);
+            }
+            return null;
+        } catch (Exception e) {
+            LOG.warn("Failed to check member limit for org {}: {}", orgId, e.getMessage());
+            return null; // fail open
         }
     }
 }

@@ -228,37 +228,30 @@ public class PlatformMetricsResource {
             params.add(java.sql.Timestamp.from(to));
         }
 
-        String countSql = "SELECT COUNT(*) FROM cveilmetrics.telemetry" + where;
+        // Single query with COUNT(*) OVER() to eliminate N+1 pagination
         String dataSql =
-                "SELECT time_bucket, tenant_id, metric_name, dimensions, metric_value, published_at"
-                        + " FROM cveilmetrics.telemetry"
+                "SELECT time_bucket, tenant_id, metric_name, dimensions, metric_value,"
+                    + " published_at, COUNT(*) OVER() AS total_count FROM cveilmetrics.telemetry"
                         + where
                         + " ORDER BY time_bucket DESC LIMIT ? OFFSET ?";
 
         DataSource ds = dataSourceInstance.get();
-        long total;
+        long total = 0;
         List<MetricRow> rows = new ArrayList<>();
 
-        try (Connection conn = ds.getConnection()) {
-            try (PreparedStatement ps = conn.prepareStatement(countSql)) {
-                for (int i = 0; i < params.size(); i++) {
-                    ps.setObject(i + 1, params.get(i));
-                }
-                try (ResultSet rs = ps.executeQuery()) {
-                    total = rs.next() ? rs.getLong(1) : 0;
-                }
+        try (Connection conn = ds.getConnection();
+                PreparedStatement ps = conn.prepareStatement(dataSql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
             }
-
-            try (PreparedStatement ps = conn.prepareStatement(dataSql)) {
-                for (int i = 0; i < params.size(); i++) {
-                    ps.setObject(i + 1, params.get(i));
-                }
-                ps.setInt(params.size() + 1, limit);
-                ps.setInt(params.size() + 2, offset);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        rows.add(mapRow(rs));
+            ps.setInt(params.size() + 1, limit);
+            ps.setInt(params.size() + 2, offset);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (rows.isEmpty()) {
+                        total = rs.getLong("total_count");
                     }
+                    rows.add(mapRow(rs));
                 }
             }
         }
@@ -288,7 +281,8 @@ public class PlatformMetricsResource {
                         + " MIN(time_bucket) AS first_seen, MAX(time_bucket) AS last_seen"
                         + " FROM cveilmetrics.telemetry"
                         + where
-                        + " GROUP BY metric_name ORDER BY total_value DESC";
+                        + " GROUP BY metric_name ORDER BY total_value DESC"
+                        + " LIMIT 1000";
 
         DataSource ds = dataSourceInstance.get();
         List<MetricSummary> summaries = new ArrayList<>();

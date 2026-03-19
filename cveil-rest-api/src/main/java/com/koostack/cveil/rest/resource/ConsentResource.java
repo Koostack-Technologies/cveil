@@ -21,6 +21,7 @@ import com.koostack.cveil.plugin.consent.jooq.GetSubjectConsentQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GetSubjectQueryActuator;
 import com.koostack.cveil.plugin.consent.jooq.GrantConsentCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.ListSubjectsQueryActuator;
+import com.koostack.cveil.plugin.consent.jooq.PublishSubjectDataDeletedCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.RegisterSubjectCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.RemoveSubjectCommandActuator;
 import com.koostack.cveil.plugin.consent.jooq.RevokeAllConsentCommandActuator;
@@ -949,6 +950,26 @@ public class ConsentResource {
                             cachedKeysDeleted,
                             status,
                             Instant.now());
+
+            // Publish composite SUBJECT_DATA_DELETED event for webhook consumers
+            try {
+                consentDispatcher.dispatch(
+                        new PublishSubjectDataDeletedCommandActuator
+                                .PublishSubjectDataDeletedCommand(
+                                subjectId,
+                                requestId,
+                                ledgerEntriesRevoked,
+                                cachedKeysDeleted,
+                                status,
+                                RequestContext.actor(),
+                                RequestContext.ipAddress(),
+                                RequestContext.userAgent()));
+            } catch (Exception e) {
+                LOG.warn(
+                        "eraseSubject: failed to publish SUBJECT_DATA_DELETED event for {}",
+                        subjectId,
+                        e);
+            }
 
             metrics.counter("dsar_deletions", currentTenantId());
             return Response.ok(dto).build();

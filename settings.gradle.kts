@@ -42,6 +42,9 @@ include("platform:cveil-billing-projection-jooq")
 // --- Payment Processor ---
 include("platform:cveil-payment-proc-stripe")
 
+// --- Webhook Outbound ---
+include("platform:cveil-webhook-outbound")
+
 // --- Platform Core ---
 include("platform:cveil-core-schema")
 include("platform:cveil-core-jooq-common")

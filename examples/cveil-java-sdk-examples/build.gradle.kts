@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("application")
 }
 
 group = "com.koostack"
@@ -10,12 +11,32 @@ repositories {
 }
 
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation(project(":sdks:cveil-sdk-java"))
 }
 
-tasks.test {
-    useJUnitPlatform()
+application {
+    mainClass.set("com.koostack.cveil.examples.ExampleRunner")
+}
+
+// Run all examples in sequence
+tasks.named<JavaExec>("run") {
+    description = "Run all cveil SDK examples in sequence"
+}
+
+// Individual example tasks
+mapOf(
+    "runCatalogue"  to "com.koostack.cveil.examples.CatalogueSetup",
+    "runGovernance"  to "com.koostack.cveil.examples.GovernanceSetup",
+    "runSubjects"    to "com.koostack.cveil.examples.SubjectManagement",
+    "runConsent"     to "com.koostack.cveil.examples.ConsentLifecycle",
+    "runMasking"     to "com.koostack.cveil.examples.DataMasking",
+    "runBatch"       to "com.koostack.cveil.examples.BatchOperations",
+    "runDsar"        to "com.koostack.cveil.examples.DsarCompliance",
+).forEach { (taskName, mainCls) ->
+    tasks.register<JavaExec>(taskName) {
+        group = "examples"
+        description = "Run ${mainCls.substringAfterLast('.')}"
+        classpath = sourceSets["main"].runtimeClasspath
+        mainClass.set(mainCls)
+    }
 }

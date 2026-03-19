@@ -181,6 +181,7 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
 
                 // -- DSAR Aggregate --
             case ConsentEventTypes.SUBJECT_AUDIT_DELETED -> handleSubjectAuditDeleted(node);
+            case ConsentEventTypes.SUBJECT_DATA_DELETED -> handleSubjectDataDeleted(node);
 
             default -> log.debug("Ignoring unhandled event type: {}", eventType);
         }
@@ -1095,6 +1096,45 @@ public class ConsentAdminProjectionHandler implements StreamEventHandler {
                 .onConflict(DSAR_AUDIT_LOG.DSAR_AUDIT_UUID)
                 .doNothing()
                 .execute();
+    }
+
+    private void handleSubjectDataDeleted(JsonNode node) {
+        String subjectId = node.get("subjectId").asText();
+        String deletionRequestId = node.get("deletionRequestId").asText();
+        String status = textOrNull(node, "status");
+        String actor = textOrNull(node, "actor");
+        String ipAddress = textOrNull(node, "ipAddress");
+        String userAgent = textOrNull(node, "userAgent");
+        int ledgerEntriesRevoked =
+                node.has("ledgerEntriesRevoked") ? node.get("ledgerEntriesRevoked").asInt() : 0;
+        int cachedKeysDeleted =
+                node.has("cachedKeysDeleted") ? node.get("cachedKeysDeleted").asInt() : 0;
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        String tid = TenantContext.require();
+
+        // Record the composite deletion event in the DSAR audit log
+        activeDsl()
+                .insertInto(DSAR_AUDIT_LOG)
+                .set(
+                        DSAR_AUDIT_LOG.DSAR_AUDIT_UUID,
+                        deriveUuid("consent-dsar-deleted:" + eventMessageId()))
+                .set(DSAR_AUDIT_LOG.TENANT_ID, tid)
+                .set(DSAR_AUDIT_LOG.SUBJECT_ID, subjectId)
+                .set(DSAR_AUDIT_LOG.DELETION_REQUEST_ID, deletionRequestId)
+                .set(DSAR_AUDIT_LOG.POLICIES_DELETED, ledgerEntriesRevoked + cachedKeysDeleted)
+                .set(DSAR_AUDIT_LOG.STATUS, status != null ? status : "SUCCESS")
+                .set(DSAR_AUDIT_LOG.ACTOR, actor)
+                .set(DSAR_AUDIT_LOG.IP_ADDRESS, ipAddress)
+                .set(DSAR_AUDIT_LOG.USER_AGENT, userAgent)
+                .set(DSAR_AUDIT_LOG.CREATED_AT, now)
+                .onConflict(DSAR_AUDIT_LOG.DSAR_AUDIT_UUID)
+                .doNothing()
+                .execute();
+
+        log.info(
+                "Projected SUBJECT_DATA_DELETED for subject {} (request {})",
+                subjectId,
+                deletionRequestId);
     }
 
     // -----------------------------------------------------------------------

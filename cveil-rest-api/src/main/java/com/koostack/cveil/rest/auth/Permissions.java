@@ -7,8 +7,8 @@ import com.koostack.cveil.core.models.AuthorizationContext;
  * Permission-based authorization enforcement for REST resource methods.
  *
  * <p>Replaces the role-based checks in {@link Roles} with atomic permission checks backed by the
- * Cveil permissions framework. The {@link AuthorizationContext} is resolved per-request by the
- * auth filter from the {@code role_assignment} / {@code role_permission} tables.
+ * Cveil permissions framework. The {@link AuthorizationContext} is resolved per-request by the auth
+ * filter from the {@code role_assignment} / {@code role_permission} tables.
  *
  * <h2>Usage</h2>
  *
@@ -54,6 +54,10 @@ public final class Permissions {
     // -- Events permissions -------------------------------------------------
 
     public static final String EVENTS_READ = "events:read";
+
+    // -- Reports permissions ------------------------------------------------
+
+    public static final String REPORTS_READ = "reports:read";
 
     // -- Organization permissions -------------------------------------------
 

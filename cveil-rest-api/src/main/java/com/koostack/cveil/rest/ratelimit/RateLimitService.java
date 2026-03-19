@@ -533,6 +533,61 @@ public class RateLimitService {
     }
 
     // -----------------------------------------------------------------------
+    // Public endpoint IP-based rate limiting
+    // -----------------------------------------------------------------------
+
+    /** Infix for public-endpoint IP-based counters. */
+    private static final String PUBLIC_IP_INFIX = ":public-ip:";
+
+    /** Max requests per minute for unauthenticated public endpoints per IP. */
+    private static final int PUBLIC_IP_LIMIT_PER_MIN = 60;
+
+    /**
+     * Checks and increments an IP-based per-minute rate limit for unauthenticated public endpoints
+     * (consent banner, DSAR submission). Uses the same atomic Lua script as tenant burst limits.
+     *
+     * @param clientIp the client IP address
+     * @return the rate limit result
+     */
+    public RateLimitResult checkPublicIpBurst(String clientIp) {
+        if (jedis == null) {
+            return RateLimitResult.UNLIMITED;
+        }
+
+        Instant now = Instant.now();
+        String minuteKey = MINUTE_FORMATTER.format(now);
+        String redisKey = KEY_PREFIX + PUBLIC_IP_INFIX + clientIp + ":" + minuteKey;
+
+        try {
+            long count =
+                    (long)
+                            jedis.eval(
+                                    LUA_INCR_EXPIRE,
+                                    List.of(redisKey),
+                                    List.of(String.valueOf(BURST_TTL_SECONDS)));
+
+            Instant resetAt = now.truncatedTo(ChronoUnit.MINUTES).plus(1, ChronoUnit.MINUTES);
+            long remaining = Math.max(0, PUBLIC_IP_LIMIT_PER_MIN - count);
+            boolean exceeded = count > PUBLIC_IP_LIMIT_PER_MIN;
+
+            return new RateLimitResult(
+                    PUBLIC_IP_LIMIT_PER_MIN,
+                    remaining,
+                    resetAt,
+                    exceeded,
+                    /* warning */ false,
+                    /* monthlyExceeded */ false,
+                    /* subjectLimitExceeded */ false);
+        } catch (Exception e) {
+            LOG.warn(
+                    "RateLimitService: Redis error during public IP burst check for {}",
+                    clientIp,
+                    e);
+            return RateLimitResult.UNLIMITED; // fail-open
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Metric publishing
     // -----------------------------------------------------------------------
 
@@ -601,7 +656,7 @@ public class RateLimitService {
             String planId = tenant.plan();
             TenantLimits limits;
             if (planId == null || planId.isBlank()) {
-                limits = new TenantLimits(60, 10_000, 1_000);
+                limits = getDefaultLimits();
             } else {
                 PlanQueryService.PlanInfo plan = planQuery.getPlan(planId);
                 if (plan != null) {
@@ -609,7 +664,7 @@ public class RateLimitService {
                             new TenantLimits(
                                     plan.burstLimit(), plan.evalLimit(), plan.subjectLimit());
                 } else {
-                    limits = new TenantLimits(60, 10_000, 1_000);
+                    limits = getDefaultLimits();
                 }
             }
 
@@ -632,6 +687,24 @@ public class RateLimitService {
             // Return stale cached value if available (better than nothing)
             return cached != null ? cached.limits() : null;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Default limits
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns the fallback rate limits for tenants without an assigned plan. Values are read from
+     * {@code cveil.rate-limit.*} configuration properties, falling back to sensible hardcoded
+     * defaults if not configured.
+     */
+    private TenantLimits getDefaultLimits() {
+        return config.rateLimit()
+                .map(
+                        rl ->
+                                new TenantLimits(
+                                        rl.defaultBurst(), rl.defaultEval(), rl.defaultSubject()))
+                .orElse(new TenantLimits(30, 10_000, 500));
     }
 
     // -----------------------------------------------------------------------

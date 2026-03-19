@@ -19,7 +19,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. Users — mirrors Keycloak users + app-specific profile fields
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.iam_user (
+CREATE TABLE iam_user (
     user_id         UUID            PRIMARY KEY,                -- Keycloak sub claim (immutable)
     tenant_id       VARCHAR(255)    NOT NULL UNIQUE,            -- user's personal tenant
     username        VARCHAR(255)    NOT NULL UNIQUE,
@@ -36,14 +36,14 @@ CREATE TABLE platform_iam.iam_user (
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_iam_user_status     ON platform_iam.iam_user(status);
-CREATE INDEX idx_iam_user_created_at ON platform_iam.iam_user(created_at);
-CREATE INDEX idx_iam_user_tenant     ON platform_iam.iam_user(tenant_id);
+CREATE INDEX idx_iam_user_status     ON iam_user(status);
+CREATE INDEX idx_iam_user_created_at ON iam_user(created_at);
+CREATE INDEX idx_iam_user_tenant     ON iam_user(tenant_id);
 
 -- ---------------------------------------------------------------------------
 -- 2. Organizations — mirrors Keycloak organizations
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.iam_organization (
+CREATE TABLE iam_organization (
     org_id          VARCHAR(255)    PRIMARY KEY,                -- Keycloak org ID
     tenant_id       VARCHAR(255)    NOT NULL UNIQUE,            -- org's tenant record
     org_name        VARCHAR(500)    NOT NULL UNIQUE,            -- Keycloak org alias (= tenant_id value)
@@ -55,12 +55,12 @@ CREATE TABLE platform_iam.iam_organization (
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_iam_org_tenant ON platform_iam.iam_organization(tenant_id);
+CREATE INDEX idx_iam_org_tenant ON iam_organization(tenant_id);
 
 -- ---------------------------------------------------------------------------
 -- 3. Organization membership — links users to orgs
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.org_membership (
+CREATE TABLE org_membership (
     org_id          VARCHAR(255)    NOT NULL,
     user_id         UUID            NOT NULL,
     role            VARCHAR(100)    NOT NULL DEFAULT 'member'
@@ -70,12 +70,12 @@ CREATE TABLE platform_iam.org_membership (
     PRIMARY KEY (org_id, user_id)
 );
 
-CREATE INDEX idx_membership_user ON platform_iam.org_membership(user_id);
+CREATE INDEX idx_membership_user ON org_membership(user_id);
 
 -- ---------------------------------------------------------------------------
 -- 4. Organization invitations — tracks pending invites for role pre-assignment
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.org_invitation (
+CREATE TABLE org_invitation (
     invitation_id   UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id          VARCHAR(255)    NOT NULL,
     email           VARCHAR(500)    NOT NULL,
@@ -88,5 +88,5 @@ CREATE TABLE platform_iam.org_invitation (
     expires_at      TIMESTAMPTZ
 );
 
-CREATE INDEX idx_invitation_org_status   ON platform_iam.org_invitation(org_id, status);
-CREATE INDEX idx_invitation_email_status ON platform_iam.org_invitation(email, status);
+CREATE INDEX idx_invitation_org_status   ON org_invitation(org_id, status);
+CREATE INDEX idx_invitation_email_status ON org_invitation(email, status);

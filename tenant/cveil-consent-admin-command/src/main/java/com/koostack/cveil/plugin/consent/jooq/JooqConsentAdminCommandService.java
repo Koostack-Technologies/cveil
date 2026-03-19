@@ -68,6 +68,7 @@ public class JooqConsentAdminCommandService
     private ExpireConsentCommandActuator expireConsentActuator;
     private RevokeAllConsentCommandActuator revokeAllConsentActuator;
     private DeleteSubjectAuditCommandActuator deleteSubjectAuditActuator;
+    private PublishSubjectDataDeletedCommandActuator publishSubjectDataDeletedActuator;
     private ShredSubjectCommandActuator shredSubjectActuator;
     private SeedConsentGovernanceCommandActuator seedConsentGovernanceActuator;
 
@@ -147,6 +148,8 @@ public class JooqConsentAdminCommandService
         expireConsentActuator = new ExpireConsentCommandActuator(eventService);
         revokeAllConsentActuator = new RevokeAllConsentCommandActuator(eventService);
         deleteSubjectAuditActuator = new DeleteSubjectAuditCommandActuator(eventService);
+        publishSubjectDataDeletedActuator =
+                new PublishSubjectDataDeletedCommandActuator(eventService);
 
         // DSAR actuators require SubjectDsarService (null-safe: only registered when available)
         if (config.dsarService() != null) {
@@ -246,6 +249,9 @@ public class JooqConsentAdminCommandService
         actuators.put(
                 DeleteSubjectAuditCommandActuator.DeleteSubjectAuditCommand.class,
                 deleteSubjectAuditActuator);
+        actuators.put(
+                PublishSubjectDataDeletedCommandActuator.PublishSubjectDataDeletedCommand.class,
+                publishSubjectDataDeletedActuator);
         if (shredSubjectActuator != null) {
             actuators.put(
                     ShredSubjectCommandActuator.ShredSubjectCommand.class, shredSubjectActuator);

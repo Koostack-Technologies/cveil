@@ -11,7 +11,7 @@
 -- ============================================================================
 
 -- 1. Update existing 'free' tier (Developer / Starter)
-UPDATE platform_core.plan SET
+UPDATE plan SET
     display_name  = 'Starter',
     description   = 'For individual developers and early-stage startups validating the API and integrating basic consent flows.',
     eval_limit    = 100000,
@@ -23,7 +23,7 @@ UPDATE platform_core.plan SET
 WHERE plan_id = 'free';
 
 -- 2. Update existing 'pro' tier → Growth
-UPDATE platform_core.plan SET
+UPDATE plan SET
     display_name  = 'Growth',
     description   = 'For growing businesses that need to prove GDPR/CCPA compliance and handle moderate traffic.',
     eval_limit    = 2000000,
@@ -35,7 +35,7 @@ UPDATE platform_core.plan SET
 WHERE plan_id = 'pro';
 
 -- 3. Insert new 'business' tier (Business / Professional)
-INSERT INTO platform_core.plan (plan_id, display_name, description, eval_limit, subject_limit, burst_limit, is_public, is_active, sort_order)
+INSERT INTO plan (plan_id, display_name, description, eval_limit, subject_limit, burst_limit, is_public, is_active, sort_order)
 VALUES (
     'business',
     'Business',
@@ -49,7 +49,7 @@ VALUES (
 );
 
 -- 4. Update existing 'enterprise' tier
-UPDATE platform_core.plan SET
+UPDATE plan SET
     display_name  = 'Enterprise',
     description   = 'For large enterprises requiring massive scale, strict data isolation, or on-premise/VPC deployments.',
     eval_limit    = -1,

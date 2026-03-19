@@ -48,6 +48,12 @@ public class ListPricingTiersQueryActuator
             field(name("cveilcore", "plan", "stripe_product_id"), String.class);
     private static final org.jooq.Field<String> STRIPE_PRICE_ID =
             field(name("cveilcore", "plan", "stripe_price_id"), String.class);
+    private static final org.jooq.Field<Integer> MEMBER_LIMIT =
+            field(name("cveilcore", "plan", "member_limit"), Integer.class);
+    private static final org.jooq.Field<Integer> AUDIT_RETENTION_DAYS =
+            field(name("cveilcore", "plan", "audit_retention_days"), Integer.class);
+    private static final org.jooq.Field<String> STRIPE_ANNUAL_PRICE_ID =
+            field(name("cveilcore", "plan", "stripe_annual_price_id"), String.class);
 
     // -- plan_display_detail table fields -------------------------------------
 
@@ -113,11 +119,16 @@ public class ListPricingTiersQueryActuator
                         record.get(SUBJECT_LIMIT),
                         record.get(BURST_LIMIT),
                         record.get(JURISDICTION_LIMIT) != null ? record.get(JURISDICTION_LIMIT) : 3,
+                        record.get(MEMBER_LIMIT) != null ? record.get(MEMBER_LIMIT) : -1,
+                        record.get(AUDIT_RETENTION_DAYS) != null
+                                ? record.get(AUDIT_RETENTION_DAYS)
+                                : 30,
                         record.get(IS_PUBLIC),
                         record.get(IS_ACTIVE),
                         record.get(SORT_ORDER),
                         record.get(STRIPE_PRODUCT_ID),
-                        record.get(STRIPE_PRICE_ID));
+                        record.get(STRIPE_PRICE_ID),
+                        record.get(STRIPE_ANNUAL_PRICE_ID));
 
         PlanDisplayDetail detail =
                 new PlanDisplayDetail(

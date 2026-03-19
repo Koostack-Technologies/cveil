@@ -28,7 +28,7 @@ export function initDeleteModal() {
             if (!errEl) {
                 errEl = document.createElement('p');
                 errEl.id = 'delete-modal-error';
-                errEl.className = 'text-sm text-red-400 mt-3';
+                errEl.className = 'text-sm text-error mt-3';
                 btn.parentElement.appendChild(errEl);
             }
             errEl.textContent = e.message;

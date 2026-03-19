@@ -28,7 +28,6 @@ public class OnboardingStateHolder {
 
         // Step 1
         private String workspaceName;
-        private boolean isTeam;
         private String orgTenantId;
 
         // Selected plan (from pricing page → signup → onboarding)
@@ -62,14 +61,6 @@ public class OnboardingStateHolder {
 
         public void setWorkspaceName(String workspaceName) {
             this.workspaceName = workspaceName;
-        }
-
-        public boolean isTeam() {
-            return isTeam;
-        }
-
-        public void setTeam(boolean team) {
-            isTeam = team;
         }
 
         /**

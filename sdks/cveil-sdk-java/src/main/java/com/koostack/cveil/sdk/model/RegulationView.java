@@ -5,7 +5,7 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record RegulationView(
-        int regulationId,
+        String regulationId,
         String regulationName,
         String description,
         List<RegulationJurisdictionLink> activeJurisdictions) {}

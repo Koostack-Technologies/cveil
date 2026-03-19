@@ -39,7 +39,10 @@ public class DeferredProvisioningTask implements Runnable {
     /** Tenant ID that seed and billing data are written to (may be an org tenant). */
     private final String tenantId;
 
-    /** Tenant ID used to report progress via {@link ProvisioningTracker} (always the personal tenant). */
+    /**
+     * Tenant ID used to report progress via {@link ProvisioningTracker} (always the personal
+     * tenant).
+     */
     private final String trackingTenantId;
 
     private final String email;
@@ -114,7 +117,10 @@ public class DeferredProvisioningTask implements Runnable {
 
     @Override
     public void run() {
-        LOG.info("Starting deferred provisioning for tenant: {} (tracker: {})", tenantId, trackingTenantId);
+        LOG.info(
+                "Starting deferred provisioning for tenant: {} (tracker: {})",
+                tenantId,
+                trackingTenantId);
 
         try {
             // Step 1: Seed consent governance data (the slow step)
@@ -139,7 +145,14 @@ public class DeferredProvisioningTask implements Runnable {
         } catch (Exception e) {
             LOG.error(
                     "Deferred provisioning failed for tenant {}: {}", tenantId, e.getMessage(), e);
-            tracker.fail(trackingTenantId, "Workspace setup encountered an error. Please contact support.");
+            String stepHint = inferFailedStep(e);
+            tracker.fail(
+                    trackingTenantId,
+                    "Workspace setup failed during "
+                            + stepHint
+                            + ": "
+                            + abbreviate(e.getMessage())
+                            + ". Please contact support.");
         }
     }
 
@@ -209,5 +222,36 @@ public class DeferredProvisioningTask implements Runnable {
         billingDispatcher.dispatch(
                 new CreateSubscriptionCommandActuator.CreateSubscriptionCommand(
                         tenantId, plan, null, null, null));
+    }
+
+    /** Infers which provisioning step failed from the exception's stack trace. */
+    private String inferFailedStep(Exception e) {
+        String trace = stackTraceToString(e);
+        if (trace.contains("seedConsentGovernance")
+                || trace.contains("SeedConsent")
+                || trace.contains("SeedParameterized")) {
+            return "governance configuration";
+        }
+        if (trace.contains("createBillingProfile") || trace.contains("CreateBillingProfile")) {
+            return "billing setup";
+        }
+        if (trace.contains("createStripeCustomer") || trace.contains("SetPaymentProcessor")) {
+            return "payment processor setup";
+        }
+        if (trace.contains("createSubscription") || trace.contains("CreateSubscription")) {
+            return "plan activation";
+        }
+        return "workspace setup";
+    }
+
+    private static String stackTraceToString(Throwable t) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        t.printStackTrace(new java.io.PrintWriter(sw));
+        return sw.toString();
+    }
+
+    private static String abbreviate(String msg) {
+        if (msg == null) return "unknown error";
+        return msg.length() > 120 ? msg.substring(0, 117) + "..." : msg;
     }
 }

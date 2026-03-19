@@ -7,7 +7,6 @@ import com.koostack.cveil.core.platform.plan.PlanQueryService;
 import com.koostack.cveil.core.platform.plan.PlanQueryService.PlanInfo;
 import com.koostack.cveil.platform.core.jooq.SyncPlanStripeIdsCommandActuator;
 import java.util.List;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * <ol>
  *   <li>Reads all active plans from {@code cveilcore.plan}
  *   <li>Skips plans that already have Stripe IDs persisted (fast path)
+ *   <li>Skips plans without pricing (custom/enterprise) based on {@code monthly_price_cents}
  *   <li>For plans that need syncing, calls {@link PaymentProcessorService#syncProduct} which is
  *       itself idempotent (searches Stripe by {@code metadata.plan_id} before creating)
  *   <li>Dispatches a {@code SyncPlanStripeIdsCommand} so the event store captures the mapping and
@@ -27,22 +27,15 @@ import org.slf4j.LoggerFactory;
  * </ol>
  *
  * <p>Enterprise plans (custom pricing) are skipped entirely — they have no fixed price to sync.
+ * Pricing is read from the {@code monthly_price_cents} and {@code annual_price_cents} columns in
+ * the plan table (populated by V13 migration).
  */
 public final class StripePlanSyncTask {
 
     private static final Logger LOG = LoggerFactory.getLogger(StripePlanSyncTask.class);
 
-    /**
-     * Price in cents for each plan. Plans not listed here are skipped. Enterprise is excluded
-     * because it uses custom/negotiated pricing.
-     */
-    private static final Map<String, Integer> PLAN_PRICE_CENTS =
-            Map.of(
-                    "free", 0,
-                    "pro", 4900,
-                    "business", 19900);
-
-    private static final String BILLING_INTERVAL = "month";
+    private static final String MONTHLY_INTERVAL = "month";
+    private static final String ANNUAL_INTERVAL = "year";
 
     private StripePlanSyncTask() {}
 
@@ -76,43 +69,74 @@ public final class StripePlanSyncTask {
         int skipped = 0;
 
         for (PlanInfo plan : plans) {
-            Integer priceCents = PLAN_PRICE_CENTS.get(plan.planId());
+            Integer priceCents = plan.monthlyPriceCents();
             if (priceCents == null) {
                 LOG.debug("Skipping plan {} — no fixed price (custom/enterprise)", plan.planId());
                 skipped++;
                 continue;
             }
 
-            // Fast path: already synced — both Stripe IDs present
-            if (plan.stripeProductId() != null
-                    && !plan.stripeProductId().isBlank()
-                    && plan.stripePriceId() != null
-                    && !plan.stripePriceId().isBlank()) {
+            // Fast path: already fully synced — monthly + annual Stripe IDs present
+            boolean hasMonthly =
+                    plan.stripeProductId() != null
+                            && !plan.stripeProductId().isBlank()
+                            && plan.stripePriceId() != null
+                            && !plan.stripePriceId().isBlank();
+            boolean needsAnnual =
+                    plan.hasAnnualPricing()
+                            && (plan.stripeAnnualPriceId() == null
+                                    || plan.stripeAnnualPriceId().isBlank());
+
+            if (hasMonthly && !needsAnnual) {
                 LOG.debug(
-                        "Plan {} already synced (product={}, price={})",
+                        "Plan {} already synced (product={}, price={}, annual={})",
                         plan.planId(),
                         plan.stripeProductId(),
-                        plan.stripePriceId());
+                        plan.stripePriceId(),
+                        plan.stripeAnnualPriceId());
                 skipped++;
                 continue;
             }
 
             try {
-                ProductPriceMapping mapping =
+                // Sync monthly price
+                ProductPriceMapping monthlyMapping =
                         paymentProcessor.syncProduct(
-                                plan.planId(), plan.displayName(), priceCents, BILLING_INTERVAL);
+                                plan.planId(), plan.displayName(), priceCents, MONTHLY_INTERVAL);
+
+                // Sync annual price if applicable
+                String annualPriceId = plan.stripeAnnualPriceId();
+                Integer annualCents = plan.annualPriceCents();
+                if (annualCents != null) {
+                    try {
+                        ProductPriceMapping annualMapping =
+                                paymentProcessor.syncProduct(
+                                        plan.planId() + "-annual",
+                                        plan.displayName() + " (Annual)",
+                                        annualCents,
+                                        ANNUAL_INTERVAL);
+                        annualPriceId = annualMapping.externalPriceId();
+                    } catch (Exception e) {
+                        LOG.warn(
+                                "Failed to sync annual price for plan {} (non-fatal): {}",
+                                plan.planId(),
+                                e.getMessage());
+                    }
+                }
 
                 coreDispatcher.dispatch(
                         new SyncPlanStripeIdsCommandActuator.SyncPlanStripeIdsCommand(
                                 plan.planId(),
-                                mapping.externalProductId(),
-                                mapping.externalPriceId()));
+                                monthlyMapping.externalProductId(),
+                                monthlyMapping.externalPriceId(),
+                                annualPriceId));
 
                 LOG.info(
-                        "Synced plan {} → product={}, price={}",
+                        "Synced plan {} → product={}, price={}, annualPrice={}",
                         plan.planId(),
-                        mapping.externalProductId(),
-                        mapping.externalPriceId());
+                        monthlyMapping.externalProductId(),
+                        monthlyMapping.externalPriceId(),
+                        annualPriceId);
                 synced++;
             } catch (Exception e) {
                 // Non-fatal: plan will work without Stripe IDs, sync retries on next restart

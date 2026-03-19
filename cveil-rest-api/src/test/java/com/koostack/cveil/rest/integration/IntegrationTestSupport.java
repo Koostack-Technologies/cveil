@@ -70,6 +70,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String tenantSchema; // consent/tenant schema name for search_path
     private final String tenantId; // business tenant ID for tenant-aware queries
     private final String keycloakUrl; // null → Keycloak helpers disabled
+    private final int shardCount; // must match runtime CveilConfig.stream.shard-count
     private Keycloak keycloakAdmin; // lazy-initialized
 
     /** Creates support without tenant schema routing (platform queries only). */
@@ -106,6 +107,10 @@ public class IntegrationTestSupport implements AutoCloseable {
 
         this.keycloakUrl =
                 config.keycloak().flatMap(kc -> kc.url()).filter(u -> !u.isBlank()).orElse(null);
+        this.shardCount =
+                config.stream()
+                        .map(CveilConfig.StreamConfig::shardCount)
+                        .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     @Override
@@ -578,9 +583,9 @@ public class IntegrationTestSupport implements AutoCloseable {
         return entries != null ? entries : List.of();
     }
 
-    /** Computes the shard stream key for a tenant (must match RedisEventPublisher routing). */
+    /** Computes the shard stream key for a tenant (must match runtime shard count). */
     private String shardStreamKey(String tenantId) {
-        int shard = Math.floorMod(tenantId.hashCode(), RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        int shard = Math.floorMod(tenantId.hashCode(), shardCount);
         return "cveil:stream:shard:" + shard;
     }
 
@@ -644,6 +649,37 @@ public class IntegrationTestSupport implements AutoCloseable {
                                 var groups = jedis.xinfoGroups(streamKey);
                                 return groups.stream()
                                         .anyMatch(g -> "admin-projection".equals(g.getName()));
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        });
+    }
+
+    /**
+     * Waits only for the tenant DB row to be ready (status + Redis ACL credentials populated).
+     * Unlike {@link #awaitTenantReady}, this skips the Redis stream consumer-group check, making it
+     * much faster for tests whose endpoints use direct JDBC and don't depend on stream consumers.
+     */
+    public void awaitTenantDbReady(String tenantId, Duration timeout) {
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(200))
+                .until(
+                        () -> {
+                            try (Connection conn =
+                                    DriverManager.getConnection(jdbcUrl, dbUsername, dbPassword)) {
+                                var rs =
+                                        conn.createStatement()
+                                                .executeQuery(
+                                                        "SELECT 1 FROM cveiliam.tenant WHERE"
+                                                                + " tenant_id = '"
+                                                                + tenantId
+                                                                + "' AND status IN ('created',"
+                                                                + " 'active', 'ACTIVE')"
+                                                                + " AND redis_acl_user IS NOT NULL"
+                                                                + " AND redis_acl_password IS NOT"
+                                                                + " NULL");
+                                return rs.next();
                             } catch (Exception e) {
                                 return false;
                             }

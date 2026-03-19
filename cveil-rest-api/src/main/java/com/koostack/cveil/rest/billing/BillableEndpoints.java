@@ -37,7 +37,8 @@ public final class BillableEndpoints {
                     Map.entry("/api/v1/subjects", "consent"),
                     Map.entry("/api/v1/governance", "governance"),
                     Map.entry("/api/v1/catalogue", "catalogue"),
-                    Map.entry("/api/v1/consent", "graph"));
+                    Map.entry("/api/v1/consent", "graph"),
+                    Map.entry("/api/v1/dsar", "dsar"));
 
     /** Auth provider value that identifies Personal Access Tokens. */
     public static final String PAT_PROVIDER = "access-token";

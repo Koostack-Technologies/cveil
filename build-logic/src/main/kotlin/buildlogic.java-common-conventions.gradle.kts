@@ -99,6 +99,15 @@ tasks.withType<Test>().configureEach {
     // client negotiates with v1.24 and receives HTTP 400.  Force v1.44 so
     // Testcontainers can discover the Docker daemon correctly.
     environment("DOCKER_API_VERSION", "1.44")
+
+    // CI test filtering: -PunitOnly excludes integration tests (*IT),
+    // -PintegrationOnly runs only integration tests (*IT).
+    if (project.hasProperty("unitOnly")) {
+        exclude("**/*IT.class")
+    }
+    if (project.hasProperty("integrationOnly")) {
+        include("**/*IT.class")
+    }
 }
 
 tasks.withType<JavaExec>().configureEach {

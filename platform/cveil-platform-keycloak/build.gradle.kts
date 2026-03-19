@@ -14,6 +14,9 @@ dependencies {
     // but declared explicitly for the JWKS verifier)
     implementation("com.nimbusds:nimbus-jose-jwt:9.47")
 
+    // Caffeine cache for bounded JWKS caching (max entries + TTL eviction)
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
     implementation("org.slf4j:slf4j-api:2.0.16")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.12.1")

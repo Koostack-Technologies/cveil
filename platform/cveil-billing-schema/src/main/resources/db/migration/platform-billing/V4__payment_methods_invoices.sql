@@ -11,7 +11,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. Payment methods (reference mirror — no sensitive card data stored)
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_billing.payment_method (
+CREATE TABLE payment_method (
     id                          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id                   VARCHAR(255)    NOT NULL,
     stripe_payment_method_id    VARCHAR(255)    NOT NULL UNIQUE,
@@ -28,12 +28,12 @@ CREATE TABLE platform_billing.payment_method (
 );
 
 CREATE INDEX idx_payment_method_tenant
-    ON platform_billing.payment_method(tenant_id);
+    ON payment_method(tenant_id);
 
 -- ---------------------------------------------------------------------------
 -- 2. Invoices (full mirror)
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_billing.invoice (
+CREATE TABLE invoice (
     id                          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id                   VARCHAR(255)    NOT NULL,
     stripe_invoice_id           VARCHAR(255)    NOT NULL UNIQUE,
@@ -58,18 +58,18 @@ CREATE TABLE platform_billing.invoice (
 );
 
 CREATE INDEX idx_invoice_tenant
-    ON platform_billing.invoice(tenant_id);
+    ON invoice(tenant_id);
 
 CREATE INDEX idx_invoice_tenant_status
-    ON platform_billing.invoice(tenant_id, status);
+    ON invoice(tenant_id, status);
 
 -- ---------------------------------------------------------------------------
 -- 3. Invoice line items
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_billing.invoice_line_item (
+CREATE TABLE invoice_line_item (
     id                          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id                  UUID            NOT NULL
-                                    REFERENCES platform_billing.invoice(id) ON DELETE CASCADE,
+                                    REFERENCES invoice(id) ON DELETE CASCADE,
     stripe_line_item_id         VARCHAR(255)    NOT NULL,
     description                 TEXT,
     amount                      BIGINT          NOT NULL DEFAULT 0,
@@ -83,12 +83,12 @@ CREATE TABLE platform_billing.invoice_line_item (
 );
 
 CREATE INDEX idx_invoice_line_item_invoice
-    ON platform_billing.invoice_line_item(invoice_id);
+    ON invoice_line_item(invoice_id);
 
 -- ---------------------------------------------------------------------------
 -- 4. Stripe webhook event log (idempotency + audit)
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_billing.stripe_event_log (
+CREATE TABLE stripe_event_log (
     stripe_event_id             VARCHAR(255)    PRIMARY KEY,
     event_type                  VARCHAR(255)    NOT NULL,
     processed_at                TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,

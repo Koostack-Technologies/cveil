@@ -6,7 +6,7 @@ import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record FieldView(
-        int fieldId,
+        String fieldId,
         String fieldName,
         String description,
         Map<String, Object> entity,

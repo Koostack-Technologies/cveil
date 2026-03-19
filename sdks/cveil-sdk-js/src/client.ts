@@ -725,8 +725,8 @@ export class CveilClient {
   }
 
   /** Get a subject's consent history. */
-  async getSubjectHistory(subject: string): Promise<ConsentLedgerEntry[]> {
-    return this.httpRequest<ConsentLedgerEntry[]>(
+  async getSubjectHistory(subject: string): Promise<SubjectConsentView> {
+    return this.httpRequest<SubjectConsentView>(
       "GET",
       `/api/v1/subjects/${encodeURIComponent(subject)}/history`
     );

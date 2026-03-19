@@ -9,11 +9,20 @@
 quarkus:
   http:
     port: 8080
+    proxy:
+      proxy-address-forwarding: true
+      allow-forwarded: false
+      enable-forwarded-host: true
+      enable-forwarded-prefix: true
     cors:
-      origins: ${CVEIL_CORS_ORIGINS:https://dashboard.cveil.dev}
-      methods: ${CVEIL_CORS_METHODS:GET,POST,DELETE,OPTIONS}
+      # Regex allows all origins — required for the embeddable consent banner widget.
+      # Security is enforced by DPoP/JWT tokens, not CORS. To restrict origins
+      # (e.g. in on-prem deployments), set CVEIL_CORS_ORIGINS to specific domains.
+      origins: ${CVEIL_CORS_ORIGINS:/.*/}
+      methods: ${CVEIL_CORS_METHODS:GET,POST,PUT,DELETE,OPTIONS}
       headers: ${CVEIL_CORS_HEADERS:Authorization,Content-Type,X-Request-Id,DPoP,X-Org-Id}
       exposed-headers: ${CVEIL_CORS_EXPOSED_HEADERS:X-Request-Id,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset,X-RateLimit-Warning,DPoP-Nonce}
+      access-control-allow-credentials: false
   virtual-threads:
     enabled: true # REQUIRED for ScopedValue (TenantContext, RequestContext)
 

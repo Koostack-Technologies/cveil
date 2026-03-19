@@ -6,129 +6,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/logo.svg">
     <title>{#insert title}Dashboard{/insert} | Cveil</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        cv: { 50: '#f0fdfa', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
-                        gray: { 900: '#0a0f1c', 800: '#172136', 750: '#1e293b' }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <link rel="stylesheet" href="/css/cveil-web.css?v={v ?: '0'}">
 </head>
-<body class="antialiased bg-gray-50 text-gray-800 h-screen flex overflow-hidden">
+<body class="antialiased bg-surface-base text-on-surface h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <aside class="hidden md:flex md:flex-col w-64 bg-[#0a0f1c] border-r border-gray-800">
+    <aside class="hidden md:flex md:flex-col w-64 bg-surface-lowest">
         <!-- Logo -->
-        <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
+        <div class="h-16 flex items-center gap-2 px-5 bg-surface-lowest">
             <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
-            <span class="text-lg font-bold tracking-tight text-white">Cveil</span>
+            <span class="text-headline-sm text-on-surface tracking-tight">Cveil</span>
         </div>
 
         <!-- Workspace switcher -->
         <div class="px-4 py-4">
             <div class="relative" id="ws-switcher">
-                <button onclick="document.getElementById('ws-dropdown').classList.toggle('hidden')"
-                        class="w-full bg-gray-800/60 border border-gray-700 rounded px-3 py-2 text-left hover:border-gray-600 transition-colors group">
-                    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Workspace</p>
+                <button {#if organizations != null && organizations.size > 1}onclick="document.getElementById('ws-dropdown').classList.toggle('hidden')"{/if}
+                        class="w-full bg-surface-container rounded-md px-3 py-2 text-left hover:bg-surface-high transition-colors group">
+                    <p class="text-label-sm text-on-surface-muted">Organization</p>
                     <div class="flex items-center justify-between">
-                        <p class="text-sm text-white font-mono truncate">{workspaceDisplayName ?: tenantId ?: 'default'}</p>
-                        <svg class="w-4 h-4 text-gray-500 group-hover:text-gray-300 shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                        <p class="text-body-md font-technical text-on-surface truncate">{workspaceDisplayName ?: tenantId ?: 'default'}</p>
+                        {#if organizations != null && organizations.size > 1}
+                        <svg class="w-4 h-4 text-on-surface-muted group-hover:text-on-surface-variant shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                        {/if}
                     </div>
                     {#if activeOrgId}
-                    <p class="text-xs text-gray-500 font-mono truncate mt-0.5">{tenantId}</p>
+                    <p class="text-label-sm font-technical text-on-surface-muted truncate mt-0.5">{tenantId}</p>
                     {/if}
                 </button>
 
-                <!-- Dropdown -->
-                <div id="ws-dropdown" class="hidden absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 max-h-64 overflow-y-auto">
-                    <!-- Personal workspace -->
-                    <form method="POST" action="/dashboard/switch-org" class="contents">
-                        <input type="hidden" name="orgName" value="personal">
-                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors border-b border-gray-700 {#if !activeOrgId}bg-gray-700/40{/if}">
-                            <div class="flex items-center gap-2">
-                                <span class="w-6 h-6 rounded bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-xs font-bold shrink-0">{initial ?: 'U'}</span>
-                                <div class="min-w-0">
-                                    <p class="text-sm text-white truncate">Personal</p>
-                                    <p class="text-xs text-gray-500 font-mono truncate">{personalTenantId ?: 'default'}</p>
-                                </div>
-                                {#if !activeOrgId}
-                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                {/if}
-                            </div>
-                        </button>
-                    </form>
-
-                    {#if organizations != null && organizations.size > 0}
-                    <div class="px-3 py-1.5">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Organizations</p>
-                    </div>
+                <!-- Dropdown (only shown when user belongs to multiple orgs) -->
+                {#if organizations != null && organizations.size > 1}
+                <div id="ws-dropdown" class="hidden absolute left-0 right-0 mt-1 glass-panel z-50 max-h-64 overflow-y-auto">
                     {#for org in organizations}
                     <form method="POST" action="/dashboard/switch-org" class="contents">
                         <input type="hidden" name="orgName" value="{org.orgName}">
-                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-gray-700/60 transition-colors {#if activeOrgId == org.orgId}bg-gray-700/40{/if}">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-surface-high transition-colors {#if activeOrgId == org.orgId}bg-surface-high{/if}">
                             <div class="flex items-center gap-2">
-                                <span class="w-6 h-6 rounded bg-purple-900/40 border border-purple-500/30 flex items-center justify-center text-purple-400 text-xs font-bold shrink-0">{org.orgName.charAt(0)}</span>
+                                <span class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">{org.orgName.charAt(0)}</span>
                                 <div class="min-w-0">
-                                    <p class="text-sm text-white truncate">{org.displayName ?: org.orgName}</p>
-                                    <p class="text-xs text-gray-500 font-mono truncate">{org.orgName}</p>
+                                    <p class="text-body-md text-on-surface truncate">{org.displayName ?: org.orgName}</p>
+                                    <p class="text-label-sm font-technical text-on-surface-muted truncate">{org.orgName}</p>
                                 </div>
                                 {#if activeOrgId == org.orgId}
-                                <svg class="w-4 h-4 text-cv-500 shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                <svg class="w-4 h-4 text-primary shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
                                 {/if}
                             </div>
                         </button>
                     </form>
                     {/for}
-                    {/if}
                 </div>
+                {/if}
             </div>
         </div>
 
         <!-- Nav -->
-        <nav class="flex-1 px-3 space-y-1 overflow-y-auto">
-            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'overview'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"></path></svg>
-                Overview
-            </a>
-            <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'governance'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
-                Governance
-            </a>
-            <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'consent'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                Consent
-            </a>
-            <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'catalogue'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                Catalogue
-            </a>
-            <a href="/dashboard/billing" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'billing'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm font-medium transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'billing'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                Billing
-            </a>
-            <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400 hover:bg-gray-800/40 hover:text-white{/if} text-sm transition-colors">
-                <svg class="w-5 h-5 {#if activeNav == 'account'}text-cv-500{/if}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                Account
-            </a>
+        <nav class="flex-1 px-3 space-y-4 overflow-y-auto" id="sidebar-nav">
+            <!-- Workspace -->
+            <div class="nav-group" data-group="workspace">
+                <button type="button" onclick="toggleNavGroup('workspace')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Workspace</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'overview'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Overview</a>
+                    <a href="/dashboard/governance" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'governance'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Governance</a>
+                    <a href="/dashboard/catalogue" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'catalogue'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Catalogue</a>
+                </div>
+            </div>
+
+            <!-- Privacy -->
+            <div class="nav-group" data-group="privacy">
+                <button type="button" onclick="toggleNavGroup('privacy')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Privacy</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/consent" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'consent'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Consent</a>
+                    <a href="/dashboard/dsar" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'dsar'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">DSAR</a>
+                </div>
+            </div>
+
+            <!-- Insights -->
+            <div class="nav-group" data-group="insights">
+                <button type="button" onclick="toggleNavGroup('insights')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Insights</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/analytics" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'analytics'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Analytics</a>
+                    <a href="/dashboard/reports" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'reports'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Reports</a>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="nav-group" data-group="settings">
+                <button type="button" onclick="toggleNavGroup('settings')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Settings</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/webhooks" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'webhooks'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Webhooks</a>
+                    <a href="/dashboard/billing" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'billing'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Billing</a>
+                    <a href="/dashboard/account" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'account'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Account</a>
+                </div>
+            </div>
         </nav>
 
         <!-- Sidebar footer -->
-        <div class="px-4 py-4 border-t border-gray-800">
-            <a href="/docs" class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+        <div class="px-4 py-4 bg-surface-lowest">
+            <a href="/docs" class="flex items-center gap-2 text-label-md text-on-surface-muted hover:text-on-surface-variant transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                 Documentation
             </a>
@@ -139,63 +126,136 @@
     <div class="flex-1 flex flex-col overflow-hidden">
 
         <!-- Top header -->
-        <header class="h-16 flex items-center justify-between px-6 border-b border-gray-200 bg-white/80 backdrop-blur-md">
+        <header class="h-16 flex items-center justify-between px-6 bg-surface-low">
             <!-- Mobile menu button -->
-            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-900" aria-label="Toggle sidebar">
+            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-on-surface-variant hover:text-on-surface" aria-label="Toggle sidebar">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
 
             <div class="hidden md:block">
-                <h2 class="text-lg font-semibold">{#insert headerTitle}Dashboard{/insert}</h2>
+                <h2 class="text-headline-sm">{#insert headerTitle}Dashboard{/insert}</h2>
             </div>
 
             <!-- User actions -->
             <div class="flex items-center gap-4">
                 <div class="text-right hidden sm:block">
-                    <p class="text-sm font-medium text-gray-900">{username ?: 'User'}</p>
-                    <p class="text-xs text-gray-500">{roles ?: 'member'}</p>
+                    <p class="text-body-md font-medium text-on-surface">{username ?: 'User'}</p>
+                    <p class="text-label-sm text-on-surface-muted">{roles ?: 'member'}</p>
                 </div>
-                <div class="w-8 h-8 rounded-full bg-cv-50 border border-cv-500/30 flex items-center justify-center text-cv-600 text-sm font-bold">
+                <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-body-md font-bold">
                     {initial ?: 'U'}
                 </div>
-                <form method="POST" action="/logout" class="inline">
-                    <button type="submit" class="text-gray-500 hover:text-gray-900 p-2 rounded hover:bg-gray-100 transition-colors" title="Sign out">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-                    </button>
-                </form>
+                <button type="button" id="logout-btn" class="text-on-surface-variant hover:text-on-surface p-2 rounded-md hover:bg-surface-high transition-colors" title="Sign out">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
             </div>
         </header>
 
         <!-- Mobile sidebar overlay -->
         <div id="mobile-sidebar" class="hidden fixed inset-0 z-40 md:hidden">
-            <div class="fixed inset-0 bg-black/30" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
-            <aside class="relative w-64 h-full bg-[#0a0f1c] border-r border-gray-800 overflow-y-auto">
-                <div class="h-16 flex items-center gap-2 px-5 border-b border-gray-800">
+            <div class="fixed inset-0 bg-black/40" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
+            <aside class="relative w-64 h-full bg-surface-lowest overflow-y-auto">
+                <div class="h-16 flex items-center gap-2 px-5">
                     <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
-                    <span class="text-lg font-bold tracking-tight text-white">Cveil</span>
+                    <span class="text-headline-sm text-on-surface tracking-tight">Cveil</span>
                 </div>
-                <nav class="px-3 py-4 space-y-1">
-                    <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'overview'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Overview</a>
-                    <a href="/dashboard/governance" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'governance'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Governance</a>
-                    <a href="/dashboard/consent" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'consent'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Consent</a>
-                    <a href="/dashboard/catalogue" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'catalogue'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Catalogue</a>
-                    <a href="/dashboard/billing" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'billing'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Billing</a>
-                    <a href="/dashboard/account" class="flex items-center gap-3 px-3 py-2.5 rounded {#if activeNav == 'account'}bg-gray-800/60 text-white{#else}text-gray-400{/if} text-sm font-medium">Account</a>
+                <nav class="px-3 py-4 space-y-4">
+                    <div class="nav-group" data-group="workspace">
+                        <button type="button" onclick="toggleNavGroup('workspace')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Workspace</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'overview'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Overview</a>
+                            <a href="/dashboard/governance" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'governance'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Governance</a>
+                            <a href="/dashboard/catalogue" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'catalogue'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Catalogue</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="privacy">
+                        <button type="button" onclick="toggleNavGroup('privacy')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Privacy</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/consent" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'consent'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Consent</a>
+                            <a href="/dashboard/dsar" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'dsar'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">DSAR</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="insights">
+                        <button type="button" onclick="toggleNavGroup('insights')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Insights</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/analytics" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'analytics'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Analytics</a>
+                            <a href="/dashboard/reports" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'reports'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Reports</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="settings">
+                        <button type="button" onclick="toggleNavGroup('settings')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Settings</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/webhooks" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'webhooks'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Webhooks</a>
+                            <a href="/dashboard/billing" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'billing'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Billing</a>
+                            <a href="/dashboard/account" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'account'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Account</a>
+                        </div>
+                    </div>
                 </nav>
             </aside>
         </div>
 
         <!-- Main content -->
-        <main class="flex-1 overflow-y-auto p-6 sm:p-8">
+        <main class="flex-1 overflow-y-auto p-6 sm:p-8 bg-surface-base">
             {#insert content}
-            <p class="text-gray-500">No content.</p>
+            <p class="text-on-surface-muted">No content.</p>
             {/insert}
         </main>
     </div>
 
-    {#raw}
     <script>
-        // Close workspace switcher dropdown when clicking outside
+        function toggleNavGroup(group) {
+            var key = 'cveil_nav_' + group;
+            var groups = document.querySelectorAll('.nav-group[data-group="' + group + '"]');
+            var isCollapsed = localStorage.getItem(key) === 'collapsed';
+            if (isCollapsed) {
+                localStorage.removeItem(key);
+            } else {
+                localStorage.setItem(key, 'collapsed');
+            }
+            groups.forEach(function(g) { applyNavGroupState(g, !isCollapsed); });
+        }
+        function applyNavGroupState(el, collapsed) {
+            var items = el.querySelector('.nav-group-items');
+            var chevron = el.querySelector('.nav-chevron');
+            if (!items) return;
+            if (collapsed) {
+                items.style.display = 'none';
+                if (chevron) chevron.style.transform = 'rotate(-90deg)';
+            } else {
+                items.style.display = '';
+                if (chevron) chevron.style.transform = '';
+            }
+        }
+        (function initNavGroups() {
+            ['workspace', 'privacy', 'insights', 'settings'].forEach(function(group) {
+                var collapsed = localStorage.getItem('cveil_nav_' + group) === 'collapsed';
+                document.querySelectorAll('.nav-group[data-group="' + group + '"]').forEach(function(g) {
+                    applyNavGroupState(g, collapsed);
+                });
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            var tid = '{tenantId}';
+            var pid = '{personalTenantId}';
+            if (tid && tid !== pid) {
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_active_org=' + encodeURIComponent(tid) + '; path=/; max-age=31536000; SameSite=Lax' + sec;
+            }
+        })();
         document.addEventListener('click', function(e) {
             var switcher = document.getElementById('ws-switcher');
             var dropdown = document.getElementById('ws-dropdown');
@@ -203,7 +263,29 @@
                 dropdown.classList.add('hidden');
             }
         });
+        document.getElementById('logout-btn').addEventListener('click', async function() {
+            try {
+                var rt = sessionStorage.getItem('cveil_refresh_token');
+                if (rt) {
+                    await fetch('/api/v1/platform/iam/logout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refreshToken: rt })
+                    }).catch(function() {});
+                }
+                sessionStorage.removeItem('cveil_access_token');
+                sessionStorage.removeItem('cveil_refresh_token');
+                sessionStorage.removeItem('cveil_token_type');
+                sessionStorage.removeItem('cveil_expires_at');
+                sessionStorage.removeItem('cveil_dpop_jwk');
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
+            } catch (e) {}
+            window.location.href = '/login';
+        });
     </script>
-    {/raw}
 </body>
 </html>

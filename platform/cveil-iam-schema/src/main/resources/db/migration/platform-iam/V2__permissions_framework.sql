@@ -16,7 +16,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. Permissions — atomic actions that can be checked in resource methods
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.permission (
+CREATE TABLE permission (
     permission_id   VARCHAR(100)  PRIMARY KEY,
     domain          VARCHAR(50)   NOT NULL,
     description     TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE platform_iam.permission (
 -- ---------------------------------------------------------------------------
 -- 2. Role definitions — system roles + custom per-org roles
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.role_definition (
+CREATE TABLE role_definition (
     role_id         VARCHAR(100)  PRIMARY KEY,
     tenant_id       VARCHAR(255),              -- NULL = system role, non-null = custom org role
     scope           VARCHAR(50)   NOT NULL CHECK (scope IN ('platform', 'tenant')),
@@ -37,39 +37,39 @@ CREATE TABLE platform_iam.role_definition (
     created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_role_definition_tenant ON platform_iam.role_definition(tenant_id);
+CREATE INDEX idx_role_definition_tenant ON role_definition(tenant_id);
 
 -- ---------------------------------------------------------------------------
 -- 3. Role → permission mapping
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.role_permission (
-    role_id         VARCHAR(100)  NOT NULL REFERENCES platform_iam.role_definition(role_id) ON DELETE CASCADE,
-    permission_id   VARCHAR(100)  NOT NULL REFERENCES platform_iam.permission(permission_id) ON DELETE CASCADE,
+CREATE TABLE role_permission (
+    role_id         VARCHAR(100)  NOT NULL REFERENCES role_definition(role_id) ON DELETE CASCADE,
+    permission_id   VARCHAR(100)  NOT NULL REFERENCES permission(permission_id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
 
 -- ---------------------------------------------------------------------------
 -- 4. User → role assignment, scoped per tenant
 -- ---------------------------------------------------------------------------
-CREATE TABLE platform_iam.role_assignment (
+CREATE TABLE role_assignment (
     user_id         VARCHAR(255)  NOT NULL,
     tenant_id       VARCHAR(255),              -- NULL = platform-scope assignment
-    role_id         VARCHAR(100)  NOT NULL REFERENCES platform_iam.role_definition(role_id) ON DELETE CASCADE,
+    role_id         VARCHAR(100)  NOT NULL REFERENCES role_definition(role_id) ON DELETE CASCADE,
     granted_by      VARCHAR(255)  NOT NULL,
     granted_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Unique constraint using COALESCE to treat NULL tenant_id as '' for uniqueness
 CREATE UNIQUE INDEX idx_role_assignment_unique
-    ON platform_iam.role_assignment (user_id, COALESCE(tenant_id, ''), role_id);
+    ON role_assignment (user_id, COALESCE(tenant_id, ''), role_id);
 
-CREATE INDEX idx_role_assignment_tenant ON platform_iam.role_assignment(tenant_id, user_id);
-CREATE INDEX idx_role_assignment_user   ON platform_iam.role_assignment(user_id);
+CREATE INDEX idx_role_assignment_tenant ON role_assignment(tenant_id, user_id);
+CREATE INDEX idx_role_assignment_user   ON role_assignment(user_id);
 
 -- ============================================================================
 -- Seed: permissions
 -- ============================================================================
-INSERT INTO platform_iam.permission (permission_id, domain, description) VALUES
+INSERT INTO permission (permission_id, domain, description) VALUES
     -- Consent domain
     ('consent:grant',       'consent',    'Grant consent (single + batch)'),
     ('consent:revoke',      'consent',    'Revoke consent (single + batch)'),
@@ -101,7 +101,7 @@ INSERT INTO platform_iam.permission (permission_id, domain, description) VALUES
 -- ============================================================================
 -- Seed: system role definitions
 -- ============================================================================
-INSERT INTO platform_iam.role_definition (role_id, tenant_id, scope, display_name, description, is_system, is_assignable) VALUES
+INSERT INTO role_definition (role_id, tenant_id, scope, display_name, description, is_system, is_assignable) VALUES
     ('super-admin',       NULL, 'platform', 'Super Administrator',  'Full platform access — all permissions on all tenants',         TRUE, FALSE),
     ('tenant-admin',      NULL, 'tenant',   'Tenant Admin',         'Full access within a tenant including org management',           TRUE, TRUE),
     ('tenant-write',      NULL, 'tenant',   'Tenant Writer',        'Read and write access to consent, catalogue, and governance',    TRUE, TRUE),
@@ -115,23 +115,23 @@ INSERT INTO platform_iam.role_definition (role_id, tenant_id, scope, display_nam
 -- ============================================================================
 
 -- super-admin: ALL permissions
-INSERT INTO platform_iam.role_permission (role_id, permission_id)
-SELECT 'super-admin', permission_id FROM platform_iam.permission;
+INSERT INTO role_permission (role_id, permission_id)
+SELECT 'super-admin', permission_id FROM permission;
 
 -- tenant-admin: all tenant-scoped permissions (no platform:* or iam:user:*)
-INSERT INTO platform_iam.role_permission (role_id, permission_id)
-SELECT 'tenant-admin', permission_id FROM platform_iam.permission
+INSERT INTO role_permission (role_id, permission_id)
+SELECT 'tenant-admin', permission_id FROM permission
 WHERE domain IN ('consent', 'catalogue', 'governance', 'events')
    OR permission_id IN ('org:read', 'org:write', 'org:member:manage', 'org:role:manage');
 
 -- org-admin: same as tenant-admin (org management is the key differentiator in assignment context)
-INSERT INTO platform_iam.role_permission (role_id, permission_id)
-SELECT 'org-admin', permission_id FROM platform_iam.permission
+INSERT INTO role_permission (role_id, permission_id)
+SELECT 'org-admin', permission_id FROM permission
 WHERE domain IN ('consent', 'catalogue', 'governance', 'events')
    OR permission_id IN ('org:read', 'org:write', 'org:member:manage', 'org:role:manage');
 
 -- tenant-write: all consent (except dsar), catalogue, governance, events
-INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
+INSERT INTO role_permission (role_id, permission_id) VALUES
     ('tenant-write', 'consent:grant'),
     ('tenant-write', 'consent:revoke'),
     ('tenant-write', 'consent:evaluate'),
@@ -146,7 +146,7 @@ INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
     ('tenant-write', 'org:read');
 
 -- tenant-read: read-only across all tenant domains
-INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
+INSERT INTO role_permission (role_id, permission_id) VALUES
     ('tenant-read', 'consent:evaluate'),
     ('tenant-read', 'consent:read'),
     ('tenant-read', 'consent:graph:read'),
@@ -156,7 +156,7 @@ INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
     ('tenant-read', 'org:read');
 
 -- consent-operator: focused consent operations only
-INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
+INSERT INTO role_permission (role_id, permission_id) VALUES
     ('consent-operator', 'consent:grant'),
     ('consent-operator', 'consent:revoke'),
     ('consent-operator', 'consent:evaluate'),
@@ -164,7 +164,7 @@ INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
     ('consent-operator', 'consent:graph:read');
 
 -- viewer: minimal read-only
-INSERT INTO platform_iam.role_permission (role_id, permission_id) VALUES
+INSERT INTO role_permission (role_id, permission_id) VALUES
     ('viewer', 'consent:evaluate'),
     ('viewer', 'consent:read'),
     ('viewer', 'catalogue:read'),

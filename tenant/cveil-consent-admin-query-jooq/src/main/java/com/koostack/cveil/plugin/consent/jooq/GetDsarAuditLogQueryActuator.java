@@ -10,6 +10,9 @@ public class GetDsarAuditLogQueryActuator
         implements QueryActuator<
                 GetDsarAuditLogQueryActuator.GetDsarAuditLogQuery, List<DsarAuditLog>> {
 
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 1000;
+
     private final DsarAuditLogRepository dsarAuditLogRepository;
 
     public GetDsarAuditLogQueryActuator(DsarAuditLogRepository dsarAuditLogRepository) {
@@ -20,12 +23,20 @@ public class GetDsarAuditLogQueryActuator
      * Query input for retrieving a subject's DSAR audit log.
      *
      * @param subjectId the data subject identifier
+     * @param limit max results to return (default 100, max 1000)
+     * @param offset starting offset for pagination (default 0)
      */
-    public record GetDsarAuditLogQuery(String subjectId) {}
+    public record GetDsarAuditLogQuery(String subjectId, int limit, int offset) {
+        public GetDsarAuditLogQuery(String subjectId) {
+            this(subjectId, DEFAULT_LIMIT, 0);
+        }
+    }
 
     @Override
     public List<DsarAuditLog> execute(GetDsarAuditLogQuery query) {
-        return dsarAuditLogRepository.findBySubject(query.subjectId());
+        int limit = Math.max(1, Math.min(query.limit(), MAX_LIMIT));
+        int offset = Math.max(0, query.offset());
+        return dsarAuditLogRepository.findBySubject(query.subjectId(), limit, offset);
     }
 
     @Override

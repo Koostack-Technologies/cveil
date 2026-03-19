@@ -5,7 +5,7 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PurposeView(
-        int purposeId,
+        String purposeId,
         String purposeName,
         String description,
         List<PurposeRegulationLink> regulations,

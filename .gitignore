@@ -50,3 +50,4 @@ CONTEXT.md
 certs/local/*.key
 certs/local/*.crt
 crates/target/
+**/node_modules

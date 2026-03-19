@@ -4,18 +4,18 @@
 {#content}
 
     <!-- Sub-navigation tabs -->
-    <div class="border-b border-gray-200 mb-8">
+    <div class="mb-8">
         <nav class="flex gap-6 -mb-px">
             <button onclick="showSection('profile')" id="tab-profile"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-cv-500 text-cv-500 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-primary text-primary transition-colors">
                 Profile
             </button>
             <button onclick="showSection('organizations')" id="tab-organizations"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
                 Organizations
             </button>
             <button onclick="showSection('tokens')" id="tab-tokens"
-                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-900 transition-colors">
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
                 Access Tokens
             </button>
         </nav>
@@ -29,50 +29,50 @@
             <h2 class="text-xl font-semibold mb-6">Profile</h2>
 
             <!-- Profile info card -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-6">
+            <div class="bg-surface-low rounded-md p-6 mb-6">
                 <dl class="space-y-4 text-sm">
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Username</dt>
-                        <dd class="text-gray-900 font-mono">{username ?: '—'}</dd>
+                        <dt class="text-on-surface-muted">Username</dt>
+                        <dd class="text-on-surface font-technical">{username ?: '—'}</dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Email</dt>
-                        <dd class="text-gray-900" id="display-email">{email ?: '—'}</dd>
+                        <dt class="text-on-surface-muted">Email</dt>
+                        <dd class="text-on-surface" id="display-email">{email ?: '—'}</dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Full Name</dt>
-                        <dd class="text-gray-900" id="display-fullname">{fullName ?: '—'}</dd>
+                        <dt class="text-on-surface-muted">Full Name</dt>
+                        <dd class="text-on-surface" id="display-fullname">{fullName ?: '—'}</dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Roles</dt>
-                        <dd class="text-gray-900" id="display-roles">{roles ?: 'member'}</dd>
+                        <dt class="text-on-surface-muted">Roles</dt>
+                        <dd class="text-on-surface" id="display-roles">{roles ?: 'member'}</dd>
                     </div>
                     <div>
-                        <dt class="text-gray-500 mb-2">Permissions</dt>
+                        <dt class="text-on-surface-muted mb-2">Permissions</dt>
                         <dd id="display-permissions" class="flex flex-wrap gap-1">
-                            <span class="text-gray-500 text-xs">Loading…</span>
+                            <span class="text-on-surface-muted text-xs">Loading…</span>
                         </dd>
                     </div>
                 </dl>
             </div>
 
             <!-- Edit profile form -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6 mb-6">
-                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Edit Profile</h3>
+            <div class="bg-surface-low rounded-md p-6 mb-6">
+                <h3 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide mb-4">Edit Profile</h3>
                 <form id="profile-form" onsubmit="updateProfile(event)" class="space-y-4">
                     <div>
-                        <label for="fullName" class="block text-sm text-gray-500 mb-1">Full Name</label>
+                        <label for="fullName" class="block text-sm text-on-surface-muted mb-1">Full Name</label>
                         <input type="text" id="fullName" name="fullName" value="{fullName ?: ''}"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded-md bg-surface-low ghost-border text-on-surface text-sm focus:border-primary/40 focus:outline-none">
                     </div>
                     <div>
-                        <label for="emailInput" class="block text-sm text-gray-500 mb-1">Email</label>
+                        <label for="emailInput" class="block text-sm text-on-surface-muted mb-1">Email</label>
                         <input type="email" id="emailInput" name="email" value="{email ?: ''}"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded-md bg-surface-low ghost-border text-on-surface text-sm focus:border-primary/40 focus:outline-none">
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" id="profile-save-btn"
-                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded-md bg-primary-dim hover:bg-primary-container text-on-surface text-sm font-medium transition-colors">
                             Save Changes
                         </button>
                         <span id="profile-msg" class="text-sm hidden"></span>
@@ -81,23 +81,23 @@
             </div>
 
             <!-- Change password form -->
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Change Password</h3>
+            <div class="bg-surface-low rounded-md p-6">
+                <h3 class="text-sm font-semibold text-on-surface-muted uppercase tracking-wide mb-4">Change Password</h3>
                 <form id="password-form" onsubmit="changePassword(event)" class="space-y-4">
                     <div>
-                        <label for="newPassword" class="block text-sm text-gray-500 mb-1">New Password</label>
+                        <label for="newPassword" class="block text-sm text-on-surface-muted mb-1">New Password</label>
                         <input type="password" id="newPassword" name="newPassword" minlength="8" required
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none"
+                            class="w-full px-3 py-2 rounded-md bg-surface-low ghost-border text-on-surface text-sm focus:border-primary/40 focus:outline-none"
                             placeholder="Minimum 8 characters">
                     </div>
                     <div>
-                        <label for="confirmPassword" class="block text-sm text-gray-500 mb-1">Confirm Password</label>
+                        <label for="confirmPassword" class="block text-sm text-on-surface-muted mb-1">Confirm Password</label>
                         <input type="password" id="confirmPassword" name="confirmPassword" minlength="8" required
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
+                            class="w-full px-3 py-2 rounded-md bg-surface-low ghost-border text-on-surface text-sm focus:border-primary/40 focus:outline-none">
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" id="password-save-btn"
-                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded-md bg-primary-dim hover:bg-primary-container text-on-surface text-sm font-medium transition-colors">
                             Change Password
                         </button>
                         <span id="password-msg" class="text-sm hidden"></span>
@@ -113,49 +113,10 @@
     <section id="section-organizations" class="hidden">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-semibold">Organizations</h2>
-            <button onclick="showCreateOrgForm()" id="create-org-toggle-btn"
-                class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
-                + New Organization
-            </button>
-        </div>
-
-        <!-- Create org form (hidden by default) -->
-        <div id="create-org-form-container" class="hidden mb-6">
-            <div class="bg-white shadow-sm border border-gray-200 rounded-md p-6">
-                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Create Organization</h3>
-                <form id="create-org-form" onsubmit="createOrganization(event)" class="space-y-4">
-                    <div>
-                        <label for="org-name" class="block text-sm text-gray-500 mb-1">Name <span class="text-gray-600">(slug, used as identifier)</span></label>
-                        <input type="text" id="org-name" name="name" required
-                            pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]"
-                            minlength="2" maxlength="255"
-                            placeholder="my-organization"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none font-mono">
-                        <p class="text-gray-600 text-xs mt-1">Lowercase letters, numbers, and hyphens only.</p>
-                    </div>
-                    <div>
-                        <label for="org-display-name" class="block text-sm text-gray-500 mb-1">Display Name <span class="text-gray-600">(optional)</span></label>
-                        <input type="text" id="org-display-name" name="displayName" maxlength="255"
-                            placeholder="My Organization"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm focus:border-cv-500 focus:outline-none">
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button type="submit" id="create-org-btn"
-                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
-                            Create Organization
-                        </button>
-                        <button type="button" onclick="hideCreateOrgForm()"
-                            class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 text-sm font-medium transition-colors">
-                            Cancel
-                        </button>
-                        <span id="create-org-msg" class="text-sm hidden"></span>
-                    </div>
-                </form>
-            </div>
         </div>
 
         <div id="orgs-list" class="space-y-3">
-            <p class="text-gray-500 text-sm">Loading organizations…</p>
+            <p class="text-on-surface-muted text-sm">Loading organizations…</p>
         </div>
     </section>
 
@@ -167,51 +128,51 @@
             <h2 class="text-xl font-semibold">Access Tokens</h2>
             <button onclick="showCreateTokenModal()"
                 id="token-create-btn"
-                class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                class="px-4 py-2 rounded-md bg-primary-dim hover:bg-primary-container text-on-surface text-sm font-medium transition-colors">
                 + Create Token
             </button>
         </div>
 
-        <p class="text-gray-500 text-sm mb-6">
+        <p class="text-on-surface-muted text-sm mb-6">
             Personal access tokens provide long-lived API access as Bearer tokens. Tokens are automatically scoped to your currently active workspace. Switch workspaces from the sidebar to create tokens for a different scope. Maximum expiration: 90 days.
         </p>
 
         <!-- Create token modal -->
         <div id="create-token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-            <div class="bg-white border border-gray-200 shadow-lg rounded-md p-6 max-w-md w-full mx-4">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Access Token</h3>
+            <div class="bg-surface-low shadow-lg rounded-md p-6 max-w-md w-full mx-4">
+                <h3 class="text-lg font-semibold text-on-surface mb-4">Create Access Token</h3>
                 <form onsubmit="createToken(event)">
                     <div class="mb-4">
-                        <label for="token-name" class="block text-sm font-medium text-gray-600 mb-1">Name</label>
+                        <label for="token-name" class="block text-sm font-medium text-on-surface-variant mb-1">Name</label>
                         <input type="text" id="token-name" required maxlength="100" placeholder="e.g. CI Pipeline, CLI Tool"
-                            class="w-full px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm placeholder-gray-500 focus:outline-none focus:border-cv-500">
+                            class="w-full px-3 py-2 rounded-md bg-surface-low ghost-border text-on-surface text-sm placeholder-on-surface-muted focus:outline-none focus:border-primary/40">
                     </div>
                     <div class="mb-4">
-                        <label for="token-scope" class="block text-sm font-medium text-gray-600 mb-1">Account Scope</label>
+                        <label for="token-scope" class="block text-sm font-medium text-on-surface-variant mb-1">Account Scope</label>
                         <input type="text" id="token-scope-display"
                             value="{workspaceDisplayName ?: 'Personal'} ({tenantId ?: 'personal'})"
                             disabled
-                            class="w-full px-3 py-2 rounded bg-gray-50 border border-gray-200 text-gray-600 text-sm cursor-not-allowed">
+                            class="w-full px-3 py-2 rounded-md bg-surface-base text-on-surface-variant text-sm cursor-not-allowed">
                         <input type="hidden" id="token-scope" value="{tenantId ?: ''}">
-                        <p class="text-gray-600 text-xs mt-1">Token will be scoped to the currently active workspace. Switch workspaces from the sidebar to change.</p>
+                        <p class="text-on-surface-variant text-xs mt-1">Token will be scoped to the currently active workspace. Switch workspaces from the sidebar to change.</p>
                     </div>
                     <div class="mb-5">
-                        <label class="block text-sm font-medium text-gray-600 mb-2">Expiration</label>
+                        <label class="block text-sm font-medium text-on-surface-variant mb-2">Expiration</label>
                         <div class="grid grid-cols-4 gap-2" id="expiry-options">
                             <button type="button" onclick="selectExpiry(7, this)"
-                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded-md ghost-border text-sm text-on-surface-variant hover:border-primary hover:text-on-surface transition-colors">
                                 7 days
                             </button>
                             <button type="button" onclick="selectExpiry(30, this)"
-                                class="expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded-md border border-primary bg-primary-dim/20 text-sm text-primary-container transition-colors">
                                 30 days
                             </button>
                             <button type="button" onclick="selectExpiry(60, this)"
-                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded-md ghost-border text-sm text-on-surface-variant hover:border-primary hover:text-on-surface transition-colors">
                                 60 days
                             </button>
                             <button type="button" onclick="selectExpiry(90, this)"
-                                class="expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors">
+                                class="expiry-btn px-3 py-2 rounded-md ghost-border text-sm text-on-surface-variant hover:border-primary hover:text-on-surface transition-colors">
                                 90 days
                             </button>
                         </div>
@@ -219,11 +180,11 @@
                     <p id="create-token-msg" class="text-sm text-red-400 mb-3 hidden"></p>
                     <div class="flex gap-3 justify-end">
                         <button type="button" onclick="hideCreateTokenModal()"
-                            class="px-4 py-2 rounded border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition-colors">
+                            class="px-4 py-2 rounded-md ghost-border text-on-surface-variant text-sm font-medium hover:bg-surface-container transition-colors">
                             Cancel
                         </button>
                         <button type="submit" id="create-token-submit"
-                            class="px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                            class="px-4 py-2 rounded-md bg-primary-dim hover:bg-primary-container text-on-surface text-sm font-medium transition-colors">
                             Create Token
                         </button>
                     </div>
@@ -233,38 +194,38 @@
 
         <!-- Show-once token modal -->
         <div id="token-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-            <div class="bg-white border border-gray-200 shadow-lg rounded-md p-6 max-w-lg w-full mx-4">
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">Token Created</h3>
+            <div class="bg-surface-low shadow-lg rounded-md p-6 max-w-lg w-full mx-4">
+                <h3 class="text-lg font-semibold text-on-surface mb-2">Token Created</h3>
                 <p class="text-yellow-400 text-sm mb-4">⚠ Copy this token now. It will not be shown again.</p>
                 <div class="relative mb-4">
-                    <pre id="token-value" class="bg-gray-50 border border-gray-200 rounded p-3 text-sm text-cv-500 font-mono break-all whitespace-pre-wrap"></pre>
+                    <pre id="token-value" class="bg-surface-base rounded-md p-3 text-sm text-primary font-technical break-all whitespace-pre-wrap"></pre>
                     <button onclick="copyToken()" title="Copy"
-                        class="absolute top-2 right-2 p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors">
+                        class="absolute top-2 right-2 p-1.5 rounded-md bg-surface-container hover:bg-surface-high text-on-surface-muted transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                     </button>
                 </div>
                 <dl class="text-sm space-y-1 mb-4">
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Name</dt>
-                        <dd class="text-gray-900" id="token-result-name"></dd>
+                        <dt class="text-on-surface-muted">Name</dt>
+                        <dd class="text-on-surface" id="token-result-name"></dd>
                     </div>
                     <div class="flex justify-between">
-                        <dt class="text-gray-500">Expires</dt>
-                        <dd class="text-gray-900" id="token-result-expires"></dd>
+                        <dt class="text-on-surface-muted">Expires</dt>
+                        <dd class="text-on-surface" id="token-result-expires"></dd>
                     </div>
                 </dl>
                 <button onclick="closeTokenModal()"
-                    class="w-full px-4 py-2 rounded bg-cv-600 hover:bg-cv-500 text-white text-sm font-medium transition-colors">
+                    class="w-full px-4 py-2 rounded-md bg-primary-dim hover:bg-primary-container text-on-surface text-sm font-medium transition-colors">
                     I've copied the token
                 </button>
             </div>
         </div>
 
         <!-- Token list -->
-        <div class="bg-white shadow-sm border border-gray-200 rounded-md overflow-hidden">
+        <div class="bg-surface-low rounded-md overflow-hidden">
             <table class="w-full text-sm">
-                <thead class="border-b border-gray-200">
-                    <tr class="text-gray-500 text-left">
+                <thead class="">
+                    <tr class="text-on-surface-muted text-left">
                         <th class="px-4 py-3 font-medium">Name</th>
                         <th class="px-4 py-3 font-medium hidden sm:table-cell">Prefix</th>
                         <th class="px-4 py-3 font-medium hidden sm:table-cell">Scope</th>
@@ -275,12 +236,13 @@
                     </tr>
                 </thead>
                 <tbody id="tokens-table-body">
-                    <tr><td colspan="7" class="px-4 py-6 text-gray-500 text-center">Loading tokens…</td></tr>
+                    <tr><td colspan="7" class="px-4 py-6 text-on-surface-muted text-center">Loading tokens…</td></tr>
                 </tbody>
             </table>
         </div>
     </section>
 
+    <script src="/js/cveil-web.iife.js?v={v ?: '0'}"></script>
     <script>
         // -------------------------------------------------------------------
         // Tab navigation
@@ -288,13 +250,13 @@
         function showSection(name) {
             document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(t => {
-                t.classList.remove('border-cv-500', 'text-cv-500');
-                t.classList.add('border-transparent', 'text-gray-500');
+                t.classList.remove('border-primary', 'text-primary');
+                t.classList.add('border-transparent', 'text-on-surface-muted');
             });
             document.getElementById('section-' + name).classList.remove('hidden');
             const tab = document.getElementById('tab-' + name);
-            tab.classList.add('border-cv-500', 'text-cv-500');
-            tab.classList.remove('border-transparent', 'text-gray-500');
+            tab.classList.add('border-primary', 'text-primary');
+            tab.classList.remove('border-transparent', 'text-on-surface-muted');
 
             if (name === 'organizations') loadOrganizations();
             if (name === 'tokens') loadTokens();
@@ -311,28 +273,28 @@
         // Load profile permissions on page load
         (async function loadProfilePermissions() {
             try {
-                var res = await fetch('/api/v1/platform/iam/me');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                 var me = await res.json();
                 // Update roles display
                 var rolesEl = document.getElementById('display-roles');
                 if (me.roles && me.roles.length > 0) {
                     rolesEl.innerHTML = me.roles.map(function(r) {
-                        return '<span class="inline-block px-2 py-0.5 rounded-full bg-cv-500/10 text-cv-600 text-xs font-medium mr-1">' + escHtml(r) + '</span>';
+                        return '<span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary-container text-xs font-medium mr-1">' + escHtml(r) + '</span>';
                     }).join('');
                 }
                 // Update permissions display
                 var permsEl = document.getElementById('display-permissions');
                 if (me.permissions && me.permissions.length > 0) {
                     permsEl.innerHTML = me.permissions.map(function(p) {
-                        return '<span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-mono">' + escHtml(p) + '</span>';
+                        return '<span class="inline-block px-2 py-0.5 rounded-full bg-surface-container text-on-surface-muted text-xs font-technical">' + escHtml(p) + '</span>';
                     }).join('');
                 } else {
-                    permsEl.innerHTML = '<span class="text-gray-500 text-xs">No permissions resolved for personal tenant.</span>';
+                    permsEl.innerHTML = '<span class="text-on-surface-muted text-xs">No permissions resolved for personal tenant.</span>';
                 }
                 // Cache orgs for token scope dropdown
                 cachedOrgs = me.organizations || [];
             } catch (e) {
-                document.getElementById('display-permissions').innerHTML = '<span class="text-gray-500 text-xs">Unable to load.</span>';
+                document.getElementById('display-permissions').innerHTML = '<span class="text-on-surface-muted text-xs">Unable to load.</span>';
             }
         })();
 
@@ -348,7 +310,7 @@
             msg.classList.add('hidden');
 
             try {
-                const res = await fetch('/api/v1/platform/iam/me', {
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -387,7 +349,7 @@
             msg.classList.add('hidden');
 
             try {
-                const res = await fetch('/api/v1/platform/iam/me/password', {
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me/password', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ newPassword: pw })
@@ -410,82 +372,36 @@
         // -------------------------------------------------------------------
         // Organizations
         // -------------------------------------------------------------------
-        function showCreateOrgForm() {
-            document.getElementById('create-org-form-container').classList.remove('hidden');
-            document.getElementById('create-org-toggle-btn').classList.add('hidden');
-            document.getElementById('org-name').focus();
-        }
-
-        function hideCreateOrgForm() {
-            document.getElementById('create-org-form-container').classList.add('hidden');
-            document.getElementById('create-org-toggle-btn').classList.remove('hidden');
-            document.getElementById('create-org-form').reset();
-            var msg = document.getElementById('create-org-msg');
-            msg.classList.add('hidden');
-        }
-
-        async function createOrganization(e) {
-            e.preventDefault();
-            var btn = document.getElementById('create-org-btn');
-            var msg = document.getElementById('create-org-msg');
-            btn.disabled = true;
-            btn.textContent = 'Creating…';
-            msg.classList.add('hidden');
-
-            try {
-                var res = await fetch('/api/v1/platform/iam/organizations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: document.getElementById('org-name').value.trim(),
-                        displayName: document.getElementById('org-display-name').value.trim() || null
-                    })
-                });
-                var data = await res.json();
-                if (res.ok) {
-                    hideCreateOrgForm();
-                    loadOrganizations();
-                } else {
-                    showMsg(msg, data.message || 'Failed to create organization', 'text-red-400');
-                }
-            } catch (err) {
-                showMsg(msg, 'Network error', 'text-red-400');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Create Organization';
-            }
-        }
-
         async function loadOrganizations() {
             var container = document.getElementById('orgs-list');
             try {
-                var res = await fetch('/api/v1/platform/iam/me');
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                 var data = await res.json();
                 var orgs = data.organizations || [];
                 if (orgs.length === 0) {
-                    container.innerHTML = '<p class="text-gray-500 text-sm">You are not a member of any organizations. Create one above to get started.</p>';
+                    container.innerHTML = '<p class="text-on-surface-muted text-sm">You are not a member of any organizations. Create one above to get started.</p>';
                     return;
                 }
                 container.innerHTML = orgs.map(function(o) {
                     var roleBadges = '';
                     if (o.roles && o.roles.length > 0) {
                         roleBadges = o.roles.map(function(r) {
-                            return '<span class="inline-block px-2 py-0.5 rounded-full bg-cv-500/10 text-cv-600 text-xs font-medium">' + escHtml(r) + '</span>';
+                            return '<span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary-container text-xs font-medium">' + escHtml(r) + '</span>';
                         }).join(' ');
                     } else if (o.isAdmin) {
-                        roleBadges = '<span class="inline-block px-2 py-0.5 rounded-full bg-cv-500/10 text-cv-600 text-xs font-medium">Admin</span>';
+                        roleBadges = '<span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary-container text-xs font-medium">Admin</span>';
                     } else {
-                        roleBadges = '<span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">member</span>';
+                        roleBadges = '<span class="inline-block px-2 py-0.5 rounded-full bg-surface-container text-on-surface-muted text-xs font-medium">member</span>';
                     }
-                    return '<a href="/dashboard/organizations/' + escHtml(o.orgId) + '" class="block bg-white shadow-sm border border-gray-200 rounded-md p-5 hover:border-cv-500/40 transition-colors">'
+                    return '<a href="/dashboard/organizations/' + escHtml(o.orgId) + '" class="block bg-surface-low rounded-md p-5 hover:border-primary/40 transition-colors">'
                         + '<div class="flex items-center justify-between"><div>'
                         + '<div class="flex items-center gap-2 mb-1">'
-                        + '<h3 class="text-gray-900 font-medium">' + escHtml(o.displayName || o.orgName) + '</h3>'
+                        + '<h3 class="text-on-surface font-medium">' + escHtml(o.displayName || o.orgName) + '</h3>'
                         + roleBadges
                         + '</div>'
-                        + '<p class="text-gray-500 text-sm font-mono">' + escHtml(o.orgId) + '</p>'
+                        + '<p class="text-on-surface-muted text-sm font-technical">' + escHtml(o.orgId) + '</p>'
                         + '</div>'
-                        + '<svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>'
+                        + '<svg class="w-5 h-5 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>'
                         + '</div></a>';
                 }).join('');
             } catch (err) {
@@ -506,10 +422,10 @@
             selectedExpiryDays = 30;
             // Reset expiry button styles (30 days is default selected)
             document.querySelectorAll('.expiry-btn').forEach(function(b) {
-                b.className = 'expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
+                b.className = 'expiry-btn px-3 py-2 rounded-md ghost-border text-sm text-on-surface-variant hover:border-primary hover:text-on-surface transition-colors';
             });
             var btns = document.querySelectorAll('.expiry-btn');
-            if (btns[1]) btns[1].className = 'expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
+            if (btns[1]) btns[1].className = 'expiry-btn px-3 py-2 rounded-md border border-primary bg-primary-dim/20 text-sm text-primary-container transition-colors';
 
             document.getElementById('token-name').focus();
         }
@@ -521,9 +437,9 @@
         function selectExpiry(days, btn) {
             selectedExpiryDays = days;
             document.querySelectorAll('.expiry-btn').forEach(function(b) {
-                b.className = 'expiry-btn px-3 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:border-cv-500 hover:text-gray-900 transition-colors';
+                b.className = 'expiry-btn px-3 py-2 rounded-md ghost-border text-sm text-on-surface-variant hover:border-primary hover:text-on-surface transition-colors';
             });
-            btn.className = 'expiry-btn px-3 py-2 rounded border border-cv-500 bg-cv-600/20 text-sm text-cv-600 transition-colors';
+            btn.className = 'expiry-btn px-3 py-2 rounded-md border border-primary bg-primary-dim/20 text-sm text-primary-container transition-colors';
         }
 
         async function loadTokens() {
@@ -532,16 +448,16 @@
                 // Ensure we have org data for mapping tenantId → org name
                 if (cachedOrgs.length === 0) {
                     try {
-                        var meRes = await fetch('/api/v1/platform/iam/me');
+                        var meRes = await CveilWeb.authFetch('/api/v1/platform/iam/me');
                         var me = await meRes.json();
                         cachedOrgs = me.organizations || [];
                     } catch (e) { /* fallback: show raw tenantId */ }
                 }
 
-                const res = await fetch('/api/v1/platform/iam/me/tokens');
+                const res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens');
                 const tokens = await res.json();
                 if (!Array.isArray(tokens) || tokens.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-gray-500 text-center">No access tokens. Create one to get started.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-on-surface-muted text-center">No access tokens. Create one to get started.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = tokens.map(function(t) {
@@ -549,7 +465,7 @@
                     var name = escHtml(t.name);
                     var status = escHtml(t.status);
                     var badge = statusBadge(status);
-                    var expiresClass = isExpiringSoon(t.expiresAt) ? 'text-yellow-400' : 'text-gray-500';
+                    var expiresClass = isExpiringSoon(t.expiresAt) ? 'text-yellow-400' : 'text-on-surface-muted';
                     var revokeBtn = status === 'active'
                         ? '<button data-revoke-prefix="' + prefix + '" class="text-red-400 hover:text-red-300 text-xs font-medium">Revoke</button>'
                         : '';
@@ -560,14 +476,14 @@
                     }
                     var scopeBadge = t.tenantId
                         ? '<span class="inline-block px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 text-xs font-medium">' + scopeLabel + '</span>'
-                        : '<span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">Personal</span>';
-                    return '<tr class="border-b border-gray-200">'
-                        + '<td class="px-4 py-3 text-gray-900 text-sm">' + name + '</td>'
-                        + '<td class="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">' + prefix + '</td>'
+                        : '<span class="inline-block px-2 py-0.5 rounded-full bg-surface-container text-on-surface-muted text-xs font-medium">Personal</span>';
+                    return '<tr class="">'
+                        + '<td class="px-4 py-3 text-on-surface text-sm">' + name + '</td>'
+                        + '<td class="px-4 py-3 text-on-surface-muted font-technical text-xs hidden sm:table-cell">' + prefix + '</td>'
                         + '<td class="px-4 py-3 hidden sm:table-cell">' + scopeBadge + '</td>'
                         + '<td class="px-4 py-3">' + badge + '</td>'
                         + '<td class="px-4 py-3 ' + expiresClass + ' hidden md:table-cell">' + fmtInstant(t.expiresAt) + '</td>'
-                        + '<td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + fmtInstant(t.createdAt) + '</td>'
+                        + '<td class="px-4 py-3 text-on-surface-muted hidden lg:table-cell">' + fmtInstant(t.createdAt) + '</td>'
                         + '<td class="px-4 py-3 text-right">' + revokeBtn + '</td></tr>';
                 }).join('');
             } catch (err) {
@@ -602,7 +518,7 @@
             try {
                 var body = { name: name, expiresAt: expiresAt };
                 if (tenantId) body.tenantId = tenantId;
-                var res = await fetch('/api/v1/platform/iam/me/tokens', {
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
@@ -629,7 +545,7 @@
         async function revokeToken(tokenPrefix) {
             if (!confirm('Revoke this access token? This cannot be undone.')) return;
             try {
-                var res = await fetch('/api/v1/platform/iam/me/tokens/' + encodeURIComponent(tokenPrefix), { method: 'DELETE' });
+                var res = await CveilWeb.authFetch('/api/v1/platform/iam/me/tokens/' + encodeURIComponent(tokenPrefix), { method: 'DELETE' });
                 if (res.ok) {
                     loadTokens();
                 } else {
@@ -653,7 +569,7 @@
             if (status === 'active') return '<span class="inline-block px-2 py-0.5 rounded-full bg-green-600/20 text-green-400 text-xs font-medium">Active</span>';
             if (status === 'revoked') return '<span class="inline-block px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 text-xs font-medium">Revoked</span>';
             if (status === 'expired') return '<span class="inline-block px-2 py-0.5 rounded-full bg-yellow-600/20 text-yellow-400 text-xs font-medium">Expired</span>';
-            return '<span class="text-gray-500 text-xs">' + escHtml(status) + '</span>';
+            return '<span class="text-on-surface-muted text-xs">' + escHtml(status) + '</span>';
         }
 
         function isExpiringSoon(iso) {
@@ -667,7 +583,7 @@
         // -------------------------------------------------------------------
         function showMsg(el, text, cls) {
             el.textContent = text;
-            el.className = 'text-sm ' + cls;
+            el.className = 'text-sm' + cls;
             el.classList.remove('hidden');
         }
 

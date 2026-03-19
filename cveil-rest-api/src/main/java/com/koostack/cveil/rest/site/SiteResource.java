@@ -2,10 +2,8 @@ package com.koostack.cveil.rest.site;
 
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
-import com.koostack.cveil.core.exception.CveilAuthException;
-import com.koostack.cveil.core.models.AuthResult;
-import com.koostack.cveil.platform.iam.jooq.AuthenticateCommandActuator;
-import com.koostack.cveil.platform.iam.jooq.LogoutCommandActuator;
+import com.koostack.cveil.core.platform.iam.IamQueryService.OrganizationInfo;
+import com.koostack.cveil.platform.iam.jooq.GetCurrentUserQueryActuator;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask;
 import com.koostack.cveil.rest.lifecycle.ProvisioningTracker;
@@ -13,8 +11,6 @@ import com.koostack.cveil.rest.onboarding.IndustryPreset;
 import com.koostack.cveil.rest.onboarding.OnboardingStateHolder;
 import com.koostack.cveil.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterUserSyncOrchestrator;
-import com.koostack.cveil.core.platform.iam.IamQueryService.OrganizationInfo;
-import com.koostack.cveil.platform.iam.jooq.GetCurrentUserQueryActuator;
 import com.koostack.cveil.rest.util.AuthCookieHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import io.quarkus.qute.Template;
@@ -24,6 +20,8 @@ import jakarta.inject.Named;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -73,6 +71,14 @@ public class SiteResource {
     @Inject Template catalogue;
 
     @Inject Template billing;
+
+    @Inject Template reports;
+
+    @Inject Template analytics;
+
+    @Inject Template dsar;
+
+    @Inject Template webhooks;
 
     @Inject Template setup;
 
@@ -152,7 +158,7 @@ public class SiteResource {
     @POST
     @Path("signup")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    @Produces(MediaType.TEXT_HTML)
+    @Produces({MediaType.TEXT_HTML, MediaType.APPLICATION_JSON})
     public Object processSignup(
             @FormParam("username") String username,
             @FormParam("email") String email,
@@ -163,13 +169,23 @@ public class SiteResource {
 
         LOG.debug("POST /signup username={}, email={}, plan={}", username, email, plan);
 
+        String accept = httpHeaders.getHeaderString("Accept");
+        boolean wantsJson = accept != null && accept.contains("application/json");
+
         if (username == null
                 || username.isBlank()
                 || email == null
                 || email.isBlank()
                 || password == null
                 || password.isBlank()) {
-            return signup.data("error", "Username, email, and password are required.")
+            String msg = "Username, email, and password are required.";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -177,7 +193,14 @@ public class SiteResource {
         }
 
         if (!password.equals(confirmPassword)) {
-            return signup.data("error", "Passwords do not match.")
+            String msg = "Passwords do not match.";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -185,9 +208,14 @@ public class SiteResource {
         }
 
         if (!cqrs.isCqrsAvailable()) {
-            return signup.data(
-                            "error",
-                            "Registration is temporarily unavailable. Please try again later.")
+            String msg = "Registration is temporarily unavailable. Please try again later.";
+            if (wantsJson) {
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -211,32 +239,29 @@ public class SiteResource {
 
             syncOrchestrator.execute(syncCommand);
 
-            // ── Auto-login and redirect to onboarding wizard ───────────────
-            // Deferred provisioning (governance + billing) runs after the user
-            // completes the onboarding wizard and selects their compliance profile.
-            try {
-                AuthResult auth =
-                        cqrs.iamDispatcher()
-                                .dispatch(
-                                        new AuthenticateCommandActuator.AuthenticateCommand(
-                                                REALM, email, password));
-                NewCookie[] cookies =
-                        AuthCookieHelper.setAuthCookies(
-                                auth.accessToken(), auth.refreshToken(), auth.expiresIn());
-                String onboardingUri =
-                        plan != null && !plan.isBlank()
-                                ? "/onboarding?plan=" + plan
-                                : "/onboarding";
-                return Response.seeOther(URI.create(onboardingUri)).cookie(cookies).build();
-            } catch (Exception loginEx) {
-                LOG.warn("Auto-login after registration failed: {}", loginEx.getMessage());
-                return Response.seeOther(URI.create("/login")).build();
+            // ── JSON response: JS client will handle DPoP login separately ─
+            if (wantsJson) {
+                return Response.ok(
+                                java.util.Map.of(
+                                        "registered", true,
+                                        "email", email,
+                                        "username", username))
+                        .type(MediaType.APPLICATION_JSON)
+                        .build();
             }
+
+            // ── HTML fallback: redirect to login (JS required for DPoP auth)
+            return Response.seeOther(URI.create("/login")).build();
         } catch (IllegalArgumentException e) {
             LOG.warn("Invalid username for tenant derivation: {}", e.getMessage());
-            return signup.data(
-                            "error",
-                            "Invalid username. Use letters and numbers only (e.g. janedoe).")
+            String msg = "Invalid username. Use letters and numbers only (e.g. janedoe).";
+            if (wantsJson) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -249,14 +274,28 @@ public class SiteResource {
                     e.totalSteps(),
                     e.getMessage(),
                     e);
-            return signup.data("error", "Registration failed. Please try again or contact support.")
+            String userMessage = extractUserFriendlySignupError(e);
+            if (wantsJson) {
+                return Response.status(Response.Status.CONFLICT)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", userMessage))
+                        .build();
+            }
+            return signup.data("error", userMessage)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
                     .data("plan", plan);
         } catch (Exception e) {
             LOG.error("Unexpected error during registration: {}", e.getMessage(), e);
-            return signup.data("error", "An unexpected error occurred. Please try again.")
+            String msg = "An unexpected error occurred: " + summarizeException(e);
+            if (wantsJson) {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of("error", msg))
+                        .build();
+            }
+            return signup.data("error", msg)
                     .data("username", username)
                     .data("email", email)
                     .data("fullName", fullName)
@@ -380,7 +419,8 @@ public class SiteResource {
     @GET
     @Path("onboarding")
     @Produces(MediaType.TEXT_HTML)
-    public Object onboardingStep1(@QueryParam("plan") String plan) {
+    public Object onboardingStep1(
+            @QueryParam("plan") String plan, @QueryParam("error") String error) {
         UserContext uc = resolveUserContext();
         if (uc == null) return Response.seeOther(URI.create("/login")).build();
 
@@ -389,15 +429,16 @@ public class SiteResource {
         if (plan != null && !plan.isBlank()) {
             state.setPlan(plan);
         }
-        return onboardingWorkspace.data("error", null).data("workspaceName", "");
+        return onboardingWorkspace
+                .data("error", error != null && !error.isBlank() ? error : null)
+                .data("workspaceName", "");
     }
 
     @POST
     @Path("onboarding")
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.TEXT_HTML)
-    public Object processOnboardingStep1(
-            @FormParam("workspaceName") String workspaceName, @FormParam("isTeam") String isTeam) {
+    public Object processOnboardingStep1(@FormParam("workspaceName") String workspaceName) {
 
         UserContext uc = resolveUserContext();
         if (uc == null) return Response.seeOther(URI.create("/login")).build();
@@ -406,63 +447,65 @@ public class SiteResource {
         var state = onboardingStateHolder.get(tenantId);
         if (state == null) state = onboardingStateHolder.start(tenantId);
 
-        String trimmedName = workspaceName != null ? workspaceName.trim() : "My Workspace";
-        if (trimmedName.isEmpty()) trimmedName = "My Workspace";
+        String trimmedName = workspaceName != null ? workspaceName.trim() : "My Organization";
+        if (trimmedName.isEmpty()) trimmedName = "My Organization";
         state.setWorkspaceName(trimmedName);
-        state.setTeam("on".equals(isTeam) || "true".equals(isTeam));
 
-        // If the user wants a team workspace, create the organization now so we
-        // have a TenantContext for all subsequent governance seed operations.
-        if (state.isTeam()) {
-            if (!cqrs.isCqrsAvailable()) {
-                return onboardingWorkspace
-                        .data("error", "Organization creation is temporarily unavailable.")
-                        .data("workspaceName", trimmedName);
-            }
-            try {
-                String orgName =
-                        TenantIdDeriver.derive(
-                                trimmedName.toLowerCase().replaceAll("[^a-z0-9]", ""));
-                String kcUserId = resolveKeycloakUserId(uc);
+        // One-org-per-account guard: block if the user already owns an org
+        List<OrganizationInfo> existingOrgs = resolveUserOrganizations(uc);
+        if (!existingOrgs.isEmpty()) {
+            return onboardingWorkspace
+                    .data(
+                            "error",
+                            "You already belong to an organization. Only one organization per"
+                                    + " account is allowed.")
+                    .data("workspaceName", trimmedName);
+        }
 
-                var orchestrator =
-                        new RegisterOrganizationOrchestrator(
-                                cqrs.iamDispatcher(),
-                                cqrs.coreDispatcher(),
-                                cqrs.billingDispatcher(),
-                                cqrs.isPermissionServiceAvailable()
-                                        ? cqrs.permissionService()
-                                        : null,
-                                consentDispatcher);
+        // Always create an organization — personal workspaces are not supported.
+        if (!cqrs.isCqrsAvailable()) {
+            return onboardingWorkspace
+                    .data("error", "Organization creation is temporarily unavailable.")
+                    .data("workspaceName", trimmedName);
+        }
+        try {
+            String orgName =
+                    TenantIdDeriver.derive(trimmedName.toLowerCase().replaceAll("[^a-z0-9]", ""));
+            String kcUserId = resolveKeycloakUserId(uc);
 
-                var orgCommand =
-                        new RegisterOrganizationOrchestrator.RegisterOrgCommand(
-                                REALM, orgName, trimmedName, kcUserId, uc.username(), "free");
+            var orchestrator =
+                    new RegisterOrganizationOrchestrator(
+                            cqrs.iamDispatcher(),
+                            cqrs.coreDispatcher(),
+                            cqrs.billingDispatcher(),
+                            cqrs.isPermissionServiceAvailable() ? cqrs.permissionService() : null,
+                            consentDispatcher);
 
-                var orgResult = orchestrator.execute(orgCommand);
-                state.setOrgTenantId(orgResult.orgName());
-                LOG.info(
-                        "Organization '{}' created during onboarding for user {}",
-                        orgResult.orgName(),
-                        uc.username());
-            } catch (OrchestratorException e) {
-                LOG.error(
-                        "Org creation in onboarding failed at step '{}': {}",
-                        e.failedStep(),
-                        e.getMessage(),
-                        e);
-                return onboardingWorkspace
-                        .data(
-                                "error",
-                                "Could not create organization. Please try again or uncheck"
-                                        + " the team option.")
-                        .data("workspaceName", trimmedName);
-            } catch (Exception e) {
-                LOG.error("Unexpected error creating org in onboarding: {}", e.getMessage(), e);
-                return onboardingWorkspace
-                        .data("error", "An unexpected error occurred. Please try again.")
-                        .data("workspaceName", trimmedName);
-            }
+            var orgCommand =
+                    new RegisterOrganizationOrchestrator.RegisterOrgCommand(
+                            REALM, orgName, trimmedName, kcUserId, uc.username(), "free");
+
+            var orgResult = orchestrator.execute(orgCommand);
+            state.setOrgTenantId(orgResult.orgName());
+            LOG.info(
+                    "Organization '{}' created during onboarding for user {}",
+                    orgResult.orgName(),
+                    uc.username());
+        } catch (OrchestratorException e) {
+            LOG.error(
+                    "Org creation in onboarding failed at step '{}': {}",
+                    e.failedStep(),
+                    e.getMessage(),
+                    e);
+            String userMessage = extractUserFriendlyOrgError(e);
+            return onboardingWorkspace
+                    .data("error", userMessage)
+                    .data("workspaceName", trimmedName);
+        } catch (Exception e) {
+            LOG.error("Unexpected error creating org in onboarding: {}", e.getMessage(), e);
+            return onboardingWorkspace
+                    .data("error", "An unexpected error occurred: " + summarizeException(e))
+                    .data("workspaceName", trimmedName);
         }
 
         return Response.seeOther(URI.create("/onboarding/industry")).build();
@@ -579,16 +622,13 @@ public class SiteResource {
                         purposeIds,
                         new LinkedHashSet<>(entities != null ? entities : List.of())));
 
-        // If an org was created, set the active-org cookie so the dashboard
-        // automatically opens in the org workspace after onboarding completes.
+        // Set the active-org cookie so the dashboard opens in the org workspace
         String orgTenantId = state.orgTenantId();
         onboardingStateHolder.complete(tenantId);
 
-        var redirect = Response.seeOther(URI.create("/onboarding/complete"));
-        if (orgTenantId != null) {
-            redirect.cookie(AuthCookieHelper.setActiveOrgCookie(orgTenantId));
-        }
-        return redirect.build();
+        return Response.seeOther(URI.create("/onboarding/complete"))
+                .cookie(AuthCookieHelper.setActiveOrgCookie(orgTenantId))
+                .build();
     }
 
     /** Step 4: Progress page — polls /onboarding/status until seeding completes. */
@@ -749,11 +789,22 @@ public class SiteResource {
      * @param personalTenantId the user's personal tenant ID
      * @param effectiveTenantId the currently active tenant (org or personal)
      */
-    private Response checkOnboardingGuard(String personalTenantId, String effectiveTenantId) {
+    private Response checkOnboardingGuard(
+            String personalTenantId,
+            String effectiveTenantId,
+            List<OrganizationInfo> organizations) {
         if (personalTenantId == null) return null;
-        ProvisioningTracker.ProvisioningStatus provStatus = provisioningTracker.getStatus(personalTenantId);
+        ProvisioningTracker.ProvisioningStatus provStatus =
+                provisioningTracker.getStatus(personalTenantId);
         if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.IN_PROGRESS) {
             return Response.seeOther(URI.create("/onboarding/complete")).build();
+        }
+        if (provStatus != null && provStatus.status() == ProvisioningTracker.Status.FAILED) {
+            String msg =
+                    provStatus.errorMessage() != null
+                            ? provStatus.errorMessage()
+                            : "Workspace setup did not complete.";
+            return Response.seeOther(URI.create("/onboarding?error=" + urlEncode(msg))).build();
         }
         if (hasCompletedOnboarding(personalTenantId)) return null;
         // When seed data was placed under an org tenant, check that tenant too
@@ -762,7 +813,26 @@ public class SiteResource {
                 && hasCompletedOnboarding(effectiveTenantId)) {
             return null;
         }
-        return Response.seeOther(URI.create("/onboarding")).build();
+        // After logout/login the active-org cookie is cleared, so effectiveTenantId
+        // falls back to personalTenantId. Check all orgs the user belongs to — if any
+        // has a subscription, onboarding was already completed.
+        if (organizations != null) {
+            for (OrganizationInfo org : organizations) {
+                if (org.orgName() != null
+                        && !org.orgName().equals(personalTenantId)
+                        && !org.orgName().equals(effectiveTenantId)
+                        && hasCompletedOnboarding(org.orgName())) {
+                    return null;
+                }
+            }
+        }
+        return Response.seeOther(
+                        URI.create(
+                                "/onboarding?error="
+                                        + urlEncode(
+                                                "Your previous setup did not complete. Please"
+                                                        + " complete onboarding to continue.")))
+                .build();
     }
 
     // -----------------------------------------------------------------------
@@ -785,37 +855,11 @@ public class SiteResource {
 
         LOG.debug("POST /login identifier={}", identifier);
 
-        if (identifier == null || identifier.isBlank() || password == null || password.isBlank()) {
-            return login.data("error", "Email/username and password are required.")
-                    .data("identifier", identifier);
-        }
-
-        if (!cqrs.isCqrsAvailable()) {
-            return login.data(
-                            "error",
-                            "Authentication is temporarily unavailable. Please try again later.")
-                    .data("identifier", identifier);
-        }
-
-        try {
-            AuthResult result =
-                    cqrs.iamDispatcher()
-                            .dispatch(
-                                    new AuthenticateCommandActuator.AuthenticateCommand(
-                                            REALM, identifier, password));
-            NewCookie[] cookies =
-                    AuthCookieHelper.setAuthCookies(
-                            result.accessToken(), result.refreshToken(), result.expiresIn());
-            return Response.seeOther(URI.create("/dashboard")).cookie(cookies).build();
-        } catch (CveilAuthException e) {
-            LOG.debug("Login failed for identifier={}: {}", identifier, e.getMessage());
-            return login.data("error", "Invalid email/username or password.")
-                    .data("identifier", identifier);
-        } catch (Exception e) {
-            LOG.error("Unexpected error during login: {}", e.getMessage(), e);
-            return login.data("error", "An unexpected error occurred. Please try again.")
-                    .data("identifier", identifier);
-        }
+        // Server-side form submission is a fallback when JS is disabled.
+        // Since DPoP-based auth requires JavaScript, redirect to the login page
+        // so the JS flow can handle authentication properly.
+        return login.data("error", "Please enable JavaScript to sign in.")
+                .data("identifier", identifier);
     }
 
     // -----------------------------------------------------------------------
@@ -834,7 +878,8 @@ public class SiteResource {
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
         // Guard: redirect if onboarding is in progress or never completed
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
         return applyDashboardData(dashboard.instance(), uc, ws, "overview");
@@ -851,14 +896,16 @@ public class SiteResource {
 
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
         String fullName =
                 uc.jwtPayload() != null ? extractJsonString(uc.jwtPayload(), "name") : null;
 
         return applyDashboardData(account.instance(), uc, ws, "account")
-                .data("fullName", fullName);
+                .data("fullName", fullName)
+                .data("v", BUILD_VERSION);
     }
 
     @GET
@@ -872,10 +919,84 @@ public class SiteResource {
 
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        return applyDashboardData(billing.instance(), uc, ws, "billing")
+        return applyDashboardData(billing.instance(), uc, ws, "billing").data("v", BUILD_VERSION);
+    }
+
+    @GET
+    @Path("dashboard/reports")
+    @Produces(MediaType.TEXT_HTML)
+    public Object reportsPage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
+
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
+        if (onboardingRedirect != null) return onboardingRedirect;
+
+        return applyDashboardData(reports.instance(), uc, ws, "reports").data("v", BUILD_VERSION);
+    }
+
+    @GET
+    @Path("dashboard/analytics")
+    @Produces(MediaType.TEXT_HTML)
+    public Object analyticsPage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
+
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
+        if (onboardingRedirect != null) return onboardingRedirect;
+
+        return applyDashboardData(analytics.instance(), uc, ws, "analytics")
+                .data("v", BUILD_VERSION);
+    }
+
+    @GET
+    @Path("dashboard/dsar")
+    @Produces(MediaType.TEXT_HTML)
+    public Object dsarPage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
+
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
+        if (onboardingRedirect != null) return onboardingRedirect;
+
+        return applyDashboardData(dsar.instance(), uc, ws, "dsar").data("v", BUILD_VERSION);
+    }
+
+    @GET
+    @Path("dashboard/webhooks")
+    @Produces(MediaType.TEXT_HTML)
+    public Object webhooksPage() {
+        UserContext uc = resolveUserContext();
+        if (uc == null) {
+            return Response.seeOther(URI.create("/login")).build();
+        }
+
+        WorkspaceContext ws = resolveWorkspaceContext(uc);
+
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
+        if (onboardingRedirect != null) return onboardingRedirect;
+
+        return applyDashboardData(webhooks.instance(), uc, ws, "webhooks")
                 .data("v", BUILD_VERSION);
     }
 
@@ -890,7 +1011,8 @@ public class SiteResource {
 
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
         return applyDashboardData(governance.instance(), uc, ws, "governance")
@@ -908,7 +1030,8 @@ public class SiteResource {
 
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
         return applyDashboardData(catalogue.instance(), uc, ws, "catalogue")
@@ -926,11 +1049,11 @@ public class SiteResource {
 
         WorkspaceContext ws = resolveWorkspaceContext(uc);
 
-        Response onboardingRedirect = checkOnboardingGuard(ws.personalTenantId(), ws.tenantId());
+        Response onboardingRedirect =
+                checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        return applyDashboardData(consent.instance(), uc, ws, "consent")
-                .data("v", BUILD_VERSION);
+        return applyDashboardData(consent.instance(), uc, ws, "consent").data("v", BUILD_VERSION);
     }
 
     @GET
@@ -978,9 +1101,8 @@ public class SiteResource {
     // -----------------------------------------------------------------------
 
     /**
-     * Switches the active workspace by setting the {@code cveil_active_org} cookie. Accepts an
-     * {@code orgName} form parameter — if empty or {@code "personal"}, clears the cookie to revert
-     * to the user's personal workspace.
+     * Switches the active organization by setting the {@code cveil_active_org} cookie. Only
+     * switches to organizations the user is a member of.
      */
     @POST
     @Path("dashboard/switch-org")
@@ -991,17 +1113,13 @@ public class SiteResource {
             return Response.seeOther(URI.create("/login")).build();
         }
 
-        // Switch back to personal workspace
-        if (orgName == null || orgName.isBlank() || "personal".equals(orgName)) {
-            return Response.seeOther(URI.create("/dashboard"))
-                    .cookie(AuthCookieHelper.clearActiveOrgCookie())
-                    .build();
+        if (orgName == null || orgName.isBlank()) {
+            return Response.seeOther(URI.create("/dashboard")).build();
         }
 
         // Validate that the user is a member of the requested org
         List<OrganizationInfo> orgs = resolveUserOrganizations(uc);
-        boolean isMember =
-                orgs.stream().anyMatch(o -> orgName.equals(o.orgName()));
+        boolean isMember = orgs.stream().anyMatch(o -> orgName.equals(o.orgName()));
 
         if (!isMember) {
             LOG.warn(
@@ -1024,22 +1142,8 @@ public class SiteResource {
     @Path("logout")
     @Produces(MediaType.TEXT_HTML)
     public Response processLogout() {
-        String cookieHeader = httpHeaders.getHeaderString("Cookie");
-        String refreshToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.REFRESH_COOKIE);
-
-        // Revoke the refresh token in Keycloak (best-effort)
-        if (refreshToken != null && cqrs.isCqrsAvailable()) {
-            try {
-                cqrs.iamDispatcher()
-                        .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, refreshToken));
-            } catch (Exception e) {
-                LOG.warn("Token revocation during logout failed: {}", e.getMessage());
-            }
-        }
-
-        NewCookie[] cleared = AuthCookieHelper.clearAuthCookies();
-        // Also clear the DPoP session cookie (non-HttpOnly, set by JS login)
+        // Token revocation is handled client-side via POST /api/v1/platform/iam/logout
+        // before the browser navigates here. This server-side handler just clears cookies.
         NewCookie clearSession =
                 new NewCookie.Builder(AuthCookieHelper.SESSION_COOKIE)
                         .value("")
@@ -1048,8 +1152,10 @@ public class SiteResource {
                         .sameSite(NewCookie.SameSite.LAX)
                         .build();
         NewCookie clearOrg = AuthCookieHelper.clearActiveOrgCookie();
+        // Also expire legacy HttpOnly cookies in case they linger from an old session
+        NewCookie[] clearedAuth = AuthCookieHelper.clearAuthCookies();
         return Response.seeOther(URI.create("/login"))
-                .cookie(cleared[0], cleared[1], clearSession, clearOrg)
+                .cookie(clearedAuth[0], clearedAuth[1], clearSession, clearOrg)
                 .build();
     }
 
@@ -1061,11 +1167,11 @@ public class SiteResource {
      * Resolved workspace context for dashboard pages — encapsulates the effective tenant ID,
      * display label, and the user's available workspaces (personal + organizations).
      *
-     * @param tenantId        the effective tenant ID (org's orgName or personal tenant)
-     * @param displayName     human-readable label ("Personal" or org display name)
-     * @param activeOrgId     the Keycloak org ID of the active org, or {@code null} for personal
+     * @param tenantId the effective tenant ID (org's orgName or personal tenant)
+     * @param displayName human-readable label ("Personal" or org display name)
+     * @param activeOrgId the Keycloak org ID of the active org, or {@code null} for personal
      * @param personalTenantId the user's personal tenant ID (always available)
-     * @param organizations   organizations the user belongs to (may be empty)
+     * @param organizations organizations the user belongs to (may be empty)
      */
     record WorkspaceContext(
             String tenantId,
@@ -1075,9 +1181,9 @@ public class SiteResource {
             List<OrganizationInfo> organizations) {}
 
     /**
-     * Resolves the effective workspace context for the current request. Checks the
-     * {@code cveil_active_org} cookie; if set to a valid org the user belongs to, uses that org's
-     * {@code orgName} as tenantId. Otherwise falls back to the user's personal tenant.
+     * Resolves the effective workspace context for the current request. Checks the {@code
+     * cveil_active_org} cookie; if set to a valid org the user belongs to, uses that org's {@code
+     * orgName} as tenantId. Otherwise falls back to the user's personal tenant.
      */
     private WorkspaceContext resolveWorkspaceContext(UserContext uc) {
         String username = uc.username();
@@ -1099,20 +1205,26 @@ public class SiteResource {
                             org.orgName(), display, org.orgId(), personalTenantId, organizations);
                 }
             }
-            // Cookie references an org the user doesn't belong to — fall through to personal
             LOG.debug(
-                    "Active org cookie '{}' does not match any user org membership, "
-                            + "falling back to personal tenant",
-                    activeOrgName);
+                    "Active org cookie '{}' does not match any user org membership", activeOrgName);
         }
 
+        // No valid org cookie — auto-select the first org (org-only model)
+        if (!organizations.isEmpty()) {
+            OrganizationInfo first = organizations.get(0);
+            String display = first.displayName() != null ? first.displayName() : first.orgName();
+            return new WorkspaceContext(
+                    first.orgName(), display, first.orgId(), personalTenantId, organizations);
+        }
+
+        // Fallback for users who haven't completed onboarding yet
         return new WorkspaceContext(
                 personalTenantId, "Personal", null, personalTenantId, organizations);
     }
 
     /**
-     * Resolves the list of organizations the current user belongs to by querying the
-     * {@code GetCurrentUserQueryActuator} via the IAM query dispatcher.
+     * Resolves the list of organizations the current user belongs to by querying the {@code
+     * GetCurrentUserQueryActuator} via the IAM query dispatcher.
      */
     private List<OrganizationInfo> resolveUserOrganizations(UserContext uc) {
         if (!cqrs.isCqrsAvailable()) return List.of();
@@ -1138,17 +1250,13 @@ public class SiteResource {
      * display name, org list), user info, roles, and navigation state.
      */
     private TemplateInstance applyDashboardData(
-            TemplateInstance template,
-            UserContext uc,
-            WorkspaceContext ws,
-            String activeNav) {
+            TemplateInstance template, UserContext uc, WorkspaceContext ws, String activeNav) {
         String username = uc.username();
         String initial =
                 username != null && !username.isEmpty()
                         ? username.substring(0, 1).toUpperCase()
                         : "U";
-        return template
-                .data("username", username)
+        return template.data("username", username)
                 .data("email", uc.email())
                 .data("tenantId", ws.tenantId())
                 .data("workspaceDisplayName", ws.displayName())
@@ -1205,41 +1313,99 @@ public class SiteResource {
     record UserContext(String username, String email, String jwtPayload) {}
 
     /**
-     * Resolves user context for server-rendered dashboard pages. Tries (in order):
-     *
-     * <ol>
-     *   <li>{@code cveil_access} cookie — decode the JWT payload (pre-DPoP flow)
-     *   <li>{@code cveil_session} cookie — lightweight base64 JSON set by DPoP login
-     * </ol>
+     * Resolves user context for server-rendered dashboard pages from the lightweight {@code
+     * cveil_session} cookie set by the DPoP login flow.
      *
      * @return resolved context, or {@code null} if the user is not authenticated
      */
     private UserContext resolveUserContext() {
         String cookieHeader = httpHeaders.getHeaderString("Cookie");
 
-        // Path 1: traditional JWT cookie
-        String accessToken =
-                AuthCookieHelper.readCookie(cookieHeader, AuthCookieHelper.ACCESS_COOKIE);
-        if (accessToken != null) {
-            String payload = AuthCookieHelper.decodeJwtPayload(accessToken);
-            if (payload != null) {
-                String u = extractJsonString(payload, "preferred_username");
-                if (u == null) u = extractJsonString(payload, "sub");
-                String e = extractJsonString(payload, "email");
-                return new UserContext(u, e, payload);
-            }
-        }
-
-        // Path 2: lightweight DPoP session cookie
         String sessionJson = AuthCookieHelper.decodeSessionCookie(cookieHeader);
         if (sessionJson != null) {
             String u = extractJsonString(sessionJson, "u");
             String e = extractJsonString(sessionJson, "e");
+            String s = extractJsonString(sessionJson, "s");
             if (u != null) {
-                return new UserContext(u, e, null);
+                // Build a synthetic JWT-like payload with the sub claim so that
+                // resolveKeycloakUserId() returns the Keycloak UUID (not the username).
+                String syntheticPayload =
+                        s != null
+                                ? "{\"sub\":\"" + s + "\",\"preferred_username\":\"" + u + "\"}"
+                                : null;
+                return new UserContext(u, e, syntheticPayload);
             }
         }
 
         return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Error message helpers
+    // -----------------------------------------------------------------------
+
+    /** Extracts a user-friendly error message from an org-creation OrchestratorException. */
+    private static String extractUserFriendlyOrgError(OrchestratorException e) {
+        String rootMsg = rootCauseMessage(e);
+        if (rootMsg.contains("conflicts")) {
+            return "An organization with that name already exists. Please choose a different"
+                    + " workspace name.";
+        }
+        if (rootMsg.contains("401") || rootMsg.contains("Unauthorized")) {
+            return "Identity provider authentication failed. Please contact support.";
+        }
+        if (rootMsg.contains("403") || rootMsg.contains("Forbidden")) {
+            return "You do not have permission to create an organization. Please contact support.";
+        }
+        return "Could not create organization: "
+                + summarizeException(e)
+                + ". Please try a different name or uncheck the team option.";
+    }
+
+    /** Extracts a user-friendly error message from a signup OrchestratorException. */
+    private static String extractUserFriendlySignupError(OrchestratorException e) {
+        String rootMsg = rootCauseMessage(e);
+        if (rootMsg.contains("409")
+                || rootMsg.contains("Conflict")
+                || rootMsg.contains("already exists")
+                || rootMsg.contains("User exists")) {
+            return "An account with that email or username already exists. Please log in or use a"
+                    + " different email.";
+        }
+        if (rootMsg.contains("401") || rootMsg.contains("Unauthorized")) {
+            return "Identity provider authentication failed. Please try again or contact support.";
+        }
+        if (rootMsg.contains("404") || rootMsg.contains("Not Found")) {
+            return "The identity service is not fully configured. Please contact support.";
+        }
+        return "Registration failed at step '"
+                + e.failedStep()
+                + "': "
+                + summarizeException(e)
+                + ". Please try again or contact support.";
+    }
+
+    /** Walks the exception cause chain and returns the deepest cause's message. */
+    private static String rootCauseMessage(Throwable t) {
+        Throwable root = t;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
+    }
+
+    /** Returns a short summary of an exception suitable for display to users. */
+    private static String summarizeException(Throwable t) {
+        String msg = rootCauseMessage(t);
+        // Truncate long stack-trace-style messages for user display
+        if (msg.length() > 150) {
+            msg = msg.substring(0, 147) + "...";
+        }
+        return msg;
+    }
+
+    /** URL-encodes a string for safe use in query parameters. */
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

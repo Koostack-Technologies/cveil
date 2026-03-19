@@ -11,6 +11,6 @@
 -- tenant_isolation policy.
 -- ============================================================================
 
-CREATE POLICY outbox_discovery ON cveil_event.event
+CREATE POLICY outbox_discovery ON cveilevent.event
     FOR SELECT
     USING (current_setting('app.tenant_id', true) = '__discovery__');

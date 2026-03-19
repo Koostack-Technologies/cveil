@@ -23,6 +23,12 @@ public class CoreProjectionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(CoreProjectionHandler.class);
 
+    /** Callback interface for notifying the REST layer of plan/tenant changes. */
+    @FunctionalInterface
+    public interface PlanChangeListener {
+        void onPlanChange(String planId, String tenantId);
+    }
+
     private static final org.jooq.Table<?> TENANT = table(name("cveiliam", "tenant"));
     private static final org.jooq.Field<String> TENANT_ID = field(name("tenant_id"), String.class);
     private static final org.jooq.Field<String> DISPLAY_NAME =
@@ -47,15 +53,38 @@ public class CoreProjectionHandler {
             field(name("stripe_product_id"), String.class);
     private static final org.jooq.Field<String> STRIPE_PRICE_ID =
             field(name("stripe_price_id"), String.class);
+    private static final org.jooq.Field<String> STRIPE_ANNUAL_PRICE_ID =
+            field(name("stripe_annual_price_id"), String.class);
     private static final org.jooq.Field<OffsetDateTime> PLAN_UPDATED_AT =
             field(name("updated_at"), OffsetDateTime.class);
 
     private final DSLContext dsl;
     private final ObjectMapper mapper;
+    private volatile PlanChangeListener planChangeListener;
 
     public CoreProjectionHandler(DSLContext dsl) {
         this.dsl = dsl;
         this.mapper = new ObjectMapper();
+    }
+
+    /** Register a listener that is invoked whenever a plan or tenant-plan change is projected. */
+    public void setPlanChangeListener(PlanChangeListener listener) {
+        this.planChangeListener = listener;
+    }
+
+    private void notifyPlanChange(String planId, String tenantId) {
+        PlanChangeListener listener = this.planChangeListener;
+        if (listener != null) {
+            try {
+                listener.onPlanChange(planId, tenantId);
+            } catch (Exception e) {
+                LOG.warn(
+                        "PlanChangeListener failed for plan={} tenant={}: {}",
+                        planId,
+                        tenantId,
+                        e.getMessage());
+            }
+        }
     }
 
     /**
@@ -136,6 +165,8 @@ public class CoreProjectionHandler {
                 .set(UPDATED_AT, OffsetDateTime.now())
                 .where(TENANT_ID.eq(id))
                 .execute();
+
+        notifyPlanChange(newPlan, id);
     }
 
     private void handleSuspended(String payload) throws Exception {
@@ -217,14 +248,39 @@ public class CoreProjectionHandler {
         String planId = node.get("planId").asText();
         String productId = node.get("stripeProductId").asText();
         String priceId = node.get("stripePriceId").asText();
+        String annualPriceId =
+                node.has("stripeAnnualPriceId") && !node.get("stripeAnnualPriceId").isNull()
+                        ? node.get("stripeAnnualPriceId").asText()
+                        : null;
 
-        dsl.update(PLAN_TABLE)
-                .set(STRIPE_PRODUCT_ID, productId)
-                .set(STRIPE_PRICE_ID, priceId)
-                .set(PLAN_UPDATED_AT, OffsetDateTime.now())
-                .where(PLAN_ID.eq(planId))
-                .execute();
+        var update =
+                dsl.update(PLAN_TABLE)
+                        .set(STRIPE_PRODUCT_ID, productId)
+                        .set(STRIPE_PRICE_ID, priceId)
+                        .set(PLAN_UPDATED_AT, OffsetDateTime.now());
 
-        LOG.info("Plan {} synced with Stripe: product={}, price={}", planId, productId, priceId);
+        if (annualPriceId != null) {
+            update = update.set(STRIPE_ANNUAL_PRICE_ID, annualPriceId);
+        }
+
+        int rowCount = update.where(PLAN_ID.eq(planId)).execute();
+        if (rowCount == 0) {
+            LOG.error(
+                    "Plan {} not found when projecting PLAN_STRIPE_SYNCED — "
+                            + "Stripe IDs (product={}, price={}) were NOT persisted. "
+                            + "The plan may have been deleted or not yet created.",
+                    planId,
+                    productId,
+                    priceId);
+        }
+
+        LOG.info(
+                "Plan {} synced with Stripe: product={}, price={}, annualPrice={}",
+                planId,
+                productId,
+                priceId,
+                annualPriceId);
+
+        notifyPlanChange(planId, null);
     }
 }

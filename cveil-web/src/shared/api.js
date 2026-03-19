@@ -12,10 +12,58 @@ export function setAccessToken(token) { _accessToken = token; }
 export function getAccessToken() { return _accessToken; }
 export function clearAccessToken() { _accessToken = null; }
 
+function readCookie(name) {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function clearAllAuthState() {
+    clearAccessToken();
+    sessionStorage.removeItem('cveil_access_token');
+    sessionStorage.removeItem('cveil_refresh_token');
+    sessionStorage.removeItem('cveil_token_type');
+    sessionStorage.removeItem('cveil_expires_at');
+    sessionStorage.removeItem('cveil_dpop_jwk');
+    var sec = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax' + sec;
+    document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
+}
+
+/**
+ * Drop-in replacement for raw fetch() that attaches DPoP auth + X-Org-Id.
+ * Returns the raw Response so callers can check res.ok / res.json() as usual.
+ * Intended for use in HTML templates via CveilWeb.authFetch().
+ */
+export async function authFetch(url, opts = {}) {
+    const headers = { ...opts.headers };
+    const activeOrg = readCookie('cveil_active_org');
+    if (activeOrg) headers['X-Org-Id'] = activeOrg;
+
+    const method = (opts.method || 'GET').toUpperCase();
+    if (_accessToken) {
+        headers['Authorization'] = 'DPoP ' + _accessToken;
+        try {
+            const fullUrl = new URL(url, window.location.origin).href;
+            headers['DPoP'] = await getDpopProof(method, fullUrl, _accessToken);
+        } catch (e) {
+            headers['Authorization'] = 'Bearer ' + _accessToken;
+        }
+    }
+    return fetch(url, { ...opts, headers });
+}
+
 export function createApi(basePath) {
     return async function api(path, opts = {}) {
         const headers = { ...opts.headers };
         if (opts.body) headers['Content-Type'] = 'application/json';
+
+        // Send active org as explicit header so backend uses correct tenant
+        const activeOrg = readCookie('cveil_active_org');
+        if (activeOrg) {
+            headers['X-Org-Id'] = activeOrg;
+        }
 
         const fullUrl = new URL(basePath + path, window.location.origin).href;
         const method = (opts.method || 'GET').toUpperCase();
@@ -36,6 +84,11 @@ export function createApi(basePath) {
             res = await fetch(basePath + path, { ...opts, headers });
         } catch (_) {
             throw new Error('Network error — please check your connection and try again.');
+        }
+        if (res.status === 401) {
+            clearAllAuthState();
+            window.location.href = '/login';
+            throw new Error('Session expired. Redirecting to login.');
         }
         if (!res.ok) {
             const err = await res.json().catch(() => ({ message: res.statusText }));

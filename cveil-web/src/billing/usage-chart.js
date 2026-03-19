@@ -72,12 +72,14 @@ export function create(selector) {
         .append('div')
         .style('position', 'absolute')
         .style('pointer-events', 'none')
-        .style('background', 'rgba(255,255,255,0.96)')
-        .style('border', '1px solid #e5e7eb')
+        .style('background', 'rgba(26, 34, 54, 0.85)')
+        .style('border', '1px solid rgba(60, 73, 71, 0.15)')
         .style('border-radius', '4px')
         .style('padding', '8px 12px')
         .style('font-size', '12px')
-        .style('box-shadow', '0 2px 8px rgba(0,0,0,0.08)')
+        .style('box-shadow', '0 20px 40px rgba(0, 0, 0, 0.4)')
+        .style('backdrop-filter', 'blur(12px)')
+        .style('-webkit-backdrop-filter', 'blur(12px)')
         .style('display', 'none')
         .style('z-index', '10');
 
@@ -158,8 +160,8 @@ function redraw() {
         .selectAll('text').attr('fill', '#9ca3af').style('font-size', '11px');
 
     // Style axis lines
-    chartG.selectAll('.domain').attr('stroke', '#e5e7eb');
-    chartG.selectAll('.tick line').attr('stroke', '#f3f4f6');
+    chartG.selectAll('.domain').attr('stroke', 'rgba(60, 73, 71, 0.15)');
+    chartG.selectAll('.tick line').attr('stroke', 'rgba(60, 73, 71, 0.1)');
 
     // Lines — data join
     const series = Object.entries(visibleData);
@@ -187,7 +189,7 @@ function onMouseMove(event) {
     const [mx] = d3.pointer(event);
     const date = xScale.invert(mx);
 
-    let html = `<div style="font-weight:600;margin-bottom:4px;color:#374151">${d3.timeFormat('%b %d, %Y %H:%M')(date)}</div>`;
+    let html = `<div style="font-weight:600;margin-bottom:4px;color:#e8eaed">${d3.timeFormat('%b %d, %Y %H:%M')(date)}</div>`;
     let hasData = false;
 
     for (const [name, pts] of Object.entries(currentData)) {
@@ -202,8 +204,8 @@ function onMouseMove(event) {
         const cfg = METRIC_CONFIG[name];
         html += `<div style="display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;background:${cfg.color};display:inline-block"></span>
-            <span style="color:#6b7280">${cfg.label}:</span>
-            <span style="font-weight:600;color:#111827">${Math.round(pts[i].value).toLocaleString()}</span>
+            <span style="color:#9ca3af">${cfg.label}:</span>
+            <span style="font-weight:600;color:#e8eaed">${Math.round(pts[i].value).toLocaleString()}</span>
         </div>`;
         hasData = true;
     }
@@ -235,7 +237,7 @@ export function buildLegend(selector) {
         item.className = 'flex items-center gap-1.5 text-xs transition-opacity cursor-pointer';
         item.dataset.metric = name;
         item.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${cfg.color};display:inline-block"></span>
-            <span class="text-gray-600">${cfg.label}</span>`;
+            <span class="text-on-surface-muted">${cfg.label}</span>`;
         item.onclick = () => toggleMetric(name);
         el.appendChild(item);
     }
