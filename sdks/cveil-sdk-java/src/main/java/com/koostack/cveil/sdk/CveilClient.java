@@ -666,12 +666,12 @@ public class CveilClient implements AutoCloseable {
     }
 
     /** Get a subject's consent history. */
-    public List<ConsentLedgerEntry> getSubjectHistory(String subject) throws IOException {
+    public SubjectConsentView getSubjectHistory(String subject) throws IOException {
         return httpRequest(
                 "GET",
                 "/api/v1/subjects/" + encode(subject) + "/history",
                 null,
-                new TypeReference<>() {});
+                SubjectConsentView.class);
     }
 
     private void optimisticIngest(

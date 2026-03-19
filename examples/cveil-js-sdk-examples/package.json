@@ -1,0 +1,29 @@
+{
+  "name": "@cveil/sdk-js-examples",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cveil JS/TypeScript SDK examples — e2e tests and documentation snippets",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/runner.js",
+    "example:catalogue": "npm run build && node dist/01-catalogue-setup.js",
+    "example:governance": "npm run build && node dist/02-governance-setup.js",
+    "example:subjects": "npm run build && node dist/03-subject-management.js",
+    "example:consent": "npm run build && node dist/04-consent-lifecycle.js",
+    "example:masking": "npm run build && node dist/05-data-masking.js",
+    "example:batch": "npm run build && node dist/06-batch-operations.js",
+    "example:dsar": "npm run build && node dist/07-dsar-compliance.js",
+    "clean": "rm -rf dist/"
+  },
+  "dependencies": {
+    "@cveil/sdk-js": "file:../../sdks/cveil-sdk-js"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

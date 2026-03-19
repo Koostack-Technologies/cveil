@@ -269,29 +269,32 @@ describe("CveilClient API Methods", () => {
     it("getSubjectHistory() returns ledger entries", async () => {
       mockResponses.set("GET /api/v1/subjects/user-7/history", {
         status: 200,
-        body: [
-          {
-            consentLedgerId: 1,
-            subjectId: "user-7",
-            policyId: 10,
-            purposeName: "Marketing",
-            policyType: "FIELD",
-            fieldName: "email",
-            entityName: "User",
-            categoryName: null,
-            action: "GRANT",
-            actor: "user-7",
-            ipAddress: null,
-            userAgent: null,
-            createdAt: "2026-01-01T00:00:00Z",
-            expiresAt: null,
-          },
-        ],
+        body: {
+          subjectId: "user-7",
+          entries: [
+            {
+              consentLedgerId: 1,
+              subjectId: "user-7",
+              policyId: 10,
+              purposeName: "Marketing",
+              policyType: "FIELD",
+              fieldName: "email",
+              entityName: "User",
+              categoryName: null,
+              action: "GRANT",
+              actor: "user-7",
+              ipAddress: null,
+              userAgent: null,
+              createdAt: "2026-01-01T00:00:00Z",
+              expiresAt: null,
+            },
+          ],
+        },
       });
 
       const result = await client.getSubjectHistory("user-7");
-      assert.equal(result.length, 1);
-      assert.equal(result[0].action, "GRANT");
+      assert.equal(result.entries.length, 1);
+      assert.equal(result.entries[0].action, "GRANT");
     });
   });
 

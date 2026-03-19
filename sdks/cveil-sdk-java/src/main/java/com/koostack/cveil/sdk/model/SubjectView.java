@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SubjectView(
-        int subjectId,
+        String subjectId,
         String subjectName,
         String description,
         String createdAt,

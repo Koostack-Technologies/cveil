@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ConsentLedgerEntry(
-        int consentLedgerId,
+        String consentLedgerId,
         String subjectId,
-        int policyId,
+        String policyId,
         String purposeName,
         String policyType,
         String fieldName,
