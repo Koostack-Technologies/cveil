@@ -34,6 +34,12 @@ export const TABS = {
   profile: '#tab-profile',
   organizations: '#tab-organizations',
   tokens: '#tab-tokens',
+  // Billing
+  usage: '#tab-usage',
+  plan: '#tab-plan',
+  invoices: '#tab-invoices',
+  payment: '#tab-payment',
+  // DSAR has no tabs (single page)
 } as const;
 
 /** Table body selectors by module section. */
@@ -47,6 +53,9 @@ export const TABLES = {
   fields: '#fields-table',
   categories: '#categories-table',
   tokens: '#tokens-table-body',
+  dsarTable: '#dsar-table-body',
+  auditLog: '#audit-log-body',
+  invoicesTable: '#invoices-table',
 } as const;
 
 /** Access token page selectors. */
@@ -78,4 +87,75 @@ export const PANEL = {
 export const DELETE_MODAL = {
   container: '#delete-modal',
   confirm: '#delete-modal-confirm',
+} as const;
+
+/** Consent ledger (SSE) selectors. */
+export const LEDGER = {
+  sseStatus: '#sse-status',
+  feed: '#ledger-feed',
+  empty: '#ledger-empty',
+  count: '#ledger-count',
+  filterAction: '#ledger-filter-action',
+  filterSubject: '#ledger-filter-subject',
+  filterPurpose: '#ledger-filter-purpose',
+  pauseBtn: '#ledger-pause-btn',
+} as const;
+
+/** Account profile/orgs selectors. */
+export const ACCOUNT = {
+  displayEmail: '#display-email',
+  displayFullname: '#display-fullname',
+  displayRoles: '#display-roles',
+  profileForm: '#profile-form',
+  fullNameInput: '#fullName',
+  emailInput: '#emailInput',
+  profileSaveBtn: '#profile-save-btn',
+  profileMsg: '#profile-msg',
+  passwordForm: '#password-form',
+  newPassword: '#newPassword',
+  confirmPassword: '#confirmPassword',
+  passwordSaveBtn: '#password-save-btn',
+  passwordMsg: '#password-msg',
+  orgsList: '#orgs-list',
+} as const;
+
+/** DSAR page selectors. */
+export const DSAR = {
+  countPending: '#dsar-count-pending',
+  countInProgress: '#dsar-count-in-progress',
+  countCompleted: '#dsar-count-completed',
+  countOverdue: '#dsar-count-overdue',
+  filterStatus: '#dsar-filter-status',
+  filterType: '#dsar-filter-type',
+  createModal: '#dsar-create-modal',
+  detailModal: '#dsar-detail-modal',
+  detailContent: '#dsar-detail-content',
+  pageInfo: '#dsar-page-info',
+  prevBtn: '#dsar-prev',
+  nextBtn: '#dsar-next',
+} as const;
+
+/** Billing page selectors. */
+export const BILLING = {
+  currentPlanName: '#current-plan-name',
+  planStatusBadge: '#plan-status-badge',
+  limitRequests: '#limit-requests',
+  limitRequestsBar: '#limit-requests-bar',
+  limitSubjects: '#limit-subjects',
+  limitSubjectsBar: '#limit-subjects-bar',
+  plansGrid: '#plans-grid',
+  usageChart: '#usage-chart',
+  chartLoading: '#chart-loading',
+} as const;
+
+/** Reports page selectors. */
+export const REPORTS = {
+  consentSummaryChart: '#consent-summary-chart',
+  consentActivityChart: '#consent-activity-chart',
+  activityRange: '#activity-range',
+  govSnapshot: '#governance-snapshot',
+  auditSubject: '#audit-subject',
+  auditPageInfo: '#audit-page-info',
+  auditPrev: '#audit-prev',
+  auditNext: '#audit-next',
 } as const;

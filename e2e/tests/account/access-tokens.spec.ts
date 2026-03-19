@@ -90,14 +90,14 @@ test.describe('Access Tokens @account', () => {
 
     // 30 days is selected by default — verify it has the active style
     const btn30 = page.locator(`${TOKEN.expiryOptions} button:has-text("30 days")`);
-    await expect(btn30).toHaveClass(/bg-cv-600/);
+    await expect(btn30).toHaveClass(/bg-primary-dim/);
 
     // Click 90 days
     const btn90 = page.locator(`${TOKEN.expiryOptions} button:has-text("90 days")`);
     await btn90.click();
-    await expect(btn90).toHaveClass(/bg-cv-600/);
+    await expect(btn90).toHaveClass(/bg-primary-dim/);
     // 30 days should no longer be active
-    await expect(btn30).not.toHaveClass(/bg-cv-600/);
+    await expect(btn30).not.toHaveClass(/bg-primary-dim/);
 
     await page.click(`${TOKEN.createModal} button:has-text("Cancel")`);
   });
