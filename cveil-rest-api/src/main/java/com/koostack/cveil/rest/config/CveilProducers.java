@@ -1071,6 +1071,17 @@ public class CveilProducers {
                 "flyway_schema_history",
                 "cveiliam");
 
+        // Move tenant table from cveilcore → cveiliam (domain boundary).
+        // The platform-core V1 migration creates the table in cveilcore,
+        // but the CQRS read model (CoreProjectionHandler, CoreQueryService)
+        // addresses it as cveiliam.tenant.
+        try (var conn = migrationDs.getConnection();
+                var stmt = conn.createStatement()) {
+            moveTableIfNeeded(stmt, "cveilcore", "tenant", "cveiliam");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to move tenant table to cveiliam", e);
+        }
+
         // RLS policies — must run AFTER all schema migrations complete.
         // Uses 'public' schema for the flyway history table since RLS
         // policies span multiple schemas.
@@ -1835,5 +1846,28 @@ public class CveilProducers {
                 location,
                 result.migrationsExecuted,
                 result.success);
+    }
+
+    /**
+     * Moves a table from one schema to another if it exists in the source schema. No-op if the
+     * table has already been moved (e.g. on subsequent restarts).
+     */
+    private void moveTableIfNeeded(
+            java.sql.Statement stmt, String fromSchema, String table, String toSchema)
+            throws java.sql.SQLException {
+        try (var rs =
+                stmt.executeQuery(
+                        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE"
+                                + " table_schema = '"
+                                + fromSchema
+                                + "' AND table_name = '"
+                                + table
+                                + "')")) {
+            if (rs.next() && rs.getBoolean(1)) {
+                LOG.info("Moving table {}.{} → {}", fromSchema, table, toSchema);
+                stmt.execute(
+                        "ALTER TABLE " + fromSchema + "." + table + " SET SCHEMA " + toSchema);
+            }
+        }
     }
 }

@@ -42,8 +42,19 @@ test.describe('Catalogue Module @catalogue', () => {
 
   test.describe('Fields CRUD', () => {
     const fldName = `e2e_field_${Date.now()}`;
+    const prereqEntity = `e2e_fld_ent_${Date.now()}`;
 
     test('creates, verifies, and deletes a field', async ({ page }) => {
+      // First create a prerequisite entity so the dropdown has an option
+      await page.click(TABS.entities);
+      await expect(page.locator(TABLES.entities)).toBeVisible();
+      await page.click('button:has-text("Add Entity")');
+      await page.fill('#pf-ent-name', prereqEntity);
+      await page.fill('#pf-ent-desc', 'Prereq for field test');
+      await page.click(`${PANEL.body} button[type="submit"]`);
+      await expect(page.locator(TABLES.entities)).toContainText(prereqEntity, { timeout: 10_000 });
+
+      // Now switch to Fields tab
       await page.click(TABS.fields);
       await expect(page.locator(TABLES.fields)).toBeVisible();
 
@@ -52,16 +63,10 @@ test.describe('Catalogue Module @catalogue', () => {
       await expect(page.locator(PANEL.title)).toContainText('Add Field');
       await page.fill('#pf-fld-name', fldName);
 
-      // Select the first available entity in the dropdown
+      // Select the prerequisite entity from the dropdown
       const entitySelect = page.locator('#pf-fld-entity');
-      await entitySelect.selectOption({ index: 1 }).catch(async () => {
-        // If no entities exist, the dropdown may only have a placeholder
-        // — select whatever is available
-        const options = await entitySelect.locator('option').all();
-        if (options.length > 0) {
-          await entitySelect.selectOption({ index: 0 });
-        }
-      });
+      await entitySelect.waitFor({ state: 'visible', timeout: 5_000 });
+      await entitySelect.selectOption({ label: prereqEntity });
 
       await page.fill('#pf-fld-desc', 'E2E test field');
       await page.click(`${PANEL.body} button[type="submit"]`);
@@ -69,12 +74,20 @@ test.describe('Catalogue Module @catalogue', () => {
       // Verify
       await expect(page.locator(TABLES.fields)).toContainText(fldName, { timeout: 10_000 });
 
-      // Delete
+      // Delete the field
       const row = page.locator(TABLES.fields).locator('tr', { hasText: fldName });
       await row.locator('button:has-text("Delete")').click();
       await expect(page.locator(DELETE_MODAL.confirm)).toBeVisible();
       await page.click(DELETE_MODAL.confirm);
       await expect(page.locator(TABLES.fields)).not.toContainText(fldName, { timeout: 10_000 });
+
+      // Clean up: delete the prerequisite entity
+      await page.click(TABS.entities);
+      const entRow = page.locator(TABLES.entities).locator('tr', { hasText: prereqEntity });
+      await entRow.locator('button:has-text("Delete")').click();
+      await expect(page.locator(DELETE_MODAL.confirm)).toBeVisible();
+      await page.click(DELETE_MODAL.confirm);
+      await expect(page.locator(TABLES.entities)).not.toContainText(prereqEntity, { timeout: 10_000 });
     });
   });
 

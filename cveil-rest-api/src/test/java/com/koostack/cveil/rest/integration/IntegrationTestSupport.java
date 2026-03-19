@@ -70,6 +70,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String tenantSchema; // consent/tenant schema name for search_path
     private final String tenantId; // business tenant ID for tenant-aware queries
     private final String keycloakUrl; // null → Keycloak helpers disabled
+    private final int shardCount; // must match runtime CveilConfig.stream.shard-count
     private Keycloak keycloakAdmin; // lazy-initialized
 
     /** Creates support without tenant schema routing (platform queries only). */
@@ -106,6 +107,10 @@ public class IntegrationTestSupport implements AutoCloseable {
 
         this.keycloakUrl =
                 config.keycloak().flatMap(kc -> kc.url()).filter(u -> !u.isBlank()).orElse(null);
+        this.shardCount =
+                config.stream()
+                        .map(CveilConfig.StreamConfig::shardCount)
+                        .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
     }
 
     @Override
@@ -578,9 +583,9 @@ public class IntegrationTestSupport implements AutoCloseable {
         return entries != null ? entries : List.of();
     }
 
-    /** Computes the shard stream key for a tenant (must match RedisEventPublisher routing). */
+    /** Computes the shard stream key for a tenant (must match runtime shard count). */
     private String shardStreamKey(String tenantId) {
-        int shard = Math.floorMod(tenantId.hashCode(), RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        int shard = Math.floorMod(tenantId.hashCode(), shardCount);
         return "cveil:stream:shard:" + shard;
     }
 
