@@ -9,13 +9,9 @@ test.describe('Consent Ledger SSE @consent', () => {
     await expect(page.locator('#section-ledger')).toBeVisible();
   });
 
-  test('SSE status indicator renders and shows a connection state', async ({ page }) => {
-    // The SSE status element should appear and show a known state.
-    // EventSource cannot send Authorization headers, so it may show
-    // "Live" (cookie auth) or "Disconnected" (401). Both are valid states.
-    const status = page.locator(LEDGER.sseStatus);
-    await expect(status).toBeVisible({ timeout: 10_000 });
-    await expect(status).toContainText(/Live|Disconnected|Reconnecting|Error|Connecting/);
+  test('SSE connects and shows Live status', async ({ page }) => {
+    // fetchEventSource sends DPoP/Bearer auth headers, so SSE should connect
+    await expect(page.locator(LEDGER.sseStatus)).toContainText('Live', { timeout: 15_000 });
   });
 
   test('ledger feed container is visible', async ({ page }) => {
@@ -24,16 +20,13 @@ test.describe('Consent Ledger SSE @consent', () => {
   });
 
   test('SSE receives event after consent grant via API', async ({ page }) => {
-    // Skip if SSE is not connected (EventSource auth limitation)
-    const statusText = await page.locator(LEDGER.sseStatus).textContent();
-    test.skip(!statusText?.includes('Live'), 'SSE not connected — EventSource cannot send auth headers');
+    // Wait for SSE to connect
+    await expect(page.locator(LEDGER.sseStatus)).toContainText('Live', { timeout: 15_000 });
 
-    // Get auth tokens from sessionStorage to make API calls
     const tokens = await page.evaluate(() => ({
       accessToken: sessionStorage.getItem('cveil_access_token'),
       orgCookie: document.cookie.split(';').find(c => c.trim().startsWith('cveil_active_org='))?.split('=')[1] || '',
     }));
-
     const baseUrl = 'http://localhost:8080';
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${tokens.accessToken}`,
@@ -41,31 +34,68 @@ test.describe('Consent Ledger SSE @consent', () => {
     };
     if (tokens.orgCookie) headers['X-Org-Id'] = tokens.orgCookie;
 
-    // List policies to get scope components for consent grant
-    const policiesRes = await page.request.get(`${baseUrl}/api/v1/governance/policies`, { headers });
-    const policies = await policiesRes.json();
-    test.skip(!Array.isArray(policies) || policies.length === 0, 'No policies — consent grant requires governance data');
+    const ts = Date.now();
+    const entityName = `e2e_sse_${ts}_ent`;
+    const fieldName = `e2e_sse_${ts}_fld`;
+    const categoryName = `E2E_SSE_${ts}_CAT`;
+    const purposeName = `E2E_SSE_${ts}`;
+    const subjectId = `e2e_sse_subject_${ts}`;
 
-    const policy = policies[0];
-    const subjectId = `e2e_sse_subject_${Date.now()}`;
+    try {
+      // Seed full governance chain: entity → field → category → field-category → purpose → policy
+      await page.request.post(`${baseUrl}/api/v1/catalogue/entities`, {
+        headers, data: { entityName, description: 'E2E SSE test entity' },
+      });
+      await page.request.post(`${baseUrl}/api/v1/catalogue/fields`, {
+        headers, data: { fieldName, entityName, description: 'E2E SSE test field' },
+      });
+      await page.request.post(`${baseUrl}/api/v1/catalogue/categories`, {
+        headers, data: { categoryName, description: 'E2E SSE test category' },
+      });
+      await page.request.post(`${baseUrl}/api/v1/catalogue/fields/categories`, {
+        headers, data: { fieldName, entityName, categoryName },
+      });
+      await page.request.post(`${baseUrl}/api/v1/governance/purposes`, {
+        headers, data: { purposeName, description: 'E2E SSE test purpose' },
+      });
 
-    // Grant consent via API
-    const grantRes = await page.request.post(`${baseUrl}/api/v1/subjects/consent/grant`, {
-      headers,
-      data: {
-        subject: subjectId,
-        scope: {
-          purposeName: policy.purposeName,
-          fieldName: policy.fieldName || undefined,
-          entityName: policy.entityName || undefined,
-          category: policy.categoryName || undefined,
+      // Wait for projections before creating policy
+      for (let i = 0; i < 15; i++) {
+        await page.waitForTimeout(500);
+        const r = await page.request.get(`${baseUrl}/api/v1/governance/purposes`, { headers });
+        const data = await r.json();
+        if (Array.isArray(data) && data.some((p: any) => p.purposeName === purposeName)) break;
+      }
+
+      await page.request.post(`${baseUrl}/api/v1/governance/purposes/policies`, {
+        headers,
+        data: { purposeName, policyType: 'FIELD', fieldName, entityName, categoryName: null },
+      });
+      await page.waitForTimeout(1500);
+
+      // Grant consent via API (scope requires category)
+      const grantRes = await page.request.post(`${baseUrl}/api/v1/subjects/consent/grant`, {
+        headers,
+        data: {
+          subject: subjectId,
+          scope: { purposeName, fieldName, entityName, category: categoryName },
         },
-      },
-    });
-    expect(grantRes.ok()).toBeTruthy();
+      });
+      expect(grantRes.ok()).toBeTruthy();
 
-    // Wait for the SSE event to appear in the ledger feed
-    await expect(page.locator(LEDGER.feed)).toContainText(subjectId, { timeout: 30_000 });
+      // Wait for the SSE event to appear in the ledger feed
+      await expect(page.locator(LEDGER.feed)).toContainText(subjectId, { timeout: 30_000 });
+    } finally {
+      await page.request.fetch(`${baseUrl}/api/v1/governance/purposes/policies`, {
+        method: 'DELETE', headers,
+        data: { purposeName, policyType: 'FIELD', fieldName, entityName, categoryName: null },
+      });
+      await page.request.delete(`${baseUrl}/api/v1/governance/purposes/${purposeName}`, { headers });
+      await page.request.delete(`${baseUrl}/api/v1/catalogue/fields/${entityName}/${fieldName}/categories/${categoryName}`, { headers });
+      await page.request.delete(`${baseUrl}/api/v1/catalogue/fields/${entityName}/${fieldName}`, { headers });
+      await page.request.delete(`${baseUrl}/api/v1/catalogue/categories/${categoryName}`, { headers });
+      await page.request.delete(`${baseUrl}/api/v1/catalogue/entities/${entityName}`, { headers });
+    }
   });
 
   test('ledger action filter dropdown works', async ({ page }) => {

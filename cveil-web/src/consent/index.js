@@ -4,6 +4,10 @@ import {
  retryUntilChanged, setTableLoading,
 } from '../shared/index.js';
 
+import { getAccessToken } from '../shared/api.js';
+import { getDpopProof } from '../shared/dpop.js';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
+
 import {
  initPlayground, evaluateAndMask, loadSampleTemplate, copyMaskedOutput,
 } from './playground.js';
@@ -27,7 +31,7 @@ let simulation = null;
 
 // ── Ledger State ───────────────────────────────────────────────
 const SSE_URL = '/api/v1/consent/events';
-let eventSource = null;
+let sseAbortCtrl = null;
 let sseInitialized = false;
 let ledgerPaused = false;
 let ledgerEvents = [];
@@ -350,40 +354,59 @@ function renderTreeGraph() {
 // ================================================================
 // LEDGER FEED (SSE)
 // ================================================================
-function initSSE() {
+async function initSSE() {
  if (sseInitialized) return;
  sseInitialized = true;
 
- try {
- eventSource = new EventSource(SSE_URL);
+ sseAbortCtrl = new AbortController();
+ const fullUrl = new URL(SSE_URL, window.location.origin).href;
 
- eventSource.onopen = () => {
- updateSSEStatus('connected');
- };
+ // Build auth headers upfront (fetchEventSource needs a plain object)
+ const headers = {};
+ const token = getAccessToken();
+ if (token) {
+  try {
+   headers['Authorization'] = 'DPoP ' + token;
+   headers['DPoP'] = await getDpopProof('GET', fullUrl, token);
+  } catch {
+   headers['Authorization'] = 'Bearer ' + token;
+  }
+ }
+ const org = document.cookie.match(/(?:^|; )cveil_active_org=([^;]*)/);
+ if (org) headers['X-Org-Id'] = decodeURIComponent(org[1]);
 
- eventSource.onmessage = (event) => {
- try {
- const data = JSON.parse(event.data);
- const consentActions = ['GRANTED', 'REVOKED', 'ALL_REVOKED', 'CONSENT_ENTRY_CHANGED'];
- if (!consentActions.includes(data.action)) return;
- addLedgerEvent(data);
- } catch (e) {
- console.warn('Failed to parse SSE event:', e);
- }
- };
+ fetchEventSource(SSE_URL, {
+  signal: sseAbortCtrl.signal,
+  headers,
 
- eventSource.onerror = () => {
- updateSSEStatus('disconnected');
- setTimeout(() => {
- if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
- updateSSEStatus('reconnecting');
- }
- }, 2000);
- };
- } catch (e) {
- updateSSEStatus('error');
- console.error('SSE initialization failed:', e);
- }
+  onopen(res) {
+   if (res.ok) {
+    updateSSEStatus('connected');
+   } else {
+    updateSSEStatus('error');
+    throw new Error(`SSE open failed: ${res.status}`);
+   }
+  },
+
+  onmessage(event) {
+   try {
+    const data = JSON.parse(event.data);
+    const consentActions = ['GRANTED', 'REVOKED', 'ALL_REVOKED', 'CONSENT_ENTRY_CHANGED'];
+    if (!consentActions.includes(data.action)) return;
+    addLedgerEvent(data);
+   } catch (e) {
+    console.warn('Failed to parse SSE event:', e);
+   }
+  },
+
+  onerror(err) {
+   updateSSEStatus('disconnected');
+  },
+
+  openWhenHidden: false,
+ }).catch(() => {
+  // Stream ended or aborted — no action needed
+ });
 }
 
 function updateSSEStatus(status) {
