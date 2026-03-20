@@ -29,9 +29,6 @@ include("platform:cveil-platform-event-jooq")
 include("tenant:cveil-consent-admin-projection-jooq")
 include("tenant:cveil-consent-decision-projection-redis")
 
-// --- Tenant Authz ---
-include("tenant:cveil-authz-keycloak")
-
 // --- Platform Billing ---
 include("platform:cveil-billing-schema")
 include("platform:cveil-billing-jooq-common")

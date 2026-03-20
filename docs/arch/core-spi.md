@@ -141,8 +141,6 @@ com.koostack.cveil.core/
 │   │   │   └── ... (Updated, Removed, Snapshot events)
 │   │   └── invalidation/
 │   │       └── InvalidationSink.java
-│   ├── authz/
-│   │   └── AuthzProvider.java    #   Tenant authorization interface
 │   ├── iam/
 │   │   ├── TenantIamEventTypes.java
 │   │   └── TenantRoles.java

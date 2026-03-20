@@ -13,7 +13,6 @@ import com.koostack.cveil.core.platform.iam.IdpProvider;
 import com.koostack.cveil.core.platform.iam.IdpTenantResolver;
 import com.koostack.cveil.core.platform.iam.TokenValidationService;
 import com.koostack.cveil.core.spi.PluginBundle;
-import com.koostack.cveil.core.tenant.authz.AuthzProvider;
 import com.koostack.cveil.core.tenant.consent.invalidation.SubscriptionManager;
 import com.koostack.cveil.platform.billing.jooq.BillingProjectionHandler;
 import com.koostack.cveil.platform.billing.jooq.BillingQueryDispatcher;
@@ -161,8 +160,6 @@ public class CveilProducers {
     @Inject
     Instance<IdpProvider> idpProviderInstance;
 
-    @Inject Instance<AuthzProvider<?>> authzProviderInstance;
-
     @Inject com.koostack.cveil.rest.ratelimit.RateLimitService rateLimitService;
 
     // -----------------------------------------------------------------------
@@ -222,15 +219,6 @@ public class CveilProducers {
             if (idp != null && idp.isAvailable()) {
                 builder.withIdpProvider(idp);
                 LOG.info("Cveil REST API: IdpProvider wired into builder");
-            }
-        }
-
-        // -- Authz provider (production only, when Keycloak is configured) ----
-        if (authzProviderInstance.isResolvable()) {
-            AuthzProvider<?> authz = authzProviderInstance.get();
-            if (authz != null) {
-                builder.withAuthzProvider(authz);
-                LOG.info("Cveil REST API: AuthzProvider wired into builder");
             }
         }
 
@@ -590,54 +578,6 @@ public class CveilProducers {
                                     "Cveil REST API: No Keycloak configuration — IdpProvider not"
                                             + " available");
                             return IdpProvider.unavailable();
-                        });
-    }
-
-    /**
-     * Produces the {@link AuthzProvider} singleton — tenant-scoped authorization (role management)
-     * backed by Keycloak.
-     *
-     * <p>In production mode with Keycloak configured, returns a {@code KeycloakAuthzProvider}. In
-     * embedded mode or when Keycloak is not configured, returns {@code null}.
-     */
-    @Produces
-    @ApplicationScoped
-    @Unremovable
-    @SuppressWarnings("rawtypes")
-    public AuthzProvider authzProvider() {
-        if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
-            LOG.debug("Cveil REST API: AuthzProvider not available (embedded mode)");
-            return null;
-        }
-
-        return config.keycloak()
-                .filter(kc -> kc.url().isPresent() && !kc.url().get().isBlank())
-                .map(
-                        kc -> {
-                            com.koostack.cveil.tenant.authz.keycloak.KeycloakAuthzConfig
-                                    authzConfig =
-                                            new com.koostack.cveil.tenant.authz.keycloak
-                                                    .KeycloakAuthzConfig(
-                                                    kc.url().get(),
-                                                    "master",
-                                                    "admin-cli",
-                                                    kc.adminUsername(),
-                                                    kc.adminPassword().orElse(""));
-                            com.koostack.cveil.tenant.authz.keycloak.KeycloakAuthzProvider
-                                    provider =
-                                            new com.koostack.cveil.tenant.authz.keycloak
-                                                    .KeycloakAuthzProvider(authzConfig);
-                            LOG.info(
-                                    "Cveil REST API: KeycloakAuthzProvider wired (url={})",
-                                    kc.url().get());
-                            return (AuthzProvider) provider;
-                        })
-                .orElseGet(
-                        () -> {
-                            LOG.info(
-                                    "Cveil REST API: No Keycloak configuration — AuthzProvider not"
-                                            + " available");
-                            return null;
                         });
     }
 

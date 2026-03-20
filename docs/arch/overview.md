@@ -92,8 +92,7 @@ cveil-rest-api (Quarkus application — deployment unit)
 │   ├── cveil-consent-admin-projection-jooq
 │   ├── cveil-consent-decision-projection-redis
 │   ├── cveil-consent-admin-jooq-common
-│   ├── cveil-subject-dsar-jooq
-│   └── cveil-authz-keycloak
+│   └── cveil-subject-dsar-jooq
 │
 ├── platform/
 │   ├── cveil-core-{schema,command,query-jooq,projection-jooq,jooq-common}

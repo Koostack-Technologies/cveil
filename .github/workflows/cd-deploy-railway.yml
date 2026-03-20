@@ -1,0 +1,53 @@
+# =============================================================================
+# Cveil — Deploy to Railway
+#
+# Deploys the latest GHCR Docker image to Railway using the Railway CLI.
+# Manual dispatch only — choose the image tag to deploy.
+#
+# Required secrets:
+#   RAILWAY_TOKEN       — Railway API token
+#
+# Required variables:
+#   RAILWAY_SERVICE_ID  — Railway service ID
+# =============================================================================
+
+name: "Deploy: Railway"
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy (e.g. v1.2.3, latest)"
+        required: true
+        default: "latest"
+
+concurrency:
+  group: deploy-railway
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Validate branch
+        run: |
+          echo "Deploying ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: |
+          railway service \
+            --set "RAILWAY_DOCKERFILE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}"
+          railway redeploy --yes
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}

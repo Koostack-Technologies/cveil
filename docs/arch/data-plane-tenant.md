@@ -111,34 +111,9 @@ Implements Data Subject Access Request workflows. See [Consent Engine — DSAR](
 - Integration with `ConsentAdminCommandService` for bulk revocation
 - Integration with Redis for cached key cleanup
 
-### Tenant Authorization (`cveil-authz-keycloak`)
+### Tenant Authorization
 
-Bridges Keycloak realm tokens to Cveil's authorization model.
-
-**Authorization Flow:**
-```
-1. OIDC token arrives in Authorization header
-2. DpopVerifier validates DPoP proof (if present)
-3. Token decoded → Keycloak realm + subject + roles
-4. AuthzProvider resolves to AuthorizationContext:
-   {
-     tenantId: "acme-corp",
-     userId: "user-123",
-     roles: ["admin", "consent-writer"],
-     permissions: ["consent:read", "consent:write", "admin:read", "admin:write"]
-   }
-5. Resource method checks permissions via @RolesAllowed or manual check
-```
-
-**Role → Permission Mapping:**
-
-| Role | Permissions |
-|------|------------|
-| `viewer` | `consent:read`, `admin:read` |
-| `consent-reader` | `consent:read` |
-| `consent-writer` | `consent:read`, `consent:write` |
-| `admin` | `consent:read`, `consent:write`, `admin:read`, `admin:write` |
-| `super-admin` | All permissions |
+Role management and permission resolution are handled by `PermissionService` in the platform IAM layer (`cveil-iam-query`). See [Platform Services — IAM](./platform-services.md) for details.
 
 ## Tenant Event Stream
 

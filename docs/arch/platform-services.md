@@ -69,11 +69,6 @@ Manages users, roles, and authentication across the platform.
 - SMTP configuration for invitation emails
 - Token exchange support
 
-**Tenant Authorization (`tenant/cveil-authz-keycloak`):**
-- Resolves Keycloak tokens to `AuthorizationContext`
-- Maps Keycloak realm roles to Cveil permissions
-- Supports both platform-level and tenant-level role scoping
-
 ### Platform Billing (`platform/cveil-billing-*`)
 
 Manages subscriptions, invoices, and payment processing via Stripe.
