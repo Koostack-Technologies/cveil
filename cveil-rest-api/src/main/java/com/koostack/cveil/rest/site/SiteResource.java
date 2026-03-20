@@ -3,6 +3,7 @@ package com.koostack.cveil.rest.site;
 import com.koostack.cveil.core.cqrs.AbstractOrchestrator.OrchestratorException;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.platform.iam.IamQueryService.OrganizationInfo;
+import com.koostack.cveil.core.platform.iam.IdpProvider;
 import com.koostack.cveil.platform.iam.jooq.GetCurrentUserQueryActuator;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.lifecycle.DeferredProvisioningTask;
@@ -24,6 +25,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -133,6 +135,8 @@ public class SiteResource {
     @Inject ProvisioningTracker provisioningTracker;
 
     @Inject OnboardingStateHolder onboardingStateHolder;
+
+    @Inject IdpProvider idpProvider;
 
     @Inject
     @Named("consentDispatcher")
@@ -350,8 +354,47 @@ public class SiteResource {
     @GET
     @Path("verify-email/callback")
     @Produces(MediaType.TEXT_HTML)
-    public TemplateInstance verifyEmailCallbackPage() {
+    public TemplateInstance verifyEmailCallbackPage(@QueryParam("key") String key) {
+        if (key != null && !key.isBlank()) {
+            try {
+                String userId = extractSubFromJwt(key);
+                if (userId != null) {
+                    idpProvider.verifyEmail(null, userId, key);
+                    LOG.info("Email verified via callback for user '{}'", userId);
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to verify email from callback key: {}", e.getMessage());
+            }
+        }
         return verifyEmailCallback.data("v", BUILD_VERSION);
+    }
+
+    /**
+     * Decode the payload of a JWT (without signature verification) and extract the {@code sub}
+     * claim. Used to identify the user from a Keycloak action token.
+     */
+    private static String extractSubFromJwt(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) return null;
+            String payload = parts[1];
+            // Fix Base64 URL-safe padding
+            int pad = (4 - payload.length() % 4) % 4;
+            payload += "=".repeat(pad);
+            byte[] decoded = Base64.getUrlDecoder().decode(payload);
+            String json = new String(decoded, StandardCharsets.UTF_8);
+            // Simple JSON extraction — avoid pulling in a JSON library for one field
+            int idx = json.indexOf("\"sub\"");
+            if (idx < 0) return null;
+            int colon = json.indexOf(':', idx);
+            int quote1 = json.indexOf('"', colon);
+            int quote2 = json.indexOf('"', quote1 + 1);
+            if (quote1 < 0 || quote2 < 0) return null;
+            return json.substring(quote1 + 1, quote2);
+        } catch (Exception e) {
+            LOG.debug("Failed to decode JWT sub claim: {}", e.getMessage());
+            return null;
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1300,6 +1343,7 @@ public class SiteResource {
                         : "U";
         return template.data("username", username)
                 .data("email", uc.email())
+                .data("emailVerified", uc.emailVerified())
                 .data("tenantId", ws.tenantId())
                 .data("workspaceDisplayName", ws.displayName())
                 .data("activeOrgId", ws.activeOrgId())
@@ -1349,10 +1393,11 @@ public class SiteResource {
     }
 
     /**
-     * Lightweight container for user context needed by dashboard templates. Resolved from either
-     * the {@code cveil_access} JWT cookie or the DPoP-flow {@code cveil_session} cookie.
+     * Lightweight container for user context needed by dashboard templates. Resolved from the
+     * {@code cveil_session} cookie set by the DPoP login flow. The {@code emailVerified} field is
+     * sourced from the cookie's {@code ev} key ({@code "1"} = verified).
      */
-    record UserContext(String username, String email, String jwtPayload) {}
+    record UserContext(String username, String email, String jwtPayload, boolean emailVerified) {}
 
     /**
      * Resolves user context for server-rendered dashboard pages from the lightweight {@code
@@ -1368,6 +1413,7 @@ public class SiteResource {
             String u = extractJsonString(sessionJson, "u");
             String e = extractJsonString(sessionJson, "e");
             String s = extractJsonString(sessionJson, "s");
+            String ev = extractJsonString(sessionJson, "ev");
             if (u != null) {
                 // Build a synthetic JWT-like payload with the sub claim so that
                 // resolveKeycloakUserId() returns the Keycloak UUID (not the username).
@@ -1375,7 +1421,7 @@ public class SiteResource {
                         s != null
                                 ? "{\"sub\":\"" + s + "\",\"preferred_username\":\"" + u + "\"}"
                                 : null;
-                return new UserContext(u, e, syntheticPayload);
+                return new UserContext(u, e, syntheticPayload, "1".equals(ev));
             }
         }
 

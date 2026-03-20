@@ -25,13 +25,13 @@ public record DsarAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String subjectId) {
+    public static UUID deriveId(String tenantId, String subjectId) {
         return UUID.nameUUIDFromBytes(
-                ("consent-dsar:" + subjectId).getBytes(StandardCharsets.UTF_8));
+                ("consent-dsar:" + tenantId + ":" + subjectId).getBytes(StandardCharsets.UTF_8));
     }
 
     public static DsarAggregate create(String tenantId, String subjectId) {
-        return new DsarAggregate(tenantId, deriveId(subjectId), subjectId, null, 0L);
+        return new DsarAggregate(tenantId, deriveId(tenantId, subjectId), subjectId, null, 0L);
     }
 
     public static DsarAggregate apply(

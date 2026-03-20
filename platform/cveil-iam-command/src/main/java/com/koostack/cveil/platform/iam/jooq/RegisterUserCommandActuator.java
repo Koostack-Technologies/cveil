@@ -259,31 +259,40 @@ public class RegisterUserCommandActuator
                     assignRealmRole(realm, createdUserId, roleName);
                 }
 
-                // Send action emails (combined into a single call to avoid duplicate emails)
-                var requiredActions = new java.util.ArrayList<String>();
-                requiredActions.add("VERIFY_EMAIL");
-                if (command.temporaryPassword()) {
-                    requiredActions.add("UPDATE_PASSWORD");
-                }
+                // Send verification email using sendVerifyEmail (doesn't add required actions,
+                // so ROPC login isn't blocked for unverified users).
                 try {
                     String redirectUri =
                             appBaseUrl != null ? appBaseUrl + "/verify-email/callback" : null;
                     if (redirectUri != null && clientId != null) {
                         realm.users()
                                 .get(createdUserId)
-                                .executeActionsEmail(
+                                .sendVerifyEmail(
                                         clientId,
                                         redirectUri,
-                                        KeycloakIdpProvider.VERIFICATION_LINK_LIFESPAN_SECONDS,
-                                        requiredActions);
+                                        KeycloakIdpProvider.VERIFICATION_LINK_LIFESPAN_SECONDS);
                     } else {
-                        realm.users().get(createdUserId).executeActionsEmail(requiredActions);
+                        realm.users().get(createdUserId).sendVerifyEmail();
                     }
                 } catch (Exception e) {
                     LOG.warn(
-                            "Failed to send action email(s) {}: {}",
-                            requiredActions,
+                            "Failed to send verification email for user '{}': {}",
+                            createdUserId,
                             e.getMessage());
+                }
+
+                // If the user was created with a temporary password, send UPDATE_PASSWORD action
+                if (command.temporaryPassword()) {
+                    try {
+                        realm.users()
+                                .get(createdUserId)
+                                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+                    } catch (Exception e) {
+                        LOG.warn(
+                                "Failed to send password update email for user '{}': {}",
+                                createdUserId,
+                                e.getMessage());
+                    }
                 }
 
                 return new KcUserResult(createdUserId, false);

@@ -469,7 +469,8 @@ class CreateTenantPipelineIT {
                     planIds.add(rs.getString("plan_id"));
                     assertThat(rs.getBoolean("is_active")).isTrue();
                 }
-                assertThat(planIds).containsExactlyInAnyOrder("free", "pro", "enterprise");
+                assertThat(planIds)
+                        .containsExactlyInAnyOrder("free", "pro", "business", "enterprise");
             }
         }
     }

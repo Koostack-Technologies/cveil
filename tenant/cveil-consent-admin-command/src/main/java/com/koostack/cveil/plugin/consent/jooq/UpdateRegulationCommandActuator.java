@@ -40,7 +40,7 @@ public class UpdateRegulationCommandActuator
     public Void execute(UpdateRegulationCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = RegulationAggregate.deriveId(command.regulationName());
+        UUID aggregateId = RegulationAggregate.deriveId(tenantId, command.regulationName());
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 

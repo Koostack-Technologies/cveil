@@ -99,6 +99,13 @@ cveil:
     force-bootstrap: ${CVEIL_FORCE_BOOTSTRAP:false}
 
   # ---------------------------------------------------------------------------
+  # Stream / Outbox Configuration
+  # ---------------------------------------------------------------------------
+  stream:
+    shard-count: ${CVEIL_STREAM_SHARD_COUNT:8}
+    outbox-poller-count: ${CVEIL_OUTBOX_POLLER_COUNT:1}
+
+  # ---------------------------------------------------------------------------
   # Multi-Tenant Isolation
   # ---------------------------------------------------------------------------
   # When enabled, DSAR endpoints (export and delete) require an active

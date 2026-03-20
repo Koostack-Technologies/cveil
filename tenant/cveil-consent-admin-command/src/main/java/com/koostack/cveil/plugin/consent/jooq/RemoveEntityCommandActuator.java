@@ -31,7 +31,7 @@ public class RemoveEntityCommandActuator
     public Void execute(RemoveEntityCommand command) {
         Objects.requireNonNull(command.entityName(), "entityName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = EntityAggregate.deriveId(command.entityName());
+        UUID aggregateId = EntityAggregate.deriveId(tenantId, command.entityName());
         var payload = new EntityRemovedEvent(command.entityName());
         AggregateKey key = new AggregateKey(aggregateId, EntityAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

@@ -30,13 +30,14 @@ public record SubjectConsentAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String subjectId) {
+    public static UUID deriveId(String tenantId, String subjectId) {
         return UUID.nameUUIDFromBytes(
-                ("consent-subject:" + subjectId).getBytes(StandardCharsets.UTF_8));
+                ("consent-subject:" + tenantId + ":" + subjectId).getBytes(StandardCharsets.UTF_8));
     }
 
     public static SubjectConsentAggregate create(String tenantId, String subjectId) {
-        return new SubjectConsentAggregate(tenantId, deriveId(subjectId), subjectId, List.of(), 0L);
+        return new SubjectConsentAggregate(
+                tenantId, deriveId(tenantId, subjectId), subjectId, List.of(), 0L);
     }
 
     public static SubjectConsentAggregate apply(

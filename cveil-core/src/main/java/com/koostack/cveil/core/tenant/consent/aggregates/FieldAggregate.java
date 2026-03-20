@@ -47,9 +47,10 @@ public record FieldAggregate(
         return normalized != null ? normalized : fieldName;
     }
 
-    public static UUID deriveId(String entityName, String fieldName) {
+    public static UUID deriveId(String tenantId, String entityName, String fieldName) {
         String key = normalizeEntityName(entityName) + ":" + normalizeFieldName(fieldName);
-        return UUID.nameUUIDFromBytes(("consent-field:" + key).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(
+                ("consent-field:" + tenantId + ":" + key).getBytes(StandardCharsets.UTF_8));
     }
 
     public static FieldAggregate create(
@@ -61,7 +62,7 @@ public record FieldAggregate(
         String normalized = normalizeEntityName(entityName);
         return new FieldAggregate(
                 tenantId,
-                deriveId(normalized, fieldName),
+                deriveId(tenantId, normalized, fieldName),
                 fieldName,
                 description,
                 normalized,

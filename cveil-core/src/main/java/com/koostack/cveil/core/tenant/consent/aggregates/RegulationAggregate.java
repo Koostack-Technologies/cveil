@@ -27,15 +27,21 @@ public record RegulationAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String regulationName) {
+    public static UUID deriveId(String tenantId, String regulationName) {
         return UUID.nameUUIDFromBytes(
-                ("consent-regulation:" + regulationName).getBytes(StandardCharsets.UTF_8));
+                ("consent-regulation:" + tenantId + ":" + regulationName)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     public static RegulationAggregate create(
             String tenantId, String regulationName, String description) {
         return new RegulationAggregate(
-                tenantId, deriveId(regulationName), regulationName, description, List.of(), 0L);
+                tenantId,
+                deriveId(tenantId, regulationName),
+                regulationName,
+                description,
+                List.of(),
+                0L);
     }
 
     public static RegulationAggregate apply(

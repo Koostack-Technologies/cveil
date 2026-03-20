@@ -31,7 +31,7 @@ public class RemovePurposeCommandActuator
     public Void execute(RemovePurposeCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
+        UUID aggregateId = PurposeAggregate.deriveId(tenantId, command.purposeName());
         var payload = new PurposeRemovedEvent(command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

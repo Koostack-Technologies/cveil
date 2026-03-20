@@ -1,6 +1,7 @@
 package com.koostack.cveil.rest.integration;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -12,6 +13,7 @@ import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -216,8 +218,8 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
                         .withEnv("KC_DB_PASSWORD", DB_PASSWORD)
                         .withEnv("KC_HOSTNAME_STRICT", "false")
                         .withEnv("KC_HTTP_ENABLED", "true")
-                        .withEnv("KEYCLOAK_ADMIN", "admin")
-                        .withEnv("KEYCLOAK_ADMIN_PASSWORD", "admin")
+                        .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
+                        .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
                         .withEnv("KC_HEALTH_ENABLED", "true")
                         .waitingFor(
                                 Wait.forLogMessage(".*Keycloak.*started in.*", 1)
@@ -229,6 +231,12 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
         String keycloakUrl =
                 "http://" + keycloak.getHost() + ":" + keycloak.getMappedPort(KEYCLOAK_PORT);
         LOG.info("Keycloak started: url={}", keycloakUrl);
+
+        // Keycloak 26 sets sslRequired=external on the master realm by default.
+        // Requests through Docker port-forwarding appear external, triggering
+        // "HTTPS required" 403 on the token endpoint.  Disable SSL requirement
+        // via kcadm.sh from *inside* the container where localhost is trusted.
+        disableMasterRealmSslRequirement();
 
         // Bootstrap the cveil realm so the CQRS projection handler can
         // materialise events into a pre-existing realm (the app does not auto-create it).
@@ -317,6 +325,71 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
     }
 
     // -----------------------------------------------------------------------
+    // Keycloak SSL workaround
+    // -----------------------------------------------------------------------
+
+    /**
+     * Disables the {@code sslRequired} setting on the master realm so that the Keycloak admin REST
+     * API is accessible over plain HTTP through Docker port-forwarding.
+     *
+     * <p>Keycloak 26+ defaults the master realm to {@code sslRequired=external}. Requests arriving
+     * through Docker's mapped ports appear to originate from a non-localhost address, causing the
+     * token endpoint to return 403 "HTTPS required". Running {@code kcadm.sh} from <em>inside</em>
+     * the container avoids this because the connection is to {@code localhost:8080}.
+     */
+    private void disableMasterRealmSslRequirement() {
+        LOG.info("Disabling sslRequired on master realm (Keycloak 26+ workaround)...");
+        try {
+            Container.ExecResult login =
+                    keycloak.execInContainer(
+                            "/opt/keycloak/bin/kcadm.sh",
+                            "config",
+                            "credentials",
+                            "--server",
+                            "http://localhost:8080",
+                            "--realm",
+                            "master",
+                            "--user",
+                            "admin",
+                            "--password",
+                            "admin");
+            if (login.getExitCode() != 0) {
+                throw new IllegalStateException(
+                        "kcadm.sh login failed (exit "
+                                + login.getExitCode()
+                                + "): "
+                                + login.getStderr());
+            }
+
+            Container.ExecResult update =
+                    keycloak.execInContainer(
+                            "/opt/keycloak/bin/kcadm.sh",
+                            "update",
+                            "realms/master",
+                            "-s",
+                            "sslRequired=NONE",
+                            "--server",
+                            "http://localhost:8080",
+                            "--realm",
+                            "master",
+                            "--user",
+                            "admin",
+                            "--password",
+                            "admin");
+            if (update.getExitCode() != 0) {
+                throw new IllegalStateException(
+                        "kcadm.sh update failed (exit "
+                                + update.getExitCode()
+                                + "): "
+                                + update.getStderr());
+            }
+            LOG.info("Master realm sslRequired set to NONE");
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Failed to disable SSL requirement on master realm", e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Keycloak platform-realm bootstrap
     // -----------------------------------------------------------------------
 
@@ -338,11 +411,13 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
                         .password("admin")
                         .build()) {
 
-            // Create realm
+            // Create realm — sslRequired=NONE so the token endpoint works
+            // over plain HTTP through Docker port-forwarding (Keycloak 26+).
             RealmRepresentation realm = new RealmRepresentation();
             realm.setRealm(PLATFORM_REALM);
             realm.setDisplayName("Cveil Platform");
             realm.setEnabled(true);
+            realm.setSslRequired("NONE");
             realm.setAccessTokenLifespan(3600);
             realm.setSsoSessionMaxLifespan(604800);
             realm.setOrganizationsEnabled(true);
@@ -360,6 +435,7 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
             client.setServiceAccountsEnabled(true);
             client.setDirectAccessGrantsEnabled(true);
             client.setStandardFlowEnabled(false);
+            client.setRedirectUris(List.of("*"));
 
             realmResource.clients().create(client);
 

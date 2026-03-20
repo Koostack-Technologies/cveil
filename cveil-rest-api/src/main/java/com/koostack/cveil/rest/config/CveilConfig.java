@@ -259,6 +259,16 @@ public interface CveilConfig {
         /** SMTP authentication password (use app password for Gmail). */
         @WithName("smtp-password")
         Optional<String> smtpPassword();
+
+        /** Whether SMTP requires authentication (default true for Gmail). */
+        @WithName("smtp-auth")
+        @WithDefault("true")
+        String smtpAuth();
+
+        /** Whether SMTP uses STARTTLS (default true for Gmail port 587). */
+        @WithName("smtp-starttls")
+        @WithDefault("true")
+        String smtpStarttls();
     }
 
     /** Database configuration — JDBC URL and jOOQ SQL dialect. */
@@ -554,6 +564,19 @@ public interface CveilConfig {
         @WithName("shard-count")
         @WithDefault("8")
         int shardCount();
+
+        /**
+         * Number of outbox poller consumer threads.
+         *
+         * <p>Each poller is an independent Redis consumer in the {@code outbox-pollers} consumer
+         * group. Increasing this value distributes outbox relay work across more threads, which can
+         * reduce latency when many tenants publish events concurrently.
+         *
+         * @return the number of outbox poller threads (default 1)
+         */
+        @WithName("outbox-poller-count")
+        @WithDefault("1")
+        int outboxPollerCount();
     }
 
     /**

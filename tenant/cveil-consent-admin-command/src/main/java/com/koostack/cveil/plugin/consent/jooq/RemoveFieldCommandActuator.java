@@ -32,7 +32,7 @@ public class RemoveFieldCommandActuator
         Objects.requireNonNull(command.fieldName(), "fieldName must not be null");
         String tenantId = TenantContext.require();
         String normalized = FieldAggregate.normalizeEntityName(command.entityName());
-        UUID aggregateId = FieldAggregate.deriveId(normalized, command.fieldName());
+        UUID aggregateId = FieldAggregate.deriveId(tenantId, normalized, command.fieldName());
         var payload = new FieldRemovedEvent(normalized, command.fieldName());
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

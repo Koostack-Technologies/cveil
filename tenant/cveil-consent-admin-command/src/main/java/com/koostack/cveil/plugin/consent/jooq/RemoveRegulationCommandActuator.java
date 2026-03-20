@@ -32,7 +32,7 @@ public class RemoveRegulationCommandActuator
     public Void execute(RemoveRegulationCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = RegulationAggregate.deriveId(command.regulationName());
+        UUID aggregateId = RegulationAggregate.deriveId(tenantId, command.regulationName());
         var payload = new RegulationRemovedEvent(command.regulationName());
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);

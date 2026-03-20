@@ -1,0 +1,33 @@
+# =============================================================================
+# Docker Compose Override — E2E Testing
+#
+# Swaps the Gmail SMTP configuration to MailCrab so that e2e tests can
+# inspect outbound emails without hitting a real mail server.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile e2e up --build
+#
+# =============================================================================
+
+services:
+  keycloak:
+    environment:
+      # Fix the frontend URL so action-token issuer matches the browser URL.
+      # Without this, tokens are issued with iss=http://keycloak:8080 (internal)
+      # which fails validation when the browser accesses http://localhost:8180.
+      KC_HOSTNAME: "http://localhost:8180"
+      KC_HOSTNAME_STRICT: "true"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+
+  cveil-api:
+    environment:
+      CVEIL_KEYCLOAK_SMTP_HOST: "mailcrab"
+      CVEIL_KEYCLOAK_SMTP_PORT: "1025"
+      CVEIL_KEYCLOAK_SMTP_FROM: "noreply@cveil.local"
+      CVEIL_KEYCLOAK_SMTP_USER: ""
+      CVEIL_KEYCLOAK_SMTP_PASSWORD: ""
+      CVEIL_KEYCLOAK_SMTP_AUTH: "false"
+      CVEIL_KEYCLOAK_SMTP_STARTTLS: "false"
+    depends_on:
+      mailcrab:
+        condition: service_started

@@ -7,15 +7,15 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg">
     <title>{#insert title}Dashboard{/insert} | Cveil</title>
     <link rel="stylesheet" href="/css/cveil-web.css?v={v ?: '0'}">
+    <script src="/js/cveil-web.iife.js?v={v ?: '0'}"></script>
 </head>
 <body class="antialiased bg-surface-base text-on-surface h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
     <aside class="hidden md:flex md:flex-col w-64 bg-surface-lowest">
         <!-- Logo -->
-        <div class="h-16 flex items-center gap-2 px-5 bg-surface-lowest">
-            <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
-            <span class="text-headline-sm text-on-surface tracking-tight">Cveil</span>
+        <div class="h-16 flex items-center gap-1 px-5 bg-surface-lowest">
+            <span class="text-headline-sm tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
         </div>
 
         <!-- Workspace switcher -->
@@ -155,9 +155,8 @@
         <div id="mobile-sidebar" class="hidden fixed inset-0 z-40 md:hidden">
             <div class="fixed inset-0 bg-black/40" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
             <aside class="relative w-64 h-full bg-surface-lowest overflow-y-auto">
-                <div class="h-16 flex items-center gap-2 px-5">
-                    <img src="/logo.svg" alt="Cveil" class="w-8 h-8 rounded-md">
-                    <span class="text-headline-sm text-on-surface tracking-tight">Cveil</span>
+                <div class="h-16 flex items-center gap-1 px-5">
+                    <span class="text-headline-sm tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
                 </div>
                 <nav class="px-3 py-4 space-y-4">
                     <div class="nav-group" data-group="workspace">
@@ -208,6 +207,22 @@
 
         <!-- Main content -->
         <main class="flex-1 overflow-y-auto p-6 sm:p-8 bg-surface-base">
+            {#if !emailVerified}
+            <!-- Email verification banner — dismissed via sessionStorage, reappears on next login -->
+            <div id="verify-email-banner" class="mb-6 flex items-center justify-between gap-4 rounded-md bg-yellow-900/30 border border-yellow-600/30 px-4 py-3 text-sm text-yellow-200">
+                <div class="flex items-center gap-3">
+                    <svg class="h-5 w-5 shrink-0 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3l9.66 16.59A1 1 0 0 1 20.66 21H3.34a1 1 0 0 1-.86-1.41L12 3z"/></svg>
+                    <span>Please verify your email address to unlock all features.</span>
+                    <button id="verify-resend-btn" type="button" onclick="resendVerification(this)" class="ml-2 rounded bg-yellow-600/40 px-3 py-1 text-xs font-medium text-yellow-100 hover:bg-yellow-600/60 transition-colors">
+                        Resend verification email
+                    </button>
+                    <span id="verify-resend-msg" class="hidden ml-2 text-xs text-yellow-300"></span>
+                </div>
+                <button id="verify-dismiss-btn" type="button" onclick="dismissVerifyBanner()" class="shrink-0 text-yellow-400 hover:text-yellow-200 transition-colors" aria-label="Dismiss">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            {/if}
             {#insert content}
             <p class="text-on-surface-muted">No content.</p>
             {/insert}
@@ -286,6 +301,56 @@
             } catch (e) {}
             window.location.href = '/login';
         });
+    </script>
+    <script>
+        // Email verification banner — dismiss + resend with 60s cooldown
+        (function() {
+            var banner = document.getElementById('verify-email-banner');
+            if (banner && sessionStorage.getItem('cveil_dismiss_verify_banner') === '1') {
+                banner.style.display = 'none';
+            }
+        })();
+        function dismissVerifyBanner() {
+            var banner = document.getElementById('verify-email-banner');
+            if (banner) banner.style.display = 'none';
+            sessionStorage.setItem('cveil_dismiss_verify_banner', '1');
+        }
+        function resendVerification(btn) {
+            btn.disabled = true;
+            var msg = document.getElementById('verify-resend-msg');
+            msg.textContent = 'Sending…';
+            msg.className = 'ml-2 text-xs text-yellow-300';
+            CveilWeb.authFetch('/api/v1/platform/iam/me/verify-email/resend', {
+                method: 'POST'
+            }).then(function(r) {
+                if (r.ok) {
+                    msg.textContent = 'Verification email sent!';
+                    msg.className = 'ml-2 text-xs text-yellow-300';
+                    startResendCooldown(btn, msg);
+                } else {
+                    return r.json().then(function(d) { throw new Error(d.message || 'Failed'); });
+                }
+            }).catch(function(e) {
+                msg.textContent = e.message || 'Failed to send. Try again.';
+                msg.className = 'ml-2 text-xs text-red-400';
+                btn.disabled = false;
+            });
+        }
+        function startResendCooldown(btn, msg) {
+            var remaining = 60;
+            btn.textContent = 'Resend in ' + remaining + 's';
+            var timer = setInterval(function() {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    btn.textContent = 'Resend verification email';
+                    btn.disabled = false;
+                    msg.classList.add('hidden');
+                } else {
+                    btn.textContent = 'Resend in ' + remaining + 's';
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>

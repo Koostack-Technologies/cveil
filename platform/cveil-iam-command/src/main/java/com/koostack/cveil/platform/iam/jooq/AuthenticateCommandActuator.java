@@ -86,7 +86,6 @@ public class AuthenticateCommandActuator
                 userId);
 
         // Sync email verification status from the freshly issued JWT.
-        // The token reflects current Keycloak state, so no admin API call needed.
         Object emailVerifiedClaim = result.identity().claims().get("email_verified");
         if (Boolean.TRUE.equals(emailVerifiedClaim)) {
             var verifiedPayload =

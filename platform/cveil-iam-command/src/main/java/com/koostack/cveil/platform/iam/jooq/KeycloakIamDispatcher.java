@@ -54,6 +54,9 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
     /** Set the IdP provider for operations that need direct Keycloak access. */
     public void setIdpProvider(KeycloakIdpProvider idpProvider) {
         this.idpProvider = idpProvider;
+        LOG.info(
+                "setIdpProvider called: idpProvider={}",
+                idpProvider != null ? idpProvider.getClass().getSimpleName() : "null");
     }
 
     /** Set the application base URL for redirect URIs (e.g. email verification callback). */
@@ -173,6 +176,10 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
                 new LogoutCommandActuator(eventService, authSupport));
 
         // Email verification (requires idpProvider)
+        LOG.info(
+                "registerAuthActuators: idpProvider={}, keycloakConfig={}",
+                idpProvider != null,
+                keycloakConfig != null);
         if (idpProvider != null) {
             String verifyClientId = keycloakConfig != null ? keycloakConfig.cveilClientId() : null;
             actuators.put(

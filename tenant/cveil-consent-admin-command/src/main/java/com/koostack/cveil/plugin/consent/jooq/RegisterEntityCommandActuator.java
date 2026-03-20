@@ -34,7 +34,7 @@ public class RegisterEntityCommandActuator
         String tenantId = TenantContext.require();
         String normalized = FieldNameNormalizer.normalize(command.entityName());
         if (normalized == null) normalized = command.entityName();
-        UUID aggregateId = EntityAggregate.deriveId(normalized);
+        UUID aggregateId = EntityAggregate.deriveId(tenantId, normalized);
         var payload = new EntityRegisteredEvent(normalized, command.description());
         AggregateKey key = new AggregateKey(aggregateId, EntityAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

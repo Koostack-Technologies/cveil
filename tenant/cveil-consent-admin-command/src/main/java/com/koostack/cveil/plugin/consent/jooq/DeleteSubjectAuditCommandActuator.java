@@ -39,7 +39,7 @@ public class DeleteSubjectAuditCommandActuator
         Objects.requireNonNull(command.subjectId(), "subjectId must not be null");
         Objects.requireNonNull(command.deletionRequestId(), "deletionRequestId must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = DsarAggregate.deriveId(command.subjectId());
+        UUID aggregateId = DsarAggregate.deriveId(tenantId, command.subjectId());
         var payload =
                 new SubjectAuditDeletedEvent(
                         command.subjectId(),

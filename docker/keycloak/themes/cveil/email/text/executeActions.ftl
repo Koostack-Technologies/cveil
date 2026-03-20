@@ -1,4 +1,12 @@
 <#outputformat "plainText">
+<#assign actionLink = link>
+<#if requiredActions?? && requiredActions?seq_contains("VERIFY_EMAIL") && link?contains("key=")>
+<#assign keyParam = link?keep_after("key=")>
+<#if keyParam?contains("&")>
+<#assign keyParam = keyParam?keep_before("&")>
+</#if>
+<#assign actionLink = "${properties.appBaseUrl}/verify-email/callback?key=${keyParam}">
+</#if>
 <#assign requiredActionsText>
 <#if requiredActions??>
 <#list requiredActions as reqActionItem>
@@ -18,7 +26,7 @@ ${requiredActionsText}
 
 Please complete the required action by visiting the following link:
 
-${link}
+${actionLink}
 
 This link will expire in <#if (linkExpiration &gt; 119)>${(linkExpiration / 60)?floor} hours<#else>${linkExpiration} minutes</#if>.
 

@@ -33,7 +33,7 @@ public class RemoveJurisdictionCommandActuator
     public Void execute(RemoveJurisdictionCommand command) {
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = JurisdictionAggregate.deriveId(command.jurisdictionName());
+        UUID aggregateId = JurisdictionAggregate.deriveId(tenantId, command.jurisdictionName());
         var payload = new JurisdictionRemovedEvent(command.jurisdictionName());
         AggregateKey key =
                 new AggregateKey(aggregateId, JurisdictionAggregate.AGGREGATE_TYPE, tenantId);

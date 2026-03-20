@@ -51,6 +51,20 @@
             var session = getCookie('cveil_session');
             var target = session ? '/dashboard' : '/login';
 
+            // Update session cookie to reflect verified status so the dashboard
+            // banner disappears immediately after verification.
+            if (session) {
+                try {
+                    var decoded = JSON.parse(atob(session));
+                    decoded.ev = '1';
+                    var sec = location.protocol === 'https:' ? '; Secure' : '';
+                    document.cookie = 'cveil_session=' + btoa(JSON.stringify(decoded))
+                        + '; path=/; SameSite=Lax' + sec + '; max-age=900';
+                } catch (ignored) { /* cookie decode failed — redirect will still work */ }
+                // Clear banner dismiss flag so it doesn't mask the now-irrelevant state
+                sessionStorage.removeItem('cveil_dismiss_verify_banner');
+            }
+
             // Redirect after a brief pause to let the user see the confirmation
             setTimeout(function() {
                 window.location.href = target;

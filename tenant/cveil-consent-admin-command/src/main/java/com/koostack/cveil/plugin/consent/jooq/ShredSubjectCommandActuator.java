@@ -57,7 +57,7 @@ public class ShredSubjectCommandActuator
 
         dsarService.deleteKey(dsarId);
 
-        UUID aggregateId = DsarAggregate.deriveId(command.subjectName());
+        UUID aggregateId = DsarAggregate.deriveId(tenantId, command.subjectName());
         AggregateKey key = new AggregateKey(aggregateId, DsarAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()
                 .publishEvent(

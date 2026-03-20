@@ -41,7 +41,7 @@ public class RevokeConsentCommandActuator
     public Void execute(RevokeConsentCommand command) {
         Objects.requireNonNull(command.subjectId(), "subjectId must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = SubjectConsentAggregate.deriveId(command.subjectId());
+        UUID aggregateId = SubjectConsentAggregate.deriveId(tenantId, command.subjectId());
         var payload =
                 new ConsentRevokedEvent(
                         command.subjectId(),

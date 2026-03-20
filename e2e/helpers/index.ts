@@ -1,5 +1,7 @@
 export { TEST_USER } from './constants';
+export { VERIFY } from './constants';
 export { uniqueUser, fillSignupForm, fillLoginForm, completeOnboarding, signupAndOnboard, injectAuthState } from './auth';
+export * as mailcrab from './mailcrab';
 
 /** Sidebar navigation link selectors (by href). */
 export const NAV = {

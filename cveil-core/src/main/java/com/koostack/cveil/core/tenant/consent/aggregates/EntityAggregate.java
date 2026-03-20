@@ -17,10 +17,10 @@ public record EntityAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String entityName) {
+    public static UUID deriveId(String tenantId, String entityName) {
         String normalized = FieldNameNormalizer.normalize(entityName);
         if (normalized == null) normalized = entityName;
         return UUID.nameUUIDFromBytes(
-                ("consent-entity:" + normalized).getBytes(StandardCharsets.UTF_8));
+                ("consent-entity:" + tenantId + ":" + normalized).getBytes(StandardCharsets.UTF_8));
     }
 }

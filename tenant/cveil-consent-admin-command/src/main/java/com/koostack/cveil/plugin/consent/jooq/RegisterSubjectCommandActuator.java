@@ -58,7 +58,7 @@ public class RegisterSubjectCommandActuator
             LOG.debug("DSAR key persisted for subject: {}", command.subjectName());
         }
 
-        UUID aggregateId = SubjectAggregate.deriveId(command.subjectName());
+        UUID aggregateId = SubjectAggregate.deriveId(tenantId, command.subjectName());
         var payload = new SubjectRegisteredEvent(command.subjectName(), command.description());
         AggregateKey key = new AggregateKey(aggregateId, SubjectAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

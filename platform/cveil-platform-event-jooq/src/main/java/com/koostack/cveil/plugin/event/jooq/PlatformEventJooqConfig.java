@@ -24,6 +24,7 @@ import com.koostack.cveil.plugin.redis.common.TenantAwareJedisProvider;
  * @param tenantCredentialLookup callback to resolve per-tenant Redis ACL credentials, or {@code
  *     null} to use a shared connection
  * @param shardCount number of shard streams for tenant event distribution (default 8)
+ * @param outboxPollerCount number of outbox poller consumer threads (default 1)
  */
 public record PlatformEventJooqConfig(
         String connectionString,
@@ -32,7 +33,8 @@ public record PlatformEventJooqConfig(
         String password,
         RedisPluginConfig redis,
         TenantAwareJedisProvider.TenantCredentialLookup tenantCredentialLookup,
-        int shardCount)
+        int shardCount,
+        int outboxPollerCount)
         implements JooqPluginConfig {
 
     public PlatformEventJooqConfig(String connectionString, String dialect) {
@@ -43,7 +45,8 @@ public record PlatformEventJooqConfig(
                 null,
                 null,
                 null,
-                RedisEventPublisher.DEFAULT_SHARD_COUNT);
+                RedisEventPublisher.DEFAULT_SHARD_COUNT,
+                1);
     }
 
     public PlatformEventJooqConfig(
@@ -55,7 +58,8 @@ public record PlatformEventJooqConfig(
                 null,
                 redis,
                 null,
-                RedisEventPublisher.DEFAULT_SHARD_COUNT);
+                RedisEventPublisher.DEFAULT_SHARD_COUNT,
+                1);
     }
 
     public PlatformEventJooqConfig(
@@ -71,7 +75,8 @@ public record PlatformEventJooqConfig(
                 password,
                 redis,
                 null,
-                RedisEventPublisher.DEFAULT_SHARD_COUNT);
+                RedisEventPublisher.DEFAULT_SHARD_COUNT,
+                1);
     }
 
     public PlatformEventJooqConfig(
@@ -88,6 +93,26 @@ public record PlatformEventJooqConfig(
                 password,
                 redis,
                 tenantCredentialLookup,
-                RedisEventPublisher.DEFAULT_SHARD_COUNT);
+                RedisEventPublisher.DEFAULT_SHARD_COUNT,
+                1);
+    }
+
+    public PlatformEventJooqConfig(
+            String connectionString,
+            String dialect,
+            String username,
+            String password,
+            RedisPluginConfig redis,
+            TenantAwareJedisProvider.TenantCredentialLookup tenantCredentialLookup,
+            int shardCount) {
+        this(
+                connectionString,
+                dialect,
+                username,
+                password,
+                redis,
+                tenantCredentialLookup,
+                shardCount,
+                1);
     }
 }

@@ -32,7 +32,7 @@ public class RegisterCategoryCommandActuator
     public Void execute(RegisterCategoryCommand command) {
         Objects.requireNonNull(command.categoryName(), "categoryName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = CategoryAggregate.deriveId(command.categoryName());
+        UUID aggregateId = CategoryAggregate.deriveId(tenantId, command.categoryName());
         var payload = new CategoryRegisteredEvent(command.categoryName(), command.description());
         AggregateKey key =
                 new AggregateKey(aggregateId, CategoryAggregate.AGGREGATE_TYPE, tenantId);

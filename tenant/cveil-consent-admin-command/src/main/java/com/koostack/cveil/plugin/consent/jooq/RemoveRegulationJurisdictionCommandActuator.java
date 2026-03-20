@@ -46,7 +46,7 @@ public class RemoveRegulationJurisdictionCommandActuator
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
 
         String tenantId = TenantContext.require();
-        UUID aggregateId = RegulationAggregate.deriveId(command.regulationName());
+        UUID aggregateId = RegulationAggregate.deriveId(tenantId, command.regulationName());
         AggregateKey key =
                 new AggregateKey(aggregateId, RegulationAggregate.AGGREGATE_TYPE, tenantId);
 

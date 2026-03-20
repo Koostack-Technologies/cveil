@@ -38,7 +38,7 @@ public class ExpireConsentCommandActuator
     public Void execute(ExpireConsentCommand command) {
         Objects.requireNonNull(command.subjectId(), "subjectId must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = SubjectConsentAggregate.deriveId(command.subjectId());
+        UUID aggregateId = SubjectConsentAggregate.deriveId(tenantId, command.subjectId());
         var payload =
                 new ConsentExpiredEvent(
                         command.subjectId(),

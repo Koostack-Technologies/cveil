@@ -6,3 +6,14 @@ export const TEST_USER = {
   password: 'TestPass123!',
   plan: 'free',
 };
+
+/** Selectors for email verification UI elements. */
+export const VERIFY = {
+  banner: '#verify-email-banner',
+  bannerResendBtn: '#verify-resend-btn',
+  bannerDismissBtn: '#verify-dismiss-btn',
+  bannerResendMsg: '#verify-resend-msg',
+  badge: '#email-verify-badge',
+  accountResendBtn: '#account-resend-btn',
+  accountVerifyMsg: '#account-verify-msg',
+} as const;

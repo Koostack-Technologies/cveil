@@ -9,6 +9,7 @@
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "test:auth": "playwright test --grep @auth",
+    "test:email": "playwright test tests/auth/email-verification.spec.ts",
     "test:consent": "playwright test --grep @consent",
     "test:governance": "playwright test --grep @governance",
     "test:catalogue": "playwright test --grep @catalogue",

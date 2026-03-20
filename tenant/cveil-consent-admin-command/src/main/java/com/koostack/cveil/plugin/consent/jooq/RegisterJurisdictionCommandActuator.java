@@ -33,7 +33,7 @@ public class RegisterJurisdictionCommandActuator
     public Void execute(RegisterJurisdictionCommand command) {
         Objects.requireNonNull(command.jurisdictionName(), "jurisdictionName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = JurisdictionAggregate.deriveId(command.jurisdictionName());
+        UUID aggregateId = JurisdictionAggregate.deriveId(tenantId, command.jurisdictionName());
         var payload =
                 new JurisdictionRegisteredEvent(command.jurisdictionName(), command.description());
         AggregateKey key =

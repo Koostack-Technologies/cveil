@@ -31,15 +31,16 @@ public record PurposeAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String purposeName) {
+    public static UUID deriveId(String tenantId, String purposeName) {
         return UUID.nameUUIDFromBytes(
-                ("consent-purpose:" + purposeName).getBytes(StandardCharsets.UTF_8));
+                ("consent-purpose:" + tenantId + ":" + purposeName)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     public static PurposeAggregate create(String tenantId, String purposeName, String description) {
         return new PurposeAggregate(
                 tenantId,
-                deriveId(purposeName),
+                deriveId(tenantId, purposeName),
                 purposeName,
                 description,
                 List.of(),

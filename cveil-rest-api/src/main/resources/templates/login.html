@@ -199,12 +199,14 @@
 
             // Store lightweight session cookie for server-rendered template context.
             // Includes 's' (Keycloak sub/UUID) so server-side org lookup works.
+            // 'ev' carries email verification status for dashboard banner/badge.
             var securePart = location.protocol === 'https:' ? '; Secure' : '';
             document.cookie = 'cveil_session=' + btoa(JSON.stringify({
                 u: username,
                 e: email,
                 s: sub,
-                t: data.tokenType || 'DPoP'
+                t: data.tokenType || 'DPoP',
+                ev: data.emailVerified ? '1' : '0'
             })) + '; path=/; SameSite=Lax' + securePart + '; max-age=' + (data.expiresIn || 900);
 
             window.location.href = '/dashboard';

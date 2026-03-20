@@ -45,7 +45,7 @@ public class UnlinkPurposeFromRegulationCommandActuator
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
 
         String tenantId = TenantContext.require();
-        UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
+        UUID aggregateId = PurposeAggregate.deriveId(tenantId, command.purposeName());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
 
         PurposeAggregate current = eventPublisher().hydrateAggregate(key, PurposeAggregate.class);

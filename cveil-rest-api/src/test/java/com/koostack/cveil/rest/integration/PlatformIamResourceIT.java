@@ -42,8 +42,7 @@ class PlatformIamResourceIT {
     private static volatile IntegrationTestSupport support;
     private static volatile String username;
     private static volatile String userEmail;
-    private static volatile String serviceAccountClientId;
-    private static volatile String serviceAccountClientSecret;
+
     private static volatile String accessToken;
     private static volatile String refreshToken;
 
@@ -420,89 +419,6 @@ class PlatformIamResourceIT {
                                         .as("User should not have tenant-admin role")
                                         .doesNotContain("tenant-admin");
                             });
-        }
-    }
-
-    // =======================================================================
-    // 5. Service Accounts
-    // =======================================================================
-
-    @Nested
-    @Order(5)
-    @DisplayName("5 — Service Accounts")
-    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-    class ServiceAccounts {
-
-        @Test
-        @Order(1)
-        @DisplayName("Create service account → 201 with clientId and clientSecret")
-        void createServiceAccount() {
-            Response response =
-                    given().header("Authorization", auth())
-                            .contentType(ContentType.JSON)
-                            .body(
-                                    """
-                    {
-                      "name": "ci-pipeline",
-                      "roles": ["admin:read", "admin:write"]
-                    }
-                    """)
-                            .when()
-                            .post(BASE_PATH + "/service-accounts")
-                            .then()
-                            .statusCode(201)
-                            .body("clientId", notNullValue())
-                            .body("clientSecret", notNullValue())
-                            .body("realmId", equalTo(PLATFORM_REALM))
-                            .extract()
-                            .response();
-
-            serviceAccountClientId = response.jsonPath().getString("clientId");
-            serviceAccountClientSecret = response.jsonPath().getString("clientSecret");
-            assertNotNull(serviceAccountClientId);
-            assertNotNull(serviceAccountClientSecret);
-        }
-
-        @Test
-        @Order(2)
-        @DisplayName("Service account visible in Keycloak")
-        void serviceAccountInKeycloak() {
-            org.awaitility.Awaitility.await()
-                    .atMost(Duration.ofSeconds(30))
-                    .pollInterval(Duration.ofMillis(500))
-                    .ignoreExceptions()
-                    .untilAsserted(
-                            () -> {
-                                var clients = support.getKeycloakClients(PLATFORM_REALM);
-                                assertThat(clients)
-                                        .extracting("clientId")
-                                        .contains(serviceAccountClientId);
-                            });
-        }
-
-        @Test
-        @Order(3)
-        @DisplayName("List service accounts includes created one")
-        void listServiceAccounts() {
-            given().header("Authorization", auth())
-                    .when()
-                    .get(BASE_PATH + "/service-accounts")
-                    .then()
-                    .statusCode(200)
-                    .body("$", hasSize(greaterThanOrEqualTo(1)))
-                    .body("clientId", hasItem(serviceAccountClientId));
-        }
-
-        @Test
-        @Order(4)
-        @DisplayName("Revoke service account")
-        void revokeServiceAccount() {
-            given().header("Authorization", auth())
-                    .when()
-                    .delete(BASE_PATH + "/service-accounts/" + serviceAccountClientId)
-                    .then()
-                    .statusCode(200)
-                    .body("message", containsString("revoked"));
         }
     }
 

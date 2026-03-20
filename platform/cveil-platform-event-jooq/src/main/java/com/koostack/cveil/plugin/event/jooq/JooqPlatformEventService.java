@@ -17,12 +17,15 @@ import com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.cveil.plugin.redis.common.JedisProvider;
 import com.koostack.cveil.plugin.redis.common.RedisClientFactory;
 import com.koostack.cveil.plugin.redis.common.RedisContextFactory;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.JedisPooled;
+import redis.clients.jedis.params.XAddParams;
 
 /**
  * Unified jOOQ-backed event service — durable event store for all domain events (platform +
@@ -46,6 +49,8 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
     private EventRepository eventRepository;
     private RedisEventPublisher redisPublisher;
     private OutboxPoller outboxPoller;
+    private JedisPooled signalJedis;
+    private String nudgeStreamKey;
     private volatile SubjectDsarService<?> subjectDsarService;
     private volatile String encryptionKey;
 
@@ -80,24 +85,30 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
         this.eventRepository = new EventRepository(dslContext);
 
         if (config.redis() != null) {
+            // Dedicated admin connection for the outbox nudge stream.
+            // Bypasses tenant ACL so both writer and poller share the same stream.
+            this.signalJedis =
+                    RedisClientFactory.createClient(
+                            config.redis().host(),
+                            config.redis().port(),
+                            config.redis().password(),
+                            config.redis().tlsConfig());
+
             JedisProvider jedisProvider;
             if (config.tenantCredentialLookup() != null) {
                 jedisProvider =
                         RedisContextFactory.createProvider(
                                 config.redis(), config.tenantCredentialLookup());
             } else {
-                jedisProvider =
-                        JedisProvider.shared(
-                                RedisClientFactory.createClient(
-                                        config.redis().host(),
-                                        config.redis().port(),
-                                        config.redis().password(),
-                                        config.redis().tlsConfig()));
+                jedisProvider = JedisProvider.shared(signalJedis);
             }
             this.redisPublisher =
                     new RedisEventPublisher(jedisProvider, "cveil", config.shardCount());
+            this.nudgeStreamKey = this.redisPublisher.outboxNudgeStreamKey();
 
-            this.outboxPoller = new OutboxPoller(dslContext, redisPublisher);
+            this.outboxPoller =
+                    new OutboxPoller(
+                            dslContext, redisPublisher, signalJedis, config.outboxPollerCount());
             this.outboxPoller.start();
         }
 
@@ -227,6 +238,20 @@ public class JooqPlatformEventService implements EventService<PlatformEventJooqC
                                         triggerSnapshot(aggregateType, aggregateId, version);
                                     }
                                 });
+
+                        if (signalJedis != null) {
+                            try {
+                                signalJedis.xadd(
+                                        nudgeStreamKey,
+                                        Map.of("t", input.tenantId()),
+                                        new XAddParams().maxLen(1000));
+                            } catch (Exception ex) {
+                                log.warn(
+                                        "Failed to nudge outbox stream — event will be relayed via"
+                                                + " backlog drain",
+                                        ex);
+                            }
+                        }
                     } catch (CveilServiceException e) {
                         throw e;
                     } catch (DataAccessException e) {

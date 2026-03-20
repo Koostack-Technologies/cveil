@@ -385,12 +385,13 @@ public class IntegrationTestSupport implements AutoCloseable {
         return io.restassured.RestAssured.given()
                 .baseUri(mailpitApiUrl)
                 .when()
-                .get("/api/v1/message/" + messageId + "/html")
+                .get("/api/v1/message/" + messageId)
                 .then()
                 .statusCode(200)
                 .extract()
                 .body()
-                .asString();
+                .jsonPath()
+                .getString("HTML");
     }
 
     /** Extracts the Subject from a Mailpit message map. */

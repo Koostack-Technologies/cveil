@@ -48,7 +48,7 @@ public class PublishSubjectDataDeletedCommandActuator
         Objects.requireNonNull(command.deletionRequestId(), "deletionRequestId must not be null");
 
         String tenantId = TenantContext.require();
-        UUID aggregateId = DsarAggregate.deriveId(command.subjectId());
+        UUID aggregateId = DsarAggregate.deriveId(tenantId, command.subjectId());
         AggregateKey key = new AggregateKey(aggregateId, DsarAggregate.AGGREGATE_TYPE, tenantId);
 
         var payload =

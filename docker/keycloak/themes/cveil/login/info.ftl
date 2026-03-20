@@ -102,23 +102,35 @@
 
         <#if pageRedirectUri?has_content>
             <a class="redirect-link" href="${pageRedirectUri}">Continue &rarr;</a>
-        <#elseif skipLink??>
-            <a class="redirect-link" href="${skipLink}">Continue &rarr;</a>
+        <#else>
+            <a class="redirect-link" href="http://localhost:8080/verify-email/callback">Continue &rarr;</a>
         </#if>
     </div>
 
     <script>
-        // Auto-redirect after Keycloak processes the action token
+        // Redirect to our own callback which verifies email via admin API.
+        // Keycloak's verify-email action token requires a browser session that
+        // ROPC-based apps don't have, so we handle verification server-side.
         (function() {
-            <#if pageRedirectUri?has_content>
+            var key = new URLSearchParams(window.location.search).get('key');
+            if (!key) { return; }
+
+            // Decode the JWT payload to extract the redirect URI (reduri claim)
+            try {
+                var parts = key.split('.');
+                var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                var callbackUrl = payload.reduri || 'http://localhost:8080/verify-email/callback';
+                // Append the key so our backend can extract the user ID and verify
+                callbackUrl += (callbackUrl.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(key);
                 setTimeout(function() {
-                    window.location.href = "${pageRedirectUri?js_string}";
+                    window.location.href = callbackUrl;
                 }, 1500);
-            <#elseif skipLink??>
+            } catch (e) {
+                // Fallback: redirect without key
                 setTimeout(function() {
-                    window.location.href = "${skipLink?js_string}";
+                    window.location.href = 'http://localhost:8080/verify-email/callback';
                 }, 1500);
-            </#if>
+            }
         })();
     </script>
 </body>

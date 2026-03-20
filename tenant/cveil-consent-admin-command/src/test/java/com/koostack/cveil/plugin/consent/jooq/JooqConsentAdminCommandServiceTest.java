@@ -49,7 +49,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("User", "email"),
+                        FieldAggregate.deriveId(TENANT, "User", "email"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -82,7 +82,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId(null, "globalField"),
+                        FieldAggregate.deriveId(TENANT, null, "globalField"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -105,7 +105,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("User", "phone"),
+                        FieldAggregate.deriveId(TENANT, "User", "phone"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -146,7 +146,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("Person", "ssn"),
+                        FieldAggregate.deriveId(TENANT, "Person", "ssn"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -178,7 +178,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("Person", "dob"),
+                        FieldAggregate.deriveId(TENANT, "Person", "dob"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -205,7 +205,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("Patient", "diagnosis"),
+                        FieldAggregate.deriveId(TENANT, "Patient", "diagnosis"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -231,7 +231,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        FieldAggregate.deriveId("User", "address"),
+                        FieldAggregate.deriveId(TENANT, "User", "address"),
                         FieldAggregate.AGGREGATE_TYPE,
                         TENANT);
         FieldAggregate agg =
@@ -260,7 +260,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("marketing"),
+                        PurposeAggregate.deriveId(TENANT, "marketing"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -288,7 +288,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("analytics"),
+                        PurposeAggregate.deriveId(TENANT, "analytics"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -330,7 +330,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("marketing"),
+                        PurposeAggregate.deriveId(TENANT, "marketing"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -363,7 +363,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("data-sharing"),
+                        PurposeAggregate.deriveId(TENANT, "data-sharing"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -393,7 +393,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("profiling"),
+                        PurposeAggregate.deriveId(TENANT, "profiling"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -417,7 +417,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("marketing"),
+                        PurposeAggregate.deriveId(TENANT, "marketing"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -448,7 +448,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        PurposeAggregate.deriveId("marketing"),
+                        PurposeAggregate.deriveId(TENANT, "marketing"),
                         PurposeAggregate.AGGREGATE_TYPE,
                         TENANT);
         PurposeAggregate agg =
@@ -477,7 +477,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        RegulationAggregate.deriveId("GDPR"),
+                        RegulationAggregate.deriveId(TENANT, "GDPR"),
                         RegulationAggregate.AGGREGATE_TYPE,
                         TENANT);
         RegulationAggregate agg =
@@ -505,7 +505,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        RegulationAggregate.deriveId("CCPA"),
+                        RegulationAggregate.deriveId(TENANT, "CCPA"),
                         RegulationAggregate.AGGREGATE_TYPE,
                         TENANT);
         RegulationAggregate agg =
@@ -542,7 +542,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        RegulationAggregate.deriveId("GDPR"),
+                        RegulationAggregate.deriveId(TENANT, "GDPR"),
                         RegulationAggregate.AGGREGATE_TYPE,
                         TENANT);
         RegulationAggregate agg =
@@ -571,7 +571,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        RegulationAggregate.deriveId("GDPR"),
+                        RegulationAggregate.deriveId(TENANT, "GDPR"),
                         RegulationAggregate.AGGREGATE_TYPE,
                         TENANT);
         RegulationAggregate agg =
@@ -590,7 +590,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        RegulationAggregate.deriveId("GDPR"),
+                        RegulationAggregate.deriveId(TENANT, "GDPR"),
                         RegulationAggregate.AGGREGATE_TYPE,
                         TENANT);
         RegulationAggregate agg =
@@ -631,7 +631,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("alice"),
+                        SubjectConsentAggregate.deriveId(TENANT, "alice"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -678,7 +678,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("alice"),
+                        SubjectConsentAggregate.deriveId(TENANT, "alice"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -715,7 +715,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("alice"),
+                        SubjectConsentAggregate.deriveId(TENANT, "alice"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -759,7 +759,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("bob"),
+                        SubjectConsentAggregate.deriveId(TENANT, "bob"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -798,7 +798,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("charlie"),
+                        SubjectConsentAggregate.deriveId(TENANT, "charlie"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -848,7 +848,7 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        SubjectConsentAggregate.deriveId("diana"),
+                        SubjectConsentAggregate.deriveId(TENANT, "diana"),
                         SubjectConsentAggregate.AGGREGATE_TYPE,
                         TENANT);
         SubjectConsentAggregate agg =
@@ -878,7 +878,9 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        DsarAggregate.deriveId("eve"), DsarAggregate.AGGREGATE_TYPE, TENANT);
+                        DsarAggregate.deriveId(TENANT, "eve"),
+                        DsarAggregate.AGGREGATE_TYPE,
+                        TENANT);
         DsarAggregate agg =
                 hydrateAggregate(key.aggregateType(), key.aggregateId(), DsarAggregate.class);
 
@@ -900,7 +902,9 @@ class JooqConsentAdminCommandServiceTest extends ConsentAdminCommandTestBase {
 
         AggregateKey key =
                 new AggregateKey(
-                        DsarAggregate.deriveId("eve"), DsarAggregate.AGGREGATE_TYPE, TENANT);
+                        DsarAggregate.deriveId(TENANT, "eve"),
+                        DsarAggregate.AGGREGATE_TYPE,
+                        TENANT);
         DsarAggregate agg =
                 hydrateAggregate(key.aggregateType(), key.aggregateId(), DsarAggregate.class);
 

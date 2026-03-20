@@ -16,8 +16,9 @@ public record CategoryAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String categoryName) {
+    public static UUID deriveId(String tenantId, String categoryName) {
         return UUID.nameUUIDFromBytes(
-                ("consent-category:" + categoryName).getBytes(StandardCharsets.UTF_8));
+                ("consent-category:" + tenantId + ":" + categoryName)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 }

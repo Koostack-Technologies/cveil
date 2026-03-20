@@ -37,7 +37,24 @@
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-on-surface-muted">Email</dt>
-                        <dd class="text-on-surface" id="display-email">{email ?: '—'}</dd>
+                        <dd class="flex items-center gap-2">
+                            <span class="text-on-surface" id="display-email">{email ?: '—'}</span>
+                            {#if emailVerified}
+                            <span id="email-verify-badge" class="inline-flex items-center gap-1 rounded-full bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-400">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                Verified
+                            </span>
+                            {#else}
+                            <span id="email-verify-badge" class="inline-flex items-center gap-1 rounded-full bg-yellow-900/30 px-2 py-0.5 text-xs font-medium text-yellow-400">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3l9.66 16.59A1 1 0 0 1 20.66 21H3.34a1 1 0 0 1-.86-1.41L12 3z"/></svg>
+                                Unverified
+                            </span>
+                            <button id="account-resend-btn" type="button" onclick="accountResendVerification(this)" class="rounded bg-yellow-600/40 px-2.5 py-0.5 text-xs font-medium text-yellow-100 hover:bg-yellow-600/60 transition-colors">
+                                Resend
+                            </button>
+                            <span id="account-verify-msg" class="hidden text-xs"></span>
+                            {/if}
+                        </dd>
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-on-surface-muted">Full Name</dt>
@@ -601,6 +618,42 @@
         function fmtInstant(iso) {
             if (!iso) return '\u2014';
             return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // Account page — resend verification email with 60s cooldown
+        function accountResendVerification(btn) {
+            btn.disabled = true;
+            var msg = document.getElementById('account-verify-msg');
+            msg.classList.remove('hidden');
+            msg.textContent = 'Sending…';
+            msg.className = 'text-xs text-yellow-300';
+            CveilWeb.authFetch('/api/v1/platform/iam/me/verify-email/resend', {
+                method: 'POST'
+            }).then(function(r) {
+                if (r.ok) {
+                    msg.textContent = 'Verification email sent!';
+                    msg.className = 'text-xs text-green-400';
+                    var remaining = 60;
+                    btn.textContent = 'Resend in ' + remaining + 's';
+                    var timer = setInterval(function() {
+                        remaining--;
+                        if (remaining <= 0) {
+                            clearInterval(timer);
+                            btn.textContent = 'Resend';
+                            btn.disabled = false;
+                            msg.classList.add('hidden');
+                        } else {
+                            btn.textContent = 'Resend in ' + remaining + 's';
+                        }
+                    }, 1000);
+                } else {
+                    return r.json().then(function(d) { throw new Error(d.message || 'Failed'); });
+                }
+            }).catch(function(e) {
+                msg.textContent = e.message || 'Failed to send. Try again.';
+                msg.className = 'text-xs text-red-400';
+                btn.disabled = false;
+            });
         }
     </script>
 

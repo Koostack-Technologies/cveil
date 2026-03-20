@@ -55,6 +55,15 @@ public class RedisEventPublisher {
     }
 
     /**
+     * Returns the Redis stream key used as the outbox nudge channel. Writers XADD an entry per
+     * event with the tenant ID; the {@link OutboxPoller} reads entries via {@code XREAD BLOCK} to
+     * discover which tenants have new work without a DB discovery query.
+     */
+    public String outboxNudgeStreamKey() {
+        return appName + ":outbox:nudge";
+    }
+
+    /**
      * Returns the shard stream key for the given tenant. Uses a deterministic hash so the same
      * tenant always routes to the same shard.
      */

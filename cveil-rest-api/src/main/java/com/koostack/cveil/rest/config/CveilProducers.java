@@ -131,6 +131,9 @@ public class CveilProducers {
 
     private com.koostack.cveil.core.cqrs.CommandDispatcher iamDispatcher;
 
+    /** Direct reference to the Keycloak IdP provider (bypasses CDI proxy for instanceof). */
+    private com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider keycloakIdpProvider;
+
     @SuppressWarnings("rawtypes")
     private com.koostack.cveil.core.platform.iam.IamQueryService iamQueryService;
 
@@ -568,7 +571,9 @@ public class CveilProducers {
                                                                             kc.smtpUser()
                                                                                     .orElse("")),
                                                             kc.smtpUser().orElse(""),
-                                                            kc.smtpPassword().orElse(""));
+                                                            kc.smtpPassword().orElse(""),
+                                                            kc.smtpAuth(),
+                                                            kc.smtpStarttls());
                                                 } catch (Exception e) {
                                                     LOG.warn(
                                                             "Failed to configure SMTP on realm: {}",
@@ -576,6 +581,7 @@ public class CveilProducers {
                                                 }
                                             });
 
+                            this.keycloakIdpProvider = provider;
                             return (IdpProvider) provider;
                         })
                 .orElseGet(
@@ -1008,6 +1014,8 @@ public class CveilProducers {
                 config.stream()
                         .map(CveilConfig.StreamConfig::shardCount)
                         .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
+        int outboxPollerCount =
+                config.stream().map(CveilConfig.StreamConfig::outboxPollerCount).orElse(1);
         PlatformEventJooqConfig eventConfig =
                 new PlatformEventJooqConfig(
                         eventDbUrl,
@@ -1016,7 +1024,8 @@ public class CveilProducers {
                         platformDb.password().orElse(null),
                         redisPluginConfig,
                         null,
-                        eventShardCount);
+                        eventShardCount,
+                        outboxPollerCount);
 
         // Run CQRS schema migrations (event store + domain schemas).
         // The event-sourced CQRS modules need their own migrations.
@@ -1291,16 +1300,12 @@ public class CveilProducers {
                         adminRedisPool));
         // Share the JwksTokenVerifier from the IdpProvider so login and API-request
         // verification use the same JWKS cache (avoids kid-miss on fresh startup).
+        // Use the direct keycloakIdpProvider reference (not the CDI proxy which
+        // fails instanceof checks for the concrete implementation type).
         com.koostack.cveil.plugin.platform.keycloak.JwksTokenVerifier sharedJwksVerifier = null;
-        if (idpProviderInstance.isResolvable()) {
-            var idp = idpProviderInstance.get();
-            if (idp
-                    instanceof
-                    com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider
-                    kip) {
-                sharedJwksVerifier = kip.getJwksVerifier();
-                iamCmdSvc.setIdpProvider(kip);
-            }
+        if (this.keycloakIdpProvider != null) {
+            sharedJwksVerifier = this.keycloakIdpProvider.getJwksVerifier();
+            iamCmdSvc.setIdpProvider(this.keycloakIdpProvider);
         }
         if (sharedJwksVerifier != null) {
             iamCmdSvc.registerAuthActuators(sharedJwksVerifier);

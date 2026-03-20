@@ -78,6 +78,16 @@
 </#macro>
 <@emailLayout>
 
+  <#-- Rewrite the link to point to our callback when this is a verify-email action -->
+  <#assign actionLink = link>
+  <#if requiredActions?seq_contains("VERIFY_EMAIL") && link?contains("key=")>
+    <#assign keyParam = link?keep_after("key=")>
+    <#if keyParam?contains("&")>
+      <#assign keyParam = keyParam?keep_before("&")>
+    </#if>
+    <#assign actionLink = "${properties.appBaseUrl}/verify-email/callback?key=${keyParam}">
+  </#if>
+
   <#-- Heading -->
   <h1 style="margin:0 0 8px 0;font-family:'Manrope','Inter',sans-serif;font-size:24px;font-weight:700;color:#e8eaed;line-height:32px;">
     <#if requiredActions?seq_contains("VERIFY_EMAIL")>
@@ -124,7 +134,7 @@
       <td align="center">
         <!--[if mso]>
         <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-          href="${link}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="13%" fillcolor="#14b8a6">
+          href="${actionLink}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="13%" fillcolor="#14b8a6">
           <w:anchorlock/>
           <center style="color:#0b1326;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;">
             Complete Action &rarr;
@@ -132,7 +142,7 @@
         </v:roundrect>
         <![endif]-->
         <!--[if !mso]><!-->
-        <a href="${link}"
+        <a href="${actionLink}"
            style="display:inline-block;padding:12px 40px;background:linear-gradient(135deg,#4fdbc8,#14b8a6);color:#0b1326;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;font-family:'Inter',sans-serif;letter-spacing:0.01em;">
           Complete Action &rarr;
         </a>
@@ -149,7 +159,7 @@
   <#-- Fallback URL -->
   <p style="margin:16px 0 0 0;font-size:12px;line-height:18px;color:#8b9faf;word-break:break-all;">
     If the button doesn't work, copy and paste this URL into your browser:<br/>
-    <a href="${link}" style="color:#4fdbc8;text-decoration:underline;">${link}</a>
+    <a href="${actionLink}" style="color:#4fdbc8;text-decoration:underline;">${actionLink}</a>
   </p>
 
 </@emailLayout>

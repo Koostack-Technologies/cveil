@@ -20,8 +20,9 @@ public record JurisdictionAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String jurisdictionName) {
+    public static UUID deriveId(String tenantId, String jurisdictionName) {
         return UUID.nameUUIDFromBytes(
-                ("consent-jurisdiction:" + jurisdictionName).getBytes(StandardCharsets.UTF_8));
+                ("consent-jurisdiction:" + tenantId + ":" + jurisdictionName)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -34,7 +34,7 @@ public class RegisterFieldCommandActuator
         String tenantId = TenantContext.require();
         String normalizedEntity = FieldAggregate.normalizeEntityName(command.entityName());
         String normalizedField = FieldAggregate.normalizeFieldName(command.fieldName());
-        UUID aggregateId = FieldAggregate.deriveId(normalizedEntity, normalizedField);
+        UUID aggregateId = FieldAggregate.deriveId(tenantId, normalizedEntity, normalizedField);
         var payload =
                 new FieldRegisteredEvent(
                         normalizedEntity,

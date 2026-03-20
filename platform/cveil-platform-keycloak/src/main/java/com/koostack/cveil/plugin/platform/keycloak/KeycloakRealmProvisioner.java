@@ -97,13 +97,18 @@ public class KeycloakRealmProvisioner {
         realm.setDisplayName(displayName);
         realm.setEnabled(true);
 
+        // Allow HTTP access (needed for development / Docker setups where
+        // Keycloak action-token links are followed by the browser over HTTP).
+        realm.setSslRequired("none");
+
         // Token lifetimes
         realm.setAccessTokenLifespan(ACCESS_TOKEN_LIFESPAN_SECONDS);
         realm.setSsoSessionMaxLifespan(REFRESH_TOKEN_LIFESPAN_SECONDS);
         realm.setOfflineSessionMaxLifespan(REFRESH_TOKEN_LIFESPAN_SECONDS);
 
-        // Email verification required
-        realm.setVerifyEmail(true);
+        // Email verification is enforced at the application layer (not Keycloak realm level)
+        // so that ROPC login works immediately after registration.
+        realm.setVerifyEmail(false);
 
         // Custom themes
         realm.setEmailTheme("cveil");
@@ -281,7 +286,14 @@ public class KeycloakRealmProvisioner {
      * @param password SMTP auth password (app password for Gmail)
      */
     public void configureRealmSmtp(
-            String realmName, String host, String port, String from, String user, String password) {
+            String realmName,
+            String host,
+            String port,
+            String from,
+            String user,
+            String password,
+            String auth,
+            String starttls) {
         RealmResource realm = adminClient.realm(realmName);
         RealmRepresentation rep = realm.toRepresentation();
 
@@ -290,10 +302,10 @@ public class KeycloakRealmProvisioner {
         smtp.put("port", port);
         smtp.put("from", from);
         smtp.put("fromDisplayName", "Cveil");
-        smtp.put("auth", "true");
+        smtp.put("auth", auth);
         smtp.put("user", user);
         smtp.put("password", password);
-        smtp.put("starttls", "true");
+        smtp.put("starttls", starttls);
         smtp.put("ssl", "false");
 
         rep.setSmtpServer(smtp);
@@ -626,10 +638,27 @@ public class KeycloakRealmProvisioner {
 
         // Ensure Organizations feature is enabled on the realm
         RealmRepresentation realmRep = realmResource.toRepresentation();
+        boolean needsUpdate = false;
         if (realmRep.isOrganizationsEnabled() == null || !realmRep.isOrganizationsEnabled()) {
             realmRep.setOrganizationsEnabled(true);
-            realmResource.update(realmRep);
+            needsUpdate = true;
             LOG.info("Organizations feature enabled on realm '{}'", tenantId);
+        }
+        // Disable realm-level email verification so ROPC login works for unverified users.
+        // Email verification is enforced at the application layer instead.
+        if (Boolean.TRUE.equals(realmRep.isVerifyEmail())) {
+            realmRep.setVerifyEmail(false);
+            needsUpdate = true;
+            LOG.info("Disabled realm-level verifyEmail on realm '{}'", tenantId);
+        }
+        // Ensure sslRequired=none so HTTP action-token links work in development.
+        if (!"none".equalsIgnoreCase(realmRep.getSslRequired())) {
+            realmRep.setSslRequired("none");
+            needsUpdate = true;
+            LOG.info("Set sslRequired=none on realm '{}'", tenantId);
+        }
+        if (needsUpdate) {
+            realmResource.update(realmRep);
         }
 
         // Ensure all default roles exist

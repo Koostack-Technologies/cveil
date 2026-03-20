@@ -31,7 +31,7 @@ public class RegisterPurposeCommandActuator
     public Void execute(RegisterPurposeCommand command) {
         Objects.requireNonNull(command.purposeName(), "purposeName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = PurposeAggregate.deriveId(command.purposeName());
+        UUID aggregateId = PurposeAggregate.deriveId(tenantId, command.purposeName());
         var payload = new PurposeRegisteredEvent(command.purposeName(), command.description());
         AggregateKey key = new AggregateKey(aggregateId, PurposeAggregate.AGGREGATE_TYPE, tenantId);
         eventPublisher()

@@ -19,8 +19,9 @@ public record SubjectAggregate(
         return AGGREGATE_TYPE;
     }
 
-    public static UUID deriveId(String subjectName) {
+    public static UUID deriveId(String tenantId, String subjectName) {
         return UUID.nameUUIDFromBytes(
-                ("consent-subject-entity:" + subjectName).getBytes(StandardCharsets.UTF_8));
+                ("consent-subject-entity:" + tenantId + ":" + subjectName)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 }

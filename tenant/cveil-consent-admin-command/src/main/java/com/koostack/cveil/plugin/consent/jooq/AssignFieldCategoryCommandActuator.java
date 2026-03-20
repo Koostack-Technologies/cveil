@@ -58,7 +58,7 @@ public class AssignFieldCategoryCommandActuator
         String tenantId = TenantContext.require();
         String normalizedEntity = FieldAggregate.normalizeEntityName(command.entityName());
         String normalizedField = FieldAggregate.normalizeFieldName(command.fieldName());
-        UUID aggregateId = FieldAggregate.deriveId(normalizedEntity, normalizedField);
+        UUID aggregateId = FieldAggregate.deriveId(tenantId, normalizedEntity, normalizedField);
 
         // Hydrate current field state from event log (replaces query service call)
         AggregateKey key = new AggregateKey(aggregateId, FieldAggregate.AGGREGATE_TYPE, tenantId);

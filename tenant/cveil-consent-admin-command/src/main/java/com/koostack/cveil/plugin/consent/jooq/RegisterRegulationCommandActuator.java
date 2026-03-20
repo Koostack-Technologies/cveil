@@ -33,7 +33,7 @@ public class RegisterRegulationCommandActuator
     public Void execute(RegisterRegulationCommand command) {
         Objects.requireNonNull(command.regulationName(), "regulationName must not be null");
         String tenantId = TenantContext.require();
-        UUID aggregateId = RegulationAggregate.deriveId(command.regulationName());
+        UUID aggregateId = RegulationAggregate.deriveId(tenantId, command.regulationName());
         var payload =
                 new RegulationRegisteredEvent(command.regulationName(), command.description());
         AggregateKey key =

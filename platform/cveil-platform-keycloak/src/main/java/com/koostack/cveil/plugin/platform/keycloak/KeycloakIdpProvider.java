@@ -296,11 +296,7 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
             LOG.info("User registered: userId={}, email={}", userId, email);
 
             try {
-                adminClient
-                        .realm(realm)
-                        .users()
-                        .get(userId)
-                        .executeActionsEmail(List.of("VERIFY_EMAIL"));
+                adminClient.realm(realm).users().get(userId).sendVerifyEmail();
             } catch (Exception e) {
                 LOG.warn(
                         "Failed to send verification email for user '{}': {}",
@@ -334,8 +330,9 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     }
 
     /**
-     * Trigger a VERIFY_EMAIL action email via Keycloak for the given user, with an optional
-     * redirect URI that Keycloak will redirect to after the action is completed.
+     * Send a verification email via Keycloak for the given user. Uses sendVerifyEmail which
+     * directly verifies the email when clicked without adding required actions (so ROPC login isn't
+     * blocked).
      *
      * @param userId the Keycloak user ID
      * @param clientId the Keycloak client ID (required for redirectUri)
@@ -348,18 +345,11 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
                     .realm(realm)
                     .users()
                     .get(userId)
-                    .executeActionsEmail(
-                            clientId,
-                            redirectUri,
-                            VERIFICATION_LINK_LIFESPAN_SECONDS,
-                            List.of("VERIFY_EMAIL"));
+                    .sendVerifyEmail(clientId, redirectUri, VERIFICATION_LINK_LIFESPAN_SECONDS);
         } else {
-            adminClient
-                    .realm(realm)
-                    .users()
-                    .get(userId)
-                    .executeActionsEmail(List.of("VERIFY_EMAIL"));
+            adminClient.realm(realm).users().get(userId).sendVerifyEmail();
         }
+
         LOG.info("Verification email sent for user '{}'", userId);
     }
 
@@ -456,8 +446,16 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
     /** Delegates SMTP configuration to the realm provisioner. */
     public void configureRealmSmtp(
-            String realmName, String host, String port, String from, String user, String password) {
-        realmProvisioner.configureRealmSmtp(realmName, host, port, from, user, password);
+            String realmName,
+            String host,
+            String port,
+            String from,
+            String user,
+            String password,
+            String auth,
+            String starttls) {
+        realmProvisioner.configureRealmSmtp(
+                realmName, host, port, from, user, password, auth, starttls);
     }
 
     // -------------------------------------------------------------------

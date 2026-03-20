@@ -256,13 +256,15 @@
                 } catch (ignored) { /* use fallback values */ }
             }
 
-            // Set lightweight session cookie for server-rendered pages
+            // Set lightweight session cookie for server-rendered pages.
+            // New accounts are always unverified, but use the actual response value for consistency.
             var securePart = location.protocol === 'https:' ? '; Secure' : '';
             document.cookie = 'cveil_session=' + btoa(JSON.stringify({
                 u: jwtUsername,
                 e: jwtEmail,
                 s: sub,
-                t: data.tokenType || 'DPoP'
+                t: data.tokenType || 'DPoP',
+                ev: data.emailVerified ? '1' : '0'
             })) + '; path=/; SameSite=Lax' + securePart + '; max-age=' + (data.expiresIn || 900);
 
             // Navigate to onboarding
