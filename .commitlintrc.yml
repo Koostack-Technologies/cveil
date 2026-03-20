@@ -1,0 +1,21 @@
+# Commitlint configuration — enforce conventional commits
+# Docs: https://commitlint.js.org/reference/configuration.html
+
+extends:
+  - "@commitlint/config-conventional"
+
+rules:
+  scope-enum:
+    - 2
+    - always
+    - - core
+      - sdk-java
+      - sdk-js
+      - cli
+      - web
+      - e2e
+      - docs
+      - ci
+      - deps
+  scope-empty:
+    - 0

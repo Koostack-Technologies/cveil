@@ -21,9 +21,9 @@ name: CI Smoke Test
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
   workflow_dispatch:
 
 # Cancel in-progress runs for the same branch/PR to save resources.

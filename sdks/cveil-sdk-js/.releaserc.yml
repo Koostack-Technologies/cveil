@@ -1,0 +1,35 @@
+# Semantic Release — JavaScript SDK
+# Tags: sdk-js-v1.0.0, sdk-js-v1.1.0, etc.
+
+tagFormat: "sdk-js-v${version}"
+
+branches:
+  - main
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - releaseRules:
+        - type: feat
+          scope: sdk-js
+          release: minor
+        - type: fix
+          scope: sdk-js
+          release: patch
+        - type: perf
+          scope: sdk-js
+          release: patch
+        - type: revert
+          scope: sdk-js
+          release: patch
+
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  - - "@semantic-release/exec"
+    - prepareCmd: >
+        cd sdks/cveil-sdk-js &&
+        npm version ${nextRelease.version} --no-git-tag-version
+
+  - - "@semantic-release/github"
+    - releasedLabels:
+        - "released-sdk-js"

@@ -26,7 +26,11 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "license": "Apache-2.0",
   "devDependencies": {
     "typescript": "^5.7.0",
     "@types/node": "^22.0.0"

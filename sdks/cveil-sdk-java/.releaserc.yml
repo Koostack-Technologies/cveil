@@ -1,0 +1,30 @@
+# Semantic Release — Java SDK
+# Tags: sdk-java-v1.0.0, sdk-java-v1.1.0, etc.
+
+tagFormat: "sdk-java-v${version}"
+
+branches:
+  - main
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - releaseRules:
+        - type: feat
+          scope: sdk-java
+          release: minor
+        - type: fix
+          scope: sdk-java
+          release: patch
+        - type: perf
+          scope: sdk-java
+          release: patch
+        - type: revert
+          scope: sdk-java
+          release: patch
+
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  - - "@semantic-release/github"
+    - releasedLabels:
+        - "released-sdk-java"

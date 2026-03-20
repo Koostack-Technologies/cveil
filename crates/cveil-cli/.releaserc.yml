@@ -1,0 +1,34 @@
+# Semantic Release — Rust CLI
+# Tags: cli-v1.0.0, cli-v1.1.0, etc.
+
+tagFormat: "cli-v${version}"
+
+branches:
+  - main
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - releaseRules:
+        - type: feat
+          scope: cli
+          release: minor
+        - type: fix
+          scope: cli
+          release: patch
+        - type: perf
+          scope: cli
+          release: patch
+        - type: revert
+          scope: cli
+          release: patch
+
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  - - "@semantic-release/exec"
+    - prepareCmd: >
+        sed -i "s/^version = \".*\"/version = \"${nextRelease.version}\"/" crates/cveil-cli/Cargo.toml
+
+  - - "@semantic-release/github"
+    - releasedLabels:
+        - "released-cli"

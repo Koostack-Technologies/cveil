@@ -18,6 +18,8 @@
 name: Integration Tests
 
 on:
+  push:
+    branches: [develop]
   workflow_dispatch:
 
 concurrency:

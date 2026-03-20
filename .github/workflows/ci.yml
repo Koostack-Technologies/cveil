@@ -1,34 +1,56 @@
 # =============================================================================
-# Cveil — Unit Tests
+# Cveil — CI Quality Gate
 #
-# Runs all fast, isolated unit tests that do NOT require external services
-# (no Docker, no databases, no network calls).
+# Runs on every PR targeting develop or main. Validates:
+#   - Conventional commit format (commitlint)
+#   - Java build + Spotless formatting check
+#   - Rust build + Clippy lints
+#   - Java unit tests (*Test.java, excludes *IT)
+#   - Rust unit tests (inline #[test])
 #
-# Includes:
-#   - Java/JVM unit tests (*Test.java) across all Gradle subprojects
-#   - Rust unit tests (inline #[test] in cveil-sdk-core and cveil-cli)
-#
-# Triggers:
-#   - Push to main/develop branches
-#   - Pull requests targeting main/develop
-#   - Manual dispatch
+# All jobs are fast and require NO external services.
 # =============================================================================
 
-name: Unit Tests
+name: CI
 
 on:
+  pull_request:
+    branches: [develop, main]
   workflow_dispatch:
 
 concurrency:
-  group: ci-unit-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Java / JVM unit tests
+  # Conventional commit lint
   # ---------------------------------------------------------------------------
-  java-unit:
-    name: Java Unit Tests
+  commitlint:
+    name: Commitlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run commitlint
+        run: |
+          npm install --save-dev @commitlint/cli@latest @commitlint/config-conventional@latest
+          npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+  # ---------------------------------------------------------------------------
+  # Java build + format check + unit tests
+  # ---------------------------------------------------------------------------
+  java:
+    name: Java Build & Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -44,6 +66,12 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and check formatting
+        run: ./gradlew build -PunitOnly -x test --no-daemon
+
+      - name: Spotless check
+        run: ./gradlew spotlessCheck --no-daemon
 
       - name: Run unit tests (exclude *IT)
         run: ./gradlew test -PunitOnly --no-daemon
@@ -65,10 +93,10 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # Rust unit tests
+  # Rust build + clippy + unit tests
   # ---------------------------------------------------------------------------
-  rust-unit:
-    name: Rust Unit Tests
+  rust:
+    name: Rust Build & Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -78,6 +106,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache Cargo registry & build artifacts
         uses: actions/cache@v4
@@ -86,8 +116,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             crates/target
-          key: rust-unit-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
-          restore-keys: rust-unit-${{ runner.os }}-
+          key: rust-ci-${{ runner.os }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-ci-${{ runner.os }}-
+
+      - name: Clippy lint
+        working-directory: crates
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run Rust unit tests
         working-directory: crates

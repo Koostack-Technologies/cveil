@@ -1,0 +1,104 @@
+# =============================================================================
+# Cveil — Java SDK Release
+#
+# Runs semantic-release for the Java SDK on push to main when SDK files change.
+# Publishes to Sonatype OSSRH (Maven Central) with GPG signing.
+#
+# Required secrets (passed via env vars):
+#   OSSRH_USERNAME, OSSRH_PASSWORD — Sonatype credentials
+#   SIGNING_KEY, SIGNING_PASSWORD  — GPG signing key + passphrase
+# =============================================================================
+
+name: "Release: Java SDK"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sdks/cveil-sdk-java/**'
+      - 'crates/cveil-sdk-core/**'
+  workflow_dispatch:
+
+concurrency:
+  group: release-sdk-java
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Semantic Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install semantic-release
+        run: |
+          npm install --save-dev \
+            semantic-release@latest \
+            @semantic-release/github@latest \
+            @semantic-release/commit-analyzer@latest \
+            @semantic-release/release-notes-generator@latest \
+            conventional-changelog-conventionalcommits@latest
+
+      - name: Run semantic-release
+        id: semantic
+        run: npx semantic-release --extends ./sdks/cveil-sdk-java/.releaserc.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Publish to Sonatype / Maven Central
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to Maven Central
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Rust toolchain (for WASM build)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Publish to OSSRH
+        run: |
+          ./gradlew :sdks:cveil-sdk-java:publish \
+            -Pversion=${{ needs.release.outputs.new_release_version }} \
+            --no-daemon
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
