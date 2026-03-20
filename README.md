@@ -83,7 +83,7 @@ Cveil follows a **CQRS + Event Sourcing** architecture organized into two planes
 | **CLI** | Rust, Clap, Axum, Tokio |
 | **Build** | Gradle 8.14, Cargo, npm |
 | **Testing** | JUnit 5, Testcontainers, Playwright, AssertJ, Mockito, REST Assured |
-| **CI/CD** | GitHub Actions (unit, integration, smoke, E2E, examples) |
+| **CI/CD** | GitHub Actions, semantic-release, conventional commits |
 | **Containerization** | Docker multi-stage builds, Docker Compose, GraalVM Native Image |
 | **Code Quality** | Spotless (Google Java Format), Lombok |
 
@@ -394,7 +394,121 @@ We welcome contributions! Please see our contribution guidelines:
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Ensure tests pass (`./gradlew test`)
 4. Ensure code is formatted (`./gradlew spotlessApply`)
-5. Commit your changes and open a pull request
+5. Commit your changes using **conventional commits** (see below) and open a pull request
+
+## CI/CD
+
+### Pipeline Overview
+
+All CI/CD is handled by GitHub Actions. The pipeline follows a **main + develop** branching strategy:
+
+```
+feature branch → PR to develop → merge → PR to main → merge → automated release
+```
+
+| Trigger | Workflow | What Runs |
+|---------|----------|-----------|
+| PR → `develop` or `main` | `ci.yml` | Commitlint, Java build + Spotless, Rust build + Clippy, unit tests |
+| Push → `develop` | `ci-integration-tests.yml` | Java integration tests (Testcontainers), Rust integration tests |
+| Push → `develop` | `ci-smoke.yml` | Full Docker Compose smoke test against real API |
+| Push → `main` | `release-core.yml` | Semantic release → Docker push to GHCR (`vX.Y.Z`) |
+| Push → `main` | `release-sdk-java.yml` | Semantic release → Sonatype / Maven Central publish |
+| Push → `main` | `release-sdk-js.yml` | Semantic release → npm publish |
+| Push → `main` | `release-cli.yml` | Semantic release → crates.io publish |
+| Manual | `ci-e2e.yml` | Playwright end-to-end browser tests |
+| Manual | `ci-examples.yml` | Java + JavaScript SDK example suites |
+
+### Conventional Commits
+
+All commits **must** follow the [Conventional Commits](https://www.conventionalcommits.org/) format. This is enforced by commitlint on every PR.
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:** `feat`, `fix`, `perf`, `revert`, `docs`, `style`, `refactor`, `test`, `build`, `ci`, `chore`
+
+**Scopes** determine which artifact gets a version bump:
+
+| Scope | Artifact | Tag Format | Example |
+|-------|----------|------------|---------|
+| *(none)* or `core` | Core (API + platform + web) | `v1.2.3` | `feat: add batch consent endpoint` |
+| `sdk-java` | Java SDK | `sdk-java-v1.2.3` | `fix(sdk-java): handle timeout` |
+| `sdk-js` | JavaScript SDK | `sdk-js-v1.2.3` | `feat(sdk-js): add retry logic` |
+| `cli` | Rust CLI | `cli-v1.2.3` | `fix(cli): fix config parsing` |
+| `web`, `e2e`, `docs`, `ci`, `deps` | *(no release)* | — | `chore(ci): update Node version` |
+
+**Version bump rules:**
+
+```
+fix(core): handle null subject         → patch  (v1.0.0 → v1.0.1)
+feat: add batch consent endpoint       → minor  (v1.0.1 → v1.1.0)
+feat!: redesign consent API            → major  (v1.1.0 → v2.0.0)
+feat(sdk-java): add retry logic        → sdk-java minor (independent)
+```
+
+### Branching Strategy
+
+```
+main        ← production releases (protected, PR-only)
+develop     ← integration branch (protected, PR-only, default branch)
+feature/*   ← feature branches (PR → develop)
+hotfix/*    ← urgent fixes (PR → main, then cherry-pick to develop)
+```
+
+**Standard flow:**
+1. Create a feature branch from `develop`
+2. Open a PR → `develop` — CI runs build + unit tests + commitlint
+3. Merge to `develop` — integration tests + smoke tests run
+4. When ready to release, open a PR → `main`
+5. Merge to `main` — semantic-release auto-creates version tags, GitHub Releases with changelogs, and publishes artifacts
+
+**Hotfix flow:**
+1. Branch from `main`: `git checkout -b hotfix/fix-crash main`
+2. Open a PR → `main` directly
+3. Merge — auto-releases a patch version
+4. Cherry-pick the fix back to `develop`: `git cherry-pick <sha>`
+
+### Versioning
+
+Cveil uses **independent versioning** for publishable artifacts:
+
+| Artifact | Versioned By | Published To |
+|----------|-------------|--------------|
+| Core (API + platform) | Commits without SDK/CLI scope | GHCR Docker image |
+| Java SDK | `(sdk-java)` scoped commits | Maven Central (Sonatype OSSRH) |
+| JavaScript SDK | `(sdk-js)` scoped commits | npm (`@cveil/sdk-js`) |
+| Rust CLI | `(cli)` scoped commits | crates.io (`cveil-cli`) |
+
+### Required Secrets
+
+Configure these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Workflow | Purpose |
+|--------|----------|---------|
+| `OSSRH_USERNAME` | release-sdk-java | Sonatype Maven Central username |
+| `OSSRH_PASSWORD` | release-sdk-java | Sonatype Maven Central password |
+| `SIGNING_KEY` | release-sdk-java | GPG private key (base64) for JAR signing |
+| `SIGNING_PASSWORD` | release-sdk-java | GPG key passphrase |
+| `NPM_TOKEN` | release-sdk-js | npm registry auth token |
+| `CARGO_REGISTRY_TOKEN` | release-cli | crates.io API token |
+
+> `GITHUB_TOKEN` is provided automatically by GitHub Actions — no setup needed.
+
+### Branch Protection Setup
+
+**`main` branch:**
+- ✅ Require a pull request before merging
+- ✅ Require status checks: `Java Build & Unit Tests`, `Rust Build & Unit Tests`, `Commitlint`
+- ✅ Require branches to be up to date before merging
+
+**`develop` branch:**
+- ✅ Require a pull request before merging
+- ✅ Require status checks: `Java Build & Unit Tests`, `Rust Build & Unit Tests`, `Commitlint`
 
 ## License
 
