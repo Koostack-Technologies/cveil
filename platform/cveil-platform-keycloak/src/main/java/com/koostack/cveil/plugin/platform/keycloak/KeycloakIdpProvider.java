@@ -321,6 +321,30 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
         LOG.info("Email verified for user '{}'", userId);
     }
 
+    /**
+     * Trigger a VERIFY_EMAIL action email via Keycloak for the given user.
+     *
+     * @param userId the Keycloak user ID
+     */
+    public void sendVerificationEmail(String userId) {
+        String realm = config.cveilRealmName();
+        adminClient.realm(realm).users().get(userId).executeActionsEmail(List.of("VERIFY_EMAIL"));
+        LOG.info("Verification email sent for user '{}'", userId);
+    }
+
+    /**
+     * Check whether a user's email is marked as verified in Keycloak.
+     *
+     * @param userId the Keycloak user ID
+     * @return {@code true} if the user's email is verified in Keycloak
+     */
+    public boolean isEmailVerified(String userId) {
+        String realm = config.cveilRealmName();
+        UserRepresentation user =
+                adminClient.realm(realm).users().get(userId).toRepresentation();
+        return Boolean.TRUE.equals(user.isEmailVerified());
+    }
+
     @Override
     public void initiatePasswordReset(String tenantId, String email) {
         String realm = config.cveilRealmName();

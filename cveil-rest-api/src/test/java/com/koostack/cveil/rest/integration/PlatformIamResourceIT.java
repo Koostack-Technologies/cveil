@@ -258,7 +258,8 @@ class PlatformIamResourceIT {
                     .then()
                     .statusCode(200)
                     .body("$", hasSize(greaterThanOrEqualTo(1)))
-                    .body("email", hasItem(userEmail));
+                    .body("email", hasItem(userEmail))
+                    .body("emailVerified", everyItem(notNullValue()));
         }
 
         @Test
@@ -272,7 +273,8 @@ class PlatformIamResourceIT {
                     .statusCode(200)
                     .body("username", equalTo(username))
                     .body("email", equalTo(userEmail))
-                    .body("fullName", equalTo("Platform Admin"));
+                    .body("fullName", equalTo("Platform Admin"))
+                    .body("emailVerified", is(false));
         }
 
         @Test
@@ -579,6 +581,7 @@ class PlatformIamResourceIT {
                             .body("refreshToken", notNullValue())
                             .body("tokenType", equalTo("Bearer"))
                             .body("expiresIn", greaterThan(0))
+                            .body("emailVerified", notNullValue())
                             .extract()
                             .response();
 

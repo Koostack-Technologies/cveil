@@ -36,7 +36,8 @@ public class KeycloakUserMapper {
                 user.getEmail(),
                 fullName.isEmpty() ? null : fullName,
                 status,
-                created != null ? Instant.ofEpochMilli(created) : Instant.now());
+                created != null ? Instant.ofEpochMilli(created) : Instant.now(),
+                Boolean.TRUE.equals(user.isEmailVerified()));
     }
 
     /** Read the {@code cveil-user-id} custom attribute from a Keycloak user. */

@@ -14,6 +14,18 @@ import java.time.Instant;
  * @param fullName the user's display name, nullable
  * @param status account status: {@code active}, {@code suspended}, or {@code unverified}
  * @param createdAt when the user was created
+ * @param emailVerified whether the user's email has been verified
  */
 public record IdpUser(
-        String username, String email, String fullName, String status, Instant createdAt) {}
+        String username,
+        String email,
+        String fullName,
+        String status,
+        Instant createdAt,
+        boolean emailVerified) {
+
+    /** Backward-compatible constructor — defaults emailVerified to false. */
+    public IdpUser(String username, String email, String fullName, String status, Instant createdAt) {
+        this(username, email, fullName, status, createdAt, false);
+    }
+}

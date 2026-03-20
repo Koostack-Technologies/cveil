@@ -1,0 +1,252 @@
+{#include docs-layout.html}
+{#doc-title}Java SDK{/doc-title}
+{#doc-content}
+
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Java SDK</h1>
+    <p class="text-lg text-on-surface-muted max-w-2xl mb-8">A full-featured client for Cveil with WASM-powered local consent evaluation and field masking — no network round-trips needed for masking decisions.</p>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Note:</strong> Requires Java 21 or later.
+    </div>
+
+    <!-- Installation -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Installation</h2>
+    <p class="text-on-surface-muted mb-4">Available on Maven Central (Sonatype).</p>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Maven</h3>
+    <div class="docs-code mb-4"><pre>&lt;dependency&gt;
+  &lt;groupId&gt;com.koostack.cveil&lt;/groupId&gt;
+  &lt;artifactId&gt;cveil-sdk-java&lt;/artifactId&gt;
+  &lt;version&gt;0.1.0&lt;/version&gt;
+&lt;/dependency&gt;</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Gradle (Kotlin DSL)</h3>
+    <div class="docs-code mb-4"><pre>implementation("com.koostack.cveil:cveil-sdk-java:0.1.0")</pre></div>
+
+    <!-- Client Initialization -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Client Initialization</h2>
+    <div class="docs-code mb-4"><pre>import com.koostack.cveil.sdk.CveilClient;
+import com.koostack.cveil.sdk.CveilClientOptions;
+import com.koostack.cveil.sdk.CveilConfig;
+
+CveilConfig config = new CveilConfig(
+    "https://api.cveil.dev",       // apiBaseUrl
+    "cveil_your_api_key",          // apiToken
+    "EU",                          // defaultJurisdiction
+    "conservativeMask",            // staleMode: "apiFallback" or "conservativeMask"
+    60000L,                        // disconnectThresholdMs (default 60s)
+    10000,                         // decisionCacheMaxSize (default 10000)
+    300000L,                       // decisionCacheTtlMs (default 5min)
+    500                            // dedupWindowSize (default 500)
+);
+
+CveilClient client = CveilClient.create(
+    new CveilClientOptions(config, null, true, 100)
+);</pre></div>
+
+    <!-- Configuration Reference -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Configuration Reference</h2>
+    <div class="overflow-x-auto mb-8">
+        <table class="w-full text-sm text-left">
+            <thead>
+                <tr class="border-b border-surface-high/50 text-on-surface-variant text-xs uppercase tracking-wider">
+                    <th class="py-3 pr-4">Field</th>
+                    <th class="py-3 pr-4">Type</th>
+                    <th class="py-3 pr-4">Default</th>
+                    <th class="py-3">Description</th>
+                </tr>
+            </thead>
+            <tbody class="text-on-surface-muted">
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">apiBaseUrl</td>
+                    <td class="py-3 pr-4 font-technical">String</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">Cveil API base URL</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">apiToken</td>
+                    <td class="py-3 pr-4 font-technical">String</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">API token (must start with <code class="font-technical text-primary">cveil_</code>)</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">defaultJurisdiction</td>
+                    <td class="py-3 pr-4 font-technical">String</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">Default jurisdiction (e.g., <code class="font-technical text-primary">EU</code>)</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">staleMode</td>
+                    <td class="py-3 pr-4 font-technical">String</td>
+                    <td class="py-3 pr-4 font-technical">conservativeMask</td>
+                    <td class="py-3">Behavior when SSE disconnects: <code class="font-technical text-primary">apiFallback</code> (fetch from API) or <code class="font-technical text-primary">conservativeMask</code> (deny all)</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">disconnectThresholdMs</td>
+                    <td class="py-3 pr-4 font-technical">Long</td>
+                    <td class="py-3 pr-4 font-technical">60000</td>
+                    <td class="py-3">Time before connection is considered stale</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">decisionCacheMaxSize</td>
+                    <td class="py-3 pr-4 font-technical">Integer</td>
+                    <td class="py-3 pr-4 font-technical">10000</td>
+                    <td class="py-3">Max cached consent decisions (LRU eviction)</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">decisionCacheTtlMs</td>
+                    <td class="py-3 pr-4 font-technical">Long</td>
+                    <td class="py-3 pr-4 font-technical">300000</td>
+                    <td class="py-3">Decision cache TTL</td>
+                </tr>
+                <tr>
+                    <td class="py-3 pr-4 font-technical text-on-surface">dedupWindowSize</td>
+                    <td class="py-3 pr-4 font-technical">Integer</td>
+                    <td class="py-3 pr-4 font-technical">500</td>
+                    <td class="py-3">SSE event deduplication window</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Data Masking -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Data Masking (Core Feature)</h2>
+    <p class="text-on-surface-muted mb-4">Mask JSON objects based on consent decisions. Masking is evaluated locally via WASM — no network round-trip required.</p>
+
+    <div class="docs-code mb-4"><pre>// Mask a JSON object based on consent
+Map&lt;String, Object&gt; userData = Map.of(
+    "email", "alice@acme.com",
+    "phone", "555-867-5309",
+    "ssn", "412-55-6789"
+);
+
+MaskResult result = client.mask("user-123", "users", userData, "marketing_emails");
+// result.data() → { "email": "****@acme.com", "phone": "***", "ssn": "***" }
+// result.needsFetch() → fields that need API lookup (cache miss)</pre></div>
+
+    <div class="docs-code mb-4"><pre>// Mask with jurisdiction override
+MaskResult euResult = client.maskWithJurisdiction(
+    "user-123", "users", userData, "marketing_emails", "EU"
+);</pre></div>
+
+    <div class="docs-code mb-4"><pre>// Batch masking
+List&lt;Map&lt;String, Object&gt;&gt; records = List.of(userData1, userData2, userData3);
+List&lt;MaskResult&gt; results = client.maskBatch("user-123", "users", records, "marketing_emails");</pre></div>
+
+    <!-- Consent Evaluation -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Consent Evaluation</h2>
+    <p class="text-on-surface-muted mb-4">Evaluate consent for specific fields without performing masking.</p>
+
+    <div class="docs-code mb-4"><pre>// Evaluate consent without masking
+EvaluateResult eval = client.evaluate(
+    "user-123", "users",
+    List.of("email", "phone", "ssn"),
+    "marketing_emails"
+);
+// Returns per-field: { field, maskingType, consentAction, needsFetch }</pre></div>
+
+    <!-- Consent Operations -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Consent Operations</h2>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Grant &amp; Revoke</h3>
+    <div class="docs-code mb-4"><pre>// Grant consent
+client.grant(new GrantRequest("user-123",
+    new ConsentScope(null, null, "PII", "marketing_emails", null, null),
+    Instant.parse("2027-01-01T00:00:00Z")));
+
+// Revoke consent
+client.revoke(new RevokeRequest("user-123",
+    new ConsentScope(null, null, "PII", "marketing_emails", null, null)));</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Batch Operations</h3>
+    <div class="docs-code mb-4"><pre>// Batch grant
+client.grantAll(new BatchGrantRequest("user-123", List.of(
+    new BatchConsentEntry(
+        new ConsentScope(null, null, "PII", "marketing_emails", null, null),
+        Instant.parse("2027-01-01T00:00:00Z")
+    )
+)));</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Evaluate Consent</h3>
+    <div class="docs-code mb-4"><pre>// Evaluate
+ConsentResponse response = client.evaluateConsent("user-123",
+    new EvaluateConsentRequest(List.of(
+        new ConsentScope(null, null, "PII", "marketing_emails", null, null)
+    )));</pre></div>
+
+    <!-- Subject Management -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Subject Management</h2>
+    <div class="docs-code mb-4"><pre>client.registerSubject(new RegisterSubjectRequest("user-123", "Alice's account"));
+SubjectView subject = client.getSubject("user-123");
+List&lt;SubjectView&gt; subjects = client.listSubjects();
+client.updateSubject("user-123", new UpdateSubjectRequest("Updated description"));
+client.removeSubject("user-123");</pre></div>
+
+    <!-- Governance & Catalogue -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Governance &amp; Catalogue</h2>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Purposes</h3>
+    <div class="docs-code mb-4"><pre>client.registerPurpose(new RegisterPurposeRequest("marketing_emails", "Promotional emails"));
+client.addPurposePolicy(new AddPurposePolicyRequest("marketing_emails", "CATEGORY", "PII", null, null));</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Regulations</h3>
+    <div class="docs-code mb-4"><pre>client.registerRegulation(new RegisterRegulationRequest("GDPR", "EU General Data Protection Regulation"));</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Fields</h3>
+    <div class="docs-code mb-4"><pre>client.registerField(new RegisterFieldRequest("users", "email", "User email"));
+client.assignFieldToCategory(new AssignFieldCategoryRequest("users", "email", "PII"));</pre></div>
+
+    <!-- DSAR Compliance -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">DSAR Compliance</h2>
+    <p class="text-on-surface-muted mb-4">GDPR Articles 15 (access), 17 (erasure), and 20 (portability) supported out of the box.</p>
+
+    <div class="docs-code mb-4"><pre>// Export (GDPR Article 20)
+SubjectDataExport export = client.exportSubjectData("user-123");
+
+// Erasure (GDPR Article 17)
+DsarDeletionReceipt receipt = client.deleteSubjectData("user-123");
+// receipt: { subjectId, requestId, ledgerEntriesRevoked, cachedKeysDeleted, status, completedAt }
+
+// Irreversible key destruction
+client.shredDsarKey("user-123");</pre></div>
+
+    <div class="bg-error-container/10 border border-error/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-error">Warning:</strong> <code class="font-technical">shredDsarKey</code> is irreversible. Once called, the subject's encryption key is permanently destroyed and their data can never be decrypted.
+    </div>
+
+    <!-- SDK Lifecycle -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">SDK Lifecycle</h2>
+    <div class="docs-code mb-4"><pre>SdkStatus status = client.status();
+// { initialized, connectionState, graphNodes, cachedDecisions }
+
+client.shutdown(); // or client.close()</pre></div>
+
+    <!-- Architecture -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Architecture</h2>
+    <p class="text-on-surface-muted mb-4">The Java SDK follows a layered architecture for maximum portability:</p>
+    <div class="bg-surface-container/30 border border-surface-high/50 rounded-md p-5 mb-6">
+        <div class="flex flex-col gap-3 text-sm font-technical">
+            <div class="flex items-center gap-3">
+                <span class="text-primary font-semibold">Java Facade</span>
+                <span class="text-on-surface-muted">→</span>
+                <span class="text-on-surface">Type-safe API with Java collections and records</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-primary font-semibold">Rust WASM Core</span>
+                <span class="text-on-surface-muted">→</span>
+                <span class="text-on-surface">Consent evaluation, masking, and graph logic compiled to WebAssembly</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-primary font-semibold">Chicory Runtime</span>
+                <span class="text-on-surface-muted">→</span>
+                <span class="text-on-surface">Pure Java WASM execution — no JNI, no native code</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Note:</strong> Because the WASM core runs inside the JVM via Chicory, there are no platform-specific native dependencies. The SDK works on any OS that supports Java 21+.
+    </div>
+
+{/doc-content}
+{/include}

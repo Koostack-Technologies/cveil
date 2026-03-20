@@ -1297,6 +1297,7 @@ public class CveilProducers {
                     com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider
                     kip) {
                 sharedJwksVerifier = kip.getJwksVerifier();
+                iamCmdSvc.setIdpProvider(kip);
             }
         }
         if (sharedJwksVerifier != null) {

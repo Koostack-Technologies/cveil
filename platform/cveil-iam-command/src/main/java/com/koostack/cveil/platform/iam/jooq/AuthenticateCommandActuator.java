@@ -8,6 +8,7 @@ import com.koostack.cveil.core.event.models.PublishDomainEventInput;
 import com.koostack.cveil.core.metrics.MetricPublisherService;
 import com.koostack.cveil.core.models.AggregateKey;
 import com.koostack.cveil.core.models.AuthResult;
+import com.koostack.cveil.core.platform.events.EmailVerifiedEvent;
 import com.koostack.cveil.core.platform.events.UserAuthenticatedEvent;
 import com.koostack.cveil.core.platform.iam.IamEventTypes;
 import java.util.UUID;
@@ -83,6 +84,22 @@ public class AuthenticateCommandActuator
                 command.realmId(),
                 command.email(),
                 userId);
+
+        // Sync email verification status from the freshly issued JWT.
+        // The token reflects current Keycloak state, so no admin API call needed.
+        Object emailVerifiedClaim = result.identity().claims().get("email_verified");
+        if (Boolean.TRUE.equals(emailVerifiedClaim)) {
+            var verifiedPayload =
+                    new EmailVerifiedEvent(command.realmId(), userId, command.email());
+            eventPublisher()
+                    .publishEvent(
+                            PublishDomainEventInput.of(
+                                    PlatformConstants.PLATFORM_TENANT_ID,
+                                    IamEventTypes.EMAIL_VERIFIED,
+                                    key,
+                                    verifiedPayload));
+            LOG.trace("Email verified sync from JWT: userId={}", userId);
+        }
 
         return result;
     }

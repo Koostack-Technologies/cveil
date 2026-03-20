@@ -59,10 +59,20 @@ public final class IamDtos {
 
     /** Response for user queries. */
     public record UserResponse(
-            String username, String email, String fullName, String status, Instant createdAt) {
+            String username,
+            String email,
+            String fullName,
+            String status,
+            Instant createdAt,
+            boolean emailVerified) {
         public static UserResponse from(IdpUser u) {
             return new UserResponse(
-                    u.username(), u.email(), u.fullName(), u.status(), u.createdAt());
+                    u.username(),
+                    u.email(),
+                    u.fullName(),
+                    u.status(),
+                    u.createdAt(),
+                    u.emailVerified());
         }
     }
 
@@ -216,15 +226,22 @@ public final class IamDtos {
             long expiresIn,
             String tokenType,
             String subject,
-            Set<String> roles) {
+            Set<String> roles,
+            boolean emailVerified) {
         public static AuthResponse from(AuthResult r) {
+            boolean verified = false;
+            if (r.identity() != null && r.identity().claims() != null) {
+                Object ev = r.identity().claims().get("email_verified");
+                verified = Boolean.TRUE.equals(ev);
+            }
             return new AuthResponse(
                     r.accessToken(),
                     r.refreshToken(),
                     r.expiresIn(),
                     r.tokenType(),
                     r.identity() != null ? r.identity().subject() : null,
-                    r.identity() != null ? r.identity().roles() : Set.of());
+                    r.identity() != null ? r.identity().roles() : Set.of(),
+                    verified);
         }
     }
 
@@ -240,7 +257,21 @@ public final class IamDtos {
             String fullName,
             Set<String> roles,
             Set<String> permissions,
-            java.util.List<OrgMembership> organizations) {}
+            java.util.List<OrgMembership> organizations,
+            boolean emailVerified) {
+
+        /** Backward-compatible constructor — defaults emailVerified to false. */
+        public CurrentUserResponse(
+                String userId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                Set<String> permissions,
+                java.util.List<OrgMembership> organizations) {
+            this(userId, username, email, fullName, roles, permissions, organizations, false);
+        }
+    }
 
     /** Lightweight org membership included in /me response. */
     public record OrgMembership(
@@ -275,4 +306,14 @@ public final class IamDtos {
     /** Request body for assigning a role to a user. */
     public record AssignRoleRequest(
             @NotBlank(message = "roleId must not be blank") String roleId) {}
+
+    // ===================================================================
+    // Email Verification
+    // ===================================================================
+
+    /** Response for email verification status check. */
+    public record VerificationStatusResponse(boolean emailVerified, String message) {}
+
+    /** Response for email verification resend. */
+    public record VerificationResendResponse(boolean sent, String message) {}
 }

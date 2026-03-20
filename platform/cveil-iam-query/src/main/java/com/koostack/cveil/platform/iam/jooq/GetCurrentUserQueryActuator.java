@@ -36,6 +36,8 @@ public class GetCurrentUserQueryActuator
     private static final org.jooq.Field<String> EMAIL = field(name("email"), String.class);
     private static final org.jooq.Field<String> FULL_NAME = field(name("full_name"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
+    private static final org.jooq.Field<Boolean> EMAIL_VERIFIED =
+            field(name("email_verified"), Boolean.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT =
             field(name("created_at"), OffsetDateTime.class);
 
@@ -91,7 +93,22 @@ public class GetCurrentUserQueryActuator
             Set<String> roles,
             String status,
             java.time.Instant createdAt,
-            List<OrganizationInfo> organizations) {}
+            List<OrganizationInfo> organizations,
+            boolean emailVerified) {
+
+        /** Backward-compatible constructor — defaults emailVerified to false. */
+        public CurrentUserResult(
+                String userId,
+                String username,
+                String email,
+                String fullName,
+                Set<String> roles,
+                String status,
+                java.time.Instant createdAt,
+                List<OrganizationInfo> organizations) {
+            this(userId, username, email, fullName, roles, status, createdAt, organizations, false);
+        }
+    }
 
     @Override
     public CurrentUserResult execute(GetCurrentUserQuery query) {
@@ -101,7 +118,7 @@ public class GetCurrentUserQueryActuator
 
         // 1. Read user profile from local DB
         Record userRow =
-                dsl.select(USERNAME, EMAIL, FULL_NAME, STATUS, CREATED_AT)
+                dsl.select(USERNAME, EMAIL, FULL_NAME, STATUS, CREATED_AT, EMAIL_VERIFIED)
                         .from(IAM_USER)
                         .where(USER_ID.eq(uid))
                         .fetchOne();
@@ -150,6 +167,7 @@ public class GetCurrentUserQueryActuator
         }
 
         OffsetDateTime createdOdt = userRow.get(CREATED_AT);
+        boolean emailVerified = Boolean.TRUE.equals(userRow.get(EMAIL_VERIFIED));
         return new CurrentUserResult(
                 query.userId(),
                 userRow.get(USERNAME),
@@ -158,7 +176,8 @@ public class GetCurrentUserQueryActuator
                 roles,
                 userRow.get(STATUS),
                 createdOdt != null ? createdOdt.toInstant() : null,
-                organizations);
+                organizations,
+                emailVerified);
     }
 
     @Override

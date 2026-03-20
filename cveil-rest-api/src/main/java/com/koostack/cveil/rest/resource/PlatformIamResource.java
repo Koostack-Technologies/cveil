@@ -1125,7 +1125,8 @@ public class PlatformIamResource {
                                     result.fullName(),
                                     activeRoles,
                                     activePermissions,
-                                    orgs))
+                                    orgs,
+                                    result.emailVerified()))
                     .build();
         } catch (Exception e) {
             LOG.error("Failed to fetch current user: {}", e.getMessage(), e);
@@ -1196,6 +1197,98 @@ public class PlatformIamResource {
             LOG.error("Failed to change password: {}", e.getMessage(), e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(ErrorResponse.of("password_change_failed", "Failed to change password"))
+                    .build();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Email Verification
+    // -----------------------------------------------------------------------
+
+    @POST
+    @Path("/me/verify-email/resend")
+    @Operation(
+            operationId = "resendVerificationEmail",
+            summary = "Resend email verification link")
+    public Response resendVerificationEmail(@Context SecurityContext sc) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String userId = requestHolder.identity().subject();
+        String email = requestHolder.identity().email();
+        LOG.debug("POST /platform/iam/me/verify-email/resend userId={}", userId);
+
+        try {
+            SendVerificationEmailCommandActuator.SendVerificationEmailResult result =
+                    cqrs.iamDispatcher()
+                            .dispatch(
+                                    new SendVerificationEmailCommandActuator
+                                            .SendVerificationEmailCommand(
+                                            REALM, userId, email));
+            if (result.sent()) {
+                metrics.counter("iam_verification_email_resent", "SYSTEM");
+                return Response.ok(
+                                new VerificationResendResponse(
+                                        true, "Verification email sent"))
+                        .build();
+            } else {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(
+                                new VerificationResendResponse(
+                                        false, "Failed to send verification email"))
+                        .build();
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to resend verification email: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "verification_email_failed",
+                                    "Failed to send verification email"))
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/me/verify-email/status")
+    @Operation(
+            operationId = "getVerificationStatus",
+            summary = "Check the authenticated user's email verification status")
+    public Response getVerificationStatus(@Context SecurityContext sc) {
+        requireCqrs();
+        requireAuthenticated(sc);
+        requireJwtAuth();
+
+        String userId = requestHolder.identity().subject();
+        LOG.debug("GET /platform/iam/me/verify-email/status userId={}", userId);
+
+        try {
+            GetCurrentUserQueryActuator.CurrentUserResult result =
+                    cqrs.iamQueryDispatcher()
+                            .dispatch(
+                                    new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+            if (result == null) {
+                return Response.ok(
+                                new VerificationStatusResponse(
+                                        false, "User profile not yet available"))
+                        .build();
+            }
+            boolean verified = result.emailVerified();
+            return Response.ok(
+                            new VerificationStatusResponse(
+                                    verified,
+                                    verified
+                                            ? "Email is verified"
+                                            : "Email is not yet verified"))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Failed to check verification status: {}", e.getMessage(), e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(
+                            ErrorResponse.of(
+                                    "verification_status_failed",
+                                    "Failed to check verification status"))
                     .build();
         }
     }

@@ -999,6 +999,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 normalized.isEmpty()
                 || normalized.equals("docs")
                 || normalized.equals("docs/")
+                || normalized.startsWith("docs/")
                 || normalized.equals("plans")
                 || normalized.equals("plans/")
                 || normalized.equals("signup")

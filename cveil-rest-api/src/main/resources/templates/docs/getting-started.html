@@ -1,0 +1,132 @@
+{#include docs-layout.html}
+{#doc-title}Quick Start{/doc-title}
+{#doc-content}
+
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Quick Start</h1>
+    <p class="text-lg text-on-surface-muted max-w-2xl mb-12">Go from zero to your first consent record in four steps. You'll create a workspace, generate an API key, install the SDK, and record consent — all in under five minutes.</p>
+
+    <!-- Prerequisites -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Prerequisites</h2>
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Note:</strong> You need a Cveil API key to follow this guide. You can obtain one from the <a href="/dashboard" class="text-primary hover:underline">Dashboard</a>.
+    </div>
+
+    <!-- Step 1 -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Step 1: Create your Workspace</h2>
+    <p class="text-on-surface-muted mb-4">A workspace is an isolated environment for your application's consent data. Create one from the <a href="/dashboard" class="text-primary hover:underline">Dashboard</a> by clicking <strong class="text-on-surface">New Workspace</strong>.</p>
+    <p class="text-on-surface-muted mb-4">Once created, your workspace is assigned an isolated schema and is ready to accept consent data.</p>
+
+    <!-- Step 2 -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Step 2: Create an API Key</h2>
+    <p class="text-on-surface-muted mb-4">Generate a scoped API key for your workspace from the Dashboard under <strong class="text-on-surface">Settings → API Keys</strong>. Assign roles like <code class="font-technical text-primary">admin</code> or <code class="font-technical text-primary">consent-writer</code> to control what the key can access.</p>
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Important:</strong> The API key is returned only once when created. Copy and store it securely — you will not be able to retrieve it again.
+    </div>
+
+    <!-- Step 3 -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Step 3: Install the SDK</h2>
+    <p class="text-on-surface-muted mb-6">Choose your language and add the Cveil SDK to your project:</p>
+
+    <!-- SDK Tabs -->
+    <div x-data="{ tab: 'java' }" class="mb-8">
+        <div class="flex gap-1 mb-4 border-b border-surface-high/50">
+            <button @click="tab = 'java'" :class="tab === 'java' ? 'text-primary border-primary' : 'text-on-surface-muted border-transparent hover:text-on-surface'" class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors">Java</button>
+            <button @click="tab = 'javascript'" :class="tab === 'javascript' ? 'text-primary border-primary' : 'text-on-surface-muted border-transparent hover:text-on-surface'" class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors">JavaScript</button>
+        </div>
+
+        <div x-show="tab === 'java'">
+            <p class="text-on-surface-muted mb-3 text-sm">Maven:</p>
+            <div class="docs-code mb-4"><pre>&lt;dependency&gt;
+  &lt;groupId&gt;com.koostack.cveil&lt;/groupId&gt;
+  &lt;artifactId&gt;cveil-sdk-java&lt;/artifactId&gt;
+  &lt;version&gt;0.1.0&lt;/version&gt;
+&lt;/dependency&gt;</pre></div>
+            <p class="text-on-surface-muted mb-3 text-sm">Gradle:</p>
+            <div class="docs-code"><pre>implementation("com.koostack.cveil:cveil-sdk-java:0.1.0")</pre></div>
+        </div>
+
+        <div x-show="tab === 'javascript'">
+            <div class="docs-code"><pre>npm install @cveil/sdk-js</pre></div>
+        </div>
+    </div>
+
+    <!-- Step 4 -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Step 4: Record your First Consent</h2>
+    <p class="text-on-surface-muted mb-6">Initialize the client, grant consent for a subject, then evaluate it:</p>
+
+    <div x-data="{ tab: 'java' }" class="mb-8">
+        <div class="flex gap-1 mb-4 border-b border-surface-high/50">
+            <button @click="tab = 'java'" :class="tab === 'java' ? 'text-primary border-primary' : 'text-on-surface-muted border-transparent hover:text-on-surface'" class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors">Java</button>
+            <button @click="tab = 'javascript'" :class="tab === 'javascript' ? 'text-primary border-primary' : 'text-on-surface-muted border-transparent hover:text-on-surface'" class="px-4 py-2 text-sm font-semibold border-b-2 transition-colors">JavaScript</button>
+        </div>
+
+        <div x-show="tab === 'java'">
+            <div class="docs-code"><pre>import com.koostack.cveil.sdk.CveilClient;
+import com.koostack.cveil.sdk.CveilClientOptions;
+import com.koostack.cveil.sdk.CveilConfig;
+
+var config = new CveilConfig(
+    "https://api.cveil.dev",    // apiBaseUrl
+    "cveil_your_api_key",       // apiToken
+    "EU",                       // defaultJurisdiction
+    "conservativeMask",         // staleMode
+    60000L, 10000, 300000L, 500 // thresholds &amp; cache settings
+);
+
+var client = CveilClient.create(new CveilClientOptions(config, null, true, 100));
+
+// Grant consent
+client.grant(new GrantRequest("user-123",
+    new ConsentScope(null, null, "marketing_emails", null, null, null),
+    null));
+
+// Evaluate consent
+var result = client.evaluateConsent("user-123",
+    new EvaluateConsentRequest(List.of(
+        new ConsentScope(null, null, "marketing_emails", null, null, null)
+    )));</pre></div>
+        </div>
+
+        <div x-show="tab === 'javascript'">
+            <div class="docs-code"><pre>import { CveilClient } from '@cveil/sdk-js';
+
+const client = await CveilClient.create({
+  config: {
+    apiBaseUrl: 'https://api.cveil.dev',
+    apiToken: 'cveil_your_api_key',
+    defaultJurisdiction: 'EU',
+  }
+});
+
+// Grant consent
+await client.grant({
+  subject: 'user-123',
+  scope: { purposeName: 'marketing_emails' },
+});
+
+// Evaluate consent
+const result = await client.evaluateConsent('user-123', {
+  scopes: [{ purposeName: 'marketing_emails' }],
+});</pre></div>
+        </div>
+    </div>
+
+    <!-- Next Steps -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Next Steps</h2>
+    <div class="grid sm:grid-cols-3 gap-4">
+        <a href="/docs/concepts" class="group block p-5 rounded-md bg-surface-container/30 hover:bg-surface-container/60 border border-surface-high/50 transition-all">
+            <h3 class="font-semibold mb-1 group-hover:text-primary transition-colors">Core Concepts</h3>
+            <p class="text-sm text-on-surface-muted">Architecture, consent model, CQRS, and multi-tenancy.</p>
+        </a>
+        <a href="/docs/entities" class="group block p-5 rounded-md bg-surface-container/30 hover:bg-surface-container/60 border border-surface-high/50 transition-all">
+            <h3 class="font-semibold mb-1 group-hover:text-primary transition-colors">Data Model</h3>
+            <p class="text-sm text-on-surface-muted">Subjects, entities, fields, categories, purposes, and more.</p>
+        </a>
+        <a href="/docs/api-consent" class="group block p-5 rounded-md bg-surface-container/30 hover:bg-surface-container/60 border border-surface-high/50 transition-all">
+            <h3 class="font-semibold mb-1 group-hover:text-primary transition-colors">API Reference</h3>
+            <p class="text-sm text-on-surface-muted">Full endpoint documentation with request and response examples.</p>
+        </a>
+    </div>
+
+{/doc-content}
+{/include}

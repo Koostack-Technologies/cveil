@@ -345,7 +345,8 @@ public class JooqIamQueryService implements IamQueryService<JooqIamQueryConfig> 
                 user.getEmail(),
                 fullName.isEmpty() ? null : fullName,
                 status,
-                created != null ? Instant.ofEpochMilli(created) : Instant.now());
+                created != null ? Instant.ofEpochMilli(created) : Instant.now(),
+                Boolean.TRUE.equals(user.isEmailVerified()));
     }
 
     private String readCveilUserId(UserRepresentation user) {

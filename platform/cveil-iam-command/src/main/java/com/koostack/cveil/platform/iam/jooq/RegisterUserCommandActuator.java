@@ -207,7 +207,7 @@ public class RegisterUserCommandActuator
         user.setEmail(command.email());
         user.setUsername(command.username());
         user.setEnabled(true);
-        user.setEmailVerified(!command.temporaryPassword());
+        user.setEmailVerified(false);
 
         // Store tenant_id as a user attribute so it appears in JWT via protocol mapper
         if (command.tenantId() != null && !command.tenantId().isBlank()) {
@@ -249,15 +249,19 @@ public class RegisterUserCommandActuator
                     assignRealmRole(realm, createdUserId, roleName);
                 }
 
-                // Send "set password" email if temporary
+                // Send action emails (combined into a single call to avoid duplicate emails)
+                var requiredActions = new java.util.ArrayList<String>();
+                requiredActions.add("VERIFY_EMAIL");
                 if (command.temporaryPassword()) {
-                    try {
-                        realm.users()
-                                .get(createdUserId)
-                                .executeActionsEmail(List.of("UPDATE_PASSWORD"));
-                    } catch (Exception e) {
-                        LOG.warn("Failed to send password setup email: {}", e.getMessage());
-                    }
+                    requiredActions.add("UPDATE_PASSWORD");
+                }
+                try {
+                    realm.users()
+                            .get(createdUserId)
+                            .executeActionsEmail(requiredActions);
+                } catch (Exception e) {
+                    LOG.warn("Failed to send action email(s) {}: {}",
+                            requiredActions, e.getMessage());
                 }
 
                 return new KcUserResult(createdUserId, false);

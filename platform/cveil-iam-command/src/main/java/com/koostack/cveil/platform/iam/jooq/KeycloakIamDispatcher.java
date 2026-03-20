@@ -6,6 +6,7 @@ import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.event.EventService;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
 import com.koostack.cveil.plugin.platform.keycloak.JwksTokenVerifier;
+import com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
     private IamQueryService<?> queryService;
     private org.keycloak.admin.client.Keycloak keycloakAdmin;
     private com.koostack.cveil.plugin.platform.keycloak.KeycloakConfig keycloakConfig;
+    private KeycloakIdpProvider idpProvider;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -46,6 +48,11 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
     /** Set the query service for email/username → UUID resolution. */
     public void setQueryService(IamQueryService<?> queryService) {
         this.queryService = queryService;
+    }
+
+    /** Set the IdP provider for operations that need direct Keycloak access. */
+    public void setIdpProvider(KeycloakIdpProvider idpProvider) {
+        this.idpProvider = idpProvider;
     }
 
     public void configure(JooqIamCommandConfig config) {
@@ -153,6 +160,14 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
         actuators.put(
                 LogoutCommandActuator.LogoutCommand.class,
                 new LogoutCommandActuator(eventService, authSupport));
+
+        // Email verification (requires idpProvider)
+        if (idpProvider != null) {
+            actuators.put(
+                    SendVerificationEmailCommandActuator.SendVerificationEmailCommand.class,
+                    new SendVerificationEmailCommandActuator(eventService, idpProvider));
+        }
+
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());
     }
 

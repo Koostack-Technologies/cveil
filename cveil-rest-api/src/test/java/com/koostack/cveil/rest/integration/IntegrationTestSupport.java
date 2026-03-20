@@ -71,6 +71,7 @@ public class IntegrationTestSupport implements AutoCloseable {
     private final String tenantId; // business tenant ID for tenant-aware queries
     private final String keycloakUrl; // null → Keycloak helpers disabled
     private final int shardCount; // must match runtime CveilConfig.stream.shard-count
+    private final String mailpitApiUrl; // null → Mailpit helpers disabled
     private Keycloak keycloakAdmin; // lazy-initialized
 
     /** Creates support without tenant schema routing (platform queries only). */
@@ -111,6 +112,12 @@ public class IntegrationTestSupport implements AutoCloseable {
                 config.stream()
                         .map(CveilConfig.StreamConfig::shardCount)
                         .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
+
+        // Mailpit API URL is injected by CveilTestResourceManager as a config property
+        String mpUrl = org.eclipse.microprofile.config.ConfigProvider.getConfig()
+                .getOptionalValue("cveil.test.mailhog.api-url", String.class)
+                .orElse(null);
+        this.mailpitApiUrl = mpUrl;
     }
 
     @Override
@@ -290,6 +297,132 @@ public class IntegrationTestSupport implements AutoCloseable {
             role.setName(roleName);
             role.setDescription("Cveil default role: " + roleName);
             realmResource.roles().create(role);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Mailpit helpers (fake SMTP email capture)
+    // -----------------------------------------------------------------------
+
+    /** Returns the Mailpit API URL, or null if not configured. */
+    public String getMailpitApiUrl() {
+        return mailpitApiUrl;
+    }
+
+    /**
+     * Returns all captured emails from Mailpit as a list of maps.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getEmails() {
+        requireMailpit();
+        try {
+            String json =
+                    io.restassured.RestAssured.given()
+                            .baseUri(mailpitApiUrl)
+                            .when()
+                            .get("/api/v1/messages")
+                            .then()
+                            .statusCode(200)
+                            .extract()
+                            .body()
+                            .asString();
+
+            var parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Map.class);
+            var items = (List<Map<String, Object>>) parsed.get("messages");
+            return items != null ? items : List.of();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch emails from Mailpit", e);
+        }
+    }
+
+    /** Returns emails sent to the given address. */
+    public List<Map<String, Object>> getEmailsTo(String email) {
+        return getEmails().stream()
+                .filter(msg -> emailMatchesRecipient(msg, email))
+                .collect(Collectors.toList());
+    }
+
+    /** Returns the most recent email sent to the given address, or null if none found. */
+    public Map<String, Object> getLatestEmailTo(String email) {
+        var emails = getEmailsTo(email);
+        return emails.isEmpty() ? null : emails.get(0);
+    }
+
+    /** Deletes all captured emails in Mailpit. */
+    public void clearMailbox() {
+        requireMailpit();
+        io.restassured.RestAssured.given()
+                .baseUri(mailpitApiUrl)
+                .when()
+                .delete("/api/v1/messages")
+                .then()
+                .statusCode(200);
+    }
+
+    /** Polls until at least one email is captured for the given recipient. */
+    public List<Map<String, Object>> awaitEmailTo(String email, Duration timeout) {
+        requireMailpit();
+        var ref = new Object() { List<Map<String, Object>> emails; };
+        Awaitility.await()
+                .atMost(timeout)
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(
+                        () -> {
+                            ref.emails = getEmailsTo(email);
+                            assertThat(ref.emails)
+                                    .as("Expected at least one email to '%s'", email)
+                                    .isNotEmpty();
+                        });
+        return ref.emails;
+    }
+
+    /** Fetches the full HTML body for a Mailpit message by ID. */
+    public String fetchEmailBody(String messageId) {
+        requireMailpit();
+        return io.restassured.RestAssured.given()
+                .baseUri(mailpitApiUrl)
+                .when()
+                .get("/api/v1/message/" + messageId + "/html")
+                .then()
+                .statusCode(200)
+                .extract()
+                .body()
+                .asString();
+    }
+
+    /** Extracts the Subject from a Mailpit message map. */
+    public static String extractEmailSubject(Map<String, Object> message) {
+        var subject = message.get("Subject");
+        return subject != null ? subject.toString() : "";
+    }
+
+    /** Extracts the From address from a Mailpit message map. */
+    @SuppressWarnings("unchecked")
+    public static String extractEmailFrom(Map<String, Object> message) {
+        var from = (Map<String, Object>) message.get("From");
+        return from != null ? String.valueOf(from.get("Address")) : "";
+    }
+
+    /** Extracts the message ID for fetching the full body. */
+    public static String extractMessageId(Map<String, Object> message) {
+        var id = message.get("ID");
+        return id != null ? id.toString() : "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean emailMatchesRecipient(Map<String, Object> message, String email) {
+        var toList = (List<Map<String, Object>>) message.get("To");
+        if (toList != null) {
+            return toList.stream()
+                    .anyMatch(t -> email.equalsIgnoreCase(String.valueOf(t.get("Address"))));
+        }
+        return false;
+    }
+
+    private void requireMailpit() {
+        if (mailpitApiUrl == null || mailpitApiUrl.isBlank()) {
+            throw new IllegalStateException(
+                    "Mailpit API URL not configured — ensure CveilTestResourceManager is running");
         }
     }
 

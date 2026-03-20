@@ -75,6 +75,7 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
     private static final String POSTGRES_IMAGE = "postgres:16-alpine";
     private static final String REDIS_IMAGE = "redis:7-alpine";
     private static final String KEYCLOAK_IMAGE = "quay.io/keycloak/keycloak:26.0.8";
+    private static final String MAILPIT_IMAGE = "axllent/mailpit:latest";
 
     // -- Database defaults ----------------------------------------------------
 
@@ -91,6 +92,11 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
     private static final int KEYCLOAK_PORT = 8080;
     private static final String PLATFORM_REALM = "cveil";
     private static final String CVEIL_CLIENT_ID = "cveil-backend";
+
+    // -- Mailpit defaults -----------------------------------------------------
+
+    private static final int MAILPIT_SMTP_PORT = 1025;
+    private static final int MAILPIT_HTTP_PORT = 8025;
     private static final List<String> DEFAULT_ROLES =
             List.of(
                     "consent:read",
@@ -113,6 +119,9 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
     @SuppressWarnings("resource") // closed in stop()
     private GenericContainer<?> keycloak;
 
+    @SuppressWarnings("resource") // closed in stop()
+    private GenericContainer<?> mailpit;
+
     // -----------------------------------------------------------------------
     // Lifecycle
     // -----------------------------------------------------------------------
@@ -125,7 +134,7 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
      */
     @Override
     public Map<String, String> start() {
-        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis + Keycloak)...");
+        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis + Keycloak + Mailpit)...");
 
         // Shared Docker network so Keycloak can reach Postgres by hostname
         network = Network.newNetwork();
@@ -169,6 +178,29 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
         String redisHost = redis.getHost();
         int redisPort = redis.getMappedPort(REDIS_PORT);
         LOG.info("Redis started: host={}, port={}", redisHost, redisPort);
+
+        // -- Mailpit ----------------------------------------------------------
+        // Lightweight fake SMTP server for capturing outbound emails from Keycloak.
+
+        mailpit =
+                new GenericContainer<>(DockerImageName.parse(MAILPIT_IMAGE))
+                        .withNetwork(network)
+                        .withNetworkAliases("mailpit")
+                        .withExposedPorts(MAILPIT_SMTP_PORT, MAILPIT_HTTP_PORT)
+                        .waitingFor(
+                                Wait.forHttp("/api/v1/messages")
+                                        .forPort(MAILPIT_HTTP_PORT)
+                                        .withStartupTimeout(Duration.ofSeconds(30)))
+                        .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("mailpit"));
+
+        mailpit.start();
+
+        String mailpitApiUrl =
+                "http://"
+                        + mailpit.getHost()
+                        + ":"
+                        + mailpit.getMappedPort(MAILPIT_HTTP_PORT);
+        LOG.info("Mailpit started: api={}", mailpitApiUrl);
 
         // -- Keycloak ---------------------------------------------------------
         // Connects to Postgres via the shared Docker network alias.
@@ -224,6 +256,9 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
         props.put("cveil.test.keycloak.admin-password", "admin");
         props.put("cveil.test.keycloak.client-secret", clientSecret);
 
+        // Mailpit
+        props.put("cveil.test.mailhog.api-url", mailpitApiUrl);
+
         LOG.info(
                 "Testcontainers infrastructure ready — {} config properties injected",
                 props.size());
@@ -242,6 +277,15 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
                 LOG.info("Keycloak container stopped");
             } catch (Exception e) {
                 LOG.warn("Failed to stop Keycloak container cleanly", e);
+            }
+        }
+
+        if (mailpit != null) {
+            try {
+                mailpit.stop();
+                LOG.info("Mailpit container stopped");
+            } catch (Exception e) {
+                LOG.warn("Failed to stop Mailpit container cleanly", e);
             }
         }
 
@@ -364,6 +408,21 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
                     PLATFORM_REALM,
                     DEFAULT_ROLES.size(),
                     secret.substring(0, Math.min(4, secret.length())));
+
+            // Configure SMTP to route through Mailpit (Docker network alias)
+            RealmRepresentation rep = realmResource.toRepresentation();
+            Map<String, String> smtp = new HashMap<>();
+            smtp.put("host", "mailpit");
+            smtp.put("port", String.valueOf(MAILPIT_SMTP_PORT));
+            smtp.put("from", "cveil-test@cveil.io");
+            smtp.put("fromDisplayName", "Cveil Test");
+            smtp.put("auth", "false");
+            smtp.put("starttls", "false");
+            smtp.put("ssl", "false");
+            rep.setSmtpServer(smtp);
+            realmResource.update(rep);
+            LOG.info("SMTP configured on realm '{}' → mailpit:{}", PLATFORM_REALM, MAILPIT_SMTP_PORT);
+
             return secret;
         }
     }

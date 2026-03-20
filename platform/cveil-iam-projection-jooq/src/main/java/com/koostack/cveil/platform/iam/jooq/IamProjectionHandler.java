@@ -35,6 +35,10 @@ public class IamProjectionHandler {
     private static final org.jooq.Field<String> FULL_NAME = field(name("full_name"), String.class);
     private static final org.jooq.Field<String> USER_STATUS = field(name("status"), String.class);
     private static final org.jooq.Field<Boolean> ENABLED = field(name("enabled"), Boolean.class);
+    private static final org.jooq.Field<Boolean> EMAIL_VERIFIED =
+            field(name("email_verified"), Boolean.class);
+    private static final org.jooq.Field<OffsetDateTime> EMAIL_VERIFIED_AT =
+            field(name("email_verified_at"), OffsetDateTime.class);
     private static final org.jooq.Field<String> DISPLAY_NAME_USER =
             field(name("display_name"), String.class);
     private static final org.jooq.Field<String> AVATAR_URL =
@@ -107,6 +111,9 @@ public class IamProjectionHandler {
                 case IamEventTypes.USER_PROFILE_UPDATED -> handleUserProfileUpdated(payload);
                 case IamEventTypes.USER_APP_PROFILE_UPDATED -> handleUserAppProfileUpdated(payload);
 
+                    // Email verification
+                case IamEventTypes.EMAIL_VERIFIED -> handleEmailVerified(payload);
+
                     // Organization lifecycle
                 case IamEventTypes.ORGANIZATION_CREATED -> handleOrganizationCreated(payload);
                 case IamEventTypes.ORGANIZATION_UPDATED -> handleOrganizationUpdated(payload);
@@ -128,6 +135,7 @@ public class IamProjectionHandler {
                         IamEventTypes.TOKEN_REFRESHED,
                         IamEventTypes.USER_LOGGED_OUT,
                         IamEventTypes.PASSWORD_CHANGED,
+                        IamEventTypes.EMAIL_VERIFICATION_SENT,
                         IamEventTypes.REDIS_PROVISIONED -> LOG.trace(
                         "Acknowledged non-projected event: {}", eventType);
 
@@ -166,6 +174,7 @@ public class IamProjectionHandler {
                 .set(FULL_NAME, fullName)
                 .set(USER_STATUS, "active")
                 .set(ENABLED, true)
+                .set(EMAIL_VERIFIED, false)
                 .set(CREATED_AT, now)
                 .set(UPDATED_AT, now)
                 .onConflict(USER_ID)
@@ -257,6 +266,22 @@ public class IamProjectionHandler {
 
         step.where(USER_ID.eq(UUID.fromString(userId))).execute();
         LOG.debug("Projected UserAppProfileUpdated: userId={}", userId);
+    }
+
+    private void handleEmailVerified(String payload) throws Exception {
+        var node = mapper.readTree(payload);
+        String userId = node.get("userId").asText();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // COALESCE preserves the original verification timestamp on duplicate events
+        dsl.update(IAM_USER)
+                .set(EMAIL_VERIFIED, true)
+                .set(EMAIL_VERIFIED_AT, coalesce(EMAIL_VERIFIED_AT, val(now)))
+                .set(UPDATED_AT, now)
+                .where(USER_ID.eq(UUID.fromString(userId)))
+                .execute();
+
+        LOG.debug("Projected EmailVerified: userId={}", userId);
     }
 
     // -----------------------------------------------------------------------

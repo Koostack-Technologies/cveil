@@ -23,6 +23,8 @@ public class FindUserByUsernameQueryActuator
     private static final org.jooq.Field<String> EMAIL = field(name("email"), String.class);
     private static final org.jooq.Field<String> FULL_NAME = field(name("full_name"), String.class);
     private static final org.jooq.Field<String> STATUS = field(name("status"), String.class);
+    private static final org.jooq.Field<Boolean> EMAIL_VERIFIED =
+            field(name("email_verified"), Boolean.class);
     private static final org.jooq.Field<OffsetDateTime> CREATED_AT =
             field(name("created_at"), OffsetDateTime.class);
 
@@ -44,7 +46,7 @@ public class FindUserByUsernameQueryActuator
     public IdpUser execute(FindUserByUsernameQuery query) {
         LOG.debug("Finding user by username: {}", query.username());
         Record r =
-                dsl.select(USERNAME, EMAIL, FULL_NAME, STATUS, CREATED_AT)
+                dsl.select(USERNAME, EMAIL, FULL_NAME, STATUS, CREATED_AT, EMAIL_VERIFIED)
                         .from(IAM_USER)
                         .where(USERNAME.eq(query.username()))
                         .fetchOne();
@@ -54,7 +56,8 @@ public class FindUserByUsernameQueryActuator
                 r.get(EMAIL),
                 r.get(FULL_NAME),
                 r.get(STATUS),
-                r.get(CREATED_AT) != null ? r.get(CREATED_AT).toInstant() : null);
+                r.get(CREATED_AT) != null ? r.get(CREATED_AT).toInstant() : null,
+                Boolean.TRUE.equals(r.get(EMAIL_VERIFIED)));
     }
 
     @Override

@@ -13,6 +13,7 @@ import com.koostack.cveil.rest.orchestrator.RegisterOrganizationOrchestrator;
 import com.koostack.cveil.rest.orchestrator.RegisterUserSyncOrchestrator;
 import com.koostack.cveil.rest.util.AuthCookieHelper;
 import com.koostack.cveil.rest.util.TenantIdDeriver;
+import io.quarkus.qute.Engine;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -50,7 +51,29 @@ public class SiteResource {
 
     @Inject Template index;
 
-    @Inject Template docs;
+    @Inject Engine engine;
+
+    private static final Set<String> VALID_DOC_PAGES =
+            Set.of(
+                    "overview",
+                    "getting-started",
+                    "concepts",
+                    "entities",
+                    "api-consent",
+                    "api-graph",
+                    "api-dsar",
+                    "api-catalogue",
+                    "api-governance",
+                    "api-reports",
+                    "api-billing",
+                    "api-webhooks",
+                    "api-banner",
+
+                    "api-public",
+                    "sdk-java",
+                    "sdk-javascript",
+                    "sdk-banner",
+                    "security");
 
     @Inject Template plans;
 
@@ -128,7 +151,17 @@ public class SiteResource {
     @Path("docs")
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance documentation() {
-        return docs.instance();
+        return engine.getTemplate("docs/overview").data("page", "overview");
+    }
+
+    @GET
+    @Path("docs/{page}")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance docsPage(@PathParam("page") String page) {
+        if (!VALID_DOC_PAGES.contains(page)) {
+            throw new NotFoundException("Documentation page not found: " + page);
+        }
+        return engine.getTemplate("docs/" + page).data("page", page);
     }
 
     @GET
