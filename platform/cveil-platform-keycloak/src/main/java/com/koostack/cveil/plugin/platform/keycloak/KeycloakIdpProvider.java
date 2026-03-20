@@ -44,6 +44,9 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakIdpProvider.class);
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(10);
 
+    /** Lifespan for email verification action tokens (24 hours in seconds). */
+    public static final int VERIFICATION_LINK_LIFESPAN_SECONDS = 86_400;
+
     private KeycloakConfig config;
     private Keycloak adminClient;
     private KeycloakRealmProvisioner realmProvisioner;
@@ -327,8 +330,36 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
      * @param userId the Keycloak user ID
      */
     public void sendVerificationEmail(String userId) {
+        sendVerificationEmail(userId, null, null);
+    }
+
+    /**
+     * Trigger a VERIFY_EMAIL action email via Keycloak for the given user, with an optional
+     * redirect URI that Keycloak will redirect to after the action is completed.
+     *
+     * @param userId the Keycloak user ID
+     * @param clientId the Keycloak client ID (required for redirectUri)
+     * @param redirectUri the URI to redirect to after verification (nullable)
+     */
+    public void sendVerificationEmail(String userId, String clientId, String redirectUri) {
         String realm = config.cveilRealmName();
-        adminClient.realm(realm).users().get(userId).executeActionsEmail(List.of("VERIFY_EMAIL"));
+        if (clientId != null && redirectUri != null) {
+            adminClient
+                    .realm(realm)
+                    .users()
+                    .get(userId)
+                    .executeActionsEmail(
+                            clientId,
+                            redirectUri,
+                            VERIFICATION_LINK_LIFESPAN_SECONDS,
+                            List.of("VERIFY_EMAIL"));
+        } else {
+            adminClient
+                    .realm(realm)
+                    .users()
+                    .get(userId)
+                    .executeActionsEmail(List.of("VERIFY_EMAIL"));
+        }
         LOG.info("Verification email sent for user '{}'", userId);
     }
 
@@ -340,8 +371,7 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
      */
     public boolean isEmailVerified(String userId) {
         String realm = config.cveilRealmName();
-        UserRepresentation user =
-                adminClient.realm(realm).users().get(userId).toRepresentation();
+        UserRepresentation user = adminClient.realm(realm).users().get(userId).toRepresentation();
         return Boolean.TRUE.equals(user.isEmailVerified());
     }
 

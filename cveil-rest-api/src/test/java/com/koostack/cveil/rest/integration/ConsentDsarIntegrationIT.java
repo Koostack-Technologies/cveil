@@ -240,14 +240,9 @@ class ConsentDsarIntegrationIT {
                 String purposeName, String fieldName, String entityName, String categoryName) {}
         var policies =
                 List.of(
-                        new Policy(
-                                PURPOSE_MARKETING,
-                                FIELD_EMAIL,
-                                ENTITY_DSAR_USER,
-                                CATEGORY_PII),
+                        new Policy(PURPOSE_MARKETING, FIELD_EMAIL, ENTITY_DSAR_USER, CATEGORY_PII),
                         new Policy(PURPOSE_ANALYTICS, FIELD_PHONE, ENTITY_USER, CATEGORY_PII),
-                        new Policy(
-                                PURPOSE_SALES, FIELD_SSN, ENTITY_PATIENT, CATEGORY_HEALTH));
+                        new Policy(PURPOSE_SALES, FIELD_SSN, ENTITY_PATIENT, CATEGORY_HEALTH));
         for (var p : policies) {
             given().header("Authorization", auth())
                     .contentType(ContentType.JSON)
@@ -278,10 +273,8 @@ class ConsentDsarIntegrationIT {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(
                         () -> {
-                            var policyRows =
-                                    support.query("SELECT count(*) AS cnt FROM policy");
-                            int policyCnt =
-                                    ((Number) policyRows.get(0).get("cnt")).intValue();
+                            var policyRows = support.query("SELECT count(*) AS cnt FROM policy");
+                            int policyCnt = ((Number) policyRows.get(0).get("cnt")).intValue();
                             assertThat(policyCnt)
                                     .as("Expected at least 3 policy rows projected")
                                     .isGreaterThanOrEqualTo(3);
@@ -419,8 +412,8 @@ class ConsentDsarIntegrationIT {
     /**
      * Test 6: Delete atomicity
      *
-     * <p>Grant a policy, verify it exists, delete with correct confirmation, verify all stores
-     * are cleared.
+     * <p>Grant a policy, verify it exists, delete with correct confirmation, verify all stores are
+     * cleared.
      */
     @Test
     @Order(6)
@@ -574,8 +567,10 @@ class ConsentDsarIntegrationIT {
                             .contentType(ContentType.JSON)
                             .body(
                                     Map.of(
-                                            "subjectName", subject,
-                                            "description", "DSAR test subject"))
+                                            "subjectName",
+                                            subject,
+                                            "description",
+                                            "DSAR test subject"))
                             .when()
                             .post("/api/v1/subjects")
                             .then()

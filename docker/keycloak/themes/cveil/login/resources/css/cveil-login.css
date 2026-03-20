@@ -1,0 +1,82 @@
+/* Cveil Keycloak login theme overrides */
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #0b1326;
+    font-family: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #e8eaed;
+}
+
+#kc-header-wrapper {
+    display: none;
+}
+
+#kc-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+#kc-content-wrapper {
+    width: 100%;
+    max-width: 28rem;
+    text-align: center;
+}
+
+/* Card container */
+#kc-info-wrapper,
+.pf-c-alert,
+#kc-form,
+.instruction {
+    background-color: #131b2e;
+    border-radius: 0.5rem;
+    padding: 2.5rem;
+}
+
+/* Primary text */
+.instruction,
+.pf-c-alert__title,
+#kc-page-title {
+    color: #e8eaed;
+    font-size: 1.125rem;
+    line-height: 1.6;
+}
+
+/* Links */
+a {
+    color: #4fdbc8;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+a:hover {
+    color: #14b8a6;
+}
+
+/* Buttons — primary CTA */
+.pf-c-button--primary,
+input[type="submit"],
+button[type="submit"] {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    background: linear-gradient(135deg, #4fdbc8, #14b8a6);
+    color: #0b1326;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: opacity 0.2s;
+}
+
+.pf-c-button--primary:hover,
+input[type="submit"]:hover,
+button[type="submit"]:hover {
+    opacity: 0.9;
+}

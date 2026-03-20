@@ -105,6 +105,10 @@ public class KeycloakRealmProvisioner {
         // Email verification required
         realm.setVerifyEmail(true);
 
+        // Custom themes
+        realm.setEmailTheme("cveil");
+        realm.setLoginTheme("cveil");
+
         // Enable Keycloak Organizations on this realm
         realm.setOrganizationsEnabled(true);
 
@@ -369,6 +373,8 @@ public class KeycloakRealmProvisioner {
         client.setDirectAccessGrantsEnabled(true); // Resource Owner Password Credentials
         client.setStandardFlowEnabled(false);
         client.setFullScopeAllowed(true); // Include all realm roles in access token
+        // Allow redirect URIs for email verification callback and other flows
+        client.setRedirectUris(List.of("*"));
         client.setAttributes(
                 Map.of(
                         "access.token.lifespan",

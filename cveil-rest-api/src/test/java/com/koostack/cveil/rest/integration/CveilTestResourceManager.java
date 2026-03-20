@@ -134,7 +134,9 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
      */
     @Override
     public Map<String, String> start() {
-        LOG.info("Starting Testcontainers infrastructure (Postgres + Redis + Keycloak + Mailpit)...");
+        LOG.info(
+                "Starting Testcontainers infrastructure (Postgres + Redis + Keycloak +"
+                        + " Mailpit)...");
 
         // Shared Docker network so Keycloak can reach Postgres by hostname
         network = Network.newNetwork();
@@ -196,10 +198,7 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
         mailpit.start();
 
         String mailpitApiUrl =
-                "http://"
-                        + mailpit.getHost()
-                        + ":"
-                        + mailpit.getMappedPort(MAILPIT_HTTP_PORT);
+                "http://" + mailpit.getHost() + ":" + mailpit.getMappedPort(MAILPIT_HTTP_PORT);
         LOG.info("Mailpit started: api={}", mailpitApiUrl);
 
         // -- Keycloak ---------------------------------------------------------
@@ -421,7 +420,10 @@ public class CveilTestResourceManager implements QuarkusTestResourceLifecycleMan
             smtp.put("ssl", "false");
             rep.setSmtpServer(smtp);
             realmResource.update(rep);
-            LOG.info("SMTP configured on realm '{}' → mailpit:{}", PLATFORM_REALM, MAILPIT_SMTP_PORT);
+            LOG.info(
+                    "SMTP configured on realm '{}' → mailpit:{}",
+                    PLATFORM_REALM,
+                    MAILPIT_SMTP_PORT);
 
             return secret;
         }

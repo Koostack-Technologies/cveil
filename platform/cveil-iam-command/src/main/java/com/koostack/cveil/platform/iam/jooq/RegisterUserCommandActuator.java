@@ -8,6 +8,7 @@ import com.koostack.cveil.core.metrics.MetricPublisherService;
 import com.koostack.cveil.core.models.AggregateKey;
 import com.koostack.cveil.core.platform.events.UserRegisteredEvent;
 import com.koostack.cveil.core.platform.iam.IamEventTypes;
+import com.koostack.cveil.plugin.platform.keycloak.KeycloakIdpProvider;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,9 +41,18 @@ public class RegisterUserCommandActuator
 
     private final EventService<?> eventService;
 
-    public RegisterUserCommandActuator(EventService<?> eventService, Keycloak adminClient) {
+    private final String appBaseUrl;
+    private final String clientId;
+
+    public RegisterUserCommandActuator(
+            EventService<?> eventService,
+            Keycloak adminClient,
+            String appBaseUrl,
+            String clientId) {
         this.eventService = eventService;
         this.adminClient = adminClient;
+        this.appBaseUrl = appBaseUrl;
+        this.clientId = clientId;
     }
 
     /**
@@ -256,12 +266,24 @@ public class RegisterUserCommandActuator
                     requiredActions.add("UPDATE_PASSWORD");
                 }
                 try {
-                    realm.users()
-                            .get(createdUserId)
-                            .executeActionsEmail(requiredActions);
+                    String redirectUri =
+                            appBaseUrl != null ? appBaseUrl + "/verify-email/callback" : null;
+                    if (redirectUri != null && clientId != null) {
+                        realm.users()
+                                .get(createdUserId)
+                                .executeActionsEmail(
+                                        clientId,
+                                        redirectUri,
+                                        KeycloakIdpProvider.VERIFICATION_LINK_LIFESPAN_SECONDS,
+                                        requiredActions);
+                    } else {
+                        realm.users().get(createdUserId).executeActionsEmail(requiredActions);
+                    }
                 } catch (Exception e) {
-                    LOG.warn("Failed to send action email(s) {}: {}",
-                            requiredActions, e.getMessage());
+                    LOG.warn(
+                            "Failed to send action email(s) {}: {}",
+                            requiredActions,
+                            e.getMessage());
                 }
 
                 return new KcUserResult(createdUserId, false);

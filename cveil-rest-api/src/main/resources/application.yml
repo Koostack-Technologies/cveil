@@ -77,6 +77,7 @@ quarkus:
 cveil:
   mode: production # or "embedded" for local dev
   app-name: cveil # application name for Redis key namespacing
+  base-url: ${CVEIL_BASE_URL:http://localhost:8080} # used for email verification redirect URIs
   db:
     url: jdbc:postgresql://localhost:5432/cveil
     dialect: POSTGRES

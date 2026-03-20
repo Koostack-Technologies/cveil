@@ -68,7 +68,6 @@ public class SiteResource {
                     "api-billing",
                     "api-webhooks",
                     "api-banner",
-
                     "api-public",
                     "sdk-java",
                     "sdk-javascript",
@@ -124,6 +123,10 @@ public class SiteResource {
     @Inject
     @io.quarkus.qute.Location("onboarding-complete.html")
     Template onboardingComplete;
+
+    @Inject
+    @io.quarkus.qute.Location("verify-email-callback.html")
+    Template verifyEmailCallback;
 
     @Inject PlatformCqrsHolder cqrs;
 
@@ -342,6 +345,13 @@ public class SiteResource {
     public TemplateInstance signupSuccessPage(
             @QueryParam("username") String username, @QueryParam("tenant") String tenantId) {
         return signupSuccess.data("username", username).data("tenantId", tenantId);
+    }
+
+    @GET
+    @Path("verify-email/callback")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance verifyEmailCallbackPage() {
+        return verifyEmailCallback.data("v", BUILD_VERSION);
     }
 
     // -----------------------------------------------------------------------
@@ -1029,8 +1039,7 @@ public class SiteResource {
                 checkOnboardingGuard(ws.personalTenantId(), ws.tenantId(), ws.organizations());
         if (onboardingRedirect != null) return onboardingRedirect;
 
-        return applyDashboardData(webhooks.instance(), uc, ws, "webhooks")
-                .data("v", BUILD_VERSION);
+        return applyDashboardData(webhooks.instance(), uc, ws, "webhooks").data("v", BUILD_VERSION);
     }
 
     @GET

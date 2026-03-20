@@ -25,7 +25,8 @@ public record IdpUser(
         boolean emailVerified) {
 
     /** Backward-compatible constructor — defaults emailVerified to false. */
-    public IdpUser(String username, String email, String fullName, String status, Instant createdAt) {
+    public IdpUser(
+            String username, String email, String fullName, String status, Instant createdAt) {
         this(username, email, fullName, status, createdAt, false);
     }
 }

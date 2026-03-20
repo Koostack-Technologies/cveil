@@ -29,6 +29,7 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
     private org.keycloak.admin.client.Keycloak keycloakAdmin;
     private com.koostack.cveil.plugin.platform.keycloak.KeycloakConfig keycloakConfig;
     private KeycloakIdpProvider idpProvider;
+    private String appBaseUrl;
 
     // -- CommandDispatcher SPI -------------------------------------------------
 
@@ -55,6 +56,15 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
         this.idpProvider = idpProvider;
     }
 
+    /** Set the application base URL for redirect URIs (e.g. email verification callback). */
+    public void setAppBaseUrl(String appBaseUrl) {
+        // Strip trailing slash to avoid double-slash in constructed URLs
+        this.appBaseUrl =
+                appBaseUrl != null && appBaseUrl.endsWith("/")
+                        ? appBaseUrl.substring(0, appBaseUrl.length() - 1)
+                        : appBaseUrl;
+    }
+
     public void configure(JooqIamCommandConfig config) {
         this.eventService = config.eventService();
         this.keycloakAdmin = config.keycloakAdmin();
@@ -62,9 +72,10 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
 
         // Register all actuators
         var kc = config.keycloakAdmin();
+        String clientId = keycloakConfig != null ? keycloakConfig.cveilClientId() : null;
         actuators.put(
                 RegisterUserCommandActuator.RegisterUserCommand.class,
-                new RegisterUserCommandActuator(eventService, kc));
+                new RegisterUserCommandActuator(eventService, kc, appBaseUrl, clientId));
         actuators.put(
                 DeleteUserCommandActuator.DeleteUserCommand.class,
                 new DeleteUserCommandActuator(eventService, kc));
@@ -163,9 +174,11 @@ public class KeycloakIamDispatcher implements CommandDispatcher {
 
         // Email verification (requires idpProvider)
         if (idpProvider != null) {
+            String verifyClientId = keycloakConfig != null ? keycloakConfig.cveilClientId() : null;
             actuators.put(
                     SendVerificationEmailCommandActuator.SendVerificationEmailCommand.class,
-                    new SendVerificationEmailCommandActuator(eventService, idpProvider));
+                    new SendVerificationEmailCommandActuator(
+                            eventService, idpProvider, appBaseUrl, verifyClientId));
         }
 
         LOG.info("KeycloakIamDispatcher registered auth actuators (total={})", actuators.size());

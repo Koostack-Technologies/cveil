@@ -152,6 +152,8 @@ services:
       timeout: 5s
       retries: 15
       start_period: 60s
+    volumes:
+      - ./docker/keycloak/themes/cveil:/opt/keycloak/themes/cveil
 
   # ---------------------------------------------------------------------------
   # Cveil REST API — Quarkus application
@@ -184,6 +186,7 @@ services:
       # -- Cveil SDK configuration ----------------------------------------
       CVEIL_MODE: "production"
       CVEIL_APP_NAME: "cveil-local"
+      CVEIL_BASE_URL: "http://localhost:8080"
 
       # -- Consent database (jOOQ admin + sync layer) ----------------------
       CVEIL_DB_URL: "jdbc:postgresql://postgres:5432/cveil"

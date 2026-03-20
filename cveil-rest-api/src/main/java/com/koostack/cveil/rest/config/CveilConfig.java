@@ -104,6 +104,17 @@ public interface CveilConfig {
     Optional<String> appName();
 
     /**
+     * Application base URL used for constructing redirect URIs (e.g. email verification callbacks).
+     *
+     * <p>Defaults to {@code http://localhost:8080} for local development.
+     *
+     * @return the application base URL
+     */
+    @WithName("base-url")
+    @WithDefault("http://localhost:8080")
+    String baseUrl();
+
+    /**
      * Unified database configuration (all schemas: cveilcore, cveiliam, cveilbilling, cveilevent,
      * cveilconsent, cveilmetrics).
      *

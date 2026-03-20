@@ -30,11 +30,18 @@ public class SendVerificationEmailCommandActuator
 
     private final EventService<?> eventService;
     private final KeycloakIdpProvider idpProvider;
+    private final String appBaseUrl;
+    private final String clientId;
 
     public SendVerificationEmailCommandActuator(
-            EventService<?> eventService, KeycloakIdpProvider idpProvider) {
+            EventService<?> eventService,
+            KeycloakIdpProvider idpProvider,
+            String appBaseUrl,
+            String clientId) {
         this.eventService = eventService;
         this.idpProvider = idpProvider;
+        this.appBaseUrl = appBaseUrl;
+        this.clientId = clientId;
     }
 
     /**
@@ -60,7 +67,8 @@ public class SendVerificationEmailCommandActuator
         }
 
         try {
-            idpProvider.sendVerificationEmail(command.userId());
+            String redirectUri = appBaseUrl != null ? appBaseUrl + "/verify-email/callback" : null;
+            idpProvider.sendVerificationEmail(command.userId(), clientId, redirectUri);
         } catch (Exception e) {
             LOG.warn(
                     "Failed to send verification email for user '{}': {}",

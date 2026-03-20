@@ -11,8 +11,6 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.*;
 
 /**
@@ -291,8 +289,7 @@ class EmailVerificationIT {
         void markEmailVerifiedInKeycloak() {
             assertThat(keycloakUserId).as("Keycloak user ID required").isNotNull();
 
-            var userResource =
-                    support.keycloak().realm(PLATFORM_REALM).users().get(keycloakUserId);
+            var userResource = support.keycloak().realm(PLATFORM_REALM).users().get(keycloakUserId);
             var userRep = userResource.toRepresentation();
             userRep.setEmailVerified(true);
             userResource.update(userRep);
@@ -404,10 +401,7 @@ class EmailVerificationIT {
         @Order(2)
         @DisplayName("GET /me/verify-email/status without auth → 401")
         void statusEndpointRequiresAuth() {
-            given().when()
-                    .get(BASE_PATH + "/me/verify-email/status")
-                    .then()
-                    .statusCode(401);
+            given().when().get(BASE_PATH + "/me/verify-email/status").then().statusCode(401);
         }
 
         @Test

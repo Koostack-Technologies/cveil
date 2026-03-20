@@ -1279,6 +1279,8 @@ public class CveilProducers {
                                 .username("admin")
                                 .password("admin")
                                 .build();
+        // Set app base URL before configure() so RegisterUserCommandActuator gets the redirect URI
+        iamCmdSvc.setAppBaseUrl(config.baseUrl());
         iamCmdSvc.configure(
                 new com.koostack.cveil.platform.iam.jooq.JooqIamCommandConfig(
                         platformEventService,
@@ -1866,8 +1868,7 @@ public class CveilProducers {
                                 + "')")) {
             if (rs.next() && rs.getBoolean(1)) {
                 LOG.info("Moving table {}.{} → {}", fromSchema, table, toSchema);
-                stmt.execute(
-                        "ALTER TABLE " + fromSchema + "." + table + " SET SCHEMA " + toSchema);
+                stmt.execute("ALTER TABLE " + fromSchema + "." + table + " SET SCHEMA " + toSchema);
             }
         }
     }

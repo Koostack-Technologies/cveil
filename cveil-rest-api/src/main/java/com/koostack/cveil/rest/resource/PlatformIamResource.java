@@ -1207,9 +1207,7 @@ public class PlatformIamResource {
 
     @POST
     @Path("/me/verify-email/resend")
-    @Operation(
-            operationId = "resendVerificationEmail",
-            summary = "Resend email verification link")
+    @Operation(operationId = "resendVerificationEmail", summary = "Resend email verification link")
     public Response resendVerificationEmail(@Context SecurityContext sc) {
         requireCqrs();
         requireAuthenticated(sc);
@@ -1224,13 +1222,10 @@ public class PlatformIamResource {
                     cqrs.iamDispatcher()
                             .dispatch(
                                     new SendVerificationEmailCommandActuator
-                                            .SendVerificationEmailCommand(
-                                            REALM, userId, email));
+                                            .SendVerificationEmailCommand(REALM, userId, email));
             if (result.sent()) {
                 metrics.counter("iam_verification_email_resent", "SYSTEM");
-                return Response.ok(
-                                new VerificationResendResponse(
-                                        true, "Verification email sent"))
+                return Response.ok(new VerificationResendResponse(true, "Verification email sent"))
                         .build();
             } else {
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -1266,8 +1261,7 @@ public class PlatformIamResource {
         try {
             GetCurrentUserQueryActuator.CurrentUserResult result =
                     cqrs.iamQueryDispatcher()
-                            .dispatch(
-                                    new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
+                            .dispatch(new GetCurrentUserQueryActuator.GetCurrentUserQuery(userId));
             if (result == null) {
                 return Response.ok(
                                 new VerificationStatusResponse(
@@ -1278,9 +1272,7 @@ public class PlatformIamResource {
             return Response.ok(
                             new VerificationStatusResponse(
                                     verified,
-                                    verified
-                                            ? "Email is verified"
-                                            : "Email is not yet verified"))
+                                    verified ? "Email is verified" : "Email is not yet verified"))
                     .build();
         } catch (Exception e) {
             LOG.error("Failed to check verification status: {}", e.getMessage(), e);

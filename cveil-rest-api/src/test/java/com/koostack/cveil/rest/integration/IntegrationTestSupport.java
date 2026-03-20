@@ -114,9 +114,10 @@ public class IntegrationTestSupport implements AutoCloseable {
                         .orElse(RedisEventPublisher.DEFAULT_SHARD_COUNT);
 
         // Mailpit API URL is injected by CveilTestResourceManager as a config property
-        String mpUrl = org.eclipse.microprofile.config.ConfigProvider.getConfig()
-                .getOptionalValue("cveil.test.mailhog.api-url", String.class)
-                .orElse(null);
+        String mpUrl =
+                org.eclipse.microprofile.config.ConfigProvider.getConfig()
+                        .getOptionalValue("cveil.test.mailhog.api-url", String.class)
+                        .orElse(null);
         this.mailpitApiUrl = mpUrl;
     }
 
@@ -309,9 +310,7 @@ public class IntegrationTestSupport implements AutoCloseable {
         return mailpitApiUrl;
     }
 
-    /**
-     * Returns all captured emails from Mailpit as a list of maps.
-     */
+    /** Returns all captured emails from Mailpit as a list of maps. */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getEmails() {
         requireMailpit();
@@ -327,7 +326,8 @@ public class IntegrationTestSupport implements AutoCloseable {
                             .body()
                             .asString();
 
-            var parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Map.class);
+            var parsed =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Map.class);
             var items = (List<Map<String, Object>>) parsed.get("messages");
             return items != null ? items : List.of();
         } catch (Exception e) {
@@ -362,7 +362,10 @@ public class IntegrationTestSupport implements AutoCloseable {
     /** Polls until at least one email is captured for the given recipient. */
     public List<Map<String, Object>> awaitEmailTo(String email, Duration timeout) {
         requireMailpit();
-        var ref = new Object() { List<Map<String, Object>> emails; };
+        var ref =
+                new Object() {
+                    List<Map<String, Object>> emails;
+                };
         Awaitility.await()
                 .atMost(timeout)
                 .pollInterval(Duration.ofMillis(500))

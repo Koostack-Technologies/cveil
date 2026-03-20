@@ -5,4 +5,7 @@ import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PurposePolicyView(
-        String policyId, String policyType, Map<String, Object> category, Map<String, Object> field) {}
+        String policyId,
+        String policyType,
+        Map<String, Object> category,
+        Map<String, Object> field) {}

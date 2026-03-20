@@ -16,9 +16,8 @@ import java.util.List;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.cveil.rest.resource.PlatformIamResource} exercising
- * user management, service accounts, authentication, and RBAC against real Postgres + Redis +
- * Keycloak.
+ * Integration test for {@link com.koostack.cveil.rest.resource.PlatformIamResource} exercising user
+ * management, service accounts, authentication, and RBAC against real Postgres + Redis + Keycloak.
  *
  * <p>Every mutating operation is verified at three layers:
  *

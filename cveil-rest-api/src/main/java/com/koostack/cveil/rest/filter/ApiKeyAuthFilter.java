@@ -1006,6 +1006,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("signup/")
                 || normalized.equals("signup/success")
                 || normalized.equals("signup/success/")
+                || normalized.equals("verify-email/callback")
+                || normalized.equals("verify-email/callback/")
                 || normalized.equals("setup")
                 || normalized.equals("setup/")
                 || normalized.equals("setup/status")
