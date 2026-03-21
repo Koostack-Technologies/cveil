@@ -83,8 +83,6 @@ import redis.clients.jedis.JedisPooled;
  *   <li>{@link CoreConsentBundle} — Postgres (jOOQ) + Redis consent stack with dual-write sync
  *   <li>CQRS command/query services — tenant lifecycle, API key management, billing, and plan
  *       management
- *   <li>{@code ApiKeyTokenVerifier} — SHA-256 bearer token verification against the {@code
- *       cveiliam.api_key} projection table
  * </ul>
  *
  * <h2>Produced beans</h2>
@@ -92,7 +90,6 @@ import redis.clients.jedis.JedisPooled;
  * <ul>
  *   <li>{@link Cveil} — the primary entry point for consent operations
  *   <li>{@link CoreQueryService}, {@link CoreCommandService}, etc. — CQRS platform services
- *   <li>{@link TokenValidationService} — bearer token verification
  * </ul>
  *
  * <p>All three beans are {@code @ApplicationScoped} singletons — created once at startup and shared
@@ -254,8 +251,8 @@ public class CveilProducers {
                     final String capturedKey = encKey;
                     keyEncryptor =
                             raw ->
-                                    com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor
-                                            .encrypt(raw, capturedKey);
+                                    com.koostack.cveil.common.crypto.FieldEncryptor.encrypt(
+                                            raw, capturedKey);
                 }
             }
 
@@ -1104,8 +1101,8 @@ public class CveilProducers {
         java.util.function.UnaryOperator<String> fieldDecryptor =
                 encryptionKey != null
                         ? raw ->
-                                com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor
-                                        .decryptIfKeyPresent(raw, encryptionKey)
+                                com.koostack.cveil.common.crypto.FieldEncryptor.decryptIfKeyPresent(
+                                        raw, encryptionKey)
                         : java.util.function.UnaryOperator.identity();
 
         // IAM command service configured later after keycloakAdminClient is available

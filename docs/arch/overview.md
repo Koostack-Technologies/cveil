@@ -98,7 +98,7 @@ cveil-rest-api (Quarkus application — deployment unit)
 │   ├── cveil-core-{schema,command,query-jooq,projection-jooq,jooq-common}
 │   ├── cveil-billing-{schema,command,query-jooq,projection-jooq,jooq-common}
 │   ├── cveil-iam-{schema,command,query,projection-jooq}
-│   ├── cveil-platform-{jooq,event-jooq,keycloak,metrics-redis}
+│   ├── cveil-platform-{event-jooq,keycloak,metrics-redis}
 │   ├── cveil-plan-query-jooq
 │   ├── cveil-payment-proc-stripe
 │   └── cveil-webhook-outbound
@@ -108,7 +108,8 @@ cveil-rest-api (Quarkus application — deployment unit)
 │   ├── cveil-redis (TLS-capable Redis client factory)
 │   ├── cveil-keycloak (Keycloak admin client utilities)
 │   ├── cveil-metrics-worker (metrics sweeper)
-│   └── cveil-discovery-sensitive-annotation (@Sensitive annotation scanner)
+│   ├── cveil-discovery-sensitive-annotation (@Sensitive annotation scanner)
+│   └── cveil-crypto (AES-256-GCM field encryption)
 │
 └── sdks/ (external consumers — not part of the server deployment)
     ├── cveil-sdk-java (WASM via Chicory)

@@ -50,7 +50,7 @@ dependencies {
     // configuration's classpath manually or switch to mode=production.
     // TODO: re-enable once cveil-consent-sync-embedded is fixed
     // compileOnly(project(":cveil-bundle-embedded"))
-    implementation(project(":platform:cveil-platform-jooq"))
+    implementation(project(":common:cveil-crypto"))
     implementation(project(":platform:cveil-platform-keycloak"))
     implementation("org.keycloak:keycloak-admin-client:26.0.8")
     implementation("com.nimbusds:nimbus-jose-jwt:9.47") // DPoP proof verification

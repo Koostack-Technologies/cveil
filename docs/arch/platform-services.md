@@ -154,17 +154,6 @@ The `platform/cveil-platform-event-jooq` module provides the event store for all
 
 **Stream routing:** All platform events are published to `cveil:stream:platform`.
 
-## Platform jOOQ Infrastructure (`platform/cveil-platform-jooq`)
-
-Shared infrastructure for all platform jOOQ modules:
-- `DataSource` management for the platform schema
-- Flyway migration orchestration
-- `TenantManager` — provisions/tears down per-tenant infrastructure:
-  - Creates/drops PostgreSQL schemas
-  - Creates/deletes Redis ACL users
-  - Runs per-tenant Flyway migrations
-  - `migrateAllTenants()` for deploy-time migration of all active tenant schemas
-
 ## Common Modules
 
 ### `common/cveil-jooq`
@@ -188,3 +177,7 @@ Shared infrastructure for all platform jOOQ modules:
 ### `common/cveil-discovery-sensitive-annotation`
 - Scans the classpath for `@Sensitive` annotations on Java record/class fields
 - Produces `DiscoveredField` instances for automatic data catalogue population
+
+### `common/cveil-crypto`
+- `FieldEncryptor` — AES-256-GCM field-level encryption for sensitive data at rest
+- Provides encrypt/decrypt operations for individual field values

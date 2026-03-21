@@ -214,7 +214,8 @@ cveil/
 │   ├── cveil-redis/             #   Redis client factory with TLS support
 │   ├── cveil-keycloak/          #   Keycloak admin client wrapper
 │   ├── cveil-metrics-worker/    #   Metrics sweeper and aggregation worker
-│   └── cveil-discovery-sensitive-annotation/  # @Sensitive annotation discovery
+│   ├── cveil-discovery-sensitive-annotation/  # @Sensitive annotation discovery
+│   └── cveil-crypto/           #   AES-256-GCM field encryption
 │
 ├── tenant/                      # Tenant-scoped (data plane) CQRS modules
 │   ├── cveil-consent-admin-command/           # Consent command service
@@ -228,7 +229,6 @@ cveil/
 │   ├── cveil-core-{schema,command,query-jooq,projection-jooq,jooq-common}/
 │   ├── cveil-billing-{schema,command,query-jooq,projection-jooq,jooq-common}/
 │   ├── cveil-iam-{schema,command,query,projection-jooq}/
-│   ├── cveil-platform-jooq/                   # Platform jOOQ infrastructure
 │   ├── cveil-platform-event-jooq/             # Platform event store
 │   ├── cveil-platform-keycloak/               # Platform Keycloak integration
 │   ├── cveil-platform-metrics-redis/          # Redis-based metrics publisher

@@ -1,4 +1,4 @@
-package com.koostack.cveil.plugin.platform.jooq.crypto;
+package com.koostack.cveil.common.crypto;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

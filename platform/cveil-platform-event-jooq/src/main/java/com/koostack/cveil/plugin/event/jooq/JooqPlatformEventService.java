@@ -2,6 +2,7 @@ package com.koostack.cveil.plugin.event.jooq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.koostack.cveil.common.crypto.FieldEncryptor;
 import com.koostack.cveil.core.event.EventService;
 import com.koostack.cveil.core.event.Shreddable;
 import com.koostack.cveil.core.event.models.AggregateSnapshotTrigger;
@@ -13,7 +14,6 @@ import com.koostack.cveil.core.models.AggregateRoot;
 import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.SubjectDsarService;
 import com.koostack.cveil.plugin.jooq.common.JooqContextFactory;
-import com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor;
 import com.koostack.cveil.plugin.redis.common.JedisProvider;
 import com.koostack.cveil.plugin.redis.common.RedisClientFactory;
 import com.koostack.cveil.plugin.redis.common.RedisContextFactory;
