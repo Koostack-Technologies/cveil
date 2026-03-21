@@ -1,11 +1,11 @@
-package com.koostack.cveil.rest.integration;
+package com.koostack.cveil.site.integration;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.cveil.rest.config.CveilConfig;
+import com.koostack.cveil.site.config.CveilConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;

@@ -1,11 +1,11 @@
-package com.koostack.cveil.rest.integration;
+package com.koostack.cveil.site.integration;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.cveil.rest.config.CveilConfig;
+import com.koostack.cveil.site.config.CveilConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -15,7 +15,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.cveil.rest.resource.BillingResource} exercising billing
+ * Integration test for {@link com.koostack.cveil.site.resource.BillingResource} exercising billing
  * endpoints at {@code /api/v1/billing} against real Postgres + Keycloak.
  *
  * <p>Since Stripe is <b>not</b> available in the test environment, this test validates:

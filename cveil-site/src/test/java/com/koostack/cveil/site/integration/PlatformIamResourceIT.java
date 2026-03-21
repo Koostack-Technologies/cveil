@@ -1,11 +1,11 @@
-package com.koostack.cveil.rest.integration;
+package com.koostack.cveil.site.integration;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.koostack.cveil.rest.config.CveilConfig;
+import com.koostack.cveil.site.config.CveilConfig;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -16,7 +16,7 @@ import java.util.List;
 import org.junit.jupiter.api.*;
 
 /**
- * Integration test for {@link com.koostack.cveil.rest.resource.PlatformIamResource} exercising user
+ * Integration test for {@link com.koostack.cveil.site.resource.PlatformIamResource} exercising user
  * management, service accounts, authentication, and RBAC against real Postgres + Redis + Keycloak.
  *
  * <p>Every mutating operation is verified at three layers:

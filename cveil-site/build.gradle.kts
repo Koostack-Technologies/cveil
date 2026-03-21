@@ -83,6 +83,7 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.27.3")
     testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.18.0")
+    testImplementation("org.awaitility:awaitility:4.2.2")
     testRuntimeOnly("com.h2database:h2:2.2.224")
 
     testImplementation(platform("org.testcontainers:testcontainers-bom:2.0.3"))

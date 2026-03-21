@@ -245,6 +245,84 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
+  # Cveil Site — Admin Platform & Dashboard
+  # ---------------------------------------------------------------------------
+  cveil-site:
+    build:
+      context: .
+      dockerfile: Dockerfile.site
+      args:
+        BUILD_STRATEGY: quarkus
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      QUARKUS_HTTP_PORT: "8081"
+      QUARKUS_HTTP_HOST: "0.0.0.0"
+      QUARKUS_VIRTUAL_THREADS_ENABLED: "true"
+
+      CVEIL_SITE_CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+
+      CVEIL_MODE: "production"
+      CVEIL_APP_NAME: "cveil-site-local"
+      CVEIL_SITE_BASE_URL: "http://localhost:8081"
+
+      CVEIL_DB_URL: "jdbc:postgresql://postgres:5432/cveil"
+      CVEIL_DB_DIALECT: "POSTGRES"
+      CVEIL_DB_USERNAME: "cveil"
+      CVEIL_DB_PASSWORD: "cveil_local_dev"
+      CVEIL_DB_SSL_MODE: "require"
+
+      CVEIL_REDIS_HOST: "redis"
+      CVEIL_REDIS_PORT: "6379"
+      CVEIL_REDIS_TLS_ENABLED: "true"
+      CVEIL_REDIS_TLS_CA_CERT_PATH: "/certs/ca.crt"
+      CVEIL_REDIS_TLS_VERIFY_PEER: "true"
+
+      CVEIL_BOOTSTRAP_KEY: "opr_bootstrap_localdev_do_not_use_in_prod"
+      CVEIL_FORCE_BOOTSTRAP: "false"
+
+      CVEIL_KEYCLOAK_URL: "http://keycloak:8080"
+      CVEIL_KEYCLOAK_ADMIN_USERNAME: "admin"
+      CVEIL_KEYCLOAK_ADMIN_PASSWORD: "admin"
+      CVEIL_KEYCLOAK_CLIENT_ID: "cveil-backend"
+      CVEIL_KEYCLOAK_ROOT_EMAIL: "admin@cveil.local"
+      CVEIL_KEYCLOAK_ROOT_PASSWORD: "admin"
+
+      CVEIL_KEYCLOAK_SMTP_HOST: "smtp.gmail.com"
+      CVEIL_KEYCLOAK_SMTP_PORT: "587"
+      CVEIL_KEYCLOAK_SMTP_FROM: "koostacktech@gmail.com"
+      CVEIL_KEYCLOAK_SMTP_USER: "koostacktech@gmail.com"
+      CVEIL_KEYCLOAK_SMTP_PASSWORD: "jtlcywxzufwsunsx"
+
+      CVEIL_STRIPE_SECRET_KEY: sk_test_51TB2Tx0hZvbJkvbUlp4her8bZpDfoIb7PX7UFQk9ehOlJYOJ3IspMnJj6EG0cu5lmBVe34uOpMzmYJNP7K9KUoVP004tz0CGbR
+      CVEIL_STRIPE_PUBLISHABLE_KEY: pk_test_51TB2Tx0hZvbJkvbUJUzsIHu7drjwMVFN5DKEOeHaQSyVX2VaMp6flaazTdLZO7yTDW2QH8UJBTqqvpLhiItBCleq00E6b3aQIi
+
+      JAVA_OPTS: >-
+        -XX:+UseZGC
+        -Xms256m
+        -Xmx1g
+        --enable-preview
+        -Dquarkus.log.level=INFO
+        -Dquarkus.log.category."com.koostack.cveil".level=DEBUG
+    volumes:
+      - ./certs/local:/certs:ro
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:8081/q/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # MailCrab — Email testing server (e2e profile only)
   # ---------------------------------------------------------------------------
   mailcrab:
