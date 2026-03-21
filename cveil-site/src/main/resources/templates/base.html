@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <title>{#insert title}Cveil{/insert} | Enterprise Consent &amp; Data Masking API</title>
+    <link rel="stylesheet" href="/css/cveil-web.css?v={v ?: '0'}">
+    {#insert head}{/insert}
+</head>
+<body class="antialiased min-h-screen flex flex-col relative overflow-x-hidden bg-surface-base text-on-surface">
+
+    <div class="bg-glow"></div>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-surface-lowest/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-1">
+                <span class="text-headline-sm tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
+            </a>
+            <div class="hidden md:flex items-center space-x-8 text-body-md font-medium text-on-surface-variant">
+                <a href="/" class="hover:text-on-surface transition-colors">Home</a>
+                <a href="/plans" class="hover:text-on-surface transition-colors">Pricing</a>
+                <a href="/docs" class="hover:text-on-surface transition-colors">Documentation</a>
+                <a href="/api/v1/docs" class="hover:text-on-surface transition-colors">API Explorer</a>
+                <a href="/login" class="hover:text-on-surface transition-colors">Log In</a>
+                <a href="/signup" class="btn-primary">Sign Up</a>
+            </div>
+            <!-- Mobile hamburger -->
+            <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="md:hidden p-2 text-on-surface-variant hover:text-on-surface" aria-label="Toggle menu">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden md:hidden relative z-10 bg-surface-lowest/95 backdrop-blur-md">
+        <div class="px-4 py-4 space-y-1 text-body-md font-medium text-on-surface-variant">
+            <a href="/" class="block py-2.5 hover:text-on-surface transition-colors">Home</a>
+            <a href="/plans" class="block py-2.5 hover:text-on-surface transition-colors">Pricing</a>
+            <a href="/docs" class="block py-2.5 hover:text-on-surface transition-colors">Documentation</a>
+            <a href="/api/v1/docs" class="block py-2.5 hover:text-on-surface transition-colors">API Explorer</a>
+            <a href="/login" class="block py-2.5 hover:text-on-surface transition-colors">Log In</a>
+            <a href="/signup" class="block py-2.5 text-primary font-semibold hover:text-primary-container transition-colors">Sign Up</a>
+        </div>
+    </div>
+
+    <!-- Page Content -->
+    {#insert content}No content provided.{/insert}
+
+    <!-- Footer -->
+    <footer class="relative z-10 bg-surface-lowest py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6 text-body-md text-on-surface-muted">
+            <div class="flex items-center gap-2">
+                <span class="text-body-lg font-semibold tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
+                <span>&copy; 2026 Cveil Inc. All rights reserved.</span>
+            </div>
+            <div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                <a href="/docs" class="hover:text-on-surface-variant transition-colors">Documentation</a>
+                <a href="/api/v1/docs" class="hover:text-on-surface-variant transition-colors">API Reference</a>
+                <a href="#" class="hover:text-on-surface-variant transition-colors">Security &amp; SOC2</a>
+                <a href="#" class="hover:text-on-surface-variant transition-colors">Privacy Policy</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

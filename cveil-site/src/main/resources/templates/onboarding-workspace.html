@@ -1,0 +1,68 @@
+{#include base.html}
+{#title}Name Your Organization{/title}
+{#head}
+{/head}
+{#content}
+
+    <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 sm:pb-20">
+        <div class="w-full max-w-lg">
+
+            <!-- Step indicator -->
+            <div class="flex items-center justify-center gap-2 mb-8 text-sm text-on-surface-muted">
+                <span class="flex items-center gap-1.5 text-primary font-medium">
+                    <span class="w-6 h-6 rounded-full bg-primary text-surface-lowest flex items-center justify-center text-xs font-bold">1</span>
+                    Organization
+                </span>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-6 h-6 rounded-full border border-surface-high flex items-center justify-center text-xs">2</span>
+                    Industry
+                </span>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-6 h-6 rounded-full border border-surface-high flex items-center justify-center text-xs">3</span>
+                    Compliance
+                </span>
+            </div>
+
+            <h1 class="text-3xl sm:text-4xl font-display font-bold tracking-tight text-center mb-3">
+                Name your organization
+            </h1>
+            <p class="text-on-surface-muted text-center text-lg mb-10">
+                This is where your team's consent data lives.
+            </p>
+
+            {#if error}
+            <div class="mb-6 rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-error">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>{error}</span>
+                </div>
+            </div>
+            {/if}
+
+            <form method="POST" action="/onboarding" class="space-y-6">
+                <!-- Organization name -->
+                <div>
+                    <label for="workspaceName" class="block text-sm font-medium text-on-surface-muted mb-2">Organization name</label>
+                    <input type="text" id="workspaceName" name="workspaceName"
+                           value="{workspaceName ?: ''}"
+                           placeholder="e.g. Acme Health, KooStack Technologies"
+                           required minlength="2" maxlength="100"
+                           class="input-field w-full">
+                    <p class="mt-1.5 text-xs text-on-surface-muted">You can change this later in settings.</p>
+                </div>
+
+                <!-- Submit -->
+                <button type="submit"
+                        class="btn-primary w-full px-6 py-3.5 text-lg flex items-center justify-center gap-2">
+                    Continue
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                </button>
+            </form>
+
+        </div>
+    </main>
+
+{/content}
+{/include}

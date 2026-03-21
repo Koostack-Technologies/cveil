@@ -1,0 +1,214 @@
+{#include docs-layout.html}
+{#doc-title}JavaScript SDK{/doc-title}
+{#doc-content}
+
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">JavaScript SDK</h1>
+    <p class="text-lg text-on-surface-muted max-w-2xl mb-8">WASM-powered consent evaluation and masking for Node.js applications, using Node.js WASI for server-side execution.</p>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Note:</strong> Requires Node.js 20 or later.
+    </div>
+
+    <!-- Installation -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Installation</h2>
+    <div class="docs-code mb-4"><pre>npm install @cveil/sdk-js</pre></div>
+
+    <!-- Client Initialization -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Client Initialization</h2>
+    <div class="docs-code mb-4"><pre>import { CveilClient } from '@cveil/sdk-js';
+
+const client = await CveilClient.create({
+  config: {
+    apiBaseUrl: 'https://api.cveil.dev',
+    apiToken: 'cveil_your_api_key',
+    defaultJurisdiction: 'EU',
+    staleMode: 'conservativeMask',  // or 'apiFallback'
+    disconnectThresholdMs: 60000,
+    decisionCacheMaxSize: 10000,
+    decisionCacheTtlMs: 300000,
+    dedupWindowSize: 500,
+  },
+  autoConnect: true,
+  graphPageSize: 100,
+});</pre></div>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-primary">Note:</strong> <code class="font-technical">CveilClient.create()</code> is async and returns a Promise. The client loads the WASM module and fetches the initial consent graph on creation.
+    </div>
+
+    <!-- Configuration Reference -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Configuration Reference</h2>
+    <div class="overflow-x-auto mb-8">
+        <table class="w-full text-sm text-left">
+            <thead>
+                <tr class="border-b border-surface-high/50 text-on-surface-variant text-xs uppercase tracking-wider">
+                    <th class="py-3 pr-4">Field</th>
+                    <th class="py-3 pr-4">Type</th>
+                    <th class="py-3 pr-4">Default</th>
+                    <th class="py-3">Description</th>
+                </tr>
+            </thead>
+            <tbody class="text-on-surface-muted">
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">apiBaseUrl</td>
+                    <td class="py-3 pr-4 font-technical">string</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">Cveil API base URL</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">apiToken</td>
+                    <td class="py-3 pr-4 font-technical">string</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">API token (must start with <code class="font-technical text-primary">cveil_</code>)</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">defaultJurisdiction</td>
+                    <td class="py-3 pr-4 font-technical">string</td>
+                    <td class="py-3 pr-4 text-error">required</td>
+                    <td class="py-3">Default jurisdiction</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">staleMode</td>
+                    <td class="py-3 pr-4 font-technical">'apiFallback' | 'conservativeMask'</td>
+                    <td class="py-3 pr-4 font-technical">conservativeMask</td>
+                    <td class="py-3">Behavior when SSE disconnects</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">disconnectThresholdMs</td>
+                    <td class="py-3 pr-4 font-technical">number</td>
+                    <td class="py-3 pr-4 font-technical">60000</td>
+                    <td class="py-3">Stale threshold in milliseconds</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">decisionCacheMaxSize</td>
+                    <td class="py-3 pr-4 font-technical">number</td>
+                    <td class="py-3 pr-4 font-technical">10000</td>
+                    <td class="py-3">Max cached decisions</td>
+                </tr>
+                <tr class="border-b border-surface-high/30">
+                    <td class="py-3 pr-4 font-technical text-on-surface">decisionCacheTtlMs</td>
+                    <td class="py-3 pr-4 font-technical">number</td>
+                    <td class="py-3 pr-4 font-technical">300000</td>
+                    <td class="py-3">Cache TTL in milliseconds</td>
+                </tr>
+                <tr>
+                    <td class="py-3 pr-4 font-technical text-on-surface">dedupWindowSize</td>
+                    <td class="py-3 pr-4 font-technical">number</td>
+                    <td class="py-3 pr-4 font-technical">500</td>
+                    <td class="py-3">Dedup window</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Data Masking -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Data Masking</h2>
+    <p class="text-on-surface-muted mb-4">Mask objects based on consent decisions. All masking methods are async.</p>
+
+    <div class="docs-code mb-4"><pre>const result = await client.mask('user-123', 'users', {
+  email: 'alice@acme.com',
+  phone: '555-867-5309',
+  ssn: '412-55-6789',
+}, 'marketing_emails');
+
+console.log(result.data);
+// { email: '****@acme.com', phone: '***', ssn: '***' }</pre></div>
+
+    <div class="docs-code mb-4"><pre>// With jurisdiction override
+const euResult = await client.maskWithJurisdiction(
+  'user-123', 'users', userData, 'marketing_emails', 'EU'
+);</pre></div>
+
+    <div class="docs-code mb-4"><pre>// Batch masking
+const results = await client.maskBatch('user-123', 'users', [data1, data2], 'marketing_emails');</pre></div>
+
+    <!-- Consent Operations -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Consent Operations</h2>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Grant &amp; Revoke</h3>
+    <div class="docs-code mb-4"><pre>await client.grant({
+  subject: 'user-123',
+  scope: { categoryName: 'PII', purposeName: 'marketing_emails' },
+  expiresAt: '2027-01-01T00:00:00Z',
+});
+
+await client.revoke({
+  subject: 'user-123',
+  scope: { categoryName: 'PII', purposeName: 'marketing_emails' },
+});</pre></div>
+
+    <h3 class="text-lg font-semibold mb-3 text-on-surface">Evaluate Consent</h3>
+    <div class="docs-code mb-4"><pre>const response = await client.evaluateConsent('user-123', {
+  scopes: [{ categoryName: 'PII', purposeName: 'marketing_emails' }],
+});</pre></div>
+
+    <!-- TypeScript Types -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">TypeScript Types</h2>
+    <p class="text-on-surface-muted mb-4">The SDK ships with full TypeScript definitions. Key exported types:</p>
+    <div class="flex flex-wrap gap-2 mb-6">
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">CveilConfig</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">CveilClientOptions</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">MaskResult</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">EvaluateResult</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">ConsentScope</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">GrantRequest</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">RevokeRequest</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">BatchGrantRequest</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">BatchRevokeRequest</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">SubjectView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">PurposeView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">RegulationView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">JurisdictionView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">FieldView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">EntityView</span>
+        <span class="bg-surface-container/30 border border-surface-high/50 rounded-md px-2.5 py-1 text-xs font-technical text-on-surface-muted">CategoryView</span>
+    </div>
+
+    <!-- Governance & Catalogue -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Governance &amp; Catalogue</h2>
+    <p class="text-on-surface-muted mb-4">All operations mirror the Java SDK but are async. Use <code class="font-technical text-primary">await</code> on every call.</p>
+
+    <div class="docs-code mb-4"><pre>// Purposes
+await client.registerPurpose({ name: 'marketing_emails', description: 'Promotional emails' });
+await client.addPurposePolicy({ purposeName: 'marketing_emails', scopeType: 'CATEGORY', scopeValue: 'PII' });
+
+// Regulations
+await client.registerRegulation({ name: 'GDPR', description: 'EU General Data Protection Regulation' });
+
+// Fields
+await client.registerField({ entityName: 'users', fieldName: 'email', description: 'User email' });
+await client.assignFieldToCategory({ entityName: 'users', fieldName: 'email', categoryName: 'PII' });</pre></div>
+
+    <!-- Subject Management -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Subject Management</h2>
+    <div class="docs-code mb-4"><pre>await client.registerSubject({ subjectId: 'user-123', description: "Alice's account" });
+const subject = await client.getSubject('user-123');
+const subjects = await client.listSubjects();
+await client.updateSubject('user-123', { description: 'Updated description' });
+await client.removeSubject('user-123');</pre></div>
+
+    <!-- DSAR Compliance -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">DSAR Compliance</h2>
+    <div class="docs-code mb-4"><pre>// Export (GDPR Article 20)
+const exportData = await client.exportSubjectData('user-123');
+
+// Erasure (GDPR Article 17)
+const receipt = await client.deleteSubjectData('user-123');
+// receipt: { subjectId, requestId, ledgerEntriesRevoked, cachedKeysDeleted, status, completedAt }
+
+// Irreversible key destruction
+await client.shredDsarKey('user-123');</pre></div>
+
+    <div class="bg-error-container/10 border border-error/20 rounded-md p-4 mb-6 text-sm text-on-surface-muted">
+        <strong class="text-error">Warning:</strong> <code class="font-technical">shredDsarKey</code> is irreversible. Once called, the subject's encryption key is permanently destroyed and their data can never be decrypted.
+    </div>
+
+    <!-- SDK Lifecycle -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">SDK Lifecycle</h2>
+    <div class="docs-code mb-4"><pre>const status = await client.status();
+// { initialized, connectionState, graphNodes, cachedDecisions }
+
+await client.shutdown();</pre></div>
+
+{/doc-content}
+{/include}

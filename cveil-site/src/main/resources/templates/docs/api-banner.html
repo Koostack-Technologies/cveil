@@ -1,0 +1,134 @@
+{#include docs-layout.html}
+{#doc-title}Banner Config API{/doc-title}
+{#doc-content}
+
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Banner Config API</h1>
+    <p class="text-lg text-on-surface-muted max-w-2xl mb-6">Manage consent banner configurations for your websites. Each configuration generates a unique site ID and embed snippet for drop-in consent collection.</p>
+    <p class="text-sm text-on-surface-muted mb-8">Base path: <code class="font-technical text-primary">/api/v1/banner</code></p>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-8 text-sm text-on-surface-muted">
+        <strong class="text-primary">Authentication:</strong> Bearer token with appropriate permissions.
+    </div>
+
+    <!-- Endpoint Summary Table -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Endpoint Summary</h2>
+    <div class="rounded-md border border-outline-variant overflow-hidden mb-12">
+        <div class="docs-endpoint-row flex items-center gap-3 px-4 py-3">
+            <span class="docs-badge-get">GET</span>
+            <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs</code>
+            <span class="ml-auto text-xs text-on-surface-muted hidden sm:block">List banner configurations</span>
+        </div>
+        <div class="docs-endpoint-row flex items-center gap-3 px-4 py-3">
+            <span class="docs-badge-post">POST</span>
+            <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs</code>
+            <span class="ml-auto text-xs text-on-surface-muted hidden sm:block">Create banner configuration</span>
+        </div>
+        <div class="docs-endpoint-row flex items-center gap-3 px-4 py-3">
+            <span class="docs-badge-put">PUT</span>
+            <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}</code>
+            <span class="ml-auto text-xs text-on-surface-muted hidden sm:block">Update configuration</span>
+        </div>
+        <div class="docs-endpoint-row flex items-center gap-3 px-4 py-3">
+            <span class="docs-badge-delete">DELETE</span>
+            <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}</code>
+            <span class="ml-auto text-xs text-on-surface-muted hidden sm:block">Delete configuration</span>
+        </div>
+        <div class="docs-endpoint-row flex items-center gap-3 px-4 py-3">
+            <span class="docs-badge-get">GET</span>
+            <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}/snippet</code>
+            <span class="ml-auto text-xs text-on-surface-muted hidden sm:block">Get embed snippet</span>
+        </div>
+    </div>
+
+    <!-- Endpoints -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Endpoints</h2>
+
+    <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+        <span class="docs-badge-get">GET</span>
+        <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs</code>
+    </h3>
+    <p class="text-sm text-on-surface-muted mb-4">Lists all banner configurations for the tenant.</p>
+    <p class="text-xs font-semibold text-on-surface-variant mb-2">Query Parameters</p>
+    <div class="rounded-md border border-outline-variant overflow-hidden mb-4">
+        <div class="flex items-center gap-3 px-4 py-3">
+            <code class="font-technical text-sm text-primary">limit</code>
+            <span class="text-xs text-on-surface-muted">integer, default <code class="font-technical">50</code> — Maximum results to return</span>
+        </div>
+    </div>
+    <p class="text-xs font-semibold text-on-surface-variant mb-2">Response</p>
+    <div class="docs-code mb-4"><pre>[
+  {
+    "siteId": "cvs_abc123",
+    "siteDomain": "example.com",
+    "bannerPosition": "bottom",
+    "bannerTheme": "dark",
+    "customText": {
+      "message": "We use cookies...",
+      "acceptButton": "Accept All",
+      "rejectButton": "Reject All",
+      "preferencesButton": "Manage Preferences"
+    },
+    "purposes": ["analytics", "marketing", "functional"],
+    "createdAt": "..."
+  }
+]</pre></div>
+
+    <h3 class="text-lg font-semibold mb-2 mt-10 flex items-center gap-2">
+        <span class="docs-badge-post">POST</span>
+        <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs</code>
+    </h3>
+    <p class="text-sm text-on-surface-muted mb-4">Creates a new banner configuration. Returns the config with a generated <code class="font-technical text-primary">siteId</code> that you'll use in the embed snippet.</p>
+    <p class="text-xs font-semibold text-on-surface-variant mb-2">Request</p>
+    <div class="docs-code mb-4"><pre>{
+  "siteDomain": "example.com",
+  "bannerPosition": "bottom",
+  "bannerTheme": "dark",
+  "customText": {
+    "message": "We use cookies to improve your experience.",
+    "acceptButton": "Accept All",
+    "rejectButton": "Reject All"
+  },
+  "purposes": ["analytics", "marketing"]
+}</pre></div>
+    <p class="text-xs font-semibold text-on-surface-variant mb-2">Response</p>
+    <p class="text-sm text-on-surface-muted mb-4">Banner configuration object with generated <code class="font-technical text-primary">siteId</code>.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-10 flex items-center gap-2">
+        <span class="docs-badge-put">PUT</span>
+        <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}</code>
+    </h3>
+    <p class="text-sm text-on-surface-muted mb-4">Updates an existing banner configuration. Changes take effect immediately for new page loads.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-10 flex items-center gap-2">
+        <span class="docs-badge-delete">DELETE</span>
+        <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}</code>
+    </h3>
+    <p class="text-sm text-on-surface-muted mb-4">Deletes a banner configuration. The banner will stop rendering on the associated domain.</p>
+
+    <h3 class="text-lg font-semibold mb-2 mt-10 flex items-center gap-2">
+        <span class="docs-badge-get">GET</span>
+        <code class="font-technical text-sm text-on-surface-muted">/api/v1/banner/configs/\{siteId}/snippet</code>
+    </h3>
+    <p class="text-sm text-on-surface-muted mb-4">Returns the HTML/JavaScript embed snippet for the specified banner configuration. Copy this snippet into your site's <code class="font-technical text-primary">&lt;head&gt;</code> or before the closing <code class="font-technical text-primary">&lt;/body&gt;</code> tag.</p>
+
+    <!-- Quick Integration -->
+    <h2 class="text-2xl font-bold mb-6 mt-16 pb-3 border-b border-surface-high/50">Quick Integration</h2>
+    <p class="text-sm text-on-surface-muted mb-4">After creating a banner configuration, add the following snippet to your website. Replace the <code class="font-technical text-primary">data-site-id</code> value with your generated site ID.</p>
+
+    <div class="docs-code mb-4"><pre>&lt;script src="https://your-cveil-instance.com/js/cveil-banner.min.js"
+        data-site-id="cvs_abc123"&gt;&lt;/script&gt;</pre></div>
+
+    <p class="text-sm text-on-surface-muted mb-4">The script automatically:</p>
+    <ul class="list-disc list-inside text-sm text-on-surface-muted mb-4 space-y-1">
+        <li>Renders the consent banner based on your configuration</li>
+        <li>Collects user consent preferences</li>
+        <li>Sends consent records to the Cveil API</li>
+        <li>Respects returning visitors' previous choices</li>
+    </ul>
+
+    <div class="bg-primary/5 border border-primary/20 rounded-md p-4 mb-8 text-sm text-on-surface-muted">
+        <strong class="text-primary">Tip:</strong> Use the <code class="font-technical text-primary">/api/v1/banner/configs/\{siteId}/snippet</code> endpoint to always get the latest recommended snippet for your configuration.
+    </div>
+
+{/doc-content}
+{/include}

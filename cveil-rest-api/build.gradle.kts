@@ -77,6 +77,7 @@ dependencies {
     implementation(project(":platform:cveil-plan-query-jooq"))
     implementation(project(":platform:cveil-payment-proc-stripe")) // Stripe payment processor
     implementation(project(":platform:cveil-webhook-outbound")) // Outbound webhook delivery
+    implementation(project(":platform:cveil-core-auth-projection-redis")) // Core auth Redis projection
 
     // platform schemas
 

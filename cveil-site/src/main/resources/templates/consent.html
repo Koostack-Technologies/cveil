@@ -1,0 +1,350 @@
+{#include dashboard-layout}
+{#title}Consent{/title}
+{#headerTitle}Consent{/headerTitle}
+{#content}
+
+    <!-- Sub-navigation tabs -->
+    <div class="mb-8">
+        <nav class="flex gap-6 -mb-px">
+            <button onclick="showTab('graph')" id="tab-graph"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-primary text-primary transition-colors">
+                Graph Explorer
+            </button>
+            <button onclick="showTab('ledger')" id="tab-ledger"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
+                Ledger Feed
+            </button>
+            <button onclick="showTab('subjects')" id="tab-subjects"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
+                Subjects
+            </button>
+            <button onclick="showTab('playground')" id="tab-playground"
+                class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">
+                Playground
+            </button>
+        </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Graph Explorer Tab                                            -->
+    <!-- ============================================================ -->
+    <section id="section-graph">
+        <!-- Controls bar -->
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+            <div class="flex items-center gap-2 bg-surface-low rounded-md p-1">
+                <button onclick="setGraphMode('force')" id="graph-mode-force"
+                    class="px-3 py-1.5 text-xs font-medium rounded-md bg-primary-container text-on-surface transition-colors">
+                    Force Graph
+                </button>
+                <button onclick="setGraphMode('tree')" id="graph-mode-tree"
+                    class="px-3 py-1.5 text-xs font-medium rounded-md text-on-surface-muted hover:text-on-surface transition-colors">
+                    Tree View
+                </button>
+            </div>
+            <div class="flex-1 min-w-[200px] max-w-md">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input id="graph-search" placeholder="BFS subgraph search — e.g. marketing, GDPR, user-123"
+                        class="w-full bg-surface-low ghost-border rounded-md pl-10 pr-3 py-2 text-sm text-on-surface placeholder-on-surface-muted focus:border-primary/40 focus:outline-none" />
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="graph-root-type" class="bg-surface-low ghost-border rounded-md px-3 py-2 text-sm text-on-surface focus:border-primary/40 focus:outline-none">
+                    <option value="">All types</option>
+                    <option value="purpose">Purpose</option>
+                    <option value="regulation">Regulation</option>
+                    <option value="jurisdiction">Jurisdiction</option>
+                    <option value="field">Field</option>
+                    <option value="subject">Subject</option>
+                </select>
+                <button onclick="loadGraph()" class="px-4 py-2 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
+                    Search
+                </button>
+                <button onclick="resetGraph()" class="px-3 py-2 text-on-surface-variant hover:text-on-surface ghost-border rounded-md hover:bg-surface-container text-sm transition-colors">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap items-center gap-4 mb-4 text-xs text-on-surface-muted">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-teal-500"></span> Purpose</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500"></span> Regulation</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500"></span> Jurisdiction</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-purple-500"></span> Field</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-pink-500"></span> Subject</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-on-surface-muted"></span> Other</span>
+        </div>
+
+        <!-- Graph canvas -->
+        <div id="graph-container" class="bg-surface-low rounded-md overflow-hidden relative" style="height: 520px;">
+            <svg id="graph-svg" class="w-full h-full"></svg>
+            <div id="graph-loading" class="absolute inset-0 flex items-center justify-center bg-surface-low/80">
+                <span class="text-on-surface-muted text-sm">Loading graph…</span>
+            </div>
+            <div id="graph-empty" class="hidden absolute inset-0 flex items-center justify-center">
+                <span class="text-on-surface-muted text-sm">No graph data. Use the search or click Reset to load all nodes.</span>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="graph-pagination" class="hidden flex items-center justify-between mt-4">
+            <span id="graph-stats" class="text-xs text-on-surface-muted"></span>
+            <button id="graph-load-more" onclick="loadMoreGraph()" class="px-4 py-2 text-sm text-primary-container border border-primary/30 rounded-md hover:bg-primary/10 transition-colors">
+                Load More
+            </button>
+        </div>
+
+        <!-- Node detail tooltip -->
+        <div id="graph-tooltip" class="hidden fixed z-50 bg-surface-low rounded-md shadow-lg p-4 max-w-xs pointer-events-none">
+            <p id="tooltip-type" class="text-xs text-on-surface-muted uppercase tracking-wide mb-1"></p>
+            <p id="tooltip-name" class="text-sm font-medium text-on-surface mb-2"></p>
+            <dl id="tooltip-props" class="text-xs text-on-surface-muted space-y-1"></dl>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Ledger Feed Tab                                               -->
+    <!-- ============================================================ -->
+    <section id="section-ledger" class="hidden">
+        <!-- Controls -->
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+            <div class="flex items-center gap-2">
+                <span id="sse-status" class="flex items-center gap-1.5 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-on-surface-muted animate-pulse"></span>
+                    <span class="text-on-surface-muted">Connecting…</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2 ml-auto">
+                <select id="ledger-filter-action" onchange="applyLedgerFilters()" class="bg-surface-low ghost-border rounded-md px-3 py-1.5 text-xs text-on-surface focus:border-primary/40 focus:outline-none">
+                    <option value="">All Actions</option>
+                    <option value="GRANTED">Granted</option>
+                    <option value="REVOKED">Revoked</option>
+                    <option value="ALL_REVOKED">All Revoked</option>
+                    <option value="CONSENT_ENTRY_CHANGED">Entry Changed</option>
+                </select>
+                <input id="ledger-filter-subject" placeholder="Filter subject…" onkeyup="applyLedgerFilters()"
+                    class="bg-surface-low ghost-border rounded-md px-3 py-1.5 text-xs text-on-surface placeholder-on-surface-muted focus:border-primary/40 focus:outline-none w-36" />
+                <input id="ledger-filter-purpose" placeholder="Filter purpose…" onkeyup="applyLedgerFilters()"
+                    class="bg-surface-low ghost-border rounded-md px-3 py-1.5 text-xs text-on-surface placeholder-on-surface-muted focus:border-primary/40 focus:outline-none w-36" />
+                <button id="ledger-pause-btn" onclick="toggleLedgerPause()" class="px-3 py-1.5 text-xs ghost-border rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" title="Pause auto-scroll">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Feed list -->
+        <div id="ledger-feed" class="bg-surface-low rounded-md overflow-y-auto space-y-0 divide-y divide-surface-high" style="max-height: 560px;">
+            <div id="ledger-empty" class="px-6 py-12 text-center text-on-surface-muted">
+                <svg class="w-8 h-8 mx-auto mb-3 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                Waiting for consent events…
+            </div>
+        </div>
+        <p id="ledger-count" class="text-xs text-on-surface-muted mt-2"></p>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Subjects Tab                                                  -->
+    <!-- ============================================================ -->
+    <section id="section-subjects" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex-1 max-w-md">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input id="subjects-search" placeholder="Search subjects…" oninput="filterSubjects()"
+                        class="w-full bg-surface-low ghost-border rounded-md pl-10 pr-3 py-2 text-sm text-on-surface placeholder-on-surface-muted focus:border-primary/40 focus:outline-none" />
+                </div>
+            </div>
+            <button onclick="openSubjectPanel('add')" class="ml-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
+                <svg class="w-4 h-4 -ml-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Register Subject
+            </button>
+        </div>
+
+        <!-- Subjects table -->
+        <div class="bg-surface-low rounded-md overflow-hidden">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-surface-base text-on-surface-muted uppercase text-xs tracking-wide">
+                    <tr>
+                        <th class="px-6 py-3">Subject Name</th>
+                        <th class="px-6 py-3">Description</th>
+                        <th class="px-6 py-3">Created</th>
+                        <th class="px-6 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="subjects-table" class="divide-y divide-surface-high">
+                    <tr><td colspan="4" class="px-6 py-8 text-center text-on-surface-muted">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Subject detail panel (inline, below table) -->
+        <div id="subject-detail" class="hidden mt-6">
+            <div class="bg-surface-low rounded-md">
+                <div class="flex items-center justify-between px-6 py-4">
+                    <h3 id="subject-detail-title" class="text-lg font-semibold"></h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="closeSubjectDetail()" class="text-on-surface-muted hover:text-on-surface p-1 rounded-md hover:bg-surface-container transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Detail tabs -->
+                <div class="">
+                    <nav class="flex gap-4 px-6">
+                        <button onclick="showDetailTab('summary')" id="dtab-summary" class="dtab-btn pb-3 pt-3 text-xs font-medium border-b-2 border-primary text-primary transition-colors">Summary</button>
+                        <button onclick="showDetailTab('history')" id="dtab-history" class="dtab-btn pb-3 pt-3 text-xs font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">History</button>
+                        <button onclick="showDetailTab('compliance')" id="dtab-compliance" class="dtab-btn pb-3 pt-3 text-xs font-medium border-b-2 border-transparent text-on-surface-muted hover:text-on-surface transition-colors">Compliance</button>
+                    </nav>
+                </div>
+                <div id="subject-detail-body" class="p-6">
+                    <p class="text-on-surface-muted text-sm">Loading…</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Playground Tab (Interactive Masking Lab)                       -->
+    <!-- ============================================================ -->
+    <section id="section-playground" class="hidden">
+        <div id="playground-msg" class="hidden"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left: Configuration Panel -->
+            <div class="lg:col-span-4 space-y-5">
+                <div class="bg-surface-low rounded-md p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-sm font-semibold text-on-surface">Configuration</h4>
+                        <span id="pg-wasm-badge" class="text-xs px-2 py-0.5 rounded-full bg-surface-container text-on-surface-muted">Loading…</span>
+                    </div>
+
+                    <label class="block text-xs font-medium text-on-surface-muted mb-1">Subject</label>
+                    <select id="pg-subject" class="w-full bg-surface-low ghost-border rounded-md px-3 py-2 text-sm text-on-surface focus:border-primary/40 focus:outline-none mb-3">
+                        <option value="">— select —</option>
+                    </select>
+
+                    <label class="block text-xs font-medium text-on-surface-muted mb-1">Entity</label>
+                    <select id="pg-entity" class="w-full bg-surface-low ghost-border rounded-md px-3 py-2 text-sm text-on-surface focus:border-primary/40 focus:outline-none mb-3">
+                        <option value="">— select —</option>
+                    </select>
+
+                    <label class="block text-xs font-medium text-on-surface-muted mb-1">Purpose</label>
+                    <select id="pg-purpose" class="w-full bg-surface-low ghost-border rounded-md px-3 py-2 text-sm text-on-surface focus:border-primary/40 focus:outline-none mb-4">
+                        <option value="">— select —</option>
+                    </select>
+
+                    <button id="pg-evaluate-btn" onclick="evaluateAndMask()"
+                        class="w-full px-4 py-2.5 bg-primary-container hover:bg-primary-dim text-on-surface text-sm font-medium rounded-md transition-colors">
+                        Evaluate &amp; Mask
+                    </button>
+                </div>
+
+                <!-- Sample Templates -->
+                <div class="bg-surface-low rounded-md p-5">
+                    <h4 class="text-xs font-semibold text-on-surface-muted uppercase tracking-wide mb-3">Sample Templates</h4>
+                    <div id="pg-templates" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <!-- Consent Decisions Table -->
+                <div class="bg-surface-low rounded-md overflow-hidden">
+                    <div class="px-4 py-3">
+                        <h4 class="text-xs font-semibold text-on-surface-muted uppercase tracking-wide">Consent Decisions</h4>
+                    </div>
+                    <div id="pg-decisions" class="overflow-auto" style="max-height: 320px;">
+                        <p class="text-on-surface-muted text-xs px-3 py-6 text-center">Run an evaluation to see consent decisions.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: JSON Input + Masked Output -->
+            <div class="lg:col-span-8 space-y-5">
+                <!-- JSON Input -->
+                <div class="bg-surface-low rounded-md p-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-xs font-semibold text-on-surface-muted uppercase tracking-wide">JSON Input</h4>
+                        <span class="text-xs text-on-surface-muted">Paste or edit your data payload</span>
+                    </div>
+                    <textarea id="pg-json-input" rows="12" spellcheck="false"
+                        class="w-full font-technical text-xs bg-surface-base ghost-border rounded-md px-4 py-3 text-on-surface placeholder-on-surface-muted focus:border-primary/40 focus:outline-none leading-relaxed"
+                        placeholder='{
+  "name": "Alice Smith",
+  "email": "alice@example.com",
+  "ssn": "123-45-6789"
+}'></textarea>
+                </div>
+
+                <!-- Masked Output -->
+                <div class="bg-surface-base rounded-md p-5">
+                    <div id="pg-masked-output">
+                        <p class="text-on-surface-muted text-xs px-3 py-6 text-center">Masked output will appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Slide-out Panel (for subject CRUD)                            -->
+    <!-- ============================================================ -->
+    <div id="panel-overlay" class="hidden fixed inset-0 z-40 bg-black/30 transition-opacity" onclick="closeSubjectPanel()"></div>
+    <aside id="panel" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-surface-low shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4">
+            <h3 id="panel-title" class="text-lg font-semibold"></h3>
+            <button onclick="closeSubjectPanel()" class="text-on-surface-muted hover:text-on-surface p-1 rounded-md hover:bg-surface-container transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="panel-body" class="p-6"></div>
+    </aside>
+
+    <!-- Delete confirmation modal -->
+    <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div class="bg-surface-low rounded-md p-6 max-w-sm w-full mx-4 shadow-lg">
+            <h3 class="text-lg font-semibold text-on-surface mb-2">Confirm Delete</h3>
+            <p id="delete-modal-msg" class="text-sm text-on-surface-muted mb-6"></p>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface ghost-border rounded-md hover:bg-surface-container transition-colors">Cancel</button>
+                <button id="delete-modal-confirm" class="px-4 py-2 text-sm text-on-surface bg-red-600 hover:bg-red-700 rounded-md transition-colors">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Erasure confirmation modal (type-to-confirm) -->
+    <div id="erasure-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div class="bg-surface-low rounded-md p-6 max-w-md w-full mx-4 shadow-lg">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-error-container rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-on-error-container" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-on-surface">Permanently Erase Subject Data?</h3>
+            </div>
+            <div class="text-sm text-on-surface-muted space-y-2 mb-4">
+                <p>This will <strong class="text-on-surface">permanently</strong>:</p>
+                <ul class="list-disc ml-5 space-y-1">
+                    <li>Revoke all consent for this subject</li>
+                    <li>Delete all cached consent decisions from Redis</li>
+                    <li>Remove the subject entity record</li>
+                    <li>Log an irreversible deletion audit entry</li>
+                </ul>
+                <p class="text-on-error-container font-medium">After shredding the encryption key (Step 2), all event payloads become permanently unreadable.</p>
+            </div>
+            <label class="block text-xs font-medium text-on-surface mb-1">
+                Type <code id="erasure-modal-token" class="bg-surface-container px-1.5 py-0.5 rounded-md text-on-error-container font-technical text-xs"></code> to confirm
+            </label>
+            <input id="erasure-modal-input" type="text" class="w-full ghost-border rounded-md px-3 py-2 text-sm font-technical focus:border-red-500 focus:outline-none mb-1" placeholder="" autocomplete="off">
+            <p id="erasure-modal-error" class="text-sm text-red-500 mb-4 hidden"></p>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeErasureModal()" class="px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface ghost-border rounded-md hover:bg-surface-container transition-colors">Cancel</button>
+                <button id="erasure-modal-confirm" class="px-4 py-2 text-sm text-on-surface bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Begin Erasure</button>
+            </div>
+        </div>
+    </div>
+
+<!-- D3.js for graph visualization -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="/js/cveil-web.iife.js?v={v}"></script>
+<script>CveilWeb.consent.init();</script>
+
+{/content}
+{/include}

@@ -408,6 +408,23 @@ public class CveilProducers {
     }
 
     /**
+     * Produces the {@link CoreAuthRedisQueryService} for Redis-backed API key validation,
+     * permission resolution, and plan limit lookups. Returns {@code null} in embedded mode.
+     */
+    @Produces
+    @ApplicationScoped
+    public com.koostack.cveil.platform.auth.projection.redis.CoreAuthRedisQueryService
+            coreAuthRedisQueryService(Cveil cveil) {
+        cveil.appName(); // force CDI ordering
+        if (adminRedisPool == null) {
+            LOG.debug("Cveil REST API: CoreAuthRedisQueryService not available (no Redis)");
+            return null;
+        }
+        return new com.koostack.cveil.platform.auth.projection.redis.CoreAuthRedisQueryService(
+                () -> adminRedisPool);
+    }
+
+    /**
      * Produces the consent admin {@link CommandDispatcher} for direct command-record dispatch from
      * REST resources. Returns {@code null} in embedded mode where the consent command service is
      * not configured as a dispatcher.
@@ -1304,12 +1321,22 @@ public class CveilProducers {
         consumer.registerHandler("core-projection", (StreamHandler) coreProjection::onEvent);
         consumer.registerHandler("billing-projection", (StreamHandler) billingProjection::onEvent);
         consumer.registerHandler("iam-projection", (StreamHandler) iamProjection::onEvent);
+
+        // Core auth Redis projection — materializes API key, role, plan, and tenant events
+        // into auth:* Redis keys for fast API-key validation and permission resolution.
+        var coreAuthProjection =
+                new com.koostack.cveil.platform.auth.projection.redis
+                        .CoreAuthRedisProjectionHandler(() -> adminRedisPool);
+        consumer.registerHandler(
+                "core-auth-projection", (StreamHandler) coreAuthProjection::onEvent);
+
         consumer.addTenant("platform");
 
         this.platformStreamConsumer = consumer;
         LOG.info(
                 "Cveil REST API: platform stream consumer started"
-                        + " (groups=core-projection,billing-projection,iam-projection)");
+                        + " (groups=core-projection,billing-projection,iam-projection,"
+                        + "core-auth-projection)");
 
         // -- Metrics publisher + projection ------------------------------------
         wireMetrics(redisPluginConfig, platformDataSource);

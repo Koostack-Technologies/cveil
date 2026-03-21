@@ -1,0 +1,99 @@
+{#include dashboard-layout}
+{#title}Webhooks{/title}
+{#headerTitle}Webhooks{/headerTitle}
+{#content}
+
+            <!-- Header -->
+            <div class="mb-8 flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Webhooks</h1>
+                    <p class="text-on-surface-muted">Manage outbound webhook endpoints that receive event notifications from your workspace.</p>
+                </div>
+                <button id="btn-create-webhook" onclick="CveilWeb.webhooks.showCreateModal()" class="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Add endpoint
+                </button>
+            </div>
+
+            <!-- Empty state (hidden when endpoints exist) -->
+            <div id="webhooks-empty" class="hidden text-center py-16">
+                <svg class="w-12 h-12 text-on-surface-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                <p class="text-on-surface-muted mb-1">No webhook endpoints configured</p>
+                <p class="text-sm text-on-surface-muted">Create an endpoint to start receiving event notifications.</p>
+            </div>
+
+            <!-- Loading state -->
+            <div id="webhooks-loading" class="text-center py-16">
+                <p class="text-on-surface-muted">Loading endpoints…</p>
+            </div>
+
+            <!-- Endpoints table -->
+            <div id="webhooks-table-wrap" class="hidden">
+                <div class="bg-surface-low rounded-md overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-surface-high">
+                                <th class="text-left px-4 py-3 text-label-sm text-on-surface-muted uppercase tracking-wide font-medium">URL</th>
+                                <th class="text-left px-4 py-3 text-label-sm text-on-surface-muted uppercase tracking-wide font-medium">Events</th>
+                                <th class="text-left px-4 py-3 text-label-sm text-on-surface-muted uppercase tracking-wide font-medium">Status</th>
+                                <th class="text-right px-4 py-3 text-label-sm text-on-surface-muted uppercase tracking-wide font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="webhooks-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Create / Edit Modal -->
+            <div id="webhook-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+                <div class="fixed inset-0 bg-black/40" onclick="CveilWeb.webhooks.closeModal()"></div>
+                <div class="relative bg-surface-low rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
+                    <h2 id="webhook-modal-title" class="text-lg font-semibold mb-4">Add webhook endpoint</h2>
+                    <form id="webhook-form" onsubmit="return CveilWeb.webhooks.submitForm(event)">
+                        <input type="hidden" id="webhook-edit-id" value="">
+
+                        <label class="block text-sm font-medium text-on-surface mb-1">Endpoint URL</label>
+                        <input id="webhook-url" type="url" required placeholder="https://example.com/webhook" class="w-full bg-surface-base ghost-border rounded-md px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-1 focus:ring-primary">
+
+                        <label class="block text-sm font-medium text-on-surface mb-1">Description <span class="text-on-surface-muted">(optional)</span></label>
+                        <input id="webhook-desc" type="text" placeholder="Production webhook" class="w-full bg-surface-base ghost-border rounded-md px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-1 focus:ring-primary">
+
+                        <label class="block text-sm font-medium text-on-surface mb-1">Event types</label>
+                        <div id="webhook-events" class="grid grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto bg-surface-base rounded-md p-3 ghost-border">
+                            <!-- Populated by JS -->
+                        </div>
+
+                        <div id="webhook-form-error" class="hidden text-sm text-red-400 mb-3"></div>
+
+                        <div class="flex justify-end gap-3 mt-2">
+                            <button type="button" onclick="CveilWeb.webhooks.closeModal()" class="px-4 py-2 text-sm rounded-md text-on-surface-variant hover:bg-surface-high transition-colors">Cancel</button>
+                            <button type="submit" id="webhook-submit-btn" class="px-4 py-2 text-sm rounded-md bg-primary text-on-primary hover:bg-primary/90 transition-colors font-medium">Create</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Secret reveal modal -->
+            <div id="secret-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+                <div class="fixed inset-0 bg-black/40" onclick="document.getElementById('secret-modal').classList.add('hidden')"></div>
+                <div class="relative bg-surface-low rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+                    <h2 class="text-lg font-semibold mb-2">Signing secret</h2>
+                    <p class="text-sm text-on-surface-muted mb-4">Copy this secret now — it won't be shown again.</p>
+                    <div class="bg-surface-base rounded-md px-3 py-2 font-mono text-sm break-all select-all" id="secret-value"></div>
+                    <div class="flex justify-end mt-4">
+                        <button onclick="document.getElementById('secret-modal').classList.add('hidden')" class="px-4 py-2 text-sm rounded-md bg-primary text-on-primary hover:bg-primary/90 transition-colors font-medium">Done</button>
+                    </div>
+                </div>
+            </div>
+
+            <script src="/js/cveil-web.iife.js?v={v ?: '0'}"></script>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (window.CveilWeb && window.CveilWeb.webhooks) {
+                        CveilWeb.webhooks.init();
+                    }
+                });
+            </script>
+
+{/content}
+{/include}

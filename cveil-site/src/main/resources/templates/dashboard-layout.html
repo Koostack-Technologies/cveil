@@ -1,0 +1,356 @@
+{! Shared dashboard layout — all dashboard pages extend this via {#include} !}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <title>{#insert title}Dashboard{/insert} | Cveil</title>
+    <link rel="stylesheet" href="/css/cveil-web.css?v={v ?: '0'}">
+    <script src="/js/cveil-web.iife.js?v={v ?: '0'}"></script>
+</head>
+<body class="antialiased bg-surface-base text-on-surface h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="hidden md:flex md:flex-col w-64 bg-surface-lowest">
+        <!-- Logo -->
+        <div class="h-16 flex items-center gap-1 px-5 bg-surface-lowest">
+            <span class="text-headline-sm tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
+        </div>
+
+        <!-- Workspace switcher -->
+        <div class="px-4 py-4">
+            <div class="relative" id="ws-switcher">
+                <button {#if organizations != null && organizations.size > 1}onclick="document.getElementById('ws-dropdown').classList.toggle('hidden')"{/if}
+                        class="w-full bg-surface-container rounded-md px-3 py-2 text-left hover:bg-surface-high transition-colors group">
+                    <p class="text-label-sm text-on-surface-muted">Organization</p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-body-md font-technical text-on-surface truncate">{workspaceDisplayName ?: tenantId ?: 'default'}</p>
+                        {#if organizations != null && organizations.size > 1}
+                        <svg class="w-4 h-4 text-on-surface-muted group-hover:text-on-surface-variant shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                        {/if}
+                    </div>
+                    {#if activeOrgId}
+                    <p class="text-label-sm font-technical text-on-surface-muted truncate mt-0.5">{tenantId}</p>
+                    {/if}
+                </button>
+
+                <!-- Dropdown (only shown when user belongs to multiple orgs) -->
+                {#if organizations != null && organizations.size > 1}
+                <div id="ws-dropdown" class="hidden absolute left-0 right-0 mt-1 glass-panel z-50 max-h-64 overflow-y-auto">
+                    {#for org in organizations}
+                    <form method="POST" action="/dashboard/switch-org" class="contents">
+                        <input type="hidden" name="orgName" value="{org.orgName}">
+                        <button type="submit" class="w-full text-left px-3 py-2.5 hover:bg-surface-high transition-colors {#if activeOrgId == org.orgId}bg-surface-high{/if}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">{org.orgName.charAt(0)}</span>
+                                <div class="min-w-0">
+                                    <p class="text-body-md text-on-surface truncate">{org.displayName ?: org.orgName}</p>
+                                    <p class="text-label-sm font-technical text-on-surface-muted truncate">{org.orgName}</p>
+                                </div>
+                                {#if activeOrgId == org.orgId}
+                                <svg class="w-4 h-4 text-primary shrink-0 ml-auto" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                {/if}
+                            </div>
+                        </button>
+                    </form>
+                    {/for}
+                </div>
+                {/if}
+            </div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 px-3 space-y-4 overflow-y-auto" id="sidebar-nav">
+            <!-- Workspace -->
+            <div class="nav-group" data-group="workspace">
+                <button type="button" onclick="toggleNavGroup('workspace')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Workspace</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'overview'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Overview</a>
+                    <a href="/dashboard/governance" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'governance'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Governance</a>
+                    <a href="/dashboard/catalogue" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'catalogue'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Catalogue</a>
+                </div>
+            </div>
+
+            <!-- Privacy -->
+            <div class="nav-group" data-group="privacy">
+                <button type="button" onclick="toggleNavGroup('privacy')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Privacy</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/consent" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'consent'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Consent</a>
+                    <a href="/dashboard/dsar" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'dsar'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">DSAR</a>
+                </div>
+            </div>
+
+            <!-- Insights -->
+            <div class="nav-group" data-group="insights">
+                <button type="button" onclick="toggleNavGroup('insights')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Insights</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/analytics" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'analytics'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Analytics</a>
+                    <a href="/dashboard/reports" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'reports'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Reports</a>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="nav-group" data-group="settings">
+                <button type="button" onclick="toggleNavGroup('settings')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                    <span>Settings</span>
+                    <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div class="nav-group-items mt-1 space-y-0.5">
+                    <a href="/dashboard/webhooks" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'webhooks'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Webhooks</a>
+                    <a href="/dashboard/billing" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'billing'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Billing</a>
+                    <a href="/dashboard/account" class="block px-3 py-2 rounded-md text-body-md font-medium transition-colors {#if activeNav == 'account'}bg-surface-high text-on-surface{#else}text-on-surface-variant hover:bg-surface-container hover:text-on-surface{/if}">Account</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sidebar footer -->
+        <div class="px-4 py-4 bg-surface-lowest">
+            <a href="/docs" class="flex items-center gap-2 text-label-md text-on-surface-muted hover:text-on-surface-variant transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                Documentation
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Top header -->
+        <header class="h-16 flex items-center justify-between px-6 bg-surface-low">
+            <!-- Mobile menu button -->
+            <button onclick="document.getElementById('mobile-sidebar').classList.toggle('hidden')" class="md:hidden p-2 -ml-2 text-on-surface-variant hover:text-on-surface" aria-label="Toggle sidebar">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+
+            <div class="hidden md:block">
+                <h2 class="text-headline-sm">{#insert headerTitle}Dashboard{/insert}</h2>
+            </div>
+
+            <!-- User actions -->
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-body-md font-medium text-on-surface">{username ?: 'User'}</p>
+                    <p class="text-label-sm text-on-surface-muted">{roles ?: 'member'}</p>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-body-md font-bold">
+                    {initial ?: 'U'}
+                </div>
+                <button type="button" id="logout-btn" class="text-on-surface-variant hover:text-on-surface p-2 rounded-md hover:bg-surface-high transition-colors" title="Sign out">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Mobile sidebar overlay -->
+        <div id="mobile-sidebar" class="hidden fixed inset-0 z-40 md:hidden">
+            <div class="fixed inset-0 bg-black/40" onclick="document.getElementById('mobile-sidebar').classList.add('hidden')"></div>
+            <aside class="relative w-64 h-full bg-surface-lowest overflow-y-auto">
+                <div class="h-16 flex items-center gap-1 px-5">
+                    <span class="text-headline-sm tracking-tight"><span class="text-primary">c</span><span class="text-on-surface">veil</span></span>
+                </div>
+                <nav class="px-3 py-4 space-y-4">
+                    <div class="nav-group" data-group="workspace">
+                        <button type="button" onclick="toggleNavGroup('workspace')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Workspace</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'overview'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Overview</a>
+                            <a href="/dashboard/governance" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'governance'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Governance</a>
+                            <a href="/dashboard/catalogue" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'catalogue'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Catalogue</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="privacy">
+                        <button type="button" onclick="toggleNavGroup('privacy')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Privacy</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/consent" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'consent'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Consent</a>
+                            <a href="/dashboard/dsar" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'dsar'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">DSAR</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="insights">
+                        <button type="button" onclick="toggleNavGroup('insights')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Insights</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/analytics" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'analytics'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Analytics</a>
+                            <a href="/dashboard/reports" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'reports'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Reports</a>
+                        </div>
+                    </div>
+                    <div class="nav-group" data-group="settings">
+                        <button type="button" onclick="toggleNavGroup('settings')" class="w-full flex items-center justify-between px-3 py-1.5 text-label-sm uppercase tracking-wider text-on-surface-muted">
+                            <span>Settings</span>
+                            <svg class="nav-chevron w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div class="nav-group-items mt-1 space-y-0.5">
+                            <a href="/dashboard/webhooks" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'webhooks'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Webhooks</a>
+                            <a href="/dashboard/billing" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'billing'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Billing</a>
+                            <a href="/dashboard/account" class="block px-3 py-2 rounded-md text-body-md font-medium {#if activeNav == 'account'}bg-surface-high text-on-surface{#else}text-on-surface-variant{/if}">Account</a>
+                        </div>
+                    </div>
+                </nav>
+            </aside>
+        </div>
+
+        <!-- Main content -->
+        <main class="flex-1 overflow-y-auto p-6 sm:p-8 bg-surface-base">
+            {#if !emailVerified}
+            <!-- Email verification banner — dismissed via sessionStorage, reappears on next login -->
+            <div id="verify-email-banner" class="mb-6 flex items-center justify-between gap-4 rounded-md bg-yellow-900/30 border border-yellow-600/30 px-4 py-3 text-sm text-yellow-200">
+                <div class="flex items-center gap-3">
+                    <svg class="h-5 w-5 shrink-0 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3l9.66 16.59A1 1 0 0 1 20.66 21H3.34a1 1 0 0 1-.86-1.41L12 3z"/></svg>
+                    <span>Please verify your email address to unlock all features.</span>
+                    <button id="verify-resend-btn" type="button" onclick="resendVerification(this)" class="ml-2 rounded bg-yellow-600/40 px-3 py-1 text-xs font-medium text-yellow-100 hover:bg-yellow-600/60 transition-colors">
+                        Resend verification email
+                    </button>
+                    <span id="verify-resend-msg" class="hidden ml-2 text-xs text-yellow-300"></span>
+                </div>
+                <button id="verify-dismiss-btn" type="button" onclick="dismissVerifyBanner()" class="shrink-0 text-yellow-400 hover:text-yellow-200 transition-colors" aria-label="Dismiss">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            {/if}
+            {#insert content}
+            <p class="text-on-surface-muted">No content.</p>
+            {/insert}
+        </main>
+    </div>
+
+    <script>
+        function toggleNavGroup(group) {
+            var key = 'cveil_nav_' + group;
+            var groups = document.querySelectorAll('.nav-group[data-group="' + group + '"]');
+            var isCollapsed = localStorage.getItem(key) === 'collapsed';
+            if (isCollapsed) {
+                localStorage.removeItem(key);
+            } else {
+                localStorage.setItem(key, 'collapsed');
+            }
+            groups.forEach(function(g) { applyNavGroupState(g, !isCollapsed); });
+        }
+        function applyNavGroupState(el, collapsed) {
+            var items = el.querySelector('.nav-group-items');
+            var chevron = el.querySelector('.nav-chevron');
+            if (!items) return;
+            if (collapsed) {
+                items.style.display = 'none';
+                if (chevron) chevron.style.transform = 'rotate(-90deg)';
+            } else {
+                items.style.display = '';
+                if (chevron) chevron.style.transform = '';
+            }
+        }
+        (function initNavGroups() {
+            ['workspace', 'privacy', 'insights', 'settings'].forEach(function(group) {
+                var collapsed = localStorage.getItem('cveil_nav_' + group) === 'collapsed';
+                document.querySelectorAll('.nav-group[data-group="' + group + '"]').forEach(function(g) {
+                    applyNavGroupState(g, collapsed);
+                });
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            var tid = '{tenantId}';
+            var pid = '{personalTenantId}';
+            if (tid && tid !== pid) {
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_active_org=' + encodeURIComponent(tid) + '; path=/; max-age=31536000; SameSite=Lax' + sec;
+            }
+        })();
+        document.addEventListener('click', function(e) {
+            var switcher = document.getElementById('ws-switcher');
+            var dropdown = document.getElementById('ws-dropdown');
+            if (switcher && dropdown && !switcher.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+        document.getElementById('logout-btn').addEventListener('click', async function() {
+            try {
+                var rt = sessionStorage.getItem('cveil_refresh_token');
+                if (rt) {
+                    await fetch('/api/v1/platform/iam/logout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refreshToken: rt })
+                    }).catch(function() {});
+                }
+                sessionStorage.removeItem('cveil_access_token');
+                sessionStorage.removeItem('cveil_refresh_token');
+                sessionStorage.removeItem('cveil_token_type');
+                sessionStorage.removeItem('cveil_expires_at');
+                sessionStorage.removeItem('cveil_dpop_jwk');
+                var sec = location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = 'cveil_session=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_active_org=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_access=; path=/; max-age=0; SameSite=Lax' + sec;
+                document.cookie = 'cveil_refresh=; path=/; max-age=0; SameSite=Lax' + sec;
+            } catch (e) {}
+            window.location.href = '/login';
+        });
+    </script>
+    <script>
+        // Email verification banner — dismiss + resend with 60s cooldown
+        (function() {
+            var banner = document.getElementById('verify-email-banner');
+            if (banner && sessionStorage.getItem('cveil_dismiss_verify_banner') === '1') {
+                banner.style.display = 'none';
+            }
+        })();
+        function dismissVerifyBanner() {
+            var banner = document.getElementById('verify-email-banner');
+            if (banner) banner.style.display = 'none';
+            sessionStorage.setItem('cveil_dismiss_verify_banner', '1');
+        }
+        function resendVerification(btn) {
+            btn.disabled = true;
+            var msg = document.getElementById('verify-resend-msg');
+            msg.textContent = 'Sending…';
+            msg.className = 'ml-2 text-xs text-yellow-300';
+            CveilWeb.authFetch('/api/v1/platform/iam/me/verify-email/resend', {
+                method: 'POST'
+            }).then(function(r) {
+                if (r.ok) {
+                    msg.textContent = 'Verification email sent!';
+                    msg.className = 'ml-2 text-xs text-yellow-300';
+                    startResendCooldown(btn, msg);
+                } else {
+                    return r.json().then(function(d) { throw new Error(d.message || 'Failed'); });
+                }
+            }).catch(function(e) {
+                msg.textContent = e.message || 'Failed to send. Try again.';
+                msg.className = 'ml-2 text-xs text-red-400';
+                btn.disabled = false;
+            });
+        }
+        function startResendCooldown(btn, msg) {
+            var remaining = 60;
+            btn.textContent = 'Resend in ' + remaining + 's';
+            var timer = setInterval(function() {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    btn.textContent = 'Resend verification email';
+                    btn.disabled = false;
+                    msg.classList.add('hidden');
+                } else {
+                    btn.textContent = 'Resend in ' + remaining + 's';
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

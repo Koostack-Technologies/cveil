@@ -1,0 +1,84 @@
+{#include base.html}
+{#title}Email Verified{/title}
+{#content}
+
+    <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-16 sm:pb-20 text-center">
+        <div class="w-full max-w-lg">
+
+            <!-- Success icon -->
+            <div class="mx-auto mb-6 w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+
+            <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Email Verified</h1>
+            <p class="text-on-surface-variant text-lg mb-8">
+                Your email address has been confirmed. Redirecting you now&hellip;
+            </p>
+
+            <!-- Loading spinner (shown while redirecting) -->
+            <div id="redirect-spinner" class="flex flex-col items-center gap-4 mb-8">
+                <svg class="animate-spin w-8 h-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <p class="text-sm text-on-surface-muted">Taking you to your dashboard&hellip;</p>
+            </div>
+
+            <!-- Fallback CTA (shown after timeout or for different-browser scenarios) -->
+            <div id="fallback-cta" class="hidden">
+                <p class="text-on-surface-variant text-sm mb-6">
+                    If you are not redirected automatically, use the button below.
+                </p>
+                <a href="/login" class="bg-primary text-on-primary hover:bg-primary-container px-8 py-3.5 rounded font-semibold text-lg transition-all shadow-[0_0_20px_rgba(79,219,200,0.3)] inline-flex items-center justify-center gap-2">
+                    Continue to Login
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                </a>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            // Check if user has a session cookie — if so, redirect to dashboard
+            function getCookie(name) {
+                var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                return match ? match[2] : null;
+            }
+
+            var session = getCookie('cveil_session');
+            var target = session ? '/dashboard' : '/login';
+
+            // Update session cookie to reflect verified status so the dashboard
+            // banner disappears immediately after verification.
+            if (session) {
+                try {
+                    var decoded = JSON.parse(atob(session));
+                    decoded.ev = '1';
+                    var sec = location.protocol === 'https:' ? '; Secure' : '';
+                    document.cookie = 'cveil_session=' + btoa(JSON.stringify(decoded))
+                        + '; path=/; SameSite=Lax' + sec + '; max-age=900';
+                } catch (ignored) { /* cookie decode failed — redirect will still work */ }
+                // Clear banner dismiss flag so it doesn't mask the now-irrelevant state
+                sessionStorage.removeItem('cveil_dismiss_verify_banner');
+            }
+
+            // Redirect after a brief pause to let the user see the confirmation
+            setTimeout(function() {
+                window.location.href = target;
+            }, 2000);
+
+            // Show fallback CTA after 5 seconds if redirect hasn't happened
+            setTimeout(function() {
+                var spinner = document.getElementById('redirect-spinner');
+                var fallback = document.getElementById('fallback-cta');
+                if (spinner) spinner.classList.add('hidden');
+                if (fallback) fallback.classList.remove('hidden');
+            }, 5000);
+        })();
+    </script>
+
+{/content}
+{/include}

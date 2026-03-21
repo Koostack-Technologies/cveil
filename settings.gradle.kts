@@ -29,6 +29,9 @@ include("platform:cveil-platform-event-jooq")
 include("tenant:cveil-consent-admin-projection-jooq")
 include("tenant:cveil-consent-decision-projection-redis")
 
+// --- Site Projection ---
+include("platform:cveil-site-projection-redis")
+
 // --- Platform Billing ---
 include("platform:cveil-billing-schema")
 include("platform:cveil-billing-jooq-common")
@@ -62,6 +65,9 @@ include("platform:cveil-platform-keycloak")
 // --- Platform Plan Query ---
 include("platform:cveil-plan-query-jooq")
 
+// --- Core Auth Projection ---
+include("platform:cveil-core-auth-projection-redis")
+
 // --- Metrics ---
 include("platform:cveil-platform-metrics-redis")
 include("common:cveil-metrics-worker")
@@ -70,3 +76,6 @@ include("common:cveil-metrics-worker")
 include("sdks:cveil-sdk-java")
 
 include("examples:cveil-java-sdk-examples")
+
+// --- Site Application (Admin Platform & Dashboard) ---
+include("cveil-site")

@@ -1,0 +1,80 @@
+{#include base.html}
+{#title}Choose Your Industry{/title}
+{#head}{/head}
+{#content}
+
+    <main class="relative z-10 flex-grow flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-12 sm:pt-20 pb-16 sm:pb-20">
+        <div class="w-full max-w-2xl">
+
+            <!-- Step indicator -->
+            <div class="flex items-center justify-center gap-2 mb-8 text-sm text-on-surface-muted">
+                <span class="flex items-center gap-1.5 text-on-surface">
+                    <span class="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-xs">
+                        <svg class="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                    </span>
+                    Workspace
+                </span>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5 text-primary font-medium">
+                    <span class="w-6 h-6 rounded-full bg-primary text-surface-lowest flex items-center justify-center text-xs font-bold">2</span>
+                    Industry
+                </span>
+                <span class="w-8 h-px bg-surface-high"></span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-6 h-6 rounded-full border border-surface-high flex items-center justify-center text-xs">3</span>
+                    Compliance
+                </span>
+            </div>
+
+            <h1 class="text-3xl sm:text-4xl font-display font-bold tracking-tight text-center mb-3">
+                What best describes your business?
+            </h1>
+            <p class="text-on-surface-muted text-center text-lg mb-10">
+                We'll pre-configure your compliance profile based on your industry.
+            </p>
+
+            <form method="POST" action="/onboarding/industry" id="industry-form">
+                <input type="hidden" name="industry" id="selected-industry" value="">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    {#each presets}
+                    <button type="button" onclick="selectIndustry('{it.name()}')"
+                            id="card-{it.name()}"
+                            class="industry-card group text-left bg-surface-container/40 border border-surface-high rounded-lg p-5 hover:border-primary/50 hover:bg-surface-container/60 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface-lowest">
+                        <div class="text-2xl mb-3">{it.icon()}</div>
+                        <h3 class="text-lg font-semibold text-on-surface mb-1">{it.displayName()}</h3>
+                        <p class="text-sm text-on-surface-muted leading-relaxed">{it.description()}</p>
+                    </button>
+                    {/each}
+                </div>
+
+                <button type="submit" id="continue-btn" disabled
+                        class="btn-primary w-full px-6 py-3.5 text-lg flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
+                    Continue
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                </button>
+            </form>
+
+        </div>
+    </main>
+
+<script>
+var selected = null;
+function selectIndustry(name) {
+    selected = name;
+    document.getElementById('selected-industry').value = name;
+    document.getElementById('continue-btn').disabled = false;
+
+    document.querySelectorAll('.industry-card').forEach(function(card) {
+        card.classList.remove('border-primary', 'bg-primary/20', 'ring-1', 'ring-primary/30');
+        card.classList.add('border-surface-high');
+    });
+
+    var card = document.getElementById('card-' + name);
+    card.classList.remove('border-surface-high');
+    card.classList.add('border-primary', 'bg-primary/20', 'ring-1', 'ring-primary/30');
+}
+</script>
+
+{/content}
+{/include}
