@@ -38,7 +38,8 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-openapi") // OpenAPI spec + Swagger UI
     implementation("io.quarkus:quarkus-config-yaml") // YAML config support
     implementation("io.quarkus:quarkus-scheduler") // @Scheduled jobs
-    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for site pages
+    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for Swagger UI docs pages
+
 
     // -- Cveil core (framework-agnostic) -------------------------------------
     implementation(project(":cveil-core"))

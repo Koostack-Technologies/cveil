@@ -1142,10 +1142,6 @@ public class CveilProducers {
         // -- Payment processor (Stripe) --
         this.paymentProcessorService = initPaymentProcessor(config);
 
-        // -- Idempotent plan → Stripe sync (products + prices) --
-        com.koostack.cveil.rest.lifecycle.StripePlanSyncTask.sync(
-                paymentProcessorService, planQuerySvc, coreCmdSvc);
-
         // Configure billing dispatcher now that planQueryService is available
         billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService, planQuerySvc));
 
