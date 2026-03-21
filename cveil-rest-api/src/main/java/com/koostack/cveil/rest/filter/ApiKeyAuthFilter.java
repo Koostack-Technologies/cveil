@@ -13,7 +13,6 @@ import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
 import com.koostack.cveil.rest.lifecycle.BootstrapKeyLifecycleService;
-
 import com.koostack.cveil.rest.util.TenantIdDeriver;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Instance;
