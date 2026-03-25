@@ -259,7 +259,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Link Railway project
-        run: railway link --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.resolve.outputs.railway_env_id }} --service ${{ vars.RAILWAY_SITE_SERVICE_ID }}
+        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.resolve.outputs.railway_env_id }} --service ${{ vars.RAILWAY_SITE_SERVICE_ID }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
