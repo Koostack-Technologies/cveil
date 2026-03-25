@@ -96,7 +96,7 @@ jobs:
             echo "✅ Postgres service already exists — skipping creation"
           else
             echo "Creating Postgres plugin..."
-            railway add --database postgresql
+            railway add --database postgres
             echo "✅ Postgres plugin created"
             echo "Waiting for Postgres to be ready..."
             sleep 30
