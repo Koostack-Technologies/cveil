@@ -31,3 +31,16 @@ services:
     depends_on:
       mailcrab:
         condition: service_started
+
+  cveil-site:
+    environment:
+      CVEIL_KEYCLOAK_SMTP_HOST: "mailcrab"
+      CVEIL_KEYCLOAK_SMTP_PORT: "1025"
+      CVEIL_KEYCLOAK_SMTP_FROM: "noreply@cveil.local"
+      CVEIL_KEYCLOAK_SMTP_USER: ""
+      CVEIL_KEYCLOAK_SMTP_PASSWORD: ""
+      CVEIL_KEYCLOAK_SMTP_AUTH: "false"
+      CVEIL_KEYCLOAK_SMTP_STARTTLS: "false"
+    depends_on:
+      mailcrab:
+        condition: service_started

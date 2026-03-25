@@ -1,0 +1,109 @@
+# =============================================================================
+# Cveil Site — Admin Platform & Dashboard Dockerfile
+#
+# Multi-stage build producing a minimal container for the Quarkus-based
+# admin dashboard, IAM, billing, and tenant management service.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1a: Build front-end bundle (cveil-web)
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS frontend
+
+WORKDIR /web
+COPY cveil-web/package.json cveil-web/package-lock.json* ./
+RUN npm ci --ignore-scripts
+COPY cveil-web/ .
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 1b: Build Java application
+# -----------------------------------------------------------------------------
+FROM eclipse-temurin:21-jdk AS build
+
+WORKDIR /app
+
+# -- Gradle wrapper & dependency resolution (cached layer) --------------------
+COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY gradle/ gradle/
+COPY build-logic/ build-logic/
+
+# Copy all subproject build files for dependency resolution.
+COPY cveil-core/build.gradle.kts cveil-core/build.gradle.kts
+COPY cveil-site/build.gradle.kts cveil-site/build.gradle.kts
+COPY cveil-bundle-core/build.gradle.kts cveil-bundle-core/build.gradle.kts
+
+# Pre-download dependencies (cached unless build files change).
+RUN chmod +x gradlew && \
+    ./gradlew dependencies --no-daemon -q 2>/dev/null || true
+
+# -- Full source copy & build ------------------------------------------------
+COPY . .
+
+# -- Copy front-end bundle from frontend stage --------------------------------
+COPY --from=frontend /web/dist/cveil-web.iife.js cveil-site/src/main/resources/META-INF/resources/js/cveil-web.iife.js
+
+ARG BUILD_STRATEGY=auto
+
+RUN chmod +x gradlew && \
+    if [ "$BUILD_STRATEGY" = "quarkus" ]; then \
+        echo "==> Building with Quarkus fast-jar (quarkusBuild)..." && \
+        ./gradlew :cveil-site:quarkusBuild --no-daemon; \
+    elif [ "$BUILD_STRATEGY" = "dist" ]; then \
+        echo "==> Building with Gradle application distribution (installDist)..." && \
+        ./gradlew :cveil-site:installDist --no-daemon; \
+    else \
+        echo "==> Auto-detecting build strategy..." && \
+        if ./gradlew :cveil-site:quarkusBuild --no-daemon 2>/dev/null; then \
+            echo "==> Quarkus fast-jar build succeeded."; \
+        else \
+            echo "==> quarkusBuild not available — falling back to installDist..." && \
+            ./gradlew :cveil-site:installDist --no-daemon; \
+        fi; \
+    fi
+
+RUN mkdir -p cveil-site/build/quarkus-app \
+             cveil-site/build/install/cveil-site && \
+    if [ -f "cveil-site/build/quarkus-app/quarkus-run.jar" ]; then \
+        echo "quarkus" > /app/.build-type; \
+    else \
+        echo "dist" > /app/.build-type; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Stage 2: Runtime
+# -----------------------------------------------------------------------------
+FROM eclipse-temurin:21-jre AS runtime
+
+RUN groupadd --gid 1001 cveil && \
+    useradd --uid 1001 --gid cveil --shell /bin/false --create-home cveil
+
+WORKDIR /app
+
+COPY --from=build --chown=cveil:cveil /app/cveil-site/build/quarkus-app/ /app/quarkus-app/
+COPY --from=build --chown=cveil:cveil /app/cveil-site/build/install/cveil-site/ /app/dist/
+COPY --from=build --chown=cveil:cveil /app/.build-type /app/.build-type
+
+COPY --chown=cveil:cveil cveil-site/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+LABEL org.opencontainers.image.title="Cveil Site" \
+      org.opencontainers.image.description="Admin platform & dashboard — IAM, billing, tenant management" \
+      org.opencontainers.image.vendor="KooStack" \
+      org.opencontainers.image.url="https://github.com/koostack/cveil" \
+      org.opencontainers.image.source="https://github.com/koostack/cveil" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+EXPOSE 8081
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -sf http://localhost:8081/q/health/ready || exit 1
+
+ENV QUARKUS_HTTP_PORT=8081 \
+    QUARKUS_VIRTUAL_THREADS_ENABLED=true \
+    CVEIL_MODE=production
+
+USER cveil
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD []

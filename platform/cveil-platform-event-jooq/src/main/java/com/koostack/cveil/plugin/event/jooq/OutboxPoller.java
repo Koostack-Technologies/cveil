@@ -4,10 +4,10 @@ import static com.koostack.cveil.plugin.event.jooq.generated.tables.Event.EVENT;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.koostack.cveil.common.crypto.FieldEncryptor;
 import com.koostack.cveil.core.event.models.PlatformEvent;
 import com.koostack.cveil.core.models.TenantContext;
 import com.koostack.cveil.core.tenant.consent.SubjectDsarService;
-import com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

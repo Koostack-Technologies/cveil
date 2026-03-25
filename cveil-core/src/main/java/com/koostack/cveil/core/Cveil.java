@@ -17,7 +17,6 @@ import com.koostack.cveil.core.service.SensitiveFieldResolver;
 import com.koostack.cveil.core.spi.Plugin;
 import com.koostack.cveil.core.spi.PluginBundle;
 import com.koostack.cveil.core.spi.PluginConfig;
-import com.koostack.cveil.core.tenant.authz.AuthzProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -25,8 +24,8 @@ import java.util.logging.Logger;
 /**
  * Abstract base class for Cveil application services.
  *
- * <p>Provides the {@link Builder} and plugin-wiring infrastructure for the Cveil consent
- * management platform. Manages plugin lifecycle, namespacing, and health checks.
+ * <p>Provides the {@link Builder} and plugin-wiring infrastructure for the Cveil consent management
+ * platform. Manages plugin lifecycle, namespacing, and health checks.
  *
  * <h2>Construction</h2>
  *
@@ -60,9 +59,6 @@ public abstract class Cveil implements CveilService {
     private final BillingCommandService<?> billingCommandService;
     private final BillingQueryService<?> billingQueryService;
 
-    // -- Tenant plugins -------------------------------------------------------
-    private final AuthzProvider<?> authzProvider;
-
     // -- Discovery plugins ----------------------------------------------------
     private final SensitiveDiscovery<?> sensitiveDiscovery;
 
@@ -80,7 +76,6 @@ public abstract class Cveil implements CveilService {
         this.coreQueryService = builder.coreQueryService;
         this.billingCommandService = builder.billingCommandService;
         this.billingQueryService = builder.billingQueryService;
-        this.authzProvider = builder.authzProvider;
         this.sensitiveDiscovery = builder.sensitiveDiscovery;
 
         // Propagate appName to any service that supports namespacing
@@ -99,8 +94,8 @@ public abstract class Cveil implements CveilService {
 
     /**
      * Marker interface for plugins that support application-level namespacing. When an {@code
-     * Cveil} instance is built with an {@link Builder#withAppName(String) appName}, it calls
-     * {@link #setAppName(String)} on every registered service that implements this interface.
+     * Cveil} instance is built with an {@link Builder#withAppName(String) appName}, it calls {@link
+     * #setAppName(String)} on every registered service that implements this interface.
      *
      * <p>Implementations should use the supplied name as a prefix or namespace for any keys or
      * identifiers they manage (e.g. Redis key prefixes).
@@ -158,8 +153,8 @@ public abstract class Cveil implements CveilService {
 
     /**
      * Returns the configured {@link
-     * com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService}, or {@code null} if none
-     * was registered.
+     * com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService}, or {@code null} if none was
+     * registered.
      */
     public com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService<?>
             consentGraphService() {
@@ -197,11 +192,6 @@ public abstract class Cveil implements CveilService {
     /** Returns the configured {@link BillingQueryService}, or {@code null}. */
     public BillingQueryService<?> billingQueryService() {
         return billingQueryService;
-    }
-
-    /** Returns the configured {@link AuthzProvider}, or {@code null} if none was registered. */
-    public AuthzProvider<?> authzProvider() {
-        return authzProvider;
     }
 
     /** Returns the configured {@link IdentityResolver}, or {@code null} if none was registered. */
@@ -282,9 +272,6 @@ public abstract class Cveil implements CveilService {
         private CoreQueryService<?> coreQueryService;
         private BillingCommandService<?> billingCommandService;
         private BillingQueryService<?> billingQueryService;
-
-        // -- Tenant -----------------------------------------------------------
-        private AuthzProvider<?> authzProvider;
 
         // -- Discovery --------------------------------------------------------
         private SensitiveDiscovery<?> sensitiveDiscovery;
@@ -395,8 +382,8 @@ public abstract class Cveil implements CveilService {
 
         /**
          * Registers a pre-built {@link
-         * com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService} instance for
-         * graph-based consent queries.
+         * com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService} instance for graph-based
+         * consent queries.
          */
         public Builder withConsentGraphProvider(
                 com.koostack.cveil.core.tenant.consent.ConsentGraphQueryService<?> service) {
@@ -512,26 +499,14 @@ public abstract class Cveil implements CveilService {
             return this;
         }
 
-        /**
-         * Registers a pre-built {@link AuthzProvider} instance for tenant-scoped authorization
-         * (role management).
-         *
-         * @param authzProvider the authorization provider
-         * @return this builder
-         */
-        public Builder withAuthzProvider(AuthzProvider<?> authzProvider) {
-            this.authzProvider = authzProvider;
-            return this;
-        }
-
         // -- Discovery wiring -------------------------------------------------
 
         /**
          * Resolves a {@link SensitiveDiscovery} plugin by name via {@link PluginRegistry} (no
          * configuration).
          *
-         * <p>Used with {@link Cveil#syncDiscoveredFields()} to scan a codebase for sensitive
-         * fields and automatically register them in the consent admin schema.
+         * <p>Used with {@link Cveil#syncDiscoveredFields()} to scan a codebase for sensitive fields
+         * and automatically register them in the consent admin schema.
          */
         public Builder withSensitiveDiscovery(String name) {
             this.sensitiveDiscovery = PluginRegistry.resolve(SensitiveDiscovery.class, name);

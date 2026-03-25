@@ -1,0 +1,56 @@
+upstream api {
+    server ${API_HOST}:${API_PORT};
+}
+
+upstream site {
+    server ${SITE_HOST}:${SITE_PORT};
+}
+
+server {
+    listen 80;
+
+    # -- Health check for load balancers / Railway --------------------------
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+
+    # -- Core API endpoints → cveil-rest-api (API-key authenticated) --------
+    location /api/v1/subjects        { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/governance      { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/catalogue       { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/consent         { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/dsar            { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/reports         { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/public          { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/metrics         { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/docs            { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/health          { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/banner          { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/webhooks        { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/tenants  { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/metrics  { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/docs     { proxy_pass http://api; include /etc/nginx/proxy_params; }
+
+    # -- Platform admin endpoints → cveil-site (cookie/JWT authenticated) ---
+    location /api/v1/billing         { proxy_pass http://site; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/iam    { proxy_pass http://site; include /etc/nginx/proxy_params; }
+
+    # -- SSE / WebSocket support (consent graph live updates, etc.) ---------
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+
+    # -- Everything else (pages, static assets) → cveil-site ----------------
+    location / {
+        proxy_pass http://site;
+        include /etc/nginx/proxy_params;
+    }
+}

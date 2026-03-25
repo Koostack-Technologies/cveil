@@ -214,7 +214,8 @@ cveil/
 │   ├── cveil-redis/             #   Redis client factory with TLS support
 │   ├── cveil-keycloak/          #   Keycloak admin client wrapper
 │   ├── cveil-metrics-worker/    #   Metrics sweeper and aggregation worker
-│   └── cveil-discovery-sensitive-annotation/  # @Sensitive annotation discovery
+│   ├── cveil-discovery-sensitive-annotation/  # @Sensitive annotation discovery
+│   └── cveil-crypto/           #   AES-256-GCM field encryption
 │
 ├── tenant/                      # Tenant-scoped (data plane) CQRS modules
 │   ├── cveil-consent-admin-command/           # Consent command service
@@ -222,14 +223,12 @@ cveil/
 │   ├── cveil-consent-admin-projection-jooq/   # Consent admin projection handler
 │   ├── cveil-consent-admin-jooq-common/       # Shared jOOQ config for consent
 │   ├── cveil-consent-decision-projection-redis/ # Consent graph (Redis projection)
-│   ├── cveil-subject-dsar-jooq/               # DSAR service (export + erasure)
-│   └── cveil-authz-keycloak/                  # Tenant authorization (Keycloak)
+│   └── cveil-subject-dsar-jooq/               # DSAR service (export + erasure)
 │
 ├── platform/                    # Platform-scoped (control plane) CQRS modules
 │   ├── cveil-core-{schema,command,query-jooq,projection-jooq,jooq-common}/
 │   ├── cveil-billing-{schema,command,query-jooq,projection-jooq,jooq-common}/
 │   ├── cveil-iam-{schema,command,query,projection-jooq}/
-│   ├── cveil-platform-jooq/                   # Platform jOOQ infrastructure
 │   ├── cveil-platform-event-jooq/             # Platform event store
 │   ├── cveil-platform-keycloak/               # Platform Keycloak integration
 │   ├── cveil-platform-metrics-redis/          # Redis-based metrics publisher
@@ -415,6 +414,7 @@ feature branch → PR to develop → merge → PR to main → merge → automate
 | Push → `main` | `release-sdk-java.yml` | Semantic release → Sonatype / Maven Central publish |
 | Push → `main` | `release-sdk-js.yml` | Semantic release → npm publish |
 | Push → `main` | `release-cli.yml` | Semantic release → crates.io publish |
+| Manual | `cd-deploy-railway.yml` | Deploy Docker image to Railway |
 | Manual | `ci-e2e.yml` | Playwright end-to-end browser tests |
 | Manual | `ci-examples.yml` | Java + JavaScript SDK example suites |
 
@@ -455,7 +455,7 @@ feat(sdk-java): add retry logic        → sdk-java minor (independent)
 
 ```
 main        ← production releases (protected, PR-only)
-develop     ← integration branch (protected, PR-only, default branch)
+develop     ← integration branch (protected, PR-only, GitHub default branch)
 feature/*   ← feature branches (PR → develop)
 hotfix/*    ← urgent fixes (PR → main, then cherry-pick to develop)
 ```
@@ -496,6 +496,9 @@ Configure these in **Settings → Secrets and variables → Actions**:
 | `SIGNING_PASSWORD` | release-sdk-java | GPG key passphrase |
 | `NPM_TOKEN` | release-sdk-js | npm registry auth token |
 | `CARGO_REGISTRY_TOKEN` | release-cli | crates.io API token |
+| `RAILWAY_TOKEN` | cd-deploy-railway | Railway API token |
+
+> `RAILWAY_SERVICE_ID` is configured as a **repository variable** (not a secret) in Settings → Secrets and variables → Actions → Variables.
 
 > `GITHUB_TOKEN` is provided automatically by GitHub Actions — no setup needed.
 

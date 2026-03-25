@@ -1,0 +1,44 @@
+# Semantic Release — REST API (core consent/governance service)
+# Tags: api-v1.0.0, api-v1.1.0, etc.
+
+tagFormat: "api-v${version}"
+
+branches:
+  - main
+  - name: develop
+    prerelease: dev
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - releaseRules:
+        # Exclude scopes owned by other release pipelines
+        - scope: site
+          release: false
+        - scope: sdk-java
+          release: false
+        - scope: sdk-js
+          release: false
+        - scope: cli
+          release: false
+        # Standard rules
+        - type: feat
+          release: minor
+        - type: fix
+          release: patch
+        - type: perf
+          release: patch
+        - type: revert
+          release: patch
+
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  - - "@semantic-release/changelog"
+    - changelogFile: CHANGELOG.api.md
+
+  - - "@semantic-release/git"
+    - assets:
+        - CHANGELOG.api.md
+      message: "chore(api): release api-v${nextRelease.version} [skip ci]"
+
+  - "@semantic-release/github"

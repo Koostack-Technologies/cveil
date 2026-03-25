@@ -1,0 +1,62 @@
+# =============================================================================
+# Cveil Site — Admin Platform & Dashboard — Quarkus Configuration
+#
+# Separate deployable for the admin UI, IAM, billing, and tenant management.
+# Virtual threads MUST be enabled for ScopedValue-based context propagation.
+# =============================================================================
+
+quarkus:
+  http:
+    port: 8081
+    proxy:
+      proxy-address-forwarding: true
+      allow-forwarded: false
+      enable-forwarded-host: true
+      enable-forwarded-prefix: true
+    cors:
+      origins: ${CVEIL_SITE_CORS_ORIGINS:/.*/}
+      methods: ${CVEIL_SITE_CORS_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+      headers: ${CVEIL_SITE_CORS_HEADERS:Authorization,Content-Type,X-Request-Id,DPoP,X-Org-Id}
+      exposed-headers: ${CVEIL_SITE_CORS_EXPOSED_HEADERS:X-Request-Id,DPoP-Nonce}
+      access-control-allow-credentials: true
+  virtual-threads:
+    enabled: true
+
+  arc:
+    unremovable-types: com.koostack.cveil.core.platform.**
+  index-dependency:
+    cveil-core:
+      group-id: com.koostack.cveil
+      artifact-id: cveil-core
+
+# -----------------------------------------------------------------------------
+# Cveil Site configuration
+# =============================================================================
+cveil:
+  mode: production
+  app-name: cveil-site
+  base-url: ${CVEIL_SITE_BASE_URL:http://localhost:8081}
+  db:
+    url: jdbc:postgresql://localhost:5432/cveil
+    dialect: POSTGRES
+    username: ${CVEIL_DB_USERNAME:}
+    password: ${CVEIL_DB_PASSWORD:}
+    encryption-key: ${CVEIL_DB_ENCRYPTION_KEY:}
+    ssl-mode: ${CVEIL_DB_SSL_MODE:require}
+    ssl-cert-path: ${CVEIL_DB_SSL_CERT_PATH:}
+    ssl-key-path: ${CVEIL_DB_SSL_KEY_PATH:}
+  redis:
+    host: localhost
+    port: 6379
+    password: ${CVEIL_REDIS_PASSWORD:}
+    tls-enabled: ${CVEIL_REDIS_TLS_ENABLED:false}
+    tls-ca-cert-path: ${CVEIL_REDIS_TLS_CA_CERT_PATH:}
+    tls-verify-peer: ${CVEIL_REDIS_TLS_VERIFY_PEER:true}
+  super-admin:
+    bootstrap-key: ${CVEIL_BOOTSTRAP_KEY:}
+    force-bootstrap: ${CVEIL_FORCE_BOOTSTRAP:false}
+  stream:
+    shard-count: ${CVEIL_STREAM_SHARD_COUNT:8}
+    outbox-poller-count: ${CVEIL_OUTBOX_POLLER_COUNT:1}
+  multi-tenant:
+    enabled: ${CVEIL_MULTI_TENANT_ENABLED:false}

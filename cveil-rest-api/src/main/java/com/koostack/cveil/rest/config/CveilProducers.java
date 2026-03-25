@@ -13,7 +13,6 @@ import com.koostack.cveil.core.platform.iam.IdpProvider;
 import com.koostack.cveil.core.platform.iam.IdpTenantResolver;
 import com.koostack.cveil.core.platform.iam.TokenValidationService;
 import com.koostack.cveil.core.spi.PluginBundle;
-import com.koostack.cveil.core.tenant.authz.AuthzProvider;
 import com.koostack.cveil.core.tenant.consent.invalidation.SubscriptionManager;
 import com.koostack.cveil.platform.billing.jooq.BillingProjectionHandler;
 import com.koostack.cveil.platform.billing.jooq.BillingQueryDispatcher;
@@ -84,8 +83,6 @@ import redis.clients.jedis.JedisPooled;
  *   <li>{@link CoreConsentBundle} — Postgres (jOOQ) + Redis consent stack with dual-write sync
  *   <li>CQRS command/query services — tenant lifecycle, API key management, billing, and plan
  *       management
- *   <li>{@code ApiKeyTokenVerifier} — SHA-256 bearer token verification against the {@code
- *       cveiliam.api_key} projection table
  * </ul>
  *
  * <h2>Produced beans</h2>
@@ -93,7 +90,6 @@ import redis.clients.jedis.JedisPooled;
  * <ul>
  *   <li>{@link Cveil} — the primary entry point for consent operations
  *   <li>{@link CoreQueryService}, {@link CoreCommandService}, etc. — CQRS platform services
- *   <li>{@link TokenValidationService} — bearer token verification
  * </ul>
  *
  * <p>All three beans are {@code @ApplicationScoped} singletons — created once at startup and shared
@@ -161,8 +157,6 @@ public class CveilProducers {
     @Inject
     Instance<IdpProvider> idpProviderInstance;
 
-    @Inject Instance<AuthzProvider<?>> authzProviderInstance;
-
     @Inject com.koostack.cveil.rest.ratelimit.RateLimitService rateLimitService;
 
     // -----------------------------------------------------------------------
@@ -225,15 +219,6 @@ public class CveilProducers {
             }
         }
 
-        // -- Authz provider (production only, when Keycloak is configured) ----
-        if (authzProviderInstance.isResolvable()) {
-            AuthzProvider<?> authz = authzProviderInstance.get();
-            if (authz != null) {
-                builder.withAuthzProvider(authz);
-                LOG.info("Cveil REST API: AuthzProvider wired into builder");
-            }
-        }
-
         // -- Command + query services (production: event-sourced + jOOQ) ------
         JooqConsentAdminCommandService commandService = new JooqConsentAdminCommandService();
         this.consentAdminCommandService = commandService;
@@ -266,8 +251,8 @@ public class CveilProducers {
                     final String capturedKey = encKey;
                     keyEncryptor =
                             raw ->
-                                    com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor
-                                            .encrypt(raw, capturedKey);
+                                    com.koostack.cveil.common.crypto.FieldEncryptor.encrypt(
+                                            raw, capturedKey);
                 }
             }
 
@@ -420,6 +405,23 @@ public class CveilProducers {
         featureGateCheckerInstance =
                 new com.koostack.cveil.rest.gate.FeatureGateChecker(platformDsl);
         return featureGateCheckerInstance;
+    }
+
+    /**
+     * Produces the {@link CoreAuthRedisQueryService} for Redis-backed API key validation,
+     * permission resolution, and plan limit lookups. Returns {@code null} in embedded mode.
+     */
+    @Produces
+    @ApplicationScoped
+    public com.koostack.cveil.platform.auth.projection.redis.CoreAuthRedisQueryService
+            coreAuthRedisQueryService(Cveil cveil) {
+        cveil.appName(); // force CDI ordering
+        if (adminRedisPool == null) {
+            LOG.debug("Cveil REST API: CoreAuthRedisQueryService not available (no Redis)");
+            return null;
+        }
+        return new com.koostack.cveil.platform.auth.projection.redis.CoreAuthRedisQueryService(
+                () -> adminRedisPool);
     }
 
     /**
@@ -590,54 +592,6 @@ public class CveilProducers {
                                     "Cveil REST API: No Keycloak configuration — IdpProvider not"
                                             + " available");
                             return IdpProvider.unavailable();
-                        });
-    }
-
-    /**
-     * Produces the {@link AuthzProvider} singleton — tenant-scoped authorization (role management)
-     * backed by Keycloak.
-     *
-     * <p>In production mode with Keycloak configured, returns a {@code KeycloakAuthzProvider}. In
-     * embedded mode or when Keycloak is not configured, returns {@code null}.
-     */
-    @Produces
-    @ApplicationScoped
-    @Unremovable
-    @SuppressWarnings("rawtypes")
-    public AuthzProvider authzProvider() {
-        if (!MODE_PRODUCTION.equalsIgnoreCase(config.mode())) {
-            LOG.debug("Cveil REST API: AuthzProvider not available (embedded mode)");
-            return null;
-        }
-
-        return config.keycloak()
-                .filter(kc -> kc.url().isPresent() && !kc.url().get().isBlank())
-                .map(
-                        kc -> {
-                            com.koostack.cveil.tenant.authz.keycloak.KeycloakAuthzConfig
-                                    authzConfig =
-                                            new com.koostack.cveil.tenant.authz.keycloak
-                                                    .KeycloakAuthzConfig(
-                                                    kc.url().get(),
-                                                    "master",
-                                                    "admin-cli",
-                                                    kc.adminUsername(),
-                                                    kc.adminPassword().orElse(""));
-                            com.koostack.cveil.tenant.authz.keycloak.KeycloakAuthzProvider
-                                    provider =
-                                            new com.koostack.cveil.tenant.authz.keycloak
-                                                    .KeycloakAuthzProvider(authzConfig);
-                            LOG.info(
-                                    "Cveil REST API: KeycloakAuthzProvider wired (url={})",
-                                    kc.url().get());
-                            return (AuthzProvider) provider;
-                        })
-                .orElseGet(
-                        () -> {
-                            LOG.info(
-                                    "Cveil REST API: No Keycloak configuration — AuthzProvider not"
-                                            + " available");
-                            return null;
                         });
     }
 
@@ -1164,8 +1118,8 @@ public class CveilProducers {
         java.util.function.UnaryOperator<String> fieldDecryptor =
                 encryptionKey != null
                         ? raw ->
-                                com.koostack.cveil.plugin.platform.jooq.crypto.FieldEncryptor
-                                        .decryptIfKeyPresent(raw, encryptionKey)
+                                com.koostack.cveil.common.crypto.FieldEncryptor.decryptIfKeyPresent(
+                                        raw, encryptionKey)
                         : java.util.function.UnaryOperator.identity();
 
         // IAM command service configured later after keycloakAdminClient is available
@@ -1187,10 +1141,6 @@ public class CveilProducers {
 
         // -- Payment processor (Stripe) --
         this.paymentProcessorService = initPaymentProcessor(config);
-
-        // -- Idempotent plan → Stripe sync (products + prices) --
-        com.koostack.cveil.rest.lifecycle.StripePlanSyncTask.sync(
-                paymentProcessorService, planQuerySvc, coreCmdSvc);
 
         // Configure billing dispatcher now that planQueryService is available
         billingCmdSvc.configure(new JooqBillingCommandConfig(platformEventService, planQuerySvc));
@@ -1229,8 +1179,9 @@ public class CveilProducers {
 
         // Permission service — DB-backed role/permission resolution
         this.permissionService =
-                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(platformDataSource);
-        LOG.info("Cveil REST API: JooqPermissionService initialized");
+                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(
+                        platformDataSource, platformEventService);
+        LOG.info("Cveil REST API: JooqPermissionService initialized (with event publishing)");
 
         // Wire query service into command service for email/username → UUID resolution
         if (iamCmdSvc
@@ -1367,12 +1318,22 @@ public class CveilProducers {
         consumer.registerHandler("core-projection", (StreamHandler) coreProjection::onEvent);
         consumer.registerHandler("billing-projection", (StreamHandler) billingProjection::onEvent);
         consumer.registerHandler("iam-projection", (StreamHandler) iamProjection::onEvent);
+
+        // Core auth Redis projection — materializes API key, role, plan, and tenant events
+        // into auth:* Redis keys for fast API-key validation and permission resolution.
+        var coreAuthProjection =
+                new com.koostack.cveil.platform.auth.projection.redis
+                        .CoreAuthRedisProjectionHandler(() -> adminRedisPool);
+        consumer.registerHandler(
+                "core-auth-projection", (StreamHandler) coreAuthProjection::onEvent);
+
         consumer.addTenant("platform");
 
         this.platformStreamConsumer = consumer;
         LOG.info(
                 "Cveil REST API: platform stream consumer started"
-                        + " (groups=core-projection,billing-projection,iam-projection)");
+                        + " (groups=core-projection,billing-projection,iam-projection,"
+                        + "core-auth-projection)");
 
         // -- Metrics publisher + projection ------------------------------------
         wireMetrics(redisPluginConfig, platformDataSource);

@@ -9,9 +9,6 @@ import com.koostack.cveil.core.spi.Plugin;
  * Identity provider abstraction — the core SPI for authentication, user management, token
  * verification, and tenant lifecycle.
  *
- * <p>Role management (authorization) is handled by the separate {@link
- * com.koostack.cveil.core.tenant.authz.AuthzProvider} SPI.
- *
  * <p>The platform defaults to a Keycloak implementation, but tenants can override with any IdP
  * (Auth0, Okta, Azure AD, etc.) by configuring a different {@code IdpProvider} via the {@link
  * IdpTenantResolver}.
@@ -73,8 +70,8 @@ public interface IdpProvider<T> extends Plugin<T> {
      * @param tenantId the tenant realm
      * @param refreshToken the refresh token issued during login
      * @return new tokens and identity context
-     * @throws com.koostack.cveil.core.exception.CveilAuthException if the refresh token is
-     *     invalid, expired, or revoked
+     * @throws com.koostack.cveil.core.exception.CveilAuthException if the refresh token is invalid,
+     *     expired, or revoked
      */
     AuthResult refreshToken(String tenantId, String refreshToken);
 
@@ -134,8 +131,8 @@ public interface IdpProvider<T> extends Plugin<T> {
      * @param tenantId the tenant realm
      * @param resetToken the token from the password reset email
      * @param newPassword the user's new password
-     * @throws com.koostack.cveil.core.exception.CveilAuthException if the reset token is invalid
-     *     or expired
+     * @throws com.koostack.cveil.core.exception.CveilAuthException if the reset token is invalid or
+     *     expired
      */
     void completePasswordReset(String tenantId, String resetToken, String newPassword);
 

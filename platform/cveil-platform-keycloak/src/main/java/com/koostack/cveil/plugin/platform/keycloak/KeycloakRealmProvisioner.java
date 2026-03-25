@@ -242,7 +242,8 @@ public class KeycloakRealmProvisioner {
     }
 
     /**
-     * Ensure the platform realm exists with a root super-admin user.
+     * Ensure the platform realm exists with a root super-admin user. This method will create the
+     * realm if it does not exist, handling 409 conflicts from concurrent creation attempts.
      *
      * @param platformRealmId the platform realm name (e.g. {@code cveil-platform})
      * @param rootEmail the root admin email
@@ -255,23 +256,116 @@ public class KeycloakRealmProvisioner {
         try {
             adminClient.realm(platformRealmId).toRepresentation();
             LOG.info("Platform realm '{}' already exists", platformRealmId);
-            // Get existing client secret
-            RealmResource realm = adminClient.realm(platformRealmId);
-            var clients = realm.clients().findByClientId(cveilClientId);
-            String secret = null;
-            if (!clients.isEmpty()) {
-                secret = realm.clients().get(clients.get(0).getId()).getSecret().getValue();
-            }
-            ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
-            // Repair roles, client scope, and user assignments for existing realms
-            repairRealm(platformRealmId);
-            return new ProvisionResult(platformRealmId, secret);
+            return readExistingRealm(platformRealmId, rootEmail, rootPassword);
         } catch (jakarta.ws.rs.NotFoundException e) {
             // Realm doesn't exist — create it
-            String clientSecret = provisionRealm(platformRealmId, "Cveil Platform");
-            ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
-            return new ProvisionResult(platformRealmId, clientSecret);
+            try {
+                String clientSecret = provisionRealm(platformRealmId, "Cveil Platform");
+                ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
+                return new ProvisionResult(platformRealmId, clientSecret);
+            } catch (jakarta.ws.rs.ClientErrorException conflict) {
+                // Another instance created the realm between our check and create (409 race)
+                if (conflict.getResponse().getStatus() == 409) {
+                    LOG.info(
+                            "Platform realm '{}' was created by another instance — using existing",
+                            platformRealmId);
+                    return readExistingRealm(platformRealmId, rootEmail, rootPassword);
+                }
+                throw conflict;
+            }
         }
+    }
+
+    /**
+     * Wait for the platform realm to exist (created by another service), then read its config.
+     * Falls back to creating the realm if it doesn't appear within the timeout. This avoids
+     * concurrent creation races when multiple services start simultaneously.
+     *
+     * @param platformRealmId the platform realm name (e.g. {@code cveil})
+     * @param rootEmail the root admin email
+     * @param rootPassword the root admin password
+     * @param maxWaitSeconds maximum seconds to wait before falling back to create
+     * @return provision result containing realm ID and client secret
+     */
+    public ProvisionResult awaitPlatformRealm(
+            String platformRealmId,
+            String rootEmail,
+            String rootPassword,
+            int maxWaitSeconds) {
+        long deadline = System.currentTimeMillis() + (maxWaitSeconds * 1000L);
+        int attempt = 0;
+
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                adminClient.realm(platformRealmId).toRepresentation();
+                // Realm exists — now check if provisioning is complete (client created)
+                var clients =
+                        adminClient
+                                .realm(platformRealmId)
+                                .clients()
+                                .findByClientId(cveilClientId);
+                if (!clients.isEmpty()) {
+                    LOG.info(
+                            "Platform realm '{}' is fully provisioned",
+                            platformRealmId);
+                    return readExistingRealm(platformRealmId, rootEmail, rootPassword);
+                }
+                // Realm exists but client not yet created — still provisioning
+                attempt++;
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) break;
+                long sleepMs = Math.min(1000L * attempt, remaining);
+                LOG.info(
+                        "Platform realm '{}' exists but client '{}' not yet created — waiting"
+                                + " (attempt {}, {}ms)",
+                        platformRealmId,
+                        cveilClientId,
+                        attempt,
+                        sleepMs);
+                try {
+                    Thread.sleep(sleepMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } catch (jakarta.ws.rs.NotFoundException e) {
+                attempt++;
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) break;
+                long sleepMs = Math.min(1000L * attempt, remaining);
+                LOG.info(
+                        "Platform realm '{}' not yet available — waiting (attempt {}, {}ms)",
+                        platformRealmId,
+                        attempt,
+                        sleepMs);
+                try {
+                    Thread.sleep(sleepMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        // Timeout reached — fall back to create as last resort
+        LOG.warn(
+                "Platform realm '{}' not available after {}s — falling back to create",
+                platformRealmId,
+                maxWaitSeconds);
+        return ensurePlatformRealm(platformRealmId, rootEmail, rootPassword);
+    }
+
+    private ProvisionResult readExistingRealm(
+            String platformRealmId, String rootEmail, String rootPassword) {
+        RealmResource realm = adminClient.realm(platformRealmId);
+        var clients = realm.clients().findByClientId(cveilClientId);
+        String secret = null;
+        if (!clients.isEmpty()) {
+            secret = realm.clients().get(clients.get(0).getId()).getSecret().getValue();
+        }
+        ensurePlatformRootUser(platformRealmId, rootEmail, rootPassword);
+        repairRealm(platformRealmId);
+        return new ProvisionResult(platformRealmId, secret);
     }
 
     /**
@@ -603,10 +697,18 @@ public class KeycloakRealmProvisioner {
                 rolesResource.get(roleName).toRepresentation();
                 LOG.debug("Role '{}' already exists, skipping", roleName);
             } catch (jakarta.ws.rs.NotFoundException e) {
-                RoleRepresentation role = new RoleRepresentation();
-                role.setName(roleName);
-                role.setDescription("Cveil default role: " + roleName);
-                rolesResource.create(role);
+                try {
+                    RoleRepresentation role = new RoleRepresentation();
+                    role.setName(roleName);
+                    role.setDescription("Cveil default role: " + roleName);
+                    rolesResource.create(role);
+                } catch (jakarta.ws.rs.ClientErrorException conflict) {
+                    if (conflict.getResponse().getStatus() == 409) {
+                        LOG.debug("Role '{}' created concurrently, skipping", roleName);
+                    } else {
+                        throw conflict;
+                    }
+                }
             }
         }
         LOG.debug("Ensured {} default roles exist", DEFAULT_ROLES.size());
@@ -658,7 +760,15 @@ public class KeycloakRealmProvisioner {
             LOG.info("Set sslRequired=none on realm '{}'", tenantId);
         }
         if (needsUpdate) {
-            realmResource.update(realmRep);
+            try {
+                realmResource.update(realmRep);
+            } catch (jakarta.ws.rs.ClientErrorException conflict) {
+                if (conflict.getResponse().getStatus() == 409) {
+                    LOG.debug("Realm '{}' attributes updated concurrently, skipping", tenantId);
+                } else {
+                    throw conflict;
+                }
+            }
         }
 
         // Ensure all default roles exist

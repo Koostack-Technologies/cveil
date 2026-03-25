@@ -1,0 +1,44 @@
+# Semantic Release — Site (admin platform, dashboard, IAM, billing)
+# Tags: site-v1.0.0, site-v1.1.0, etc.
+
+tagFormat: "site-v${version}"
+
+branches:
+  - main
+  - name: develop
+    prerelease: dev
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - releaseRules:
+        # Exclude scopes owned by other release pipelines
+        - scope: api
+          release: false
+        - scope: sdk-java
+          release: false
+        - scope: sdk-js
+          release: false
+        - scope: cli
+          release: false
+        # Standard rules
+        - type: feat
+          release: minor
+        - type: fix
+          release: patch
+        - type: perf
+          release: patch
+        - type: revert
+          release: patch
+
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  - - "@semantic-release/changelog"
+    - changelogFile: CHANGELOG.site.md
+
+  - - "@semantic-release/git"
+    - assets:
+        - CHANGELOG.site.md
+      message: "chore(site): release site-v${nextRelease.version} [skip ci]"
+
+  - "@semantic-release/github"

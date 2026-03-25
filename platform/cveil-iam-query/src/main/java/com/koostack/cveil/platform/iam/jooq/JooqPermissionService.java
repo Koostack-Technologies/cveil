@@ -1,6 +1,13 @@
 package com.koostack.cveil.platform.iam.jooq;
 
+import com.koostack.cveil.core.PlatformConstants;
+import com.koostack.cveil.core.event.EventService;
+import com.koostack.cveil.core.event.models.PublishDomainEventInput;
+import com.koostack.cveil.core.models.AggregateKey;
+import com.koostack.cveil.core.platform.iam.IamEventTypes;
 import com.koostack.cveil.core.platform.iam.PermissionService;
+import com.koostack.cveil.core.platform.iam.events.RoleDefinitionCreatedEvent;
+import com.koostack.cveil.core.platform.iam.events.RoleDefinitionDeletedEvent;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
@@ -34,7 +42,10 @@ public class JooqPermissionService implements PermissionService {
     private static final long CACHE_TTL_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int CACHE_MAX_SIZE = 10_000;
 
+    private static final String ROLE_DEF_AGGREGATE_TYPE = "role-definition";
+
     private final DataSource dataSource;
+    private final EventService<?> eventService;
 
     /** Platform-scope permissions that cannot be granted to custom org roles. */
     private static final Set<String> PLATFORM_ONLY_PERMISSIONS =
@@ -56,7 +67,12 @@ public class JooqPermissionService implements PermissionService {
     }
 
     public JooqPermissionService(DataSource dataSource) {
+        this(dataSource, null);
+    }
+
+    public JooqPermissionService(DataSource dataSource, EventService<?> eventService) {
         this.dataSource = dataSource;
+        this.eventService = eventService;
     }
 
     // -- Permission resolution (hot path) -----------------------------------
@@ -275,6 +291,8 @@ public class JooqPermissionService implements PermissionService {
                         roleId,
                         tenantId,
                         permissions.size());
+
+                publishRoleDefinitionCreated(tenantId, roleId, displayName, description, permissions);
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
@@ -319,6 +337,8 @@ public class JooqPermissionService implements PermissionService {
             ps.setString(2, tenantId);
             ps.executeUpdate();
             LOG.info("Custom role deleted: role={}, tenant={}", roleId, tenantId);
+
+            publishRoleDefinitionDeleted(tenantId, roleId);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to delete custom role: " + e.getMessage(), e);
         }
@@ -527,6 +547,62 @@ public class JooqPermissionService implements PermissionService {
                     "Cache exceeded max size ({}) after expired eviction, clearing all entries",
                     CACHE_MAX_SIZE);
             cache.clear();
+        }
+    }
+
+    // -- Event publishing helpers -------------------------------------------
+
+    private void publishRoleDefinitionCreated(
+            String tenantId,
+            String roleId,
+            String displayName,
+            String description,
+            List<String> permissions) {
+        if (eventService == null) return;
+        try {
+            var event =
+                    new RoleDefinitionCreatedEvent(
+                            roleId,
+                            tenantId,
+                            "tenant",
+                            displayName,
+                            description,
+                            false,
+                            true,
+                            permissions);
+            var key =
+                    new AggregateKey(
+                            UUID.nameUUIDFromBytes(roleId.getBytes()),
+                            ROLE_DEF_AGGREGATE_TYPE,
+                            PlatformConstants.PLATFORM_TENANT_ID);
+            eventService.publishEvent(
+                    PublishDomainEventInput.of(
+                            PlatformConstants.PLATFORM_TENANT_ID,
+                            IamEventTypes.ROLE_DEFINITION_CREATED,
+                            key,
+                            event));
+        } catch (Exception e) {
+            LOG.warn("Failed to publish role-definition.created event for {}: {}", roleId, e.getMessage());
+        }
+    }
+
+    private void publishRoleDefinitionDeleted(String tenantId, String roleId) {
+        if (eventService == null) return;
+        try {
+            var event = new RoleDefinitionDeletedEvent(roleId, tenantId);
+            var key =
+                    new AggregateKey(
+                            UUID.nameUUIDFromBytes(roleId.getBytes()),
+                            ROLE_DEF_AGGREGATE_TYPE,
+                            PlatformConstants.PLATFORM_TENANT_ID);
+            eventService.publishEvent(
+                    PublishDomainEventInput.of(
+                            PlatformConstants.PLATFORM_TENANT_ID,
+                            IamEventTypes.ROLE_DEFINITION_DELETED,
+                            key,
+                            event));
+        } catch (Exception e) {
+            LOG.warn("Failed to publish role-definition.deleted event for {}: {}", roleId, e.getMessage());
         }
     }
 }

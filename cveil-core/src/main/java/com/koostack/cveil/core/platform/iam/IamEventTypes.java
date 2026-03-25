@@ -24,6 +24,10 @@ public final class IamEventTypes {
     public static final String ROLE_ASSIGNED = "iam.role.assigned";
     public static final String ROLE_REMOVED = "iam.role.removed";
 
+    // -- Role definition management -------------------------------------------
+    public static final String ROLE_DEFINITION_CREATED = "iam.role-definition.created";
+    public static final String ROLE_DEFINITION_DELETED = "iam.role-definition.deleted";
+
     // -- User deletion (compensation) -----------------------------------------
     public static final String USER_DELETED = "iam.user.deleted";
 

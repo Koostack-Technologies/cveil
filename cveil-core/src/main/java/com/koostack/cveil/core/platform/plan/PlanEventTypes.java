@@ -15,4 +15,8 @@ public final class PlanEventTypes {
     public static final String PLAN_DEACTIVATED = "plan.deactivated";
     public static final String PLAN_ACTIVATED = "plan.activated";
     public static final String PLAN_STRIPE_SYNCED = "plan.stripe_synced";
+
+    // -- Plan feature management -----------------------------------------------
+    public static final String PLAN_FEATURE_SET = "plan.feature.set";
+    public static final String PLAN_FEATURE_REMOVED = "plan.feature.removed";
 }

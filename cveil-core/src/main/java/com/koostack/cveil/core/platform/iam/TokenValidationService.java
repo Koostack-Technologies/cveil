@@ -16,10 +16,7 @@ import com.koostack.cveil.core.spi.Plugin;
  * <h2>Known implementations</h2>
  *
  * <ul>
- *   <li>{@code ApiKeyTokenVerifier} (cveil-platform-jooq) — SHA-256 hashes the token, looks up the
- *       {@code api_key} table in the platform schema, validates status and expiration, returns an
- *       {@link IdentityContext} with subject, roles, and tenantId.
- *   <li>Future IdP plugins (Okta, Auth0, Azure AD, Keycloak) — verify JWTs against external JWKS
+ *   <li>IdP plugins (Keycloak, Okta, Auth0, Azure AD) — verify JWTs against external JWKS
  *       endpoints.
  * </ul>
  *

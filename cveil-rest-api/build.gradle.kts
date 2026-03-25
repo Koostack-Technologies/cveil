@@ -38,7 +38,8 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-openapi") // OpenAPI spec + Swagger UI
     implementation("io.quarkus:quarkus-config-yaml") // YAML config support
     implementation("io.quarkus:quarkus-scheduler") // @Scheduled jobs
-    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for site pages
+    implementation("io.quarkus:quarkus-rest-qute") // Qute templating for Swagger UI docs pages
+
 
     // -- Cveil core (framework-agnostic) -------------------------------------
     implementation(project(":cveil-core"))
@@ -50,11 +51,10 @@ dependencies {
     // configuration's classpath manually or switch to mode=production.
     // TODO: re-enable once cveil-consent-sync-embedded is fixed
     // compileOnly(project(":cveil-bundle-embedded"))
-    implementation(project(":platform:cveil-platform-jooq"))
+    implementation(project(":common:cveil-crypto"))
     implementation(project(":platform:cveil-platform-keycloak"))
     implementation("org.keycloak:keycloak-admin-client:26.0.8")
     implementation("com.nimbusds:nimbus-jose-jwt:9.47") // DPoP proof verification
-    implementation(project(":tenant:cveil-authz-keycloak"))
     implementation(project(":tenant:cveil-consent-admin-jooq-common"))
     implementation(project(":common:cveil-jooq"))
     implementation(project(":common:cveil-redis"))
@@ -78,6 +78,7 @@ dependencies {
     implementation(project(":platform:cveil-plan-query-jooq"))
     implementation(project(":platform:cveil-payment-proc-stripe")) // Stripe payment processor
     implementation(project(":platform:cveil-webhook-outbound")) // Outbound webhook delivery
+    implementation(project(":platform:cveil-core-auth-projection-redis")) // Core auth Redis projection
 
     // platform schemas
 
