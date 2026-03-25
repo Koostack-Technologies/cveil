@@ -90,7 +90,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Link Railway project
-        run: railway link --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
+        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -150,7 +150,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Link Railway project
-        run: railway link --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
+        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -228,7 +228,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Link Railway project
-        run: railway link --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
+        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -293,7 +293,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Link Railway project
-        run: railway link --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
+        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
