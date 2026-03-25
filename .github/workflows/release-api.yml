@@ -1,0 +1,274 @@
+# =============================================================================
+# Cveil REST API — Release Pipeline
+#
+# Full CI/CD for the core consent/governance API service.
+#   1. Semantic Release  — version bump, tag, GitHub release
+#   2. Build & Test      — Gradle build, unit tests, integration tests
+#   3. Docker Publish    — build image, push to GHCR
+#   4. Deploy to Railway — multi-environment (dev, stage, prod)
+#
+# develop → auto-deploy to dev
+# main    → auto-deploy to stage
+# prod:     manual dispatch from a tag only
+# =============================================================================
+
+name: "Release: API"
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "cveil-rest-api/**"
+      - "cveil-core/**"
+      - "cveil-bundle-core/**"
+      - "platform/**"
+      - "common/**"
+      - "build-logic/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+      - ".releaserc.api.yml"
+      - ".github/workflows/release-api.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (only prod — dev/stage are automatic)"
+        required: true
+        type: choice
+        options:
+          - prod
+      tag:
+        description: "Image tag to deploy (e.g. api-v1.5.0). Required for prod."
+        required: true
+        type: string
+
+concurrency:
+  group: release-api-${{ github.event.inputs.environment || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Semantic Release — determine version, create tag + GitHub release
+  # Only runs on push to main (not manual dispatch)
+  # ---------------------------------------------------------------------------
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install semantic-release
+        run: |
+          npm install --save-dev \
+            semantic-release@latest \
+            @semantic-release/changelog@latest \
+            @semantic-release/git@latest \
+            @semantic-release/github@latest \
+            @semantic-release/commit-analyzer@latest \
+            @semantic-release/release-notes-generator@latest \
+            conventional-changelog-conventionalcommits@latest
+
+      - name: Run semantic-release
+        id: semantic
+        run: npx semantic-release --config .releaserc.api.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
+  # ---------------------------------------------------------------------------
+  # Build & Test — Gradle build, unit tests, integration tests
+  # Only runs on push to main (manual dispatch reuses existing image)
+  # ---------------------------------------------------------------------------
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew :cveil-rest-api:build -x test --no-daemon
+
+      - name: Spotless check
+        run: ./gradlew :cveil-rest-api:spotlessCheck --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew :cveil-rest-api:test -PunitOnly --no-daemon
+
+      - name: Integration tests
+        run: ./gradlew :cveil-rest-api:test -PintegrationOnly --no-daemon
+        env:
+          DOCKER_API_VERSION: "1.44"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-reports
+          path: "cveil-rest-api/build/reports/tests/test/"
+          retention-days: 14
+
+      - name: Upload test results (JUnit XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: "cveil-rest-api/build/test-results/test/*.xml"
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Docker Build + Push to GHCR
+  # Only runs on push to main after successful release
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker Publish
+    runs-on: ubuntu-latest
+    needs: [release, build-test]
+    if: needs.release.outputs.new_release_published == 'true'
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: api-v${{ needs.release.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=api-v${{ needs.release.outputs.new_release_version }}
+            type=sha,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./cveil-rest-api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Resolve — determine image tag and Railway environment
+  # ---------------------------------------------------------------------------
+  resolve:
+    name: Resolve Deploy Target
+    runs-on: ubuntu-latest
+    needs: [release, docker]
+    if: always() && (needs.docker.result == 'success' || github.event_name == 'workflow_dispatch')
+    outputs:
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
+      railway_env_id: ${{ steps.resolve.outputs.railway_env_id }}
+      environment: ${{ steps.resolve.outputs.environment }}
+    steps:
+      - name: Resolve deployment parameters
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BRANCH="${{ github.ref_name }}"
+            VERSION="api-v${{ needs.release.outputs.new_release_version }}"
+
+            if [ "$BRANCH" = "develop" ]; then
+              echo "image_tag=$VERSION" >> "$GITHUB_OUTPUT"
+              echo "railway_env_id=${{ vars.RAILWAY_DEV_ENV_ID }}" >> "$GITHUB_OUTPUT"
+              echo "environment=dev" >> "$GITHUB_OUTPUT"
+            elif [ "$BRANCH" = "main" ]; then
+              echo "image_tag=$VERSION" >> "$GITHUB_OUTPUT"
+              echo "railway_env_id=${{ vars.RAILWAY_STAGE_ENV_ID }}" >> "$GITHUB_OUTPUT"
+              echo "environment=stage" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Manual dispatch: prod only
+            TAG="${{ inputs.tag }}"
+            if [ -z "$TAG" ]; then
+              echo "::error::Production deployment requires a tag (e.g. api-v1.5.0)"
+              exit 1
+            fi
+
+            echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "railway_env_id=${{ vars.RAILWAY_PROD_ENV_ID }}" >> "$GITHUB_OUTPUT"
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Deploy to Railway
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: "Deploy to Railway (${{ needs.resolve.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: resolve
+    timeout-minutes: 10
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}"
+          echo "Deploying $IMAGE → ${{ needs.resolve.outputs.environment }}"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### API Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
+          railway service \
+            --set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE"
+          railway redeploy --yes
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.resolve.outputs.railway_env_id }}

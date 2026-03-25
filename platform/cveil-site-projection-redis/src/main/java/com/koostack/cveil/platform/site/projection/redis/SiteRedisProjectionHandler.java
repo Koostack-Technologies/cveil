@@ -102,6 +102,10 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
             case IamEventTypes.ROLE_ASSIGNED -> handleRoleAssigned(node);
             case IamEventTypes.ROLE_REMOVED -> handleRoleRemoved(node);
 
+                // -- IAM: Role definitions --
+            case IamEventTypes.ROLE_DEFINITION_CREATED -> handleRoleDefinitionCreated(node);
+            case IamEventTypes.ROLE_DEFINITION_DELETED -> handleRoleDefinitionDeleted(node);
+
                 // -- IAM: Access tokens --
             case IamEventTypes.ACCESS_TOKEN_CREATED -> handleAccessTokenCreated(node);
             case IamEventTypes.ACCESS_TOKEN_REVOKED -> handleAccessTokenRevoked(node);
@@ -146,6 +150,10 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
             case PlanEventTypes.PLAN_ACTIVATED -> handlePlanActivated(node);
             case PlanEventTypes.PLAN_DEACTIVATED -> handlePlanDeactivated(node);
             case PlanEventTypes.PLAN_STRIPE_SYNCED -> handlePlanStripeSynced(node);
+
+                // -- Plan: Feature gates --
+            case PlanEventTypes.PLAN_FEATURE_SET -> handlePlanFeatureSet(node);
+            case PlanEventTypes.PLAN_FEATURE_REMOVED -> handlePlanFeatureRemoved(node);
 
                 // -- No-op events (trace and skip) --
             case IamEventTypes.USER_AUTHENTICATED,
@@ -284,6 +292,7 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
         if (displayName != null) hash.put("displayName", displayName);
 
         jedisProvider.get().hset("site:org:" + orgId, hash);
+        jedisProvider.get().sadd("site:orgs:all", orgId);
         log.debug("Projected ORGANIZATION_CREATED orgId={}", orgId);
     }
 
@@ -306,6 +315,7 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
         JedisPooled jedis = jedisProvider.get();
         jedis.del("site:org:" + orgId);
         jedis.del("site:org:" + orgId + ":members");
+        jedis.srem("site:orgs:all", orgId);
         log.debug("Projected ORGANIZATION_DELETED orgId={}", orgId);
     }
 
@@ -382,6 +392,13 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
         if (scopes != null) meta.put("scopes", scopes);
 
         jedisProvider.get().hset("site:tokens:" + userId, tokenPrefix, toJson(meta));
+
+        String createdBy = textOrNull(node, "userId");
+        String tenantId = textOrNull(node, "tenantId");
+        if (createdBy != null && tenantId != null && tokenPrefix != null) {
+            jedisProvider.get().sadd("site:tokens-by-creator:" + tenantId + ":" + createdBy, tokenPrefix);
+        }
+
         log.debug("Projected ACCESS_TOKEN_CREATED userId={} tokenPrefix={}", userId, tokenPrefix);
     }
 
@@ -389,6 +406,12 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
         String userId = requiredText(node, "userId");
         String tokenPrefix = requiredText(node, "tokenPrefix");
         jedisProvider.get().hdel("site:tokens:" + userId, tokenPrefix);
+
+        String tenantId = textOrNull(node, "tenantId");
+        if (tenantId != null) {
+            jedisProvider.get().srem("site:tokens-by-creator:" + tenantId + ":" + userId, tokenPrefix);
+        }
+
         log.debug("Projected ACCESS_TOKEN_REVOKED userId={} tokenPrefix={}", userId, tokenPrefix);
     }
 
@@ -577,6 +600,22 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
 
         double score = Instant.now().toEpochMilli();
         jedisProvider.get().zadd("site:invoices:" + tenantId, score, toJson(meta));
+
+        // Store individual invoice hash for direct lookup
+        Map<String, String> invoiceHash = new HashMap<>();
+        invoiceHash.put("externalInvoiceId", invoiceId);
+        putIfPresent(invoiceHash, node, "tenantId");
+        putIfPresent(invoiceHash, node, "status");
+        putIfPresent(invoiceHash, node, "currency");
+        invoiceHash.put("amountDue", String.valueOf(longOrDefault(node, "amountDue", 0)));
+        invoiceHash.put("total", String.valueOf(longOrDefault(node, "total", 0)));
+        putIfPresent(invoiceHash, node, "hostedInvoiceUrl");
+        putIfPresent(invoiceHash, node, "invoicePdfUrl");
+        putIfPresent(invoiceHash, node, "periodStart");
+        putIfPresent(invoiceHash, node, "periodEnd");
+        putIfPresent(invoiceHash, node, "dueDate");
+        jedisProvider.get().hset("site:invoice:" + invoiceId, invoiceHash);
+
         log.debug("Projected INVOICE_CREATED tenantId={} invoiceId={}", tenantId, invoiceId);
     }
 
@@ -624,6 +663,18 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
                     putJsonIfPresent(updated, node, "total");
 
                     jedis.zadd(key, score, toJson(updated));
+
+                    // Also update individual invoice hash
+                    Map<String, String> hashUpdates = new HashMap<>();
+                    putIfPresent(hashUpdates, node, "status");
+                    putIfPresent(hashUpdates, node, "amountPaid");
+                    putIfPresent(hashUpdates, node, "paidAt");
+                    putIfPresent(hashUpdates, node, "amountDue");
+                    putIfPresent(hashUpdates, node, "total");
+                    if (!hashUpdates.isEmpty()) {
+                        jedis.hset("site:invoice:" + invoiceId, hashUpdates);
+                    }
+
                     return;
                 }
             } catch (JsonProcessingException e) {
@@ -719,6 +770,8 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
             jedis.sadd("site:plans:active", planId);
         }
 
+        jedis.sadd("site:plans:all", planId);
+
         log.debug("Projected PLAN_CREATED planId={}", planId);
     }
 
@@ -774,6 +827,102 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
     }
 
     // =======================================================================
+    // IAM: Role definitions
+    // =======================================================================
+
+    private void handleRoleDefinitionCreated(JsonNode node) {
+        String roleId = textOrNull(node, "roleId");
+        String tenantId = textOrNull(node, "tenantId");
+        if (roleId == null) return;
+
+        JedisPooled jedis = jedisProvider.get();
+
+        // Store role definition metadata
+        Map<String, String> hash = new HashMap<>();
+        hash.put("roleId", roleId);
+        putIfPresent(hash, "tenantId", node);
+        putIfPresent(hash, "scope", node);
+        putIfPresent(hash, "displayName", node);
+        putIfPresent(hash, "description", node);
+        hash.put("isSystem", String.valueOf(boolOrDefault(node, "isSystem", false)));
+        hash.put("isAssignable", String.valueOf(boolOrDefault(node, "isAssignable", true)));
+
+        String roleKey = "site:role-def:" + roleId;
+        jedis.hset(roleKey, hash);
+
+        // Store role → permission mappings
+        if (node.has("permissions") && node.get("permissions").isArray()) {
+            String permKey = "site:role-perms:" + roleId;
+            jedis.del(permKey); // idempotent: clear before re-adding
+            for (JsonNode perm : node.get("permissions")) {
+                jedis.sadd(permKey, perm.asText());
+            }
+        }
+
+        // Track role in tenant's role definitions set
+        String scope = tenantId != null ? tenantId : "platform";
+        jedis.sadd("site:role-defs:" + scope, roleId);
+        // Also add to global set for system roles
+        if (boolOrDefault(node, "isSystem", false)) {
+            jedis.sadd("site:role-defs:system", roleId);
+        }
+
+        log.debug("Projected role definition created: {}", roleId);
+    }
+
+    private void handleRoleDefinitionDeleted(JsonNode node) {
+        String roleId = textOrNull(node, "roleId");
+        String tenantId = textOrNull(node, "tenantId");
+        if (roleId == null) return;
+
+        JedisPooled jedis = jedisProvider.get();
+        jedis.del("site:role-def:" + roleId);
+        jedis.del("site:role-perms:" + roleId);
+
+        String scope = tenantId != null ? tenantId : "platform";
+        jedis.srem("site:role-defs:" + scope, roleId);
+
+        log.debug("Projected role definition deleted: {}", roleId);
+    }
+
+    // =======================================================================
+    // Plan: Feature gates
+    // =======================================================================
+
+    private void handlePlanFeatureSet(JsonNode node) {
+        String planId = textOrNull(node, "planId");
+        String featureKey = textOrNull(node, "featureKey");
+        if (planId == null || featureKey == null) return;
+
+        JedisPooled jedis = jedisProvider.get();
+        String key = "site:plan-features:" + planId;
+
+        // Store as HASH: field = featureKey, value = JSON {enabled, limitValue}
+        Map<String, Object> featureData = new HashMap<>();
+        featureData.put("enabled", boolOrDefault(node, "enabled", false));
+        if (node.has("limitValue") && !node.get("limitValue").isNull()) {
+            featureData.put("limitValue", node.get("limitValue").asInt());
+        }
+
+        try {
+            jedis.hset(key, featureKey, objectMapper.writeValueAsString(featureData));
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize plan feature: {}/{}", planId, featureKey, e);
+        }
+
+        log.debug("Projected plan feature set: {}/{}", planId, featureKey);
+    }
+
+    private void handlePlanFeatureRemoved(JsonNode node) {
+        String planId = textOrNull(node, "planId");
+        String featureKey = textOrNull(node, "featureKey");
+        if (planId == null || featureKey == null) return;
+
+        jedisProvider.get().hdel("site:plan-features:" + planId, featureKey);
+        log.debug("Projected plan feature removed: {}/{}", planId, featureKey);
+    }
+
+    // =======================================================================
     // Helpers
     // =======================================================================
 
@@ -803,6 +952,12 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
     private static void putIfPresent(Map<String, String> map, JsonNode node, String field) {
         String value = textOrNull(node, field);
         if (value != null) map.put(field, value);
+    }
+
+    private static void putIfPresent(Map<String, String> hash, String field, JsonNode node) {
+        if (node.has(field) && !node.get(field).isNull()) {
+            hash.put(field, node.get(field).asText());
+        }
     }
 
     private static void putJsonIfPresent(ObjectNode target, JsonNode source, String field) {

@@ -1179,8 +1179,9 @@ public class CveilProducers {
 
         // Permission service — DB-backed role/permission resolution
         this.permissionService =
-                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(platformDataSource);
-        LOG.info("Cveil REST API: JooqPermissionService initialized");
+                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(
+                        platformDataSource, platformEventService);
+        LOG.info("Cveil REST API: JooqPermissionService initialized (with event publishing)");
 
         // Wire query service into command service for email/username → UUID resolution
         if (iamCmdSvc

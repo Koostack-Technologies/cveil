@@ -84,7 +84,7 @@ COPY --from=build --chown=cveil:cveil /app/cveil-site/build/quarkus-app/ /app/qu
 COPY --from=build --chown=cveil:cveil /app/cveil-site/build/install/cveil-site/ /app/dist/
 COPY --from=build --chown=cveil:cveil /app/.build-type /app/.build-type
 
-COPY --chown=cveil:cveil entrypoint-site.sh /app/entrypoint.sh
+COPY --chown=cveil:cveil cveil-site/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 LABEL org.opencontainers.image.title="Cveil Site" \

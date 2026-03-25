@@ -14,14 +14,14 @@
 #
 # Build strategy is selected via the CVEIL_BUILD_STRATEGY build arg:
 #
-#   docker build -t cveil-rest-api .                              # auto-detect
-#   docker build -t cveil-rest-api --build-arg BUILD_STRATEGY=quarkus .
-#   docker build -t cveil-rest-api --build-arg BUILD_STRATEGY=dist .
+#   docker build -t cveil-rest-api -f cveil-rest-api/Dockerfile .         # auto-detect
+#   docker build -t cveil-rest-api -f cveil-rest-api/Dockerfile --build-arg BUILD_STRATEGY=quarkus .
+#   docker build -t cveil-rest-api -f cveil-rest-api/Dockerfile --build-arg BUILD_STRATEGY=dist .
 #
 # For the native image variant, see the companion Dockerfile.native at the
 # bottom of this file (commented out) or build with:
 #
-#   docker build -t cveil-rest-api-native -f Dockerfile.native .
+#   docker build -t cveil-rest-api-native -f cveil-rest-api/Dockerfile.native .
 #
 # =============================================================================
 
@@ -128,7 +128,7 @@ COPY --from=build --chown=cveil:cveil /app/.build-type /app/.build-type
 
 # -- Entrypoint script --------------------------------------------------------
 # Selects the correct launch command based on which build output exists.
-COPY --chown=cveil:cveil entrypoint.sh /app/entrypoint.sh
+COPY --chown=cveil:cveil cveil-rest-api/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # -- Labels -------------------------------------------------------------------

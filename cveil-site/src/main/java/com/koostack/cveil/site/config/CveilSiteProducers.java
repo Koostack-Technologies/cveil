@@ -508,12 +508,12 @@ public class CveilSiteProducers {
                                     "Cveil Site: KeycloakIdpProvider wired (url={})",
                                     kc.url().get());
 
-                            // Bootstrap: ensure the cveil realm exists
+                            // Bootstrap: wait for the cveil realm (API service is the primary provisioner)
                             String rootEmail = kc.rootEmail().orElse(null);
                             String rootPassword = kc.rootPassword().orElse(null);
                             if (rootEmail != null && rootPassword != null) {
                                 try {
-                                    provider.ensureCveilRealm(rootEmail, rootPassword);
+                                    provider.awaitCveilRealm(rootEmail, rootPassword, 15);
                                 } catch (Exception e) {
                                     LOG.error(
                                             "Failed to ensure Cveil realm — signup will not"
@@ -1137,8 +1137,9 @@ public class CveilSiteProducers {
 
         // Permission service — DB-backed role/permission resolution
         this.permissionService =
-                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(platformDataSource);
-        LOG.info("Cveil Site: JooqPermissionService initialized");
+                new com.koostack.cveil.platform.iam.jooq.JooqPermissionService(
+                        platformDataSource, platformEventService);
+        LOG.info("Cveil Site: JooqPermissionService initialized (with event publishing)");
 
         // Wire query service into command service for email/username → UUID resolution
         if (iamCmdSvc
@@ -1285,6 +1286,15 @@ public class CveilSiteProducers {
                 "Cveil Site: platform stream consumer started"
                         + " (groups=core-projection,billing-projection,iam-projection,"
                         + "cveil-site-projection)");
+
+        // Bootstrap config data into event store for Redis projection seeding
+        try {
+            new com.koostack.cveil.site.lifecycle.ConfigDataBootstrapSeeder(
+                            platformDataSource, platformEventService)
+                    .seed();
+        } catch (Exception e) {
+            LOG.warn("Config data bootstrap seeder failed (non-fatal): {}", e.getMessage());
+        }
 
         // -- Metrics publisher + projection ------------------------------------
         wireMetrics(redisPluginConfig, platformDataSource);

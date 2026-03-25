@@ -1,9 +1,12 @@
 package com.koostack.cveil.platform.site.projection.redis;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.koostack.cveil.plugin.redis.common.JedisProvider;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import redis.clients.jedis.JedisPooled;
 
@@ -208,6 +211,245 @@ public class SiteRedisQueryService {
     public Set<String> getActivePlanIds() {
         Set<String> result = jedisProvider.get().smembers("site:plans:active");
         return result != null ? result : Collections.emptySet();
+    }
+
+    /** Returns all plans by reading site:plans:all and fetching each plan hash. */
+    public List<PlanInfo> listPlans() {
+        Set<String> allPlanIds = jedisProvider.get().smembers("site:plans:all");
+        if (allPlanIds == null || allPlanIds.isEmpty()) return Collections.emptyList();
+        return allPlanIds.stream()
+                .map(this::getPlan)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /** Returns only active plans with full PlanInfo objects. */
+    public List<PlanInfo> listActivePlans() {
+        Set<String> activePlanIds = getActivePlanIds();
+        if (activePlanIds.isEmpty()) return Collections.emptyList();
+        return activePlanIds.stream()
+                .map(this::getPlan)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    // =======================================================================
+    // Invoice queries
+    // =======================================================================
+
+    public record InvoiceInfo(
+            String externalInvoiceId,
+            String tenantId,
+            String status,
+            String currency,
+            long amountDue,
+            long amountPaid,
+            long total,
+            String hostedInvoiceUrl,
+            String invoicePdfUrl,
+            String periodStart,
+            String periodEnd,
+            String dueDate,
+            String paidAt) {}
+
+    /** Retrieve a single invoice by external invoice ID. */
+    public InvoiceInfo getInvoice(String tenantId, String invoiceId) {
+        Map<String, String> hash = jedisProvider.get().hgetAll("site:invoice:" + invoiceId);
+        if (hash == null || hash.isEmpty()) return null;
+        // Verify tenant ownership
+        String storedTenant = hash.get("tenantId");
+        if (storedTenant != null && !storedTenant.equals(tenantId)) return null;
+        return new InvoiceInfo(
+                hash.get("externalInvoiceId"),
+                hash.get("tenantId"),
+                hash.get("status"),
+                hash.get("currency"),
+                parseLong(hash.get("amountDue"), 0),
+                parseLong(hash.get("amountPaid"), 0),
+                parseLong(hash.get("total"), 0),
+                hash.get("hostedInvoiceUrl"),
+                hash.get("invoicePdfUrl"),
+                hash.get("periodStart"),
+                hash.get("periodEnd"),
+                hash.get("dueDate"),
+                hash.get("paidAt"));
+    }
+
+    /** List invoices for a tenant with pagination. */
+    public List<String> listInvoices(String tenantId, int page, int pageSize) {
+        JedisPooled jedis = jedisProvider.get();
+        long start = (long) page * pageSize;
+        long end = start + pageSize - 1;
+        List<String> result = jedis.zrevrange("site:invoices:" + tenantId, start, end);
+        return result != null ? result : Collections.emptyList();
+    }
+
+    // =======================================================================
+    // Organization listing
+    // =======================================================================
+
+    /** List all organization IDs. */
+    public Set<String> listAllOrganizationIds() {
+        Set<String> result = jedisProvider.get().smembers("site:orgs:all");
+        return result != null ? result : Collections.emptySet();
+    }
+
+    /** List all organizations with full OrgInfo objects. */
+    public List<OrgInfo> listOrganizations() {
+        Set<String> orgIds = listAllOrganizationIds();
+        if (orgIds.isEmpty()) return Collections.emptyList();
+        return orgIds.stream()
+                .map(this::getOrganization)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    // =======================================================================
+    // Access token queries
+    // =======================================================================
+
+    /** List access tokens created by a specific user in a tenant. */
+    public Set<String> listAccessTokenPrefixesByCreator(String tenantId, String createdBy) {
+        Set<String> result =
+                jedisProvider.get().smembers("site:tokens-by-creator:" + tenantId + ":" + createdBy);
+        return result != null ? result : Collections.emptySet();
+    }
+
+    // =======================================================================
+    // Permission resolution
+    // =======================================================================
+
+    /**
+     * Resolve the effective permissions for a user in a tenant by looking up their roles,
+     * then expanding each role's permissions via the role-perms sets.
+     */
+    public Set<String> resolvePermissions(String userId, String tenantId) {
+        Set<String> roles = getUserRoles(userId, tenantId);
+        if (roles.isEmpty()) return Collections.emptySet();
+
+        JedisPooled jedis = jedisProvider.get();
+        Set<String> permissions = new java.util.HashSet<>();
+        for (String role : roles) {
+            Set<String> rolePerms = jedis.smembers("site:role-perms:" + role);
+            if (rolePerms != null) {
+                permissions.addAll(rolePerms);
+            }
+        }
+        // Also include platform-scoped roles (tenant_id IS NULL → stored as platform)
+        Set<String> platformRoles = jedis.smembers("site:user:" + userId + ":roles:platform");
+        if (platformRoles != null) {
+            for (String role : platformRoles) {
+                Set<String> rolePerms = jedis.smembers("site:role-perms:" + role);
+                if (rolePerms != null) {
+                    permissions.addAll(rolePerms);
+                }
+            }
+        }
+        return permissions;
+    }
+
+    // =======================================================================
+    // Role definition queries
+    // =======================================================================
+
+    public record RoleDefinitionInfo(
+            String roleId,
+            String tenantId,
+            String scope,
+            String displayName,
+            String description,
+            boolean isSystem,
+            boolean isAssignable,
+            List<String> permissions) {}
+
+    /** List all role definitions visible to the given tenant (system + tenant-custom). */
+    public List<RoleDefinitionInfo> listRoleDefinitions(String tenantId) {
+        JedisPooled jedis = jedisProvider.get();
+        Set<String> systemRoleIds = jedis.smembers("site:role-defs:system");
+        Set<String> tenantRoleIds = jedis.smembers("site:role-defs:" + tenantId);
+
+        Set<String> allRoleIds = new java.util.HashSet<>();
+        if (systemRoleIds != null) allRoleIds.addAll(systemRoleIds);
+        if (tenantRoleIds != null) allRoleIds.addAll(tenantRoleIds);
+
+        return allRoleIds.stream()
+                .map(roleId -> {
+                    Map<String, String> hash = jedis.hgetAll("site:role-def:" + roleId);
+                    if (hash == null || hash.isEmpty()) return null;
+                    Set<String> perms = jedis.smembers("site:role-perms:" + roleId);
+                    return new RoleDefinitionInfo(
+                            hash.get("roleId"),
+                            hash.get("tenantId"),
+                            hash.get("scope"),
+                            hash.get("displayName"),
+                            hash.get("description"),
+                            "true".equals(hash.get("isSystem")),
+                            "true".equals(hash.get("isAssignable")),
+                            perms != null ? List.copyOf(perms) : Collections.emptyList());
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /** List role assignment details for a user in a tenant. */
+    public Set<String> listUserRolesInTenant(String userId, String tenantId) {
+        return getUserRoles(userId, tenantId);
+    }
+
+    // =======================================================================
+    // Feature gate queries
+    // =======================================================================
+
+    public record PlanFeature(String planId, String featureKey, boolean enabled, Integer limitValue) {}
+
+    /** Check if a specific feature is enabled for a plan. */
+    public boolean isFeatureEnabled(String planId, String featureKey) {
+        String json = jedisProvider.get().hget("site:plan-features:" + planId, featureKey);
+        if (json == null) return false;
+        try {
+            JsonNode node = new ObjectMapper().readTree(json);
+            return node.has("enabled") && node.get("enabled").asBoolean(false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Get the limit value for a feature on a plan. Returns null if unlimited or not found. */
+    public Integer getFeatureLimit(String planId, String featureKey) {
+        String json = jedisProvider.get().hget("site:plan-features:" + planId, featureKey);
+        if (json == null) return null;
+        try {
+            JsonNode node = new ObjectMapper().readTree(json);
+            if (node.has("limitValue") && !node.get("limitValue").isNull()) {
+                return node.get("limitValue").asInt();
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Get all features for a plan. */
+    public List<PlanFeature> getFeaturesForPlan(String planId) {
+        Map<String, String> features = jedisProvider.get().hgetAll("site:plan-features:" + planId);
+        if (features == null || features.isEmpty()) return Collections.emptyList();
+
+        ObjectMapper mapper = new ObjectMapper();
+        return features.entrySet().stream()
+                .map(entry -> {
+                    try {
+                        JsonNode node = mapper.readTree(entry.getValue());
+                        boolean enabled = node.has("enabled") && node.get("enabled").asBoolean(false);
+                        Integer limitValue = (node.has("limitValue") && !node.get("limitValue").isNull())
+                                ? node.get("limitValue").asInt()
+                                : null;
+                        return new PlanFeature(planId, entry.getKey(), enabled, limitValue);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     // =======================================================================

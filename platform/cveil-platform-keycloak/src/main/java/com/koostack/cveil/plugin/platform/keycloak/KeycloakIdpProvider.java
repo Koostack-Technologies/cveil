@@ -429,7 +429,7 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
 
     /**
      * Ensure the single Cveil realm exists with all required configuration. Called at application
-     * startup.
+     * startup by the primary provisioner service (cveil-rest-api).
      *
      * @param rootEmail the root admin email
      * @param rootPassword the root admin password
@@ -441,6 +441,25 @@ public class KeycloakIdpProvider implements IdpProvider<KeycloakConfig> {
                         config.cveilRealmName(), rootEmail, rootPassword);
         this.clientSecret = result.clientSecret();
         LOG.info("Cveil realm '{}' ensured, client secret cached", config.cveilRealmName());
+        return result.clientSecret();
+    }
+
+    /**
+     * Wait for the Cveil realm to be created by another service, then read its config. Falls back
+     * to creating the realm if it doesn't appear within the timeout. Called at startup by secondary
+     * services (cveil-site) to avoid concurrent realm creation races.
+     *
+     * @param rootEmail the root admin email
+     * @param rootPassword the root admin password
+     * @param maxWaitSeconds maximum seconds to wait before falling back to create
+     * @return the client secret for the cveil-backend client
+     */
+    public String awaitCveilRealm(String rootEmail, String rootPassword, int maxWaitSeconds) {
+        var result =
+                realmProvisioner.awaitPlatformRealm(
+                        config.cveilRealmName(), rootEmail, rootPassword, maxWaitSeconds);
+        this.clientSecret = result.clientSecret();
+        LOG.info("Cveil realm '{}' ready, client secret cached", config.cveilRealmName());
         return result.clientSecret();
     }
 

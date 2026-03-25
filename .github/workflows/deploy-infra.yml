@@ -1,0 +1,314 @@
+# =============================================================================
+# Cveil Infrastructure — Provision and deploy supporting services to Railway
+#
+# Provisions Postgres, Redis, nginx reverse proxy, and Keycloak.
+# Postgres and Redis are Railway managed plugins; nginx and Keycloak are
+# custom Docker images pushed to GHCR.
+#
+# Environment is derived from the branch/tag the workflow is dispatched from:
+#   develop → dev   |   main → stage   |   tag → prod
+# =============================================================================
+
+name: "Deploy: Infrastructure"
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Which services to deploy"
+        required: true
+        type: choice
+        options:
+          - all
+          - databases
+          - postgres
+          - redis
+          - nginx
+          - keycloak
+      confirm_prod:
+        description: "Type 'yes-deploy-prod' to confirm production deployment (only needed on tags)"
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-infra-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate — resolve environment from branch/tag and validate
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Resolve & Gate
+    runs-on: ubuntu-latest
+    outputs:
+      railway_env_id: ${{ steps.resolve.outputs.env_id }}
+      environment_name: ${{ steps.resolve.outputs.environment }}
+    steps:
+      - name: Resolve environment from ref
+        id: resolve
+        run: |
+          REF="${{ github.ref_name }}"
+
+          if [ "$REF" = "develop" ]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_DEV_ENV_ID }}" >> "$GITHUB_OUTPUT"
+          elif [ "$REF" = "main" ]; then
+            echo "environment=stage" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_STAGE_ENV_ID }}" >> "$GITHUB_OUTPUT"
+          elif [[ "$REF" == api-v* ]] || [[ "$REF" == site-v* ]] || [[ "$REF" == v* ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_PROD_ENV_ID }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Infra deploy must run from 'develop' (→dev), 'main' (→stage), or a tag (→prod). Got: $REF"
+            exit 1
+          fi
+
+      - name: Validate production confirmation
+        if: steps.resolve.outputs.environment == 'prod' && inputs.confirm_prod != 'yes-deploy-prod'
+        run: |
+          echo "::error::Production deployment requires confirm_prod = 'yes-deploy-prod'"
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Postgres — provision managed plugin + initialise schemas
+  # ---------------------------------------------------------------------------
+  postgres:
+    name: "Postgres: Provision & Init"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: contains(fromJSON('["all","databases","postgres"]'), inputs.services)
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Provision Postgres plugin (idempotent)
+        run: |
+          # Check if the Postgres service already exists by listing services
+          SERVICES=$(railway service list 2>&1 || true)
+          if echo "$SERVICES" | grep -qi "postgres"; then
+            echo "✅ Postgres service already exists — skipping creation"
+          else
+            echo "Creating Postgres plugin..."
+            railway add --plugin postgresql
+            echo "✅ Postgres plugin created"
+            # Wait for the plugin to be ready
+            echo "Waiting for Postgres to be ready..."
+            sleep 30
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create cveil database (idempotent)
+        run: |
+          # Connect to the default 'railway' database to create 'cveil'
+          psql "$DATABASE_URL" -tc "SELECT 1 FROM pg_database WHERE datname = 'cveil'" | grep -q 1 \
+            || psql "$DATABASE_URL" -c "CREATE DATABASE cveil"
+          echo "✅ Database 'cveil' exists"
+        env:
+          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+
+      - name: Create keycloak schema
+        run: |
+          # Switch to the cveil database for schema init
+          CVEIL_URL=$(echo "$DATABASE_URL" | sed 's|/railway|/cveil|')
+          psql "$CVEIL_URL" -f docker/postgres/init-keycloak-schema.sql
+        env:
+          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+
+      - name: Verify schemas
+        run: |
+          CVEIL_URL=$(echo "$DATABASE_URL" | sed 's|/railway|/cveil|')
+          psql "$CVEIL_URL" -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('public', 'keycloak') ORDER BY schema_name;"
+        env:
+          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+
+  # ---------------------------------------------------------------------------
+  # Redis — provision managed plugin
+  # ---------------------------------------------------------------------------
+  redis:
+    name: "Redis: Provision"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: contains(fromJSON('["all","databases","redis"]'), inputs.services)
+    timeout-minutes: 10
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Provision Redis plugin (idempotent)
+        run: |
+          SERVICES=$(railway service list 2>&1 || true)
+          if echo "$SERVICES" | grep -qi "redis"; then
+            echo "✅ Redis service already exists — skipping creation"
+          else
+            echo "Creating Redis plugin..."
+            railway add --plugin redis
+            echo "✅ Redis plugin created"
+            sleep 15
+          fi
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
+
+      - name: Verify Redis connectivity
+        run: |
+          if [ -n "$REDIS_URL" ]; then
+            echo "✅ Redis URL is set — plugin is provisioned"
+          else
+            echo "⚠️ REDIS_URL not yet available — plugin may still be provisioning"
+            echo "   Set RAILWAY_{ENV}_REDIS_URL secret after plugin is ready"
+          fi
+        env:
+          REDIS_URL: ${{ secrets[format('RAILWAY_{0}_REDIS_URL', needs.gate.outputs.environment_name)] }}
+
+  # ---------------------------------------------------------------------------
+  # Nginx — build, push, deploy reverse proxy
+  # ---------------------------------------------------------------------------
+  nginx:
+    name: "Nginx: Deploy"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: inputs.services == 'all' || inputs.services == 'nginx'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/proxy
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/nginx/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: |
+          railway variables --set "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
+                            --set "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
+                            --set "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
+                            --set "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
+          railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
+
+  # ---------------------------------------------------------------------------
+  # Keycloak — build, push, deploy identity provider
+  # ---------------------------------------------------------------------------
+  keycloak:
+    name: "Keycloak: Deploy"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: inputs.services == 'all' || inputs.services == 'keycloak'
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/keycloak
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/keycloak/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
+
+  # ---------------------------------------------------------------------------
+  # Summary
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [gate, postgres, redis, nginx, keycloak]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Infrastructure Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | **${{ needs.gate.outputs.environment_name }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| Postgres | ${{ needs.postgres.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Redis | ${{ needs.redis.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Nginx | ${{ needs.nginx.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Keycloak | ${{ needs.keycloak.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY

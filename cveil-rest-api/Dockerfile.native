@@ -13,7 +13,7 @@
 #     and then build only the runtime stage of this Dockerfile.
 #
 # Build:
-#   docker build -t cveil-rest-api-native -f Dockerfile.native .
+#   docker build -t cveil-rest-api-native -f cveil-rest-api/Dockerfile.native .
 #
 # Run:
 #   docker run -p 8080:8080 \

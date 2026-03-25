@@ -630,7 +630,8 @@ public class SiteAuthFilter implements ContainerRequestFilter {
                 || normalized.equals("signup")
                 || normalized.equals("login")
                 || normalized.equals("forgot-password")
-                || normalized.equals("reset-password")) {
+                || normalized.equals("reset-password")
+                || normalized.startsWith("verify-email/callback")) {
             return true;
         }
 
@@ -680,6 +681,14 @@ public class SiteAuthFilter implements ContainerRequestFilter {
 
     /** Aborts the request with HTTP 401 Unauthorized and a JSON error body. */
     private static void abortUnauthorized(ContainerRequestContext ctx, String message) {
+        String path = ctx.getUriInfo().getPath();
+        // For page requests (not API calls), redirect to /login instead of JSON 401
+        if (!path.startsWith("/api/") && !path.startsWith("api/")) {
+            ctx.abortWith(
+                    Response.seeOther(java.net.URI.create("/login"))
+                            .build());
+            return;
+        }
         ctx.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
                         .entity(Map.of("error", "Unauthorized", "message", message))
