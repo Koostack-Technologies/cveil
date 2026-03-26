@@ -265,9 +265,10 @@ jobs:
           echo "### API Deployment" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image:** \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
-          railway variable set \
-            "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" \
-            -s ${{ vars.RAILWAY_API_SERVICE_ID }} -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.resolve.outputs.railway_env_id }}
-          railway redeploy --yes -s ${{ vars.RAILWAY_API_SERVICE_ID }} -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.resolve.outputs.railway_env_id }}
+          railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE"
+          railway redeploy --yes
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ needs.resolve.outputs.railway_env_id }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
