@@ -89,6 +89,15 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Debug Railway auth
+        run: |
+          railway --version
+          echo "Token length: ${#RAILWAY_API_TOKEN}"
+          echo "Token prefix: ${RAILWAY_API_TOKEN:0:10}..."
+          railway whoami
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Link Railway project
         run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
         env:
