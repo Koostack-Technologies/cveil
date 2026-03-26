@@ -105,7 +105,7 @@ jobs:
       - name: Provision Postgres plugin (idempotent)
         run: |
           # Check if the Postgres service already exists
-          if railway service list 2>/dev/null | grep -qi "postgres"; then
+          if railway status --json | jq -e '.services[] | select(.name | test("postgres"; "i"))' > /dev/null 2>&1; then
             echo "✅ Postgres service already exists — skipping creation"
           else
             echo "Creating Postgres plugin..."
@@ -114,6 +114,21 @@ jobs:
             echo "Waiting for Postgres to be ready..."
             sleep 30
           fi
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Fetch DATABASE_URL from Railway
+        id: pg-url
+        run: |
+          # Re-link to the Postgres service to read its variables
+          railway link --service Postgres
+          DB_URL=$(railway variables --json | jq -r '.DATABASE_URL // empty')
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Could not retrieve DATABASE_URL from Railway Postgres service"
+            exit 1
+          fi
+          echo "::add-mask::$DB_URL"
+          echo "database_url=$DB_URL" >> "$GITHUB_OUTPUT"
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
@@ -127,7 +142,7 @@ jobs:
             || psql "$DATABASE_URL" -c "CREATE DATABASE cveil"
           echo "✅ Database 'cveil' exists"
         env:
-          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+          DATABASE_URL: ${{ steps.pg-url.outputs.database_url }}
 
       - name: Create keycloak schema
         run: |
@@ -135,14 +150,14 @@ jobs:
           CVEIL_URL=$(echo "$DATABASE_URL" | sed 's|/railway|/cveil|')
           psql "$CVEIL_URL" -f docker/postgres/init-keycloak-schema.sql
         env:
-          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+          DATABASE_URL: ${{ steps.pg-url.outputs.database_url }}
 
       - name: Verify schemas
         run: |
           CVEIL_URL=$(echo "$DATABASE_URL" | sed 's|/railway|/cveil|')
           psql "$CVEIL_URL" -c "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('public', 'keycloak') ORDER BY schema_name;"
         env:
-          DATABASE_URL: ${{ secrets[format('RAILWAY_{0}_DATABASE_URL', needs.gate.outputs.environment_name)] }}
+          DATABASE_URL: ${{ steps.pg-url.outputs.database_url }}
 
   # ---------------------------------------------------------------------------
   # Redis — provision managed plugin
@@ -164,7 +179,7 @@ jobs:
 
       - name: Provision Redis plugin (idempotent)
         run: |
-          if railway service list 2>/dev/null | grep -qi "redis"; then
+          if railway status --json | jq -e '.services[] | select(.name | test("redis"; "i"))' > /dev/null 2>&1; then
             echo "✅ Redis service already exists — skipping creation"
           else
             echo "Creating Redis plugin..."
@@ -177,14 +192,16 @@ jobs:
 
       - name: Verify Redis connectivity
         run: |
+          # Link to the Redis service to read its variables
+          railway link --service Redis
+          REDIS_URL=$(railway variables --json | jq -r '.REDIS_URL // empty')
           if [ -n "$REDIS_URL" ]; then
             echo "✅ Redis URL is set — plugin is provisioned"
           else
             echo "⚠️ REDIS_URL not yet available — plugin may still be provisioning"
-            echo "   Set RAILWAY_{ENV}_REDIS_URL secret after plugin is ready"
           fi
         env:
-          REDIS_URL: ${{ secrets[format('RAILWAY_{0}_REDIS_URL', needs.gate.outputs.environment_name)] }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Nginx — build, push, deploy reverse proxy
