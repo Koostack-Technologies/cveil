@@ -97,6 +97,11 @@ jobs:
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
+      - name: Link Railway project
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Provision Postgres plugin (idempotent)
         run: |
           # Check if the Postgres service already exists
@@ -111,8 +116,6 @@ jobs:
           fi
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -154,6 +157,11 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Link Railway project
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Provision Redis plugin (idempotent)
         run: |
           if railway service list 2>/dev/null | grep -qi "redis"; then
@@ -166,8 +174,6 @@ jobs:
           fi
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
 
       - name: Verify Redis connectivity
         run: |
@@ -229,6 +235,11 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Link Railway service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_NGINX_SERVICE_ID }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Deploy to Railway
         run: |
           railway variable set \
@@ -239,9 +250,6 @@ jobs:
           railway up --detach
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
 
   # ---------------------------------------------------------------------------
   # Keycloak — build, push, deploy identity provider
@@ -292,13 +300,15 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Link Railway service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Deploy to Railway
         run: railway up --detach
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
 
   # ---------------------------------------------------------------------------
   # Summary

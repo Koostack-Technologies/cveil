@@ -258,6 +258,11 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Link Railway service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_SITE_SERVICE_ID }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
       - name: Deploy to Railway
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}"
@@ -270,6 +275,3 @@ jobs:
           railway redeploy --yes
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ needs.resolve.outputs.railway_env_id }}
-          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SITE_SERVICE_ID }}
