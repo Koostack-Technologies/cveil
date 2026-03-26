@@ -93,24 +93,18 @@ jobs:
         run: |
           railway --version
           echo "Token length: ${#RAILWAY_API_TOKEN}"
-          echo "Token prefix: ${RAILWAY_API_TOKEN:0:10}..."
           railway whoami
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-      - name: Link Railway project
-        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
       - name: Provision Postgres plugin (idempotent)
         run: |
           # Check if the Postgres service already exists
-          if railway service status --all --json 2>/dev/null | grep -qi "postgres"; then
+          if railway service status --all -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }} --json 2>/dev/null | grep -qi "postgres"; then
             echo "✅ Postgres service already exists — skipping creation"
           else
             echo "Creating Postgres plugin..."
-            railway add --database postgres
+            railway add --database postgres -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }}
             echo "✅ Postgres plugin created"
             echo "Waiting for Postgres to be ready..."
             sleep 30
@@ -158,18 +152,13 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway project
-        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }}
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
       - name: Provision Redis plugin (idempotent)
         run: |
-          if railway service status --all --json 2>/dev/null | grep -qi "redis"; then
+          if railway service status --all -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }} --json 2>/dev/null | grep -qi "redis"; then
             echo "✅ Redis service already exists — skipping creation"
           else
             echo "Creating Redis plugin..."
-            railway add --database redis
+            railway add --database redis -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }}
             echo "✅ Redis plugin created"
             sleep 15
           fi
@@ -236,19 +225,15 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway project
-        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
       - name: Deploy to Railway
         run: |
           railway variable set \
             "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
             "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
             "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-            "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
-          railway up --detach
+            "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}" \
+            -s ${{ vars.RAILWAY_NGINX_SERVICE_ID }} -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }}
+          railway up --detach -s ${{ vars.RAILWAY_NGINX_SERVICE_ID }} -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }}
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
@@ -301,13 +286,8 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway project
-        run: railway link --workspace ${{ vars.RAILWAY_WORKSPACE_ID }} --project ${{ vars.RAILWAY_PROJECT_ID }} --environment ${{ needs.gate.outputs.railway_env_id }} --service ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
       - name: Deploy to Railway
-        run: railway up --detach
+        run: railway up --detach -s ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }} -p ${{ vars.RAILWAY_PROJECT_ID }} -e ${{ needs.gate.outputs.railway_env_id }}
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
