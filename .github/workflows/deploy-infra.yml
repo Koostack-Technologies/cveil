@@ -92,10 +92,10 @@ jobs:
       - name: Debug Railway auth
         run: |
           railway --version
-          echo "Token length: ${#RAILWAY_TOKEN}"
+          echo "Token length: ${#RAILWAY_API_TOKEN}"
           railway whoami
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
       - name: Provision Postgres plugin (idempotent)
         run: |
@@ -110,7 +110,7 @@ jobs:
             sleep 30
           fi
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
 
@@ -165,7 +165,7 @@ jobs:
             sleep 15
           fi
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
 
@@ -238,7 +238,7 @@ jobs:
             "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
           railway up --detach
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_NGINX_SERVICE_ID }}
@@ -295,7 +295,7 @@ jobs:
       - name: Deploy to Railway
         run: railway up --detach
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ needs.gate.outputs.railway_env_id }}
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}
