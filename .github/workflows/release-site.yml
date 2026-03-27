@@ -265,7 +265,7 @@ jobs:
 
       - name: Deploy site to Railway (idempotent)
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}"
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}" | tr '[:upper:]' '[:lower:]')
           REGISTRY_CREDS=(
             "DOCKER_REGISTRY=${{ env.REGISTRY }}"
             "DOCKER_USERNAME=${{ github.repository_owner }}"

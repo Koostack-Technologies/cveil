@@ -260,7 +260,7 @@ jobs:
 
       - name: Deploy Nginx to Railway (idempotent)
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/proxy:latest"
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/proxy:latest" | tr '[:upper:]' '[:lower:]')
           REGISTRY_CREDS=(
             "DOCKER_REGISTRY=${{ env.REGISTRY }}"
             "DOCKER_USERNAME=${{ github.repository_owner }}"
@@ -353,7 +353,7 @@ jobs:
 
       - name: Deploy Keycloak to Railway (idempotent)
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/keycloak:latest"
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/keycloak:latest" | tr '[:upper:]' '[:lower:]')
           REGISTRY_CREDS=(
             "DOCKER_REGISTRY=${{ env.REGISTRY }}"
             "DOCKER_USERNAME=${{ github.repository_owner }}"
