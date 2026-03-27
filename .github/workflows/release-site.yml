@@ -288,6 +288,7 @@ jobs:
           railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
           if [ "$FIRST_DEPLOY" = true ]; then
             DEPLOY_DIR=$(mktemp -d)
+            cp -r .railway "$DEPLOY_DIR/"
             pushd "$DEPLOY_DIR"
             railway up --detach
             popd
