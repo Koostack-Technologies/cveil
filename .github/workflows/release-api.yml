@@ -287,8 +287,9 @@ jobs:
           railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
           if [ "$FIRST_DEPLOY" = true ]; then
             DEPLOY_DIR=$(mktemp -d)
-            cp -r .railway "$DEPLOY_DIR/"
             pushd "$DEPLOY_DIR"
+            git init -q
+            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service api
             railway up --detach
             popd
             rm -rf "$DEPLOY_DIR"
