@@ -253,8 +253,25 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway service
-        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_NGINX_SERVICE_ID }}"
+      - name: Link Railway project
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Ensure Nginx service exists (idempotent)
+        run: |
+          if railway status --json | jq -e '.services[] | select(.name == "nginx")' > /dev/null 2>&1; then
+            echo "✅ Nginx service already exists"
+          else
+            echo "Creating Nginx service..."
+            railway add --service nginx
+            echo "✅ Nginx service created"
+          fi
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Link Nginx service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service nginx
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
@@ -318,8 +335,25 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway service
-        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_KEYCLOAK_SERVICE_ID }}"
+      - name: Link Railway project
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Ensure Keycloak service exists (idempotent)
+        run: |
+          if railway status --json | jq -e '.services[] | select(.name == "keycloak")' > /dev/null 2>&1; then
+            echo "✅ Keycloak service already exists"
+          else
+            echo "Creating Keycloak service..."
+            railway add --service keycloak
+            echo "✅ Keycloak service created"
+          fi
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Link Keycloak service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service keycloak
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 

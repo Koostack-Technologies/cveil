@@ -257,8 +257,25 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Link Railway service
-        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service "${{ vars.RAILWAY_API_SERVICE_ID }}"
+      - name: Link Railway project
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Ensure api service exists (idempotent)
+        run: |
+          if railway status --json | jq -e '.services[] | select(.name == "api")' > /dev/null 2>&1; then
+            echo "✅ API service already exists"
+          else
+            echo "Creating api service..."
+            railway add --service api
+            echo "✅ API service created"
+          fi
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+      - name: Link api service
+        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service api
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
