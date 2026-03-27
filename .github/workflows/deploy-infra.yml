@@ -122,9 +122,10 @@ jobs:
         run: |
           # Re-link to the Postgres service to read its variables
           railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres
-          DB_URL=$(railway variables --json | jq -r '.DATABASE_URL // empty')
+          # Use the public URL so CI runners outside Railway's network can connect
+          DB_URL=$(railway variables --json | jq -r '.DATABASE_PUBLIC_URL // empty')
           if [ -z "$DB_URL" ]; then
-            echo "::error::Could not retrieve DATABASE_URL from Railway Postgres service"
+            echo "::error::Could not retrieve DATABASE_PUBLIC_URL from Railway Postgres service"
             exit 1
           fi
           echo "::add-mask::$DB_URL"
