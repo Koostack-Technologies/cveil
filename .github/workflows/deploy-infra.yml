@@ -121,7 +121,7 @@ jobs:
         id: pg-url
         run: |
           # Re-link to the Postgres service to read its variables
-          railway link --service Postgres
+          railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres
           DB_URL=$(railway variables --json | jq -r '.DATABASE_URL // empty')
           if [ -z "$DB_URL" ]; then
             echo "::error::Could not retrieve DATABASE_URL from Railway Postgres service"
@@ -193,7 +193,7 @@ jobs:
       - name: Verify Redis connectivity
         run: |
           # Link to the Redis service to read its variables
-          railway link --service Redis
+          railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Redis
           REDIS_URL=$(railway variables --json | jq -r '.REDIS_URL // empty')
           if [ -n "$REDIS_URL" ]; then
             echo "✅ Redis URL is set — plugin is provisioned"
