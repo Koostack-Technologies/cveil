@@ -261,21 +261,25 @@ jobs:
       - name: Deploy Nginx to Railway (idempotent)
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/proxy:latest"
+          REGISTRY_CREDS=(
+            "DOCKER_REGISTRY=${{ env.REGISTRY }}"
+            "DOCKER_USERNAME=${{ github.repository_owner }}"
+            "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+          )
           if railway status --json | jq -e '.services[] | select(.name == "nginx")' > /dev/null 2>&1; then
             echo "✅ Nginx service exists — redeploying"
             railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service nginx
-            railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE"
-            railway variable set \
-              "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
-              "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
-            railway redeploy --yes
           else
-            echo "Creating Nginx service with image..."
-            railway add --image "$IMAGE"
-            echo "✅ Nginx service created and deployed"
+            echo "Creating Nginx service..."
+            railway add --service nginx
+            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service nginx
           fi
+          railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}" \
+            "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
+            "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
+            "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
+            "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
+          railway redeploy --yes
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
@@ -336,16 +340,21 @@ jobs:
       - name: Deploy Keycloak to Railway (idempotent)
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/keycloak:latest"
+          REGISTRY_CREDS=(
+            "DOCKER_REGISTRY=${{ env.REGISTRY }}"
+            "DOCKER_USERNAME=${{ github.repository_owner }}"
+            "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+          )
           if railway status --json | jq -e '.services[] | select(.name == "keycloak")' > /dev/null 2>&1; then
             echo "✅ Keycloak service exists — redeploying"
             railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service keycloak
-            railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE"
-            railway redeploy --yes
           else
-            echo "Creating Keycloak service with image..."
-            railway add --image "$IMAGE"
-            echo "✅ Keycloak service created and deployed"
+            echo "Creating Keycloak service..."
+            railway add --service keycloak
+            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service keycloak
           fi
+          railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
+          railway redeploy --yes
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 

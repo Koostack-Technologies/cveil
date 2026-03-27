@@ -265,6 +265,11 @@ jobs:
       - name: Deploy api to Railway (idempotent)
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}"
+          REGISTRY_CREDS=(
+            "DOCKER_REGISTRY=${{ env.REGISTRY }}"
+            "DOCKER_USERNAME=${{ github.repository_owner }}"
+            "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+          )
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### API Deployment" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
@@ -272,12 +277,12 @@ jobs:
           if railway status --json | jq -e '.services[] | select(.name == "api")' > /dev/null 2>&1; then
             echo "Deploying $IMAGE → ${{ needs.resolve.outputs.environment }}"
             railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service api
-            railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE"
-            railway redeploy --yes
           else
-            echo "Creating api service with image $IMAGE..."
-            railway add --image "$IMAGE"
-            echo "✅ API service created and deployed"
+            echo "Creating api service..."
+            railway add --service api
+            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service api
           fi
+          railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
+          railway redeploy --yes
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
