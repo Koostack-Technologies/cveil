@@ -282,7 +282,22 @@ jobs:
             "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
             "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
           if [ "$FIRST_DEPLOY" = true ]; then
-            echo "✅ First deploy — RAILWAY_DOCKERFILE_IMAGE set. Railway will pull and deploy the image."
+            # Use Railway GraphQL API to set image source and trigger first deployment
+            SVC_ID=$(railway status --json | jq -r '.services[] | select(.name == "nginx") | .id')
+            ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
+            PAYLOAD=$(jq -n \
+              --arg svcId "$SVC_ID" \
+              --arg envId "$ENV_ID" \
+              --arg img "$IMAGE" \
+              '{
+                query: "mutation($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+                variables: { serviceId: $svcId, environmentId: $envId, input: { source: { image: $img } } }
+              }')
+            RESPONSE=$(curl -sf -X POST "https://backboard.railway.app/graphql/v2" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD")
+            echo "✅ Image source set via API — deployment triggered"
           else
             railway redeploy --yes
           fi
@@ -363,7 +378,21 @@ jobs:
           fi
           railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
           if [ "$FIRST_DEPLOY" = true ]; then
-            echo "✅ First deploy — RAILWAY_DOCKERFILE_IMAGE set. Railway will pull and deploy the image."
+            SVC_ID=$(railway status --json | jq -r '.services[] | select(.name == "keycloak") | .id')
+            ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
+            PAYLOAD=$(jq -n \
+              --arg svcId "$SVC_ID" \
+              --arg envId "$ENV_ID" \
+              --arg img "$IMAGE" \
+              '{
+                query: "mutation($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+                variables: { serviceId: $svcId, environmentId: $envId, input: { source: { image: $img } } }
+              }')
+            RESPONSE=$(curl -sf -X POST "https://backboard.railway.app/graphql/v2" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD")
+            echo "✅ Image source set via API — deployment triggered"
           else
             railway redeploy --yes
           fi
