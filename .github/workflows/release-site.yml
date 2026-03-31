@@ -266,44 +266,26 @@ jobs:
       - name: Deploy site to Railway (idempotent)
         run: |
           IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}" | tr '[:upper:]' '[:lower:]')
-          REGISTRY_CREDS=(
-            "DOCKER_REGISTRY=${{ env.REGISTRY }}"
-            "DOCKER_USERNAME=${{ github.repository_owner }}"
-            "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
-          )
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Site Deployment" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image:** \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
-          FIRST_DEPLOY=false
-          if railway status --json | jq -e '.services[] | select(.name == "site")' > /dev/null 2>&1; then
+
+          if railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service site 2>/dev/null; then
             echo "Deploying $IMAGE → ${{ needs.resolve.outputs.environment }}"
-            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service site
-          else
-            echo "Creating site service..."
-            FIRST_DEPLOY=true
-            railway add --service site
-            railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service site
-          fi
-          railway variable set "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" "${REGISTRY_CREDS[@]}"
-          if [ "$FIRST_DEPLOY" = true ]; then
-            SVC_ID=$(railway status --json | jq -r '.services[] | select(.name == "site") | .id')
-            ENV_ID="${{ needs.resolve.outputs.railway_env_id }}"
-            PAYLOAD=$(jq -n \
-              --arg svcId "$SVC_ID" \
-              --arg envId "$ENV_ID" \
-              --arg img "$IMAGE" \
-              '{
-                query: "mutation($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
-                variables: { serviceId: $svcId, environmentId: $envId, input: { source: { image: $img } } }
-              }')
-            RESPONSE=$(curl -sf -X POST "https://backboard.railway.app/graphql/v2" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$PAYLOAD")
-            echo "✅ Image source set via API — deployment triggered"
-          else
+            railway variable set \
+              "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" \
+              "DOCKER_REGISTRY=${{ env.REGISTRY }}" \
+              "DOCKER_USERNAME=${{ github.repository_owner }}" \
+              "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
             railway redeploy --yes
+          else
+            echo "Creating site service from image..."
+            railway add --image "$IMAGE" \
+              -v "DOCKER_REGISTRY=${{ env.REGISTRY }}" \
+              -v "DOCKER_USERNAME=${{ github.repository_owner }}" \
+              -v "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+            echo "✅ Site service created and deploying"
           fi
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
