@@ -396,12 +396,17 @@ jobs:
             if [ -n "$SVC_ID" ]; then
               gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
+            PGHOST='${{Postgres.PGHOST}}'
+            PGPORT='${{Postgres.PGPORT}}'
+            PGDB='${{Postgres.PGDATABASE}}'
+            PGUSER='${{Postgres.PGUSER}}'
+            PGPASS='${{Postgres.PGPASSWORD}}'
             railway variable set \
               "KC_DB=postgres" \
-              "KC_DB_URL=jdbc:postgresql://\${{Postgres.PGHOST}}:\${{Postgres.PGPORT}}/\${{Postgres.PGDATABASE}}" \
+              "KC_DB_URL=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDB}" \
               "KC_DB_SCHEMA=keycloak" \
-              "KC_DB_USERNAME=\${{Postgres.PGUSER}}" \
-              "KC_DB_PASSWORD=\${{Postgres.PGPASSWORD}}" \
+              "KC_DB_USERNAME=${PGUSER}" \
+              "KC_DB_PASSWORD=${PGPASS}" \
               "KC_HOSTNAME_STRICT=false" \
               "KC_HTTP_ENABLED=true" \
               "KC_PROXY_HEADERS=xforwarded" \
@@ -414,12 +419,17 @@ jobs:
             gql "mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
             sleep 5
             railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak
+            PGHOST='${{Postgres.PGHOST}}'
+            PGPORT='${{Postgres.PGPORT}}'
+            PGDB='${{Postgres.PGDATABASE}}'
+            PGUSER='${{Postgres.PGUSER}}'
+            PGPASS='${{Postgres.PGPASSWORD}}'
             railway variable set \
               "KC_DB=postgres" \
-              "KC_DB_URL=jdbc:postgresql://\${{Postgres.PGHOST}}:\${{Postgres.PGPORT}}/\${{Postgres.PGDATABASE}}" \
+              "KC_DB_URL=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDB}" \
               "KC_DB_SCHEMA=keycloak" \
-              "KC_DB_USERNAME=\${{Postgres.PGUSER}}" \
-              "KC_DB_PASSWORD=\${{Postgres.PGPASSWORD}}" \
+              "KC_DB_USERNAME=${PGUSER}" \
+              "KC_DB_PASSWORD=${PGPASS}" \
               "KC_HOSTNAME_STRICT=false" \
               "KC_HTTP_ENABLED=true" \
               "KC_PROXY_HEADERS=xforwarded" \
