@@ -266,25 +266,31 @@ jobs:
       - name: Deploy site to Railway (idempotent)
         run: |
           IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.image_tag }}" | tr '[:upper:]' '[:lower:]')
+          PROJECT_ID="${{ vars.RAILWAY_PROJECT_ID }}"
+          ENV_ID="${{ needs.resolve.outputs.railway_env_id }}"
+          API="https://backboard.railway.com/graphql/v2"
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Site Deployment" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment:** ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image:** \`$IMAGE\`" >> $GITHUB_STEP_SUMMARY
 
-          if railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.resolve.outputs.railway_env_id }}" --service site 2>/dev/null; then
+          if railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service site 2>/dev/null; then
             echo "Deploying $IMAGE → ${{ needs.resolve.outputs.environment }}"
-            railway variable set \
-              "RAILWAY_DOCKERFILE_IMAGE=$IMAGE" \
-              "DOCKER_REGISTRY=${{ env.REGISTRY }}" \
-              "DOCKER_USERNAME=${{ github.repository_owner }}" \
-              "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+            SVC_ID=$(railway status --json 2>/dev/null | jq -r '.serviceId // empty' || true)
+            if [ -n "$SVC_ID" ]; then
+              curl -sf -X POST "$API" \
+                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"query\":\"mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) }\"}"
+            fi
             railway redeploy --yes
           else
-            echo "Creating site service from image..."
-            railway add --image "$IMAGE" \
-              -v "DOCKER_REGISTRY=${{ env.REGISTRY }}" \
-              -v "DOCKER_USERNAME=${{ github.repository_owner }}" \
-              -v "DOCKER_PASSWORD=${{ secrets.GHCR_READ_TOKEN }}"
+            echo "Creating site service from image via API..."
+            RESULT=$(curl -sf -X POST "$API" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\":\"mutation { serviceCreate(input: { name: \\\"site\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) { id } }\"}")
+            echo "Service created: $RESULT"
             echo "✅ Site service created and deploying"
           fi
         env:
