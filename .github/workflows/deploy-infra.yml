@@ -396,17 +396,17 @@ jobs:
             if [ -n "$SVC_ID" ]; then
               gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
-            PGHOST='${{Postgres.PGHOST}}'
-            PGPORT='${{Postgres.PGPORT}}'
-            PGDB='${{Postgres.PGDATABASE}}'
-            PGUSER='${{Postgres.PGUSER}}'
-            PGPASS='${{Postgres.PGPASSWORD}}'
+            DB_REF_HOST='${{ '{{' }}Postgres.PGHOST}}'
+            DB_REF_PORT='${{ '{{' }}Postgres.PGPORT}}'
+            DB_REF_NAME='${{ '{{' }}Postgres.PGDATABASE}}'
+            DB_REF_USER='${{ '{{' }}Postgres.PGUSER}}'
+            DB_REF_PASS='${{ '{{' }}Postgres.PGPASSWORD}}'
             railway variable set \
               "KC_DB=postgres" \
-              "KC_DB_URL=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDB}" \
+              "KC_DB_URL=jdbc:postgresql://${DB_REF_HOST}:${DB_REF_PORT}/${DB_REF_NAME}" \
               "KC_DB_SCHEMA=keycloak" \
-              "KC_DB_USERNAME=${PGUSER}" \
-              "KC_DB_PASSWORD=${PGPASS}" \
+              "KC_DB_USERNAME=${DB_REF_USER}" \
+              "KC_DB_PASSWORD=${DB_REF_PASS}" \
               "KC_HOSTNAME_STRICT=false" \
               "KC_HTTP_ENABLED=true" \
               "KC_PROXY_HEADERS=xforwarded" \
@@ -419,17 +419,17 @@ jobs:
             gql "mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
             sleep 5
             railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak
-            PGHOST='${{Postgres.PGHOST}}'
-            PGPORT='${{Postgres.PGPORT}}'
-            PGDB='${{Postgres.PGDATABASE}}'
-            PGUSER='${{Postgres.PGUSER}}'
-            PGPASS='${{Postgres.PGPASSWORD}}'
+            DB_REF_HOST='${{ '{{' }}Postgres.PGHOST}}'
+            DB_REF_PORT='${{ '{{' }}Postgres.PGPORT}}'
+            DB_REF_NAME='${{ '{{' }}Postgres.PGDATABASE}}'
+            DB_REF_USER='${{ '{{' }}Postgres.PGUSER}}'
+            DB_REF_PASS='${{ '{{' }}Postgres.PGPASSWORD}}'
             railway variable set \
               "KC_DB=postgres" \
-              "KC_DB_URL=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDB}" \
+              "KC_DB_URL=jdbc:postgresql://${DB_REF_HOST}:${DB_REF_PORT}/${DB_REF_NAME}" \
               "KC_DB_SCHEMA=keycloak" \
-              "KC_DB_USERNAME=${PGUSER}" \
-              "KC_DB_PASSWORD=${PGPASS}" \
+              "KC_DB_USERNAME=${DB_REF_USER}" \
+              "KC_DB_PASSWORD=${DB_REF_PASS}" \
               "KC_HOSTNAME_STRICT=false" \
               "KC_HTTP_ENABLED=true" \
               "KC_PROXY_HEADERS=xforwarded" \
