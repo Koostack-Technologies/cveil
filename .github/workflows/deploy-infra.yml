@@ -396,10 +396,36 @@ jobs:
             if [ -n "$SVC_ID" ]; then
               gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
+            railway variable set \
+              "KC_DB=postgres" \
+              "KC_DB_URL=jdbc:postgresql://\${{Postgres.PGHOST}}:\${{Postgres.PGPORT}}/\${{Postgres.PGDATABASE}}" \
+              "KC_DB_SCHEMA=keycloak" \
+              "KC_DB_USERNAME=\${{Postgres.PGUSER}}" \
+              "KC_DB_PASSWORD=\${{Postgres.PGPASSWORD}}" \
+              "KC_HOSTNAME_STRICT=false" \
+              "KC_HTTP_ENABLED=true" \
+              "KC_PROXY_HEADERS=xforwarded" \
+              "KC_FEATURES=token-exchange,admin-fine-grained-authz,organization" \
+              "KC_BOOTSTRAP_ADMIN_USERNAME=${{ secrets.KC_ADMIN_USERNAME }}" \
+              "KC_BOOTSTRAP_ADMIN_PASSWORD=${{ secrets.KC_ADMIN_PASSWORD }}"
             railway redeploy --yes
           else
             echo "Creating Keycloak service from image via API..."
             gql "mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
+            sleep 5
+            railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak
+            railway variable set \
+              "KC_DB=postgres" \
+              "KC_DB_URL=jdbc:postgresql://\${{Postgres.PGHOST}}:\${{Postgres.PGPORT}}/\${{Postgres.PGDATABASE}}" \
+              "KC_DB_SCHEMA=keycloak" \
+              "KC_DB_USERNAME=\${{Postgres.PGUSER}}" \
+              "KC_DB_PASSWORD=\${{Postgres.PGPASSWORD}}" \
+              "KC_HOSTNAME_STRICT=false" \
+              "KC_HTTP_ENABLED=true" \
+              "KC_PROXY_HEADERS=xforwarded" \
+              "KC_FEATURES=token-exchange,admin-fine-grained-authz,organization" \
+              "KC_BOOTSTRAP_ADMIN_USERNAME=${{ secrets.KC_ADMIN_USERNAME }}" \
+              "KC_BOOTSTRAP_ADMIN_PASSWORD=${{ secrets.KC_ADMIN_PASSWORD }}"
             echo "✅ Keycloak service created and deploying"
           fi
         env:
