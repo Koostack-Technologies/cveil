@@ -276,15 +276,24 @@ jobs:
           ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
           API="https://backboard.railway.com/graphql/v2"
 
+          gql() {
+            local RESPONSE
+            RESPONSE=$(curl -sf -X POST "$API" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\":\"$1\"}")
+            echo "$RESPONSE"
+            if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+              echo "::error::Railway API error: $(echo "$RESPONSE" | jq -r '.errors[0].message')"
+              return 1
+            fi
+          }
+
           if railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service nginx 2>/dev/null; then
             echo "✅ Nginx service exists — updating image and redeploying"
-            # Update source image + registry credentials via API
             SVC_ID=$(railway status --json 2>/dev/null | jq -r '.serviceId // empty' || true)
             if [ -n "$SVC_ID" ]; then
-              curl -sf -X POST "$API" \
-                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "{\"query\":\"mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) }\"}"
+              gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
             railway variable set \
               "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
@@ -294,12 +303,7 @@ jobs:
             railway redeploy --yes
           else
             echo "Creating Nginx service from image via API..."
-            RESULT=$(curl -sf -X POST "$API" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\":\"mutation { serviceCreate(input: { name: \\\"nginx\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) { id } }\"}")
-            echo "Service created: $RESULT"
-            # Link and set env vars
+            gql "mutation { serviceCreate(input: { name: \\\"nginx\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
             sleep 5
             railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service nginx
             railway variable set \
@@ -373,23 +377,29 @@ jobs:
           ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
           API="https://backboard.railway.com/graphql/v2"
 
+          gql() {
+            local RESPONSE
+            RESPONSE=$(curl -sf -X POST "$API" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\":\"$1\"}")
+            echo "$RESPONSE"
+            if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+              echo "::error::Railway API error: $(echo "$RESPONSE" | jq -r '.errors[0].message')"
+              return 1
+            fi
+          }
+
           if railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak 2>/dev/null; then
             echo "✅ Keycloak service exists — updating image and redeploying"
             SVC_ID=$(railway status --json 2>/dev/null | jq -r '.serviceId // empty' || true)
             if [ -n "$SVC_ID" ]; then
-              curl -sf -X POST "$API" \
-                -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d "{\"query\":\"mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) }\"}"
+              gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
             railway redeploy --yes
           else
             echo "Creating Keycloak service from image via API..."
-            RESULT=$(curl -sf -X POST "$API" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\":\"mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" }, registryCredentials: { username: \\\"${{ github.repository_owner }}\\\", password: \\\"${{ secrets.GHCR_READ_TOKEN }}\\\" } }) { id } }\"}")
-            echo "Service created: $RESULT"
+            gql "mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
             echo "✅ Keycloak service created and deploying"
           fi
         env:
