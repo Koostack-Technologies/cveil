@@ -31,7 +31,6 @@ import com.koostack.cveil.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.cveil.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.cveil.rest.dto.ConsentScopeDto;
 import com.koostack.cveil.rest.dto.PlatformDtos.CreateTenantRequest;
-import com.koostack.cveil.rest.lifecycle.BootstrapKeyLifecycleService;
 import com.koostack.cveil.rest.ratelimit.RateLimitService;
 import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
@@ -79,8 +78,8 @@ class RbacTest {
     // -------------------------------------------------------------------
 
     /**
-     * Shared request holder that each resource's @BeforeEach injects.
-     * Updated by securityContextWith() to match the role being tested.
+     * Shared request holder that each resource's @BeforeEach injects. Updated by
+     * securityContextWith() to match the role being tested.
      */
     private CveilRequestHolder requestHolder;
 
@@ -89,8 +88,8 @@ class RbacTest {
     // -------------------------------------------------------------------
 
     /**
-     * Maps legacy role names to the equivalent permission set in the new
-     * DB-backed permissions framework.
+     * Maps legacy role names to the equivalent permission set in the new DB-backed permissions
+     * framework.
      */
     private static Set<String> permissionsForRoles(Set<String> roles) {
         Set<String> perms = new HashSet<>();
@@ -122,7 +121,8 @@ class RbacTest {
     private SecurityContext securityContextWith(Set<String> roles) {
         if (requestHolder != null) {
             requestHolder.setAuthorization(
-                    new AuthorizationContext("test-user", "test-tenant", roles, permissionsForRoles(roles)));
+                    new AuthorizationContext(
+                            "test-user", "test-tenant", roles, permissionsForRoles(roles)));
         }
         return new SecurityContext() {
             @Override
@@ -1360,6 +1360,7 @@ class RbacTest {
 
         private PlatformResource resource;
         private PlatformCqrsHolder cqrsHolder;
+
         @SuppressWarnings("rawtypes")
         private CoreQueryService coreQueryService;
 

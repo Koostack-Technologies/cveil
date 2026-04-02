@@ -951,8 +951,7 @@ class RateLimitFilterTest {
             verify(requestContext, never()).abortWith(any());
             // The property is still set (the filter stores whatever checkBurst returns)
             verify(requestContext)
-                    .setProperty(
-                            eq("cveil.ratelimit.burst-result"), eq(RateLimitResult.UNLIMITED));
+                    .setProperty(eq("cveil.ratelimit.burst-result"), eq(RateLimitResult.UNLIMITED));
         }
 
         @Test

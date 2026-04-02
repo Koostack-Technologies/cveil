@@ -642,7 +642,9 @@ class ApiKeyAuthFilterTest {
             filter.filter(requestContext);
 
             verify(requestContext)
-                    .setProperty(eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY), any(IdentityContext.class));
+                    .setProperty(
+                            eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
+                            any(IdentityContext.class));
         }
 
         @Test

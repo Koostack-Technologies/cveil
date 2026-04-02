@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.koostack.cveil.rest.config.CveilOpenApiConfig;
 import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
-import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.DsarResource;
+import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.HealthResource;
 import com.koostack.cveil.rest.resource.PlatformResource;
 import java.lang.reflect.Method;
@@ -55,8 +55,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition has info with title and version")
         void hasInfoTitleAndVersion() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertNotNull(def.info());
             assertEquals("Cveil Consent Management API", def.info().title());
             assertEquals("1.0.0", def.info().version());
@@ -65,8 +64,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has contact")
         void hasContact() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("KooStack", def.info().contact().name());
             assertFalse(def.info().contact().url().isBlank());
         }
@@ -74,8 +72,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has license")
         void hasLicense() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("Apache 2.0", def.info().license().name());
             assertFalse(def.info().license().url().isBlank());
         }
@@ -83,8 +80,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition has info description mentioning GDPR")
         void hasDescriptionWithRegulations() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             String desc = def.info().description();
             assertTrue(desc.contains("GDPR"), "Description should mention GDPR");
             assertTrue(desc.contains("CCPA"), "Description should mention CCPA");
@@ -93,8 +89,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("defines all tags")
         void definesAllTags() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             Tag[] tags = def.tags();
             assertEquals(8, tags.length, "Should define 8 tags");
 
@@ -110,8 +105,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("each tag has a non-empty description")
         void tagsHaveDescriptions() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             for (Tag tag : def.tags()) {
                 assertFalse(
                         tag.description().isBlank(),
@@ -122,8 +116,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("defines BearerAuth security scheme with HTTP bearer type")
         void definesSecurityScheme() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme[] schemes = def.components().securitySchemes();
             assertEquals(1, schemes.length, "Should define exactly one security scheme");
 
@@ -137,8 +130,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("security scheme has non-empty description mentioning roles")
         void securitySchemeDescribesRoles() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             String desc = scheme.description();
             assertTrue(desc.contains("consent:read"), "Should mention consent:read role");
@@ -168,8 +160,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("SECURITY_SCHEME constant matches annotation")
         void securitySchemeConstantMatchesAnnotation() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             assertEquals(
                     CveilOpenApiConfig.SECURITY_SCHEME,
@@ -594,10 +585,8 @@ class OpenApiAnnotationTest {
         @DisplayName("HealthResponse has @Schema")
         void healthResponseHasSchema() {
             assertTrue(
-                    com.koostack.cveil.rest.dto.CommonDtos.HealthResponse.class
-                            .isAnnotationPresent(
-                                    org.eclipse.microprofile.openapi.annotations.media.Schema
-                                            .class),
+                    com.koostack.cveil.rest.dto.CommonDtos.HealthResponse.class.isAnnotationPresent(
+                            org.eclipse.microprofile.openapi.annotations.media.Schema.class),
                     "HealthResponse must have @Schema");
         }
 
