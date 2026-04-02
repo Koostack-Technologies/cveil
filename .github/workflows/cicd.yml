@@ -1,0 +1,562 @@
+# =============================================================================
+# Cveil — CI/CD Orchestrator
+#
+# Builds, tests, and deploys all application services to Railway.
+#   api, site       — Gradle CI (test + build) → Docker push → Railway deploy
+#   nginx, keycloak — Docker push → Railway deploy (no Gradle tests)
+#
+# Triggers:
+#   push develop  → auto-deploy to dev  (path-filtered)
+#   push main     → semantic-release + deploy to stage (path-filtered)
+#   workflow_dispatch → choose services + environment
+#
+# Database provisioning (postgres, redis) lives in deploy-infra.yml.
+# =============================================================================
+
+name: "CI/CD"
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "cveil-rest-api/**"
+      - "cveil-site/**"
+      - "cveil-web/**"
+      - "cveil-core/**"
+      - "cveil-bundle-core/**"
+      - "platform/**"
+      - "common/**"
+      - "build-logic/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+      - "docker/nginx/**"
+      - "docker/keycloak/**"
+      - ".github/workflows/cicd.yml"
+      - ".github/workflows/ci-service.yml"
+      - ".github/workflows/cd-service.yml"
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Which services to deploy"
+        required: true
+        type: choice
+        options:
+          - all
+          - apps
+          - api
+          - site
+          - nginx
+          - keycloak
+      confirm_prod:
+        description: "Type 'yes-deploy-prod' to confirm production deployment (only needed on tags)"
+        required: false
+        type: string
+
+concurrency:
+  group: cicd-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate — resolve environment, determine which services changed
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Resolve & Gate
+    runs-on: ubuntu-latest
+    outputs:
+      railway_env_id: ${{ steps.resolve.outputs.env_id }}
+      environment_name: ${{ steps.resolve.outputs.environment }}
+      image_tag_prefix: ${{ steps.resolve.outputs.tag_prefix }}
+      deploy_api: ${{ steps.services.outputs.api }}
+      deploy_site: ${{ steps.services.outputs.site }}
+      deploy_nginx: ${{ steps.services.outputs.nginx }}
+      deploy_keycloak: ${{ steps.services.outputs.keycloak }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve environment from ref
+        id: resolve
+        run: |
+          REF="${{ github.ref_name }}"
+          if [ "$REF" = "develop" ]; then
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_DEV_ENV_ID }}" >> "$GITHUB_OUTPUT"
+            echo "tag_prefix=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          elif [ "$REF" = "main" ]; then
+            echo "environment=stage" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_STAGE_ENV_ID }}" >> "$GITHUB_OUTPUT"
+            echo "tag_prefix=sha-$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          elif [[ "$REF" == api-v* ]] || [[ "$REF" == site-v* ]] || [[ "$REF" == v* ]]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+            echo "env_id=${{ vars.RAILWAY_PROD_ENV_ID }}" >> "$GITHUB_OUTPUT"
+            echo "tag_prefix=$REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Must run from 'develop' (→dev), 'main' (→stage), or a tag (→prod). Got: $REF"
+            exit 1
+          fi
+
+      - name: Validate production confirmation
+        if: steps.resolve.outputs.environment == 'prod' && inputs.confirm_prod != 'yes-deploy-prod'
+        run: |
+          echo "::error::Production deployment requires confirm_prod = 'yes-deploy-prod'"
+          exit 1
+
+      - name: Determine which services to deploy
+        id: services
+        run: |
+          EVENT="${{ github.event_name }}"
+          SELECTED="${{ inputs.services }}"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$SELECTED" in
+              all)
+                echo "api=true" >> "$GITHUB_OUTPUT"
+                echo "site=true" >> "$GITHUB_OUTPUT"
+                echo "nginx=true" >> "$GITHUB_OUTPUT"
+                echo "keycloak=true" >> "$GITHUB_OUTPUT"
+                ;;
+              apps)
+                echo "api=true" >> "$GITHUB_OUTPUT"
+                echo "site=true" >> "$GITHUB_OUTPUT"
+                echo "nginx=false" >> "$GITHUB_OUTPUT"
+                echo "keycloak=false" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "api=$( [ '$SELECTED' = 'api' ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+                echo "site=$( [ '$SELECTED' = 'site' ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+                echo "nginx=$( [ '$SELECTED' = 'nginx' ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+                echo "keycloak=$( [ '$SELECTED' = 'keycloak' ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          else
+            # Push event — detect changed paths
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "")
+            SHARED_CHANGED=false
+            if echo "$CHANGED" | grep -qE '^(common/|build-logic/|cveil-core/|cveil-bundle-core/|platform/|build\.gradle\.kts|settings\.gradle\.kts|gradle\.properties|gradle/)'; then
+              SHARED_CHANGED=true
+            fi
+
+            API=false; SITE=false; NGINX=false; KEYCLOAK=false
+
+            if echo "$CHANGED" | grep -qE '^cveil-rest-api/' || [ "$SHARED_CHANGED" = "true" ]; then
+              API=true
+            fi
+            if echo "$CHANGED" | grep -qE '^(cveil-site/|cveil-web/)' || [ "$SHARED_CHANGED" = "true" ]; then
+              SITE=true
+            fi
+            if echo "$CHANGED" | grep -qE '^docker/nginx/'; then
+              NGINX=true
+            fi
+            if echo "$CHANGED" | grep -qE '^docker/keycloak/'; then
+              KEYCLOAK=true
+            fi
+
+            echo "api=$API" >> "$GITHUB_OUTPUT"
+            echo "site=$SITE" >> "$GITHUB_OUTPUT"
+            echo "nginx=$NGINX" >> "$GITHUB_OUTPUT"
+            echo "keycloak=$KEYCLOAK" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Semantic Release — version bump on push to main
+  # ---------------------------------------------------------------------------
+  release-api:
+    name: "Release: API"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: github.event_name == 'push' && github.ref_name == 'main' && needs.gate.outputs.deploy_api == 'true'
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install semantic-release
+        run: |
+          npm install --save-dev \
+            semantic-release@latest \
+            @semantic-release/changelog@latest \
+            @semantic-release/git@latest \
+            @semantic-release/github@latest \
+            @semantic-release/commit-analyzer@latest \
+            @semantic-release/release-notes-generator@latest \
+            conventional-changelog-conventionalcommits@latest
+
+      - name: Run semantic-release
+        id: semantic
+        run: npx semantic-release --config .releaserc.api.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
+  release-site:
+    name: "Release: Site"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: github.event_name == 'push' && github.ref_name == 'main' && needs.gate.outputs.deploy_site == 'true'
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install semantic-release
+        run: |
+          npm install --save-dev \
+            semantic-release@latest \
+            @semantic-release/changelog@latest \
+            @semantic-release/git@latest \
+            @semantic-release/github@latest \
+            @semantic-release/commit-analyzer@latest \
+            @semantic-release/release-notes-generator@latest \
+            conventional-changelog-conventionalcommits@latest
+
+      - name: Run semantic-release
+        id: semantic
+        run: npx semantic-release --config .releaserc.site.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
+  # ---------------------------------------------------------------------------
+  # Resolve image tags — combine release version with fallback to sha
+  # ---------------------------------------------------------------------------
+  resolve-tags:
+    name: Resolve Image Tags
+    runs-on: ubuntu-latest
+    needs: [gate, release-api, release-site]
+    if: always() && needs.gate.result == 'success'
+    outputs:
+      api_tag: ${{ steps.tags.outputs.api_tag }}
+      site_tag: ${{ steps.tags.outputs.site_tag }}
+    steps:
+      - name: Compute tags
+        id: tags
+        run: |
+          SHA_TAG="sha-$(echo '${{ github.sha }}' | cut -c1-7)"
+
+          # API tag: use semver if released, otherwise sha
+          if [ "${{ needs.release-api.outputs.new_release_published }}" = "true" ]; then
+            echo "api_tag=api-v${{ needs.release-api.outputs.new_release_version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_tag=$SHA_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Site tag: use semver if released, otherwise sha
+          if [ "${{ needs.release-site.outputs.new_release_published }}" = "true" ]; then
+            echo "site_tag=site-v${{ needs.release-site.outputs.new_release_version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "site_tag=$SHA_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # CI — Test + Build + Push for API and Site
+  # ---------------------------------------------------------------------------
+  ci-api:
+    name: "CI: API"
+    needs: [gate, resolve-tags]
+    if: needs.gate.outputs.deploy_api == 'true'
+    uses: ./.github/workflows/ci-service.yml
+    with:
+      service: api
+      gradle_module: ":cveil-rest-api"
+      dockerfile: "./cveil-rest-api/Dockerfile"
+      image_name: "ghcr.io/${{ github.repository }}/api"
+      image_tag: ${{ needs.resolve-tags.outputs.api_tag }}
+    permissions:
+      contents: read
+      packages: write
+
+  ci-site:
+    name: "CI: Site"
+    needs: [gate, resolve-tags]
+    if: needs.gate.outputs.deploy_site == 'true'
+    uses: ./.github/workflows/ci-service.yml
+    with:
+      service: site
+      gradle_module: ":cveil-site"
+      dockerfile: "./cveil-site/Dockerfile"
+      image_name: "ghcr.io/${{ github.repository }}/site"
+      image_tag: ${{ needs.resolve-tags.outputs.site_tag }}
+    permissions:
+      contents: read
+      packages: write
+
+  # ---------------------------------------------------------------------------
+  # Docker Build — Nginx and Keycloak (no Gradle tests)
+  # ---------------------------------------------------------------------------
+  docker-nginx:
+    name: "Docker: Nginx"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.deploy_nginx == 'true'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.result.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/proxy
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/nginx/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set output
+        id: result
+        run: |
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/proxy:latest" | tr '[:upper:]' '[:lower:]')
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+  docker-keycloak:
+    name: "Docker: Keycloak"
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.deploy_keycloak == 'true'
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.result.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/keycloak
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/keycloak/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set output
+        id: result
+        run: |
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/keycloak:latest" | tr '[:upper:]' '[:lower:]')
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # CD — Deploy to Railway
+  # ---------------------------------------------------------------------------
+  deploy-api:
+    name: "Deploy: API"
+    needs: [gate, ci-api]
+    if: needs.gate.outputs.deploy_api == 'true'
+    uses: ./.github/workflows/cd-service.yml
+    with:
+      service: api
+      image: ${{ needs.ci-api.outputs.image }}
+      project_id: ${{ vars.RAILWAY_PROJECT_ID }}
+      environment_id: ${{ needs.gate.outputs.railway_env_id }}
+      environment_name: ${{ needs.gate.outputs.environment_name }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+  deploy-site:
+    name: "Deploy: Site"
+    needs: [gate, ci-site]
+    if: needs.gate.outputs.deploy_site == 'true'
+    uses: ./.github/workflows/cd-service.yml
+    with:
+      service: site
+      image: ${{ needs.ci-site.outputs.image }}
+      project_id: ${{ vars.RAILWAY_PROJECT_ID }}
+      environment_id: ${{ needs.gate.outputs.railway_env_id }}
+      environment_name: ${{ needs.gate.outputs.environment_name }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+  deploy-nginx:
+    name: "Deploy: Nginx"
+    needs: [gate, docker-nginx]
+    if: needs.gate.outputs.deploy_nginx == 'true'
+    uses: ./.github/workflows/cd-service.yml
+    with:
+      service: nginx
+      image: ${{ needs.docker-nginx.outputs.image }}
+      project_id: ${{ vars.RAILWAY_PROJECT_ID }}
+      environment_id: ${{ needs.gate.outputs.railway_env_id }}
+      environment_name: ${{ needs.gate.outputs.environment_name }}
+      service_env_vars: >-
+        RESOLVER=1.1.1.1
+        API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}
+        API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}
+        SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}
+        SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+  # Keycloak needs Postgres details fetched first, then deploys via cd-service
+  fetch-keycloak-vars:
+    name: "Fetch Keycloak Env Vars"
+    runs-on: ubuntu-latest
+    needs: [gate, docker-keycloak]
+    if: needs.gate.outputs.deploy_keycloak == 'true'
+    timeout-minutes: 5
+    outputs:
+      env_vars: ${{ steps.build.outputs.env_vars }}
+    steps:
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Fetch Postgres connection details and build env vars
+        id: build
+        run: |
+          railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres
+          VARS=$(railway variables --json)
+          PGHOST=$(echo "$VARS" | jq -r '.PGHOST // empty')
+          PGPORT=$(echo "$VARS" | jq -r '.PGPORT // empty')
+          PGUSER=$(echo "$VARS" | jq -r '.PGUSER // empty')
+          PGPASSWORD=$(echo "$VARS" | jq -r '.PGPASSWORD // empty')
+          if [ -z "$PGHOST" ]; then
+            echo "::error::Could not fetch Postgres connection details"
+            exit 1
+          fi
+          echo "::add-mask::$PGPASSWORD"
+
+          # Build the env var string for cd-service.yml
+          ENV_VARS="KC_DB=postgres"
+          ENV_VARS="$ENV_VARS KC_DB_URL=jdbc:postgresql://${PGHOST}:${PGPORT}/cveil"
+          ENV_VARS="$ENV_VARS KC_DB_SCHEMA=keycloak"
+          ENV_VARS="$ENV_VARS KC_DB_USERNAME=${PGUSER}"
+          ENV_VARS="$ENV_VARS KC_DB_PASSWORD=${PGPASSWORD}"
+          ENV_VARS="$ENV_VARS KC_HOSTNAME_STRICT=false"
+          ENV_VARS="$ENV_VARS KC_HTTP_ENABLED=true"
+          ENV_VARS="$ENV_VARS KC_PROXY_HEADERS=xforwarded"
+          ENV_VARS="$ENV_VARS KC_FEATURES=token-exchange,admin-fine-grained-authz,organization"
+          ENV_VARS="$ENV_VARS KC_BOOTSTRAP_ADMIN_USERNAME=${{ secrets.KC_ADMIN_USERNAME }}"
+          ENV_VARS="$ENV_VARS KC_BOOTSTRAP_ADMIN_PASSWORD=${{ secrets.KC_ADMIN_PASSWORD }}"
+
+          echo "env_vars=$ENV_VARS" >> "$GITHUB_OUTPUT"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+  deploy-keycloak:
+    name: "Deploy: Keycloak"
+    needs: [gate, docker-keycloak, fetch-keycloak-vars]
+    if: needs.gate.outputs.deploy_keycloak == 'true'
+    uses: ./.github/workflows/cd-service.yml
+    with:
+      service: keycloak
+      image: ${{ needs.docker-keycloak.outputs.image }}
+      project_id: ${{ vars.RAILWAY_PROJECT_ID }}
+      environment_id: ${{ needs.gate.outputs.railway_env_id }}
+      environment_name: ${{ needs.gate.outputs.environment_name }}
+      service_env_vars: ${{ needs.fetch-keycloak-vars.outputs.env_vars }}
+    secrets:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Summary
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [gate, deploy-api, deploy-site, deploy-nginx, deploy-keycloak]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | **${{ needs.gate.outputs.environment_name }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| API | ${{ needs.deploy-api.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Site | ${{ needs.deploy-site.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Nginx | ${{ needs.deploy-nginx.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Keycloak | ${{ needs.deploy-keycloak.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY

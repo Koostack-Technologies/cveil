@@ -1,9 +1,8 @@
 # =============================================================================
-# Cveil Infrastructure — Provision and deploy supporting services to Railway
+# Cveil Infrastructure — Provision databases on Railway
 #
-# Provisions Postgres, Redis, nginx reverse proxy, and Keycloak.
-# Postgres and Redis are Railway managed plugins; nginx and Keycloak are
-# custom Docker images pushed to GHCR.
+# Provisions Postgres (+ schema init) and Redis managed plugins.
+# Application services (api, site, nginx, keycloak) are deployed via cicd.yml.
 #
 # Environment is derived from the branch/tag the workflow is dispatched from:
 #   develop → dev   |   main → stage   |   tag → prod
@@ -15,16 +14,13 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: "Which services to deploy"
+        description: "Which services to provision"
         required: true
         type: choice
         options:
           - all
-          - databases
           - postgres
           - redis
-          - nginx
-          - keycloak
       confirm_prod:
         description: "Type 'yes-deploy-prod' to confirm production deployment (only needed on tags)"
         required: false
@@ -33,9 +29,6 @@ on:
 concurrency:
   group: deploy-infra-${{ github.ref_name }}
   cancel-in-progress: false
-
-env:
-  REGISTRY: ghcr.io
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -80,7 +73,7 @@ jobs:
     name: "Postgres: Provision & Init"
     runs-on: ubuntu-latest
     needs: gate
-    if: contains(fromJSON('["all","databases","postgres"]'), inputs.services)
+    if: contains(fromJSON('["all","postgres"]'), inputs.services)
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -104,7 +97,6 @@ jobs:
 
       - name: Provision Postgres plugin (idempotent)
         run: |
-          # Try linking to an existing Postgres service; if not found, create it
           if railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres 2>/dev/null; then
             echo "✅ Postgres service already exists — skipping creation"
           else
@@ -118,7 +110,6 @@ jobs:
       - name: Fetch DATABASE_URL from Railway
         id: pg-url
         run: |
-          # Wait for the Postgres service to be linkable and have a public URL
           DB_URL=""
           for i in $(seq 1 12); do
             if railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres 2>/dev/null; then
@@ -142,7 +133,6 @@ jobs:
 
       - name: Create cveil database (idempotent)
         run: |
-          # Connect to the default 'railway' database to create 'cveil'
           psql "$DATABASE_URL" -tc "SELECT 1 FROM pg_database WHERE datname = 'cveil'" | grep -q 1 \
             || psql "$DATABASE_URL" -c "CREATE DATABASE cveil"
           echo "✅ Database 'cveil' exists"
@@ -151,7 +141,6 @@ jobs:
 
       - name: Create keycloak schema
         run: |
-          # Switch to the cveil database for schema init
           CVEIL_URL=$(echo "$DATABASE_URL" | sed 's|/railway|/cveil|')
           psql "$CVEIL_URL" -f docker/postgres/init-keycloak-schema.sql
         env:
@@ -171,7 +160,7 @@ jobs:
     name: "Redis: Provision"
     runs-on: ubuntu-latest
     needs: gate
-    if: contains(fromJSON('["all","databases","redis"]'), inputs.services)
+    if: contains(fromJSON('["all","redis"]'), inputs.services)
     timeout-minutes: 10
     steps:
       - name: Install Railway CLI
@@ -196,7 +185,6 @@ jobs:
 
       - name: Verify Redis connectivity
         run: |
-          # Wait for the Redis service to be linkable and have a URL
           REDIS_URL=""
           for i in $(seq 1 12); do
             if railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Redis 2>/dev/null; then
@@ -216,246 +204,12 @@ jobs:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Nginx — build, push, deploy reverse proxy
-  # ---------------------------------------------------------------------------
-  nginx:
-    name: "Nginx: Deploy"
-    runs-on: ubuntu-latest
-    needs: gate
-    if: inputs.services == 'all' || inputs.services == 'nginx'
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/proxy
-          tags: |
-            type=raw,value=latest
-            type=sha,format=short
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/nginx/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Link Railway project
-        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-      - name: Deploy Nginx to Railway (idempotent)
-        run: |
-          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/proxy:latest" | tr '[:upper:]' '[:lower:]')
-          PROJECT_ID="${{ vars.RAILWAY_PROJECT_ID }}"
-          ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
-          API="https://backboard.railway.com/graphql/v2"
-
-          gql() {
-            local RESPONSE
-            RESPONSE=$(curl -sf -X POST "$API" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\":\"$1\"}")
-            echo "$RESPONSE"
-            if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
-              echo "::error::Railway API error: $(echo "$RESPONSE" | jq -r '.errors[0].message')"
-              return 1
-            fi
-          }
-
-          if railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service nginx 2>/dev/null; then
-            echo "✅ Nginx service exists — updating image and redeploying"
-            SVC_ID=$(railway status --json 2>/dev/null | jq -r '.serviceId // empty' || true)
-            if [ -n "$SVC_ID" ]; then
-              gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
-            fi
-            railway variable set \
-              "RESOLVER=1.1.1.1" \
-              "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
-              "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
-            railway redeploy --yes
-          else
-            echo "Creating Nginx service from image via API..."
-            gql "mutation { serviceCreate(input: { name: \\\"nginx\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
-            sleep 5
-            railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service nginx
-            railway variable set \
-              "RESOLVER=1.1.1.1" \
-              "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
-              "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
-              "SITE_PORT=${{ vars[format('RAILWAY_{0}_SITE_PORT', needs.gate.outputs.environment_name)] || '8081' }}"
-            echo "✅ Nginx service created and deploying"
-          fi
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-  # ---------------------------------------------------------------------------
-  # Keycloak — build, push, deploy identity provider
-  # ---------------------------------------------------------------------------
-  keycloak:
-    name: "Keycloak: Deploy"
-    runs-on: ubuntu-latest
-    needs: gate
-    if: inputs.services == 'all' || inputs.services == 'keycloak'
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/keycloak
-          tags: |
-            type=raw,value=latest
-            type=sha,format=short
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/keycloak/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Link Railway project
-        run: railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}"
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-      - name: Fetch Postgres connection details
-        id: pg
-        run: |
-          railway link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment "${{ needs.gate.outputs.railway_env_id }}" --service Postgres
-          VARS=$(railway variables --json)
-          PGHOST=$(echo "$VARS" | jq -r '.PGHOST // empty')
-          PGPORT=$(echo "$VARS" | jq -r '.PGPORT // empty')
-          PGUSER=$(echo "$VARS" | jq -r '.PGUSER // empty')
-          PGPASSWORD=$(echo "$VARS" | jq -r '.PGPASSWORD // empty')
-          PGDATABASE=$(echo "$VARS" | jq -r '.PGDATABASE // empty')
-          if [ -z "$PGHOST" ]; then
-            echo "::error::Could not fetch Postgres connection details"
-            exit 1
-          fi
-          echo "::add-mask::$PGPASSWORD"
-          echo "host=$PGHOST" >> "$GITHUB_OUTPUT"
-          echo "port=$PGPORT" >> "$GITHUB_OUTPUT"
-          echo "user=$PGUSER" >> "$GITHUB_OUTPUT"
-          echo "password=$PGPASSWORD" >> "$GITHUB_OUTPUT"
-          echo "database=$PGDATABASE" >> "$GITHUB_OUTPUT"
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-      - name: Deploy Keycloak to Railway (idempotent)
-        run: |
-          IMAGE=$(echo "${{ env.REGISTRY }}/${{ github.repository }}/keycloak:latest" | tr '[:upper:]' '[:lower:]')
-          PROJECT_ID="${{ vars.RAILWAY_PROJECT_ID }}"
-          ENV_ID="${{ needs.gate.outputs.railway_env_id }}"
-          API="https://backboard.railway.com/graphql/v2"
-
-          gql() {
-            local RESPONSE
-            RESPONSE=$(curl -sf -X POST "$API" \
-              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"query\":\"$1\"}")
-            echo "$RESPONSE"
-            if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
-              echo "::error::Railway API error: $(echo "$RESPONSE" | jq -r '.errors[0].message')"
-              return 1
-            fi
-          }
-
-          set_kc_vars() {
-            railway variable set \
-              "KC_DB=postgres" \
-              "KC_DB_URL=jdbc:postgresql://${{ steps.pg.outputs.host }}:${{ steps.pg.outputs.port }}/cveil" \
-              "KC_DB_SCHEMA=keycloak" \
-              "KC_DB_USERNAME=${{ steps.pg.outputs.user }}" \
-              "KC_DB_PASSWORD=${{ steps.pg.outputs.password }}" \
-              "KC_HOSTNAME_STRICT=false" \
-              "KC_HTTP_ENABLED=true" \
-              "KC_PROXY_HEADERS=xforwarded" \
-              "KC_FEATURES=token-exchange,admin-fine-grained-authz,organization" \
-              "KC_BOOTSTRAP_ADMIN_USERNAME=${{ secrets.KC_ADMIN_USERNAME }}" \
-              "KC_BOOTSTRAP_ADMIN_PASSWORD=${{ secrets.KC_ADMIN_PASSWORD }}"
-          }
-
-          if railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak 2>/dev/null; then
-            echo "✅ Keycloak service exists — updating image and redeploying"
-            SVC_ID=$(railway status --json 2>/dev/null | jq -r '.serviceId // empty' || true)
-            if [ -n "$SVC_ID" ]; then
-              gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
-            fi
-            set_kc_vars
-            railway redeploy --yes
-          else
-            echo "Creating Keycloak service from image via API..."
-            gql "mutation { serviceCreate(input: { name: \\\"keycloak\\\", projectId: \\\"$PROJECT_ID\\\", source: { image: \\\"$IMAGE\\\" } }) { id } }"
-            sleep 5
-            railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service keycloak
-            set_kc_vars
-            echo "✅ Keycloak service created and deploying"
-          fi
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-
-  # ---------------------------------------------------------------------------
   # Summary
   # ---------------------------------------------------------------------------
   summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [gate, postgres, redis, nginx, keycloak]
+    needs: [gate, postgres, redis]
     if: always()
     steps:
       - name: Summary
@@ -467,5 +221,3 @@ jobs:
           echo "| Environment | **${{ needs.gate.outputs.environment_name }}** |" >> $GITHUB_STEP_SUMMARY
           echo "| Postgres | ${{ needs.postgres.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Redis | ${{ needs.redis.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Nginx | ${{ needs.nginx.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Keycloak | ${{ needs.keycloak.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
