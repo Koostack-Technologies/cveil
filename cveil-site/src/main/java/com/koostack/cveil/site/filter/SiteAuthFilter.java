@@ -684,9 +684,7 @@ public class SiteAuthFilter implements ContainerRequestFilter {
         String path = ctx.getUriInfo().getPath();
         // For page requests (not API calls), redirect to /login instead of JSON 401
         if (!path.startsWith("/api/") && !path.startsWith("api/")) {
-            ctx.abortWith(
-                    Response.seeOther(java.net.URI.create("/login"))
-                            .build());
+            ctx.abortWith(Response.seeOther(java.net.URI.create("/login")).build());
             return;
         }
         ctx.abortWith(

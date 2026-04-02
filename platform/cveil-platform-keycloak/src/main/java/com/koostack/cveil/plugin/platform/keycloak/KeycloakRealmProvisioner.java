@@ -288,10 +288,7 @@ public class KeycloakRealmProvisioner {
      * @return provision result containing realm ID and client secret
      */
     public ProvisionResult awaitPlatformRealm(
-            String platformRealmId,
-            String rootEmail,
-            String rootPassword,
-            int maxWaitSeconds) {
+            String platformRealmId, String rootEmail, String rootPassword, int maxWaitSeconds) {
         long deadline = System.currentTimeMillis() + (maxWaitSeconds * 1000L);
         int attempt = 0;
 
@@ -300,14 +297,9 @@ public class KeycloakRealmProvisioner {
                 adminClient.realm(platformRealmId).toRepresentation();
                 // Realm exists — now check if provisioning is complete (client created)
                 var clients =
-                        adminClient
-                                .realm(platformRealmId)
-                                .clients()
-                                .findByClientId(cveilClientId);
+                        adminClient.realm(platformRealmId).clients().findByClientId(cveilClientId);
                 if (!clients.isEmpty()) {
-                    LOG.info(
-                            "Platform realm '{}' is fully provisioned",
-                            platformRealmId);
+                    LOG.info("Platform realm '{}' is fully provisioned", platformRealmId);
                     return readExistingRealm(platformRealmId, rootEmail, rootPassword);
                 }
                 // Realm exists but client not yet created — still provisioning

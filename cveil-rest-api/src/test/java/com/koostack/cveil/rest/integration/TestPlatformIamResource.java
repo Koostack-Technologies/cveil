@@ -27,7 +27,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,11 +61,7 @@ public class TestPlatformIamResource {
             String password) {}
 
     public record UserRegisteredResponse(
-            String username,
-            String email,
-            String tenantId,
-            String plan,
-            String status) {}
+            String username, String email, String tenantId, String plan, String status) {}
 
     public record LoginRequest(String email, String password) {}
 
@@ -115,8 +110,7 @@ public class TestPlatformIamResource {
                         tenantId);
 
         try {
-            TestRegisterUserOrchestrator.RegisterUserResult result =
-                    orchestrator.execute(command);
+            TestRegisterUserOrchestrator.RegisterUserResult result = orchestrator.execute(command);
             return Response.status(Response.Status.CREATED)
                     .entity(
                             new UserRegisteredResponse(
