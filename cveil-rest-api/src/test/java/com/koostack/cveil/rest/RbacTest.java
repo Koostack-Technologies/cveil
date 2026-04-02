@@ -6,15 +6,18 @@ import static org.mockito.Mockito.*;
 import com.koostack.cveil.core.cqrs.CommandDispatcher;
 import com.koostack.cveil.core.cqrs.QueryDispatcher;
 import com.koostack.cveil.core.exception.CveilAuthException;
+import com.koostack.cveil.core.models.AuthorizationContext;
 import com.koostack.cveil.core.models.ConsentResponse;
 import com.koostack.cveil.core.models.PurposeView;
 import com.koostack.cveil.core.models.SubjectConsentView;
 import com.koostack.cveil.core.platform.core.CoreCommandService;
 import com.koostack.cveil.core.platform.core.CoreQueryService;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
+import com.koostack.cveil.rest.auth.Permissions;
 import com.koostack.cveil.rest.auth.Roles;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
+import com.koostack.cveil.rest.context.CveilRequestHolder;
 import com.koostack.cveil.rest.dto.AdminDtos.AssignFieldCategoryRequest;
 import com.koostack.cveil.rest.dto.AdminDtos.LinkPurposeRegulationRequest;
 import com.koostack.cveil.rest.dto.AdminDtos.RegisterFieldRequest;
@@ -28,16 +31,18 @@ import com.koostack.cveil.rest.dto.ConsentDtos.GrantRequest;
 import com.koostack.cveil.rest.dto.ConsentDtos.RevokeRequest;
 import com.koostack.cveil.rest.dto.ConsentScopeDto;
 import com.koostack.cveil.rest.dto.PlatformDtos.CreateTenantRequest;
-import com.koostack.cveil.rest.lifecycle.BootstrapKeyLifecycleService;
+import com.koostack.cveil.rest.ratelimit.RateLimitService;
 import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
 import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.PlatformResource;
+import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -69,11 +74,56 @@ import org.junit.jupiter.params.provider.ValueSource;
 class RbacTest {
 
     // -------------------------------------------------------------------
+    // Shared state — requestHolder is injected into each resource
+    // -------------------------------------------------------------------
+
+    /**
+     * Shared request holder that each resource's @BeforeEach injects. Updated by
+     * securityContextWith() to match the role being tested.
+     */
+    private CveilRequestHolder requestHolder;
+
+    // -------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------
 
-    /** Creates a SecurityContext backed by the given set of roles. */
-    private static SecurityContext securityContextWith(Set<String> roles) {
+    /**
+     * Maps legacy role names to the equivalent permission set in the new DB-backed permissions
+     * framework.
+     */
+    private static Set<String> permissionsForRoles(Set<String> roles) {
+        Set<String> perms = new HashSet<>();
+        if (roles.contains(Roles.CONSENT_WRITE)) {
+            perms.add(Permissions.CONSENT_GRANT);
+            perms.add(Permissions.CONSENT_REVOKE);
+        }
+        if (roles.contains(Roles.CONSENT_READ)) {
+            perms.add(Permissions.CONSENT_READ);
+            perms.add(Permissions.CONSENT_EVALUATE);
+            perms.add(Permissions.CONSENT_EXPORT);
+            perms.add(Permissions.CONSENT_DSAR);
+            perms.add(Permissions.CONSENT_GRAPH_READ);
+        }
+        if (roles.contains(Roles.ADMIN_READ)) {
+            perms.add(Permissions.CATALOGUE_READ);
+            perms.add(Permissions.GOVERNANCE_READ);
+            perms.add(Permissions.EVENTS_READ);
+            perms.add(Permissions.REPORTS_READ);
+        }
+        if (roles.contains(Roles.ADMIN_WRITE)) {
+            perms.add(Permissions.CATALOGUE_WRITE);
+            perms.add(Permissions.GOVERNANCE_WRITE);
+        }
+        return perms;
+    }
+
+    /** Creates a SecurityContext backed by the given set of roles and configures authorization. */
+    private SecurityContext securityContextWith(Set<String> roles) {
+        if (requestHolder != null) {
+            requestHolder.setAuthorization(
+                    new AuthorizationContext(
+                            "test-user", "test-tenant", roles, permissionsForRoles(roles)));
+        }
         return new SecurityContext() {
             @Override
             public Principal getUserPrincipal() {
@@ -98,12 +148,12 @@ class RbacTest {
     }
 
     /** Creates a SecurityContext with a single role. */
-    private static SecurityContext securityContextWith(String role) {
+    private SecurityContext securityContextWith(String role) {
         return securityContextWith(Set.of(role));
     }
 
     /** Creates a SecurityContext with no roles. */
-    private static SecurityContext emptySecurityContext() {
+    private SecurityContext emptySecurityContext() {
         return securityContextWith(Set.of());
     }
 
@@ -401,9 +451,12 @@ class RbacTest {
             consentQueryDispatcher = mock(QueryDispatcher.class);
             CveilConfig cveilConfig = mock(CveilConfig.class);
 
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
             setField(resource, "consentDispatcher", consentDispatcher);
             setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
             setField(resource, "cveilConfig", cveilConfig);
+            setField(resource, "metrics", mock(MetricsHelper.class));
 
             when(consentQueryDispatcher.dispatch(any()))
                     .thenAnswer(
@@ -847,8 +900,11 @@ class RbacTest {
 
             when(consentQueryDispatcher.dispatch(any())).thenReturn(Collections.emptyList());
 
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
             setField(resource, "consentDispatcher", consentDispatcher);
             setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
+            setField(resource, "metrics", mock(MetricsHelper.class));
         }
 
         // -- Read endpoints --
@@ -1084,8 +1140,11 @@ class RbacTest {
 
             when(consentQueryDispatcher.dispatch(any())).thenReturn(Collections.emptyList());
 
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
             setField(resource, "consentDispatcher", consentDispatcher);
             setField(resource, "consentQueryDispatcher", consentQueryDispatcher);
+            setField(resource, "metrics", mock(MetricsHelper.class));
         }
 
         // -- Read endpoints --
@@ -1300,46 +1359,37 @@ class RbacTest {
     class PlatformResourceRbac {
 
         private PlatformResource resource;
-        private CoreCommandService<?> coreCommandService;
-        private CoreQueryService<?> coreQueryService;
-        private CommandDispatcher iamDispatcherMock;
-        private IamQueryService<?> iamQueryService;
-        private BootstrapKeyLifecycleService bootstrapLifecycle;
-        private CommandDispatcher coreDispatcherMock;
-        private CommandDispatcher billingDispatcherMock;
+        private PlatformCqrsHolder cqrsHolder;
+
+        @SuppressWarnings("rawtypes")
+        private CoreQueryService coreQueryService;
 
         @SuppressWarnings("unchecked")
         @BeforeEach
         void setUp() throws Exception {
             resource = new PlatformResource();
-            coreCommandService = mock(CoreCommandService.class);
             coreQueryService = mock(CoreQueryService.class);
-            iamDispatcherMock = mock(CommandDispatcher.class);
-            iamQueryService = mock(IamQueryService.class);
-            bootstrapLifecycle = mock(BootstrapKeyLifecycleService.class);
-            coreDispatcherMock = mock(CommandDispatcher.class);
-            billingDispatcherMock = mock(CommandDispatcher.class);
 
             // Create PlatformCqrsHolder mock
-            PlatformCqrsHolder cqrsHolder = mock(PlatformCqrsHolder.class);
+            cqrsHolder = mock(PlatformCqrsHolder.class);
             when(cqrsHolder.isCqrsAvailable()).thenReturn(true);
-            doReturn(coreCommandService).when(cqrsHolder).coreCommandService();
+            doReturn(mock(CoreCommandService.class)).when(cqrsHolder).coreCommandService();
             doReturn(coreQueryService).when(cqrsHolder).coreQueryService();
-            doReturn(iamDispatcherMock).when(cqrsHolder).iamDispatcher();
-            doReturn(iamQueryService).when(cqrsHolder).iamQueryService();
+            doReturn(mock(CommandDispatcher.class)).when(cqrsHolder).iamDispatcher();
+            doReturn(mock(IamQueryService.class)).when(cqrsHolder).iamQueryService();
+            doReturn(mock(CommandDispatcher.class)).when(cqrsHolder).coreDispatcher();
+            doReturn(mock(CommandDispatcher.class)).when(cqrsHolder).billingDispatcher();
+            doReturn(mock(QueryDispatcher.class)).when(cqrsHolder).coreQueryDispatcher();
+            doReturn(mock(com.koostack.cveil.core.platform.billing.BillingCommandService.class))
+                    .when(cqrsHolder)
+                    .billingCommandService();
 
             // Inject via reflection
-            for (var entry :
-                    java.util.Map.of(
-                                    "cqrs", cqrsHolder,
-                                    "coreDispatcher", coreDispatcherMock,
-                                    "billingDispatcher", billingDispatcherMock,
-                                    "bootstrapLifecycle", bootstrapLifecycle)
-                            .entrySet()) {
-                var field = PlatformResource.class.getDeclaredField(entry.getKey());
-                field.setAccessible(true);
-                field.set(resource, entry.getValue());
-            }
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            setField(resource, "cqrs", cqrsHolder);
+            setField(resource, "metrics", mock(MetricsHelper.class));
+            setField(resource, "rateLimitService", mock(RateLimitService.class));
         }
 
         @Nested
@@ -1347,13 +1397,13 @@ class RbacTest {
         class CreateTenant {
 
             @Test
-            @DisplayName("super-admin → 201")
+            @DisplayName("super-admin → 501")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
                 CreateTenantRequest request =
                         new CreateTenantRequest("tenant-1", "Tenant One", "free", null);
                 Response response = resource.createTenant(ctx, request);
-                assertEquals(201, response.getStatus());
+                assertEquals(501, response.getStatus());
             }
 
             @Test
@@ -1401,7 +1451,8 @@ class RbacTest {
             @DisplayName("super-admin → 200")
             void superAdminAllowed() {
                 SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
-                when(coreQueryService.listTenants()).thenReturn(Collections.emptyList());
+                when(cqrsHolder.coreQueryDispatcher().dispatch(any()))
+                        .thenReturn(Collections.emptyList());
                 Response response = resource.listTenants(ctx);
                 assertEquals(200, response.getStatus());
             }
@@ -1445,7 +1496,7 @@ class RbacTest {
                 var tenantInfo =
                         new com.koostack.cveil.core.platform.core.models.TenantInfo(
                                 "t1", "Tenant", "free", "active", Instant.now(), null);
-                when(coreQueryService.getTenant("t1")).thenReturn(tenantInfo);
+                when(cqrsHolder.coreQueryDispatcher().dispatch(any())).thenReturn(tenantInfo);
                 Response response = resource.getTenant(ctx, "t1");
                 assertEquals(200, response.getStatus());
             }

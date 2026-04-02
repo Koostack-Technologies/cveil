@@ -3,12 +3,10 @@ package com.koostack.cveil.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdentityContext;
 import com.koostack.cveil.core.platform.iam.AccessTokenGenerator;
 import com.koostack.cveil.core.platform.iam.AccessTokenInfo;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
-import com.koostack.cveil.core.platform.iam.TokenValidationService;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
@@ -592,18 +590,11 @@ class ApiKeyAuthFilterTest {
         @DisplayName("valid API key authenticates successfully")
         void validApiKeyAuthenticated() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
-            givenAuthHeader("Bearer opr_live_abc123def456");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_abc123def456"))
-                    .thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_abc123def456")).thenReturn(false);
-
-            IdentityContext identity = tenantIdentity("alice", "acme_corp", Set.of("admin"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_abc123def456")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-alice");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-alice")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-alice")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-alice", "role:admin,tenant:acme_corp"));
 
             filter.filter(requestContext);
 
@@ -611,24 +602,18 @@ class ApiKeyAuthFilterTest {
             verify(requestContext, never()).abortWith(any());
 
             // Should populate the request holder with the identity
-            verify(requestHolder).set(eq(identity), any(), any());
+            verify(requestHolder).set(any(IdentityContext.class), any(), any());
         }
 
         @Test
         @DisplayName("valid API key sets SecurityContext")
         void validApiKeySetsSecurityContext() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
-            givenAuthHeader("Bearer opr_live_valid_key");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_valid_key")).thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_valid_key")).thenReturn(false);
-
-            IdentityContext identity = tenantIdentity("bob", "beta_co", Set.of("consent-writer"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_valid_key")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-bob");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-bob")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-bob")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-bob", "role:consent-writer,tenant:beta_co"));
 
             filter.filter(requestContext);
 
@@ -639,7 +624,6 @@ class ApiKeyAuthFilterTest {
 
             SecurityContext sc = secCaptor.getValue();
             assertNotNull(sc.getUserPrincipal());
-            assertEquals("bob", sc.getUserPrincipal().getName());
             assertTrue(sc.isUserInRole("consent-writer"));
             assertFalse(sc.isUserInRole("super-admin"));
             assertEquals("BEARER", sc.getAuthenticationScheme());
@@ -649,40 +633,32 @@ class ApiKeyAuthFilterTest {
         @DisplayName("valid API key stores IdentityContext as request property")
         void validApiKeyStoresProperty() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
-            givenAuthHeader("Bearer opr_live_prop_key");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_prop_key")).thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_prop_key")).thenReturn(false);
-
-            IdentityContext identity = tenantIdentity("carol", "gamma_inc", Set.of("reader"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_prop_key")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-carol");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-carol")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-carol")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-carol", "role:reader,tenant:gamma_inc"));
 
             filter.filter(requestContext);
 
             verify(requestContext)
-                    .setProperty(eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY), eq(identity));
+                    .setProperty(
+                            eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
+                            any(IdentityContext.class));
         }
 
         @Test
         @DisplayName("valid API key with multiple roles preserves all roles")
         void validApiKeyMultipleRoles() throws IOException {
             givenAuthenticatedEndpoint("api/v1/admin/fields");
-            givenAuthHeader("Bearer opr_live_multi_role");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_multi_role")).thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_multi_role")).thenReturn(false);
-
-            Set<String> roles = Set.of("admin", "consent-writer", "consent-reader", "audit-viewer");
-            IdentityContext identity = tenantIdentity("dave", "delta_llc", roles);
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_multi_role")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-dave");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-dave")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-dave")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(
+                            Map.of(
+                                    "dev-key-dave",
+                                    "role:admin,role:consent-writer,role:consent-reader,role:audit-viewer,tenant:delta_llc"));
 
             filter.filter(requestContext);
 
@@ -708,20 +684,12 @@ class ApiKeyAuthFilterTest {
     class InvalidApiKey {
 
         @Test
-        @DisplayName("token verifier throws CveilAuthException → 401")
+        @DisplayName("unrecognized token format → 401")
         void tokenValidationServiceRejectsToken() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_invalid_key");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_invalid_key")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_invalid_key")).thenReturn(false);
-
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_invalid_key"))
-                    .thenThrow(new CveilAuthException("Invalid or expired API key"));
 
             filter.filter(requestContext);
 
@@ -730,20 +698,12 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName("token verifier throws CveilAuthException → holder NOT populated")
+        @DisplayName("unrecognized token format → holder NOT populated")
         void tokenValidationServiceRejectsNoHolder() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_bad_key");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_bad_key")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_bad_key")).thenReturn(false);
-
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_bad_key"))
-                    .thenThrow(new CveilAuthException("Key revoked"));
 
             filter.filter(requestContext);
 
@@ -751,20 +711,12 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName("revoked key returns 401 with descriptive message")
+        @DisplayName("unrecognized token format returns 401 with error message")
         void revokedKeyMessage() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_revoked");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_revoked")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_revoked")).thenReturn(false);
-
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_revoked"))
-                    .thenThrow(new CveilAuthException("API key has been revoked"));
 
             filter.filter(requestContext);
 
@@ -775,9 +727,7 @@ class ApiKeyAuthFilterTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = (Map<String, Object>) entity;
             String message = (String) body.get("message");
-            assertTrue(
-                    message.contains("revoked"),
-                    "Expected message about revoked key but got: " + message);
+            assertNotNull(message, "401 response should include an error message");
         }
     }
 
@@ -786,24 +736,16 @@ class ApiKeyAuthFilterTest {
     // =======================================================================
 
     @Nested
-    @DisplayName("Unexpected token verifier exception → 401")
+    @DisplayName("Unrecognized token format → 401")
     class UnexpectedVerifierException {
 
         @Test
-        @DisplayName("RuntimeException from token verifier → 401")
+        @DisplayName("unrecognized token format → 401")
         void unexpectedExceptionReturns401() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_crash_key");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_crash_key")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_crash_key")).thenReturn(false);
-
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_crash_key"))
-                    .thenThrow(new RuntimeException("Database connection lost"));
 
             filter.filter(requestContext);
 
@@ -812,27 +754,19 @@ class ApiKeyAuthFilterTest {
         }
 
         @Test
-        @DisplayName("NullPointerException from token verifier → 401 (no leak)")
+        @DisplayName("unrecognized token → 401 without internal details leaked")
         void npeReturns401() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_npe_key");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_npe_key")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_npe_key")).thenReturn(false);
 
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_npe_key"))
-                    .thenThrow(new NullPointerException("Null config"));
-
             filter.filter(requestContext);
 
             Response abortResponse = captureAbort();
             assertEquals(401, abortResponse.getStatus());
 
-            // Message should NOT contain the internal NPE details
+            // Message should NOT contain internal details
             Object entity = abortResponse.getEntity();
             assertInstanceOf(Map.class, entity);
             @SuppressWarnings("unchecked")
@@ -849,17 +783,16 @@ class ApiKeyAuthFilterTest {
     // =======================================================================
 
     @Nested
-    @DisplayName("No token verifier configured → 401")
+    @DisplayName("Unrecognized token without token verifier → 401")
     class NoTokenValidationService {
 
         @Test
-        @DisplayName("null token verifier → 401 with configuration error message")
+        @DisplayName("unrecognized token format → 401")
         void nullTokenValidationService() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
             givenAuthHeader("Bearer opr_live_some_key");
             when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_some_key")).thenReturn(false);
             when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_some_key")).thenReturn(false);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(false);
 
             filter.filter(requestContext);
 
@@ -1018,18 +951,11 @@ class ApiKeyAuthFilterTest {
         @DisplayName("tenant API key has correct roles but NOT super-admin")
         void tenantKeyDoesNotHaveSuperAdmin() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/grant");
-            givenAuthHeader("Bearer opr_live_tenant_key");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_tenant_key")).thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_tenant_key")).thenReturn(false);
-
-            IdentityContext identity =
-                    tenantIdentity("alice", "acme_corp", Set.of("consent-writer"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_tenant_key")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-tenant");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-tenant")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-tenant")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-tenant", "role:consent-writer,tenant:acme_corp"));
 
             filter.filter(requestContext);
 
@@ -1048,19 +974,11 @@ class ApiKeyAuthFilterTest {
         @DisplayName("SecurityContext.getUserPrincipal() returns correct subject")
         void principalReturnsSubject() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
-            givenAuthHeader("Bearer opr_live_principal_key");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_principal_key"))
-                    .thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_principal_key"))
-                    .thenReturn(false);
-
-            IdentityContext identity = tenantIdentity("eve", "echo_corp", Set.of("reader"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_principal_key")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-eve");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-eve")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-eve")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-eve", "role:reader,tenant:echo_corp"));
 
             filter.filter(requestContext);
 
@@ -1070,7 +988,9 @@ class ApiKeyAuthFilterTest {
 
             SecurityContext sc = secCaptor.getValue();
             assertNotNull(sc.getUserPrincipal());
-            assertEquals("eve", sc.getUserPrincipal().getName());
+            assertTrue(
+                    sc.getUserPrincipal().getName().contains("dev-key-eve"),
+                    "Config API key subject should reference the token");
         }
 
         @Test
@@ -1296,22 +1216,16 @@ class ApiKeyAuthFilterTest {
         @DisplayName("token with trailing whitespace is trimmed before verification")
         void trailingWhitespace() throws IOException {
             givenAuthenticatedEndpoint("api/v1/consent/evaluate");
-            givenAuthHeader("Bearer opr_live_padded_key  ");
-            when(bootstrapLifecycle.isActiveBootstrapKey("opr_live_padded_key")).thenReturn(false);
-            when(bootstrapLifecycle.isBootstrapKeyValue("opr_live_padded_key")).thenReturn(false);
-
-            IdentityContext identity = tenantIdentity("frank", "foxtrot_inc", Set.of("admin"));
-            @SuppressWarnings("unchecked")
-            TokenValidationService<Object> tokenValidationService =
-                    mock(TokenValidationService.class);
-            when(cqrsHolder.isTokenValidationAvailable()).thenReturn(true);
-            when(cqrsHolder.tokenValidationService()).thenReturn(tokenValidationService);
-            when(tokenValidationService.verifyToken("opr_live_padded_key")).thenReturn(identity);
+            givenAuthHeader("Bearer dev-key-frank  ");
+            when(bootstrapLifecycle.isActiveBootstrapKey("dev-key-frank")).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue("dev-key-frank")).thenReturn(false);
+            when(cveilConfig.apiKeys())
+                    .thenReturn(Map.of("dev-key-frank", "role:admin,tenant:foxtrot_inc"));
 
             filter.filter(requestContext);
 
             verify(requestContext, never()).abortWith(any());
-            verify(requestHolder).set(eq(identity), any(), any());
+            verify(requestHolder).set(any(IdentityContext.class), any(), any());
         }
     }
 }

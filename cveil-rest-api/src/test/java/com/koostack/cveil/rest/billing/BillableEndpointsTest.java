@@ -205,14 +205,15 @@ class BillableEndpointsTest {
     class BillablePathPrefixes {
 
         @Test
-        @DisplayName("returns all 4 billable prefixes")
+        @DisplayName("returns all 5 billable prefixes")
         void returnsAllPrefixes() {
             List<String> prefixes = BillableEndpoints.billablePathPrefixes();
-            assertEquals(4, prefixes.size());
+            assertEquals(5, prefixes.size());
             assertTrue(prefixes.contains("/api/v1/subjects"));
             assertTrue(prefixes.contains("/api/v1/governance"));
             assertTrue(prefixes.contains("/api/v1/catalogue"));
             assertTrue(prefixes.contains("/api/v1/consent"));
+            assertTrue(prefixes.contains("/api/v1/dsar"));
         }
     }
 }

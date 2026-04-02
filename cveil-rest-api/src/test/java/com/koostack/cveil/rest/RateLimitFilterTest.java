@@ -222,6 +222,7 @@ class RateLimitFilterTest {
         void skipsUnauthenticated() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             when(requestHolder.isAuthenticated()).thenReturn(false);
+            givenPath("api/v1/consent/evaluate");
 
             filter.filter(requestContext);
 
@@ -853,6 +854,7 @@ class RateLimitFilterTest {
             // --- Request phase ---
             lenient().when(rateLimitService.isAvailable()).thenReturn(true);
             lenient().when(requestHolder.isAuthenticated()).thenReturn(false);
+            givenPath("api/v1/health");
 
             filter.filter(requestContext);
 
@@ -949,8 +951,7 @@ class RateLimitFilterTest {
             verify(requestContext, never()).abortWith(any());
             // The property is still set (the filter stores whatever checkBurst returns)
             verify(requestContext)
-                    .setProperty(
-                            eq("cveil.ratelimit.burst-result"), eq(RateLimitResult.UNLIMITED));
+                    .setProperty(eq("cveil.ratelimit.burst-result"), eq(RateLimitResult.UNLIMITED));
         }
 
         @Test

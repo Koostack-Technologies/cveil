@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.koostack.cveil.rest.config.CveilOpenApiConfig;
 import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
+import com.koostack.cveil.rest.resource.DsarResource;
 import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.HealthResource;
 import com.koostack.cveil.rest.resource.PlatformResource;
@@ -54,8 +55,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition has info with title and version")
         void hasInfoTitleAndVersion() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertNotNull(def.info());
             assertEquals("Cveil Consent Management API", def.info().title());
             assertEquals("1.0.0", def.info().version());
@@ -64,8 +64,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has contact")
         void hasContact() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("KooStack", def.info().contact().name());
             assertFalse(def.info().contact().url().isBlank());
         }
@@ -73,8 +72,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition info has license")
         void hasLicense() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             assertEquals("Apache 2.0", def.info().license().name());
             assertFalse(def.info().license().url().isBlank());
         }
@@ -82,20 +80,18 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("@OpenAPIDefinition has info description mentioning GDPR")
         void hasDescriptionWithRegulations() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             String desc = def.info().description();
             assertTrue(desc.contains("GDPR"), "Description should mention GDPR");
             assertTrue(desc.contains("CCPA"), "Description should mention CCPA");
         }
 
         @Test
-        @DisplayName("defines all six tags")
+        @DisplayName("defines all tags")
         void definesAllTags() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             Tag[] tags = def.tags();
-            assertEquals(7, tags.length, "Should define 7 tags");
+            assertEquals(8, tags.length, "Should define 8 tags");
 
             Set<String> tagNames = Arrays.stream(tags).map(Tag::name).collect(Collectors.toSet());
             assertTrue(tagNames.contains(CveilOpenApiConfig.TAG_CONSENT));
@@ -109,8 +105,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("each tag has a non-empty description")
         void tagsHaveDescriptions() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             for (Tag tag : def.tags()) {
                 assertFalse(
                         tag.description().isBlank(),
@@ -121,8 +116,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("defines BearerAuth security scheme with HTTP bearer type")
         void definesSecurityScheme() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme[] schemes = def.components().securitySchemes();
             assertEquals(1, schemes.length, "Should define exactly one security scheme");
 
@@ -136,8 +130,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("security scheme has non-empty description mentioning roles")
         void securitySchemeDescribesRoles() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             String desc = scheme.description();
             assertTrue(desc.contains("consent:read"), "Should mention consent:read role");
@@ -167,8 +160,7 @@ class OpenApiAnnotationTest {
         @Test
         @DisplayName("SECURITY_SCHEME constant matches annotation")
         void securitySchemeConstantMatchesAnnotation() {
-            OpenAPIDefinition def =
-                    CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
+            OpenAPIDefinition def = CveilOpenApiConfig.class.getAnnotation(OpenAPIDefinition.class);
             SecurityScheme scheme = def.components().securitySchemes()[0];
             assertEquals(
                     CveilOpenApiConfig.SECURITY_SCHEME,
@@ -265,10 +257,10 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("consent endpoints have 15 distinct operation IDs")
+        @DisplayName("consent endpoints have 16 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(ConsentResource.class);
-            assertEquals(15, opCount, "ConsentResource should have 15 @Operation methods");
+            assertEquals(16, opCount, "ConsentResource should have 16 @Operation methods");
         }
 
         @Test
@@ -316,10 +308,10 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("catalogue endpoints have 15 distinct operation IDs")
+        @DisplayName("catalogue endpoints have 16 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(CatalogueResource.class);
-            assertEquals(15, opCount, "CatalogueResource should have 15 @Operation methods");
+            assertEquals(16, opCount, "CatalogueResource should have 16 @Operation methods");
         }
 
         @Test
@@ -430,10 +422,10 @@ class OpenApiAnnotationTest {
         }
 
         @Test
-        @DisplayName("platform endpoints have 8 distinct operation IDs")
+        @DisplayName("platform endpoints have 5 distinct operation IDs")
         void hasCorrectNumberOfOperations() {
             long opCount = countOperationAnnotatedMethods(PlatformResource.class);
-            assertEquals(8, opCount, "PlatformResource should have 8 @Operation methods");
+            assertEquals(5, opCount, "PlatformResource should have 5 @Operation methods");
         }
 
         @Test
@@ -531,6 +523,7 @@ class OpenApiAnnotationTest {
                         GovernanceResource.class,
                         PlatformResource.class,
                         HealthResource.class,
+                        DsarResource.class,
                     }) {
                 for (Method m : clazz.getDeclaredMethods()) {
                     Operation op = m.getAnnotation(Operation.class);
@@ -546,8 +539,8 @@ class OpenApiAnnotationTest {
                     }
                 }
             }
-            // 15 consent + 15 catalogue + 19 governance + 8 platform + 1 health = 58
-            assertEquals(58, allIds.size(), "Expected 58 globally unique operationIds");
+            // 16 consent + 16 catalogue + 19 governance + 5 platform + 1 health + 7 dsar = 64
+            assertEquals(64, allIds.size(), "Expected 64 globally unique operationIds");
         }
 
         @Test
@@ -592,10 +585,8 @@ class OpenApiAnnotationTest {
         @DisplayName("HealthResponse has @Schema")
         void healthResponseHasSchema() {
             assertTrue(
-                    com.koostack.cveil.rest.dto.CommonDtos.HealthResponse.class
-                            .isAnnotationPresent(
-                                    org.eclipse.microprofile.openapi.annotations.media.Schema
-                                            .class),
+                    com.koostack.cveil.rest.dto.CommonDtos.HealthResponse.class.isAnnotationPresent(
+                            org.eclipse.microprofile.openapi.annotations.media.Schema.class),
                     "HealthResponse must have @Schema");
         }
 
