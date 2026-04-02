@@ -36,6 +36,7 @@ import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
 import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.PlatformResource;
+import com.koostack.cveil.rest.resource.DsarResource;
 import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -82,6 +83,41 @@ class RbacTest {
      * securityContextWith() to match the role being tested.
      */
     private CveilRequestHolder requestHolder;
+
+    // -------------------------------------------------------------------
+    // Shared test-data factories
+    // -------------------------------------------------------------------
+
+    private static ConsentScopeDto testScope() {
+        return new ConsentScopeDto("pii", "email", "user", "marketing");
+    }
+
+    private static GrantRequest testGrantRequest() {
+        return new GrantRequest("subject-1", testScope(), null);
+    }
+
+    private static RevokeRequest testRevokeRequest() {
+        return new RevokeRequest("subject-1", testScope());
+    }
+
+    private static EvaluateRequest testEvaluateRequest() {
+        return new EvaluateRequest(Set.of(testScope()));
+    }
+
+    /**
+     * Asserts the callable does not throw CveilAuthException.
+     * Other exceptions (e.g. NPE from unmocked services) are expected and ignored.
+     */
+    private static void assertNoCveilAuthException(
+            org.junit.jupiter.api.function.Executable exec) {
+        try {
+            exec.execute();
+        } catch (CveilAuthException e) {
+            fail("Should not throw CveilAuthException: " + e.getMessage());
+        } catch (Throwable ignored) {
+            // Business logic errors are expected — RBAC gate passed
+        }
+    }
 
     // -------------------------------------------------------------------
     // Helpers
@@ -821,6 +857,71 @@ class RbacTest {
             }
         }
 
+        // -- DSAR-related consent endpoints --
+
+        @Nested
+        @DisplayName("DELETE /subjects/{name}/shred (shredSubject)")
+        class ShredSubject {
+
+            @Test
+            @DisplayName("consent:read → allowed (has CONSENT_DSAR)")
+            void consentReadAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
+                // shredSubject passes RBAC but may NPE on business logic — that's fine
+                try {
+                    resource.shredSubject(ctx, "subj-1");
+                } catch (CveilAuthException e) {
+                    fail("consent:read should be allowed for shredSubject");
+                } catch (Exception ignored) {
+                    // Expected — business logic may fail
+                }
+            }
+
+            @Test
+            @DisplayName("consent:write → 403 (no CONSENT_DSAR)")
+            void consentWriteDenied() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+            }
+
+            @Test
+            @DisplayName("admin:read → 403")
+            void adminReadDenied() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                assertThrows(
+                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+            }
+
+            @Test
+            @DisplayName("admin:write → 403")
+            void adminWriteDenied() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
+                assertThrows(
+                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+            }
+
+            @Test
+            @DisplayName("null SecurityContext → 403")
+            void nullSecurityContextDenied() {
+                assertThrows(
+                        CveilAuthException.class, () -> resource.shredSubject(null, "subj-1"));
+            }
+
+            @Test
+            @DisplayName("super-admin → allowed")
+            void superAdminAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
+                try {
+                    resource.shredSubject(ctx, "subj-1");
+                } catch (CveilAuthException e) {
+                    fail("super-admin should be allowed for shredSubject");
+                } catch (Exception ignored) {
+                    // Expected — business logic may fail
+                }
+            }
+        }
+
         // -- Cross-cutting consent tests --
 
         @Nested
@@ -898,7 +999,17 @@ class RbacTest {
             consentDispatcher = mock(CommandDispatcher.class);
             consentQueryDispatcher = mock(QueryDispatcher.class);
 
-            when(consentQueryDispatcher.dispatch(any())).thenReturn(Collections.emptyList());
+            when(consentQueryDispatcher.dispatch(any()))
+                    .thenAnswer(
+                            inv -> {
+                                Object q = inv.getArgument(0);
+                                if (q.getClass()
+                                        .getSimpleName()
+                                        .equals("GetEntityQuery")) {
+                                    return java.util.Optional.empty();
+                                }
+                                return Collections.emptyList();
+                            });
 
             requestHolder = new CveilRequestHolder();
             setField(resource, "requestHolder", requestHolder);
@@ -1056,6 +1167,51 @@ class RbacTest {
                 assertThrows(
                         CveilAuthException.class,
                         () -> resource.assignFieldCategory(emptySecurityContext(), request()));
+            }
+        }
+
+        @Nested
+        @DisplayName("GET /catalogue/entities/{entityName}/fields (listFieldsByEntity)")
+        class ListFieldsByEntity {
+
+            @Test
+            @DisplayName("admin:read → 200")
+            void adminReadAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
+                assertDoesNotThrow(() -> resource.listFieldsByEntity(ctx, "user"));
+            }
+
+            @Test
+            @DisplayName("super-admin → 200")
+            void superAdminAllowed() {
+                SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
+                assertDoesNotThrow(() -> resource.listFieldsByEntity(ctx, "user"));
+            }
+
+            @Test
+            @DisplayName("consent:read → 403")
+            void consentReadDenied() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listFieldsByEntity(ctx, "user"));
+            }
+
+            @Test
+            @DisplayName("consent:write → 403")
+            void consentWriteDenied() {
+                SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listFieldsByEntity(ctx, "user"));
+            }
+
+            @Test
+            @DisplayName("empty roles → 403")
+            void emptyRolesDenied() {
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listFieldsByEntity(emptySecurityContext(), "user"));
             }
         }
 
@@ -1668,6 +1824,648 @@ class RbacTest {
         void requireAnyRoleEmptyVarargsSuperAdmin() {
             SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
             assertDoesNotThrow(() -> Roles.requireAnyRole(ctx));
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // DsarResource RBAC tests
+    // -------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("DsarResource RBAC")
+    class DsarResourceRbac {
+
+        private DsarResource resource;
+
+        @BeforeEach
+        void setUp() throws Exception {
+            resource = new DsarResource();
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            // dataSourceInstance left null — tests that pass RBAC will hit NPE
+            // on business logic, which is fine; we only care about the permission gate
+        }
+
+        // -- listRequests --
+
+        @Nested
+        @DisplayName("GET /dsar/requests (listRequests)")
+        class ListRequests {
+
+            @Test
+            @DisplayName("consent:read → allowed (has CONSENT_DSAR)")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(
+                        () -> resource.listRequests(null, null, 1, 25));
+            }
+
+            @Test
+            @DisplayName("super-admin → allowed")
+            void superAdminAllowed() {
+                securityContextWith(Roles.SUPER_ADMIN);
+                assertNoCveilAuthException(
+                        () -> resource.listRequests(null, null, 1, 25));
+            }
+
+            @Test
+            @DisplayName("consent:write → 403 (no CONSENT_DSAR)")
+            void consentWriteDenied() {
+                securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listRequests(null, null, 1, 25));
+            }
+
+            @Test
+            @DisplayName("admin:read → 403")
+            void adminReadDenied() {
+                securityContextWith(Roles.ADMIN_READ);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listRequests(null, null, 1, 25));
+            }
+
+            @Test
+            @DisplayName("no auth → 403")
+            void noAuthDenied() {
+                // requestHolder has null authorization by default
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listRequests(null, null, 1, 25));
+            }
+        }
+
+        // -- getRequest --
+
+        @Nested
+        @DisplayName("GET /dsar/requests/{id} (getRequest)")
+        class GetRequest {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(
+                        () -> resource.getRequest(UUID.randomUUID()));
+            }
+
+            @Test
+            @DisplayName("consent:write → 403")
+            void consentWriteDenied() {
+                securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.getRequest(UUID.randomUUID()));
+            }
+        }
+
+        // -- createRequest --
+
+        @Nested
+        @DisplayName("POST /dsar/requests (createRequest)")
+        class CreateRequest {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(
+                        () ->
+                                resource.createRequest(
+                                        new DsarResource.CreateDsarRequest(
+                                                "subj-1",
+                                                "test@example.com",
+                                                "Test User",
+                                                "access",
+                                                null,
+                                                null)));
+            }
+
+            @Test
+            @DisplayName("admin:write → 403")
+            void adminWriteDenied() {
+                securityContextWith(Roles.ADMIN_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () ->
+                                resource.createRequest(
+                                        new DsarResource.CreateDsarRequest(
+                                                "subj-1",
+                                                "test@example.com",
+                                                "Test User",
+                                                "access",
+                                                null,
+                                                null)));
+            }
+        }
+
+        // -- updateStatus --
+
+        @Nested
+        @DisplayName("PUT /dsar/requests/{id}/status (updateStatus)")
+        class UpdateStatus {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(
+                        () ->
+                                resource.updateStatus(
+                                        UUID.randomUUID(),
+                                        new DsarResource.UpdateDsarStatusRequest(
+                                                "approved", "ok")));
+            }
+
+            @Test
+            @DisplayName("consent:write → 403")
+            void consentWriteDenied() {
+                securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () ->
+                                resource.updateStatus(
+                                        UUID.randomUUID(),
+                                        new DsarResource.UpdateDsarStatusRequest(
+                                                "approved", "ok")));
+            }
+        }
+
+        // -- getActivity --
+
+        @Nested
+        @DisplayName("GET /dsar/requests/{id}/activity (getActivity)")
+        class GetActivity {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(
+                        () -> resource.getActivity(UUID.randomUUID()));
+            }
+
+            @Test
+            @DisplayName("admin:read → 403")
+            void adminReadDenied() {
+                securityContextWith(Roles.ADMIN_READ);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.getActivity(UUID.randomUUID()));
+            }
+        }
+
+        // -- getTransitions --
+
+        @Nested
+        @DisplayName("GET /dsar/transitions (getTransitions)")
+        class GetTransitions {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(() -> resource.getTransitions());
+            }
+
+            @Test
+            @DisplayName("empty roles → 403")
+            void emptyRolesDenied() {
+                emptySecurityContext();
+                assertThrows(CveilAuthException.class, () -> resource.getTransitions());
+            }
+        }
+
+        // -- getSummary --
+
+        @Nested
+        @DisplayName("GET /dsar/summary (getSummary)")
+        class GetSummary {
+
+            @Test
+            @DisplayName("consent:read → allowed")
+            void consentReadAllowed() {
+                securityContextWith(Roles.CONSENT_READ);
+                assertNoCveilAuthException(() -> resource.getSummary());
+            }
+
+            @Test
+            @DisplayName("consent:write → 403")
+            void consentWriteDenied() {
+                securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(CveilAuthException.class, () -> resource.getSummary());
+            }
+
+            @Test
+            @DisplayName("no auth → 403")
+            void noAuthDenied() {
+                assertThrows(CveilAuthException.class, () -> resource.getSummary());
+            }
+        }
+
+        // -- Cross-cutting --
+
+        @Nested
+        @DisplayName("Cross-cutting DSAR role checks")
+        class DsarCrossCutting {
+
+            @Test
+            @DisplayName("admin roles cannot access DSAR endpoints")
+            void adminRolesCannotAccessDsar() {
+                for (String role : List.of(Roles.ADMIN_READ, Roles.ADMIN_WRITE)) {
+                    securityContextWith(role);
+                    assertThrows(
+                            CveilAuthException.class,
+                            () -> resource.listRequests(null, null, 1, 25),
+                            role + " should not access listRequests");
+                    assertThrows(
+                            CveilAuthException.class,
+                            () -> resource.getSummary(),
+                            role + " should not access getSummary");
+                }
+            }
+
+            @Test
+            @DisplayName("consent:write alone cannot access DSAR endpoints")
+            void consentWriteAloneCannotAccessDsar() {
+                securityContextWith(Roles.CONSENT_WRITE);
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.listRequests(null, null, 1, 25));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.getRequest(UUID.randomUUID()));
+                assertThrows(
+                        CveilAuthException.class, () -> resource.getSummary());
+                assertThrows(
+                        CveilAuthException.class, () -> resource.getTransitions());
+            }
+
+            @Test
+            @DisplayName("super-admin → full DSAR access")
+            void superAdminFullDsarAccess() {
+                securityContextWith(Roles.SUPER_ADMIN);
+                assertNoCveilAuthException(
+                        () -> resource.listRequests(null, null, 1, 25));
+                assertNoCveilAuthException(
+                        () -> resource.getRequest(UUID.randomUUID()));
+                assertNoCveilAuthException(() -> resource.getTransitions());
+                assertNoCveilAuthException(() -> resource.getSummary());
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Permission granularity tests
+    // -------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Permission Granularity")
+    class PermissionGranularity {
+
+        /**
+         * Creates an AuthorizationContext with ONLY the specified permissions
+         * (no role-based expansion) and sets it on the requestHolder.
+         */
+        private void givenPermissions(String... permissions) {
+            requestHolder = new CveilRequestHolder();
+            requestHolder.setAuthorization(
+                    new AuthorizationContext(
+                            "test-user",
+                            "test-tenant",
+                            Set.of(),
+                            Set.of(permissions)));
+        }
+
+        @Nested
+        @DisplayName("Consent permission isolation")
+        class ConsentPermissionIsolation {
+
+            private ConsentResource resource;
+
+            @SuppressWarnings("unchecked")
+            @BeforeEach
+            void setUp() throws Exception {
+                resource = new ConsentResource();
+                requestHolder = new CveilRequestHolder();
+                setField(resource, "requestHolder", requestHolder);
+                setField(resource, "consentDispatcher", mock(CommandDispatcher.class));
+                setField(resource, "consentQueryDispatcher", mock(QueryDispatcher.class));
+                setField(resource, "cveilConfig", mock(CveilConfig.class));
+                setField(resource, "metrics", mock(MetricsHelper.class));
+            }
+
+            @Test
+            @DisplayName("consent:grant alone → can grant, cannot revoke")
+            void grantWithoutRevoke() {
+                givenPermissions(Permissions.CONSENT_GRANT);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(() -> resource.grant(null, testGrantRequest()));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.revoke(null, testRevokeRequest()));
+            }
+
+            @Test
+            @DisplayName("consent:revoke alone → can revoke, cannot grant")
+            void revokeWithoutGrant() {
+                givenPermissions(Permissions.CONSENT_REVOKE);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(() -> resource.revoke(null, testRevokeRequest()));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.grant(null, testGrantRequest()));
+            }
+
+            @Test
+            @DisplayName("consent:read alone → can read, cannot grant or revoke")
+            void readOnly() {
+                givenPermissions(Permissions.CONSENT_READ);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(() -> resource.subjectSummary(null, "subj-1"));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.grant(null, testGrantRequest()));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.revoke(null, testRevokeRequest()));
+            }
+
+            @Test
+            @DisplayName("consent:evaluate alone → can evaluate, cannot grant")
+            void evaluateOnly() {
+                givenPermissions(Permissions.CONSENT_EVALUATE);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(
+                        () -> resource.evaluate(null, "subj-1", testEvaluateRequest()));
+                assertThrows(
+                        CveilAuthException.class,
+                        () -> resource.grant(null, testGrantRequest()));
+            }
+        }
+
+        @Nested
+        @DisplayName("Catalogue permission isolation")
+        class CataloguePermissionIsolation {
+
+            private CatalogueResource resource;
+
+            @SuppressWarnings("unchecked")
+            @BeforeEach
+            void setUp() throws Exception {
+                resource = new CatalogueResource();
+                requestHolder = new CveilRequestHolder();
+                setField(resource, "requestHolder", requestHolder);
+                setField(resource, "consentDispatcher", mock(CommandDispatcher.class));
+                setField(resource, "consentQueryDispatcher", mock(QueryDispatcher.class));
+                setField(resource, "metrics", mock(MetricsHelper.class));
+            }
+
+            @Test
+            @DisplayName("catalogue:read alone → can list, cannot register")
+            void readOnly() {
+                givenPermissions(Permissions.CATALOGUE_READ);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(() -> resource.listFields(null));
+                assertThrows(
+                        CveilAuthException.class,
+                        () ->
+                                resource.registerField(
+                                        null,
+                                        new RegisterFieldRequest("f", "e", "d", "ed")));
+            }
+
+            @Test
+            @DisplayName("catalogue:write alone → can register, cannot list")
+            void writeOnly() {
+                givenPermissions(Permissions.CATALOGUE_WRITE);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(
+                        () ->
+                                resource.registerField(
+                                        null,
+                                        new RegisterFieldRequest("f", "e", "d", "ed")));
+                assertThrows(
+                        CveilAuthException.class, () -> resource.listFields(null));
+            }
+        }
+
+        @Nested
+        @DisplayName("Governance permission isolation")
+        class GovernancePermissionIsolation {
+
+            private GovernanceResource resource;
+
+            @SuppressWarnings("unchecked")
+            @BeforeEach
+            void setUp() throws Exception {
+                resource = new GovernanceResource();
+                requestHolder = new CveilRequestHolder();
+                setField(resource, "requestHolder", requestHolder);
+                setField(resource, "consentDispatcher", mock(CommandDispatcher.class));
+                setField(resource, "consentQueryDispatcher", mock(QueryDispatcher.class));
+                setField(resource, "metrics", mock(MetricsHelper.class));
+            }
+
+            @Test
+            @DisplayName("governance:read alone → can list, cannot register")
+            void readOnly() {
+                givenPermissions(Permissions.GOVERNANCE_READ);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(() -> resource.listPurposes(null));
+                assertThrows(
+                        CveilAuthException.class,
+                        () ->
+                                resource.registerPurpose(
+                                        null,
+                                        new RegisterPurposeRequest(
+                                                "purpose", "Test purpose")));
+            }
+
+            @Test
+            @DisplayName("governance:write alone → can register, cannot list")
+            void writeOnly() {
+                givenPermissions(Permissions.GOVERNANCE_WRITE);
+                setField_safe(resource, "requestHolder", requestHolder);
+
+                assertNoCveilAuthException(
+                        () ->
+                                resource.registerPurpose(
+                                        null,
+                                        new RegisterPurposeRequest(
+                                                "purpose", "Test purpose")));
+                assertThrows(
+                        CveilAuthException.class, () -> resource.listPurposes(null));
+            }
+        }
+
+        private void setField_safe(Object target, String fieldName, Object value) {
+            try {
+                setField(target, fieldName, value);
+            } catch (Exception e) {
+                fail("Failed to set field: " + e.getMessage());
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Metrics verification
+    // -------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Metrics recording on successful operations")
+    class MetricsRecording {
+
+        @SuppressWarnings("unchecked")
+        @Test
+        @DisplayName("ConsentResource.grant records consent_granted metric")
+        void grantRecordsMetric() throws Exception {
+            ConsentResource resource = new ConsentResource();
+            CommandDispatcher cd = mock(CommandDispatcher.class);
+            QueryDispatcher qd = mock(QueryDispatcher.class);
+            MetricsHelper metrics = mock(MetricsHelper.class);
+
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            setField(resource, "consentDispatcher", cd);
+            setField(resource, "consentQueryDispatcher", qd);
+            setField(resource, "cveilConfig", mock(CveilConfig.class));
+            setField(resource, "metrics", metrics);
+
+            when(qd.dispatch(any()))
+                    .thenAnswer(
+                            inv -> {
+                                Object q = inv.getArgument(0);
+                                if (q.getClass().getSimpleName().equals("FindPolicyQuery")) {
+                                    return new PurposeView.PolicyView(
+                                            UUID.randomUUID(),
+                                            "CATEGORY",
+                                            new PurposeView.CategoryRef(UUID.randomUUID(), "pii"),
+                                            null);
+                                }
+                                return null;
+                            });
+            when(cd.dispatch(any())).thenReturn(new ConsentResponse("s", Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(), Collections.emptyMap()));
+
+            SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
+            resource.grant(ctx, testGrantRequest());
+
+            verify(metrics).counter(eq("consent_grants"), any(), any());
+        }
+
+        @SuppressWarnings("unchecked")
+        @Test
+        @DisplayName("ConsentResource.revoke records consent_revoked metric")
+        void revokeRecordsMetric() throws Exception {
+            ConsentResource resource = new ConsentResource();
+            CommandDispatcher cd = mock(CommandDispatcher.class);
+            QueryDispatcher qd = mock(QueryDispatcher.class);
+            MetricsHelper metrics = mock(MetricsHelper.class);
+
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            setField(resource, "consentDispatcher", cd);
+            setField(resource, "consentQueryDispatcher", qd);
+            setField(resource, "cveilConfig", mock(CveilConfig.class));
+            setField(resource, "metrics", metrics);
+
+            when(qd.dispatch(any()))
+                    .thenAnswer(
+                            inv -> {
+                                Object q = inv.getArgument(0);
+                                if (q.getClass().getSimpleName().equals("FindPolicyQuery")) {
+                                    return new PurposeView.PolicyView(
+                                            UUID.randomUUID(),
+                                            "CATEGORY",
+                                            new PurposeView.CategoryRef(UUID.randomUUID(), "pii"),
+                                            null);
+                                }
+                                return null;
+                            });
+            when(cd.dispatch(any())).thenReturn(new ConsentResponse("s", Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(), Collections.emptyMap()));
+
+            SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
+            resource.revoke(ctx, testRevokeRequest());
+
+            verify(metrics).counter(eq("consent_revocations"), any(), any());
+        }
+
+        @SuppressWarnings("unchecked")
+        @Test
+        @DisplayName("CatalogueResource.registerField records field_registered metric")
+        void registerFieldRecordsMetric() throws Exception {
+            CatalogueResource resource = new CatalogueResource();
+            CommandDispatcher cd = mock(CommandDispatcher.class);
+            QueryDispatcher qd = mock(QueryDispatcher.class);
+            MetricsHelper metrics = mock(MetricsHelper.class);
+
+            when(qd.dispatch(any())).thenReturn(Collections.emptyList());
+
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            setField(resource, "consentDispatcher", cd);
+            setField(resource, "consentQueryDispatcher", qd);
+            setField(resource, "metrics", metrics);
+
+            SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
+            resource.registerField(ctx, new RegisterFieldRequest("f", "e", "d", "ed"));
+
+            verify(metrics).counter(eq("catalogue_mutations"), any(), any());
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // PlatformResource response body assertions
+    // -------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("PlatformResource response bodies")
+    class PlatformResponseBodies {
+
+        private PlatformResource resource;
+
+        @SuppressWarnings("unchecked")
+        @BeforeEach
+        void setUp() throws Exception {
+            resource = new PlatformResource();
+            PlatformCqrsHolder cqrs = mock(PlatformCqrsHolder.class);
+            when(cqrs.isCqrsAvailable()).thenReturn(true);
+            doReturn(mock(CoreCommandService.class)).when(cqrs).coreCommandService();
+            doReturn(mock(CoreQueryService.class)).when(cqrs).coreQueryService();
+            doReturn(mock(com.koostack.cveil.core.platform.billing.BillingCommandService.class))
+                    .when(cqrs)
+                    .billingCommandService();
+            doReturn(mock(QueryDispatcher.class)).when(cqrs).coreQueryDispatcher();
+
+            requestHolder = new CveilRequestHolder();
+            setField(resource, "requestHolder", requestHolder);
+            setField(resource, "cqrs", cqrs);
+            setField(resource, "metrics", mock(MetricsHelper.class));
+            setField(resource, "rateLimitService", mock(RateLimitService.class));
+        }
+
+        @Test
+        @DisplayName("createTenant returns 501 with deprecation message")
+        void createTenantReturns501WithMessage() {
+            SecurityContext ctx = securityContextWith(Roles.SUPER_ADMIN);
+            Response response =
+                    resource.createTenant(
+                            ctx, new CreateTenantRequest("t1", "Tenant", "free", null));
+
+            assertEquals(501, response.getStatus());
+            Object body = response.getEntity();
+            assertNotNull(body, "Response body should not be null");
+            assertTrue(
+                    body.toString().contains("no longer supported"),
+                    "Body should explain the endpoint is deprecated");
         }
     }
 
