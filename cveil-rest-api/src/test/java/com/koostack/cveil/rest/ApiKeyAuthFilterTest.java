@@ -1508,8 +1508,7 @@ class ApiKeyAuthFilterTest {
             String encodedPayload =
                     Base64.getUrlEncoder()
                             .withoutPadding()
-                            .encodeToString(
-                                    payload.toString().getBytes(StandardCharsets.UTF_8));
+                            .encodeToString(payload.toString().getBytes(StandardCharsets.UTF_8));
             String signature =
                     Base64.getUrlEncoder()
                             .withoutPadding()
@@ -1666,5 +1665,4 @@ class ApiKeyAuthFilterTest {
             verify(requestHolder, never()).set(any(), any(), any());
         }
     }
-
 }

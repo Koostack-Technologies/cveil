@@ -34,9 +34,9 @@ import com.koostack.cveil.rest.dto.PlatformDtos.CreateTenantRequest;
 import com.koostack.cveil.rest.ratelimit.RateLimitService;
 import com.koostack.cveil.rest.resource.CatalogueResource;
 import com.koostack.cveil.rest.resource.ConsentResource;
+import com.koostack.cveil.rest.resource.DsarResource;
 import com.koostack.cveil.rest.resource.GovernanceResource;
 import com.koostack.cveil.rest.resource.PlatformResource;
-import com.koostack.cveil.rest.resource.DsarResource;
 import com.koostack.cveil.rest.util.MetricsHelper;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
@@ -105,11 +105,10 @@ class RbacTest {
     }
 
     /**
-     * Asserts the callable does not throw CveilAuthException.
-     * Other exceptions (e.g. NPE from unmocked services) are expected and ignored.
+     * Asserts the callable does not throw CveilAuthException. Other exceptions (e.g. NPE from
+     * unmocked services) are expected and ignored.
      */
-    private static void assertNoCveilAuthException(
-            org.junit.jupiter.api.function.Executable exec) {
+    private static void assertNoCveilAuthException(org.junit.jupiter.api.function.Executable exec) {
         try {
             exec.execute();
         } catch (CveilAuthException e) {
@@ -881,31 +880,27 @@ class RbacTest {
             @DisplayName("consent:write → 403 (no CONSENT_DSAR)")
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
-                assertThrows(
-                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+                assertThrows(CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("admin:read → 403")
             void adminReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_READ);
-                assertThrows(
-                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+                assertThrows(CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("admin:write → 403")
             void adminWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.ADMIN_WRITE);
-                assertThrows(
-                        CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
+                assertThrows(CveilAuthException.class, () -> resource.shredSubject(ctx, "subj-1"));
             }
 
             @Test
             @DisplayName("null SecurityContext → 403")
             void nullSecurityContextDenied() {
-                assertThrows(
-                        CveilAuthException.class, () -> resource.shredSubject(null, "subj-1"));
+                assertThrows(CveilAuthException.class, () -> resource.shredSubject(null, "subj-1"));
             }
 
             @Test
@@ -1003,9 +998,7 @@ class RbacTest {
                     .thenAnswer(
                             inv -> {
                                 Object q = inv.getArgument(0);
-                                if (q.getClass()
-                                        .getSimpleName()
-                                        .equals("GetEntityQuery")) {
+                                if (q.getClass().getSimpleName().equals("GetEntityQuery")) {
                                     return java.util.Optional.empty();
                                 }
                                 return Collections.emptyList();
@@ -1193,8 +1186,7 @@ class RbacTest {
             void consentReadDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_READ);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listFieldsByEntity(ctx, "user"));
+                        CveilAuthException.class, () -> resource.listFieldsByEntity(ctx, "user"));
             }
 
             @Test
@@ -1202,8 +1194,7 @@ class RbacTest {
             void consentWriteDenied() {
                 SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listFieldsByEntity(ctx, "user"));
+                        CveilAuthException.class, () -> resource.listFieldsByEntity(ctx, "user"));
             }
 
             @Test
@@ -1856,16 +1847,14 @@ class RbacTest {
             @DisplayName("consent:read → allowed (has CONSENT_DSAR)")
             void consentReadAllowed() {
                 securityContextWith(Roles.CONSENT_READ);
-                assertNoCveilAuthException(
-                        () -> resource.listRequests(null, null, 1, 25));
+                assertNoCveilAuthException(() -> resource.listRequests(null, null, 1, 25));
             }
 
             @Test
             @DisplayName("super-admin → allowed")
             void superAdminAllowed() {
                 securityContextWith(Roles.SUPER_ADMIN);
-                assertNoCveilAuthException(
-                        () -> resource.listRequests(null, null, 1, 25));
+                assertNoCveilAuthException(() -> resource.listRequests(null, null, 1, 25));
             }
 
             @Test
@@ -1873,8 +1862,7 @@ class RbacTest {
             void consentWriteDenied() {
                 securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listRequests(null, null, 1, 25));
+                        CveilAuthException.class, () -> resource.listRequests(null, null, 1, 25));
             }
 
             @Test
@@ -1882,8 +1870,7 @@ class RbacTest {
             void adminReadDenied() {
                 securityContextWith(Roles.ADMIN_READ);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listRequests(null, null, 1, 25));
+                        CveilAuthException.class, () -> resource.listRequests(null, null, 1, 25));
             }
 
             @Test
@@ -1891,8 +1878,7 @@ class RbacTest {
             void noAuthDenied() {
                 // requestHolder has null authorization by default
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listRequests(null, null, 1, 25));
+                        CveilAuthException.class, () -> resource.listRequests(null, null, 1, 25));
             }
         }
 
@@ -1906,8 +1892,7 @@ class RbacTest {
             @DisplayName("consent:read → allowed")
             void consentReadAllowed() {
                 securityContextWith(Roles.CONSENT_READ);
-                assertNoCveilAuthException(
-                        () -> resource.getRequest(UUID.randomUUID()));
+                assertNoCveilAuthException(() -> resource.getRequest(UUID.randomUUID()));
             }
 
             @Test
@@ -1915,8 +1900,7 @@ class RbacTest {
             void consentWriteDenied() {
                 securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.getRequest(UUID.randomUUID()));
+                        CveilAuthException.class, () -> resource.getRequest(UUID.randomUUID()));
             }
         }
 
@@ -2002,8 +1986,7 @@ class RbacTest {
             @DisplayName("consent:read → allowed")
             void consentReadAllowed() {
                 securityContextWith(Roles.CONSENT_READ);
-                assertNoCveilAuthException(
-                        () -> resource.getActivity(UUID.randomUUID()));
+                assertNoCveilAuthException(() -> resource.getActivity(UUID.randomUUID()));
             }
 
             @Test
@@ -2011,8 +1994,7 @@ class RbacTest {
             void adminReadDenied() {
                 securityContextWith(Roles.ADMIN_READ);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.getActivity(UUID.randomUUID()));
+                        CveilAuthException.class, () -> resource.getActivity(UUID.randomUUID()));
             }
         }
 
@@ -2091,25 +2073,19 @@ class RbacTest {
             void consentWriteAloneCannotAccessDsar() {
                 securityContextWith(Roles.CONSENT_WRITE);
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.listRequests(null, null, 1, 25));
+                        CveilAuthException.class, () -> resource.listRequests(null, null, 1, 25));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.getRequest(UUID.randomUUID()));
-                assertThrows(
-                        CveilAuthException.class, () -> resource.getSummary());
-                assertThrows(
-                        CveilAuthException.class, () -> resource.getTransitions());
+                        CveilAuthException.class, () -> resource.getRequest(UUID.randomUUID()));
+                assertThrows(CveilAuthException.class, () -> resource.getSummary());
+                assertThrows(CveilAuthException.class, () -> resource.getTransitions());
             }
 
             @Test
             @DisplayName("super-admin → full DSAR access")
             void superAdminFullDsarAccess() {
                 securityContextWith(Roles.SUPER_ADMIN);
-                assertNoCveilAuthException(
-                        () -> resource.listRequests(null, null, 1, 25));
-                assertNoCveilAuthException(
-                        () -> resource.getRequest(UUID.randomUUID()));
+                assertNoCveilAuthException(() -> resource.listRequests(null, null, 1, 25));
+                assertNoCveilAuthException(() -> resource.getRequest(UUID.randomUUID()));
                 assertNoCveilAuthException(() -> resource.getTransitions());
                 assertNoCveilAuthException(() -> resource.getSummary());
             }
@@ -2125,17 +2101,14 @@ class RbacTest {
     class PermissionGranularity {
 
         /**
-         * Creates an AuthorizationContext with ONLY the specified permissions
-         * (no role-based expansion) and sets it on the requestHolder.
+         * Creates an AuthorizationContext with ONLY the specified permissions (no role-based
+         * expansion) and sets it on the requestHolder.
          */
         private void givenPermissions(String... permissions) {
             requestHolder = new CveilRequestHolder();
             requestHolder.setAuthorization(
                     new AuthorizationContext(
-                            "test-user",
-                            "test-tenant",
-                            Set.of(),
-                            Set.of(permissions)));
+                            "test-user", "test-tenant", Set.of(), Set.of(permissions)));
         }
 
         @Nested
@@ -2164,8 +2137,7 @@ class RbacTest {
 
                 assertNoCveilAuthException(() -> resource.grant(null, testGrantRequest()));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.revoke(null, testRevokeRequest()));
+                        CveilAuthException.class, () -> resource.revoke(null, testRevokeRequest()));
             }
 
             @Test
@@ -2176,8 +2148,7 @@ class RbacTest {
 
                 assertNoCveilAuthException(() -> resource.revoke(null, testRevokeRequest()));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.grant(null, testGrantRequest()));
+                        CveilAuthException.class, () -> resource.grant(null, testGrantRequest()));
             }
 
             @Test
@@ -2188,11 +2159,9 @@ class RbacTest {
 
                 assertNoCveilAuthException(() -> resource.subjectSummary(null, "subj-1"));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.grant(null, testGrantRequest()));
+                        CveilAuthException.class, () -> resource.grant(null, testGrantRequest()));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.revoke(null, testRevokeRequest()));
+                        CveilAuthException.class, () -> resource.revoke(null, testRevokeRequest()));
             }
 
             @Test
@@ -2204,8 +2173,7 @@ class RbacTest {
                 assertNoCveilAuthException(
                         () -> resource.evaluate(null, "subj-1", testEvaluateRequest()));
                 assertThrows(
-                        CveilAuthException.class,
-                        () -> resource.grant(null, testGrantRequest()));
+                        CveilAuthException.class, () -> resource.grant(null, testGrantRequest()));
             }
         }
 
@@ -2237,8 +2205,7 @@ class RbacTest {
                         CveilAuthException.class,
                         () ->
                                 resource.registerField(
-                                        null,
-                                        new RegisterFieldRequest("f", "e", "d", "ed")));
+                                        null, new RegisterFieldRequest("f", "e", "d", "ed")));
             }
 
             @Test
@@ -2250,10 +2217,8 @@ class RbacTest {
                 assertNoCveilAuthException(
                         () ->
                                 resource.registerField(
-                                        null,
-                                        new RegisterFieldRequest("f", "e", "d", "ed")));
-                assertThrows(
-                        CveilAuthException.class, () -> resource.listFields(null));
+                                        null, new RegisterFieldRequest("f", "e", "d", "ed")));
+                assertThrows(CveilAuthException.class, () -> resource.listFields(null));
             }
         }
 
@@ -2286,8 +2251,7 @@ class RbacTest {
                         () ->
                                 resource.registerPurpose(
                                         null,
-                                        new RegisterPurposeRequest(
-                                                "purpose", "Test purpose")));
+                                        new RegisterPurposeRequest("purpose", "Test purpose")));
             }
 
             @Test
@@ -2300,10 +2264,8 @@ class RbacTest {
                         () ->
                                 resource.registerPurpose(
                                         null,
-                                        new RegisterPurposeRequest(
-                                                "purpose", "Test purpose")));
-                assertThrows(
-                        CveilAuthException.class, () -> resource.listPurposes(null));
+                                        new RegisterPurposeRequest("purpose", "Test purpose")));
+                assertThrows(CveilAuthException.class, () -> resource.listPurposes(null));
             }
         }
 
@@ -2353,7 +2315,14 @@ class RbacTest {
                                 }
                                 return null;
                             });
-            when(cd.dispatch(any())).thenReturn(new ConsentResponse("s", Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(), Collections.emptyMap()));
+            when(cd.dispatch(any()))
+                    .thenReturn(
+                            new ConsentResponse(
+                                    "s",
+                                    Collections.emptySet(),
+                                    Collections.emptySet(),
+                                    Collections.emptyMap(),
+                                    Collections.emptyMap()));
 
             SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
             resource.grant(ctx, testGrantRequest());
@@ -2390,7 +2359,14 @@ class RbacTest {
                                 }
                                 return null;
                             });
-            when(cd.dispatch(any())).thenReturn(new ConsentResponse("s", Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(), Collections.emptyMap()));
+            when(cd.dispatch(any()))
+                    .thenReturn(
+                            new ConsentResponse(
+                                    "s",
+                                    Collections.emptySet(),
+                                    Collections.emptySet(),
+                                    Collections.emptyMap(),
+                                    Collections.emptyMap()));
 
             SecurityContext ctx = securityContextWith(Roles.CONSENT_WRITE);
             resource.revoke(ctx, testRevokeRequest());
