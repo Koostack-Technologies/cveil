@@ -222,6 +222,7 @@ class RateLimitFilterTest {
         void skipsUnauthenticated() throws IOException {
             when(rateLimitService.isAvailable()).thenReturn(true);
             when(requestHolder.isAuthenticated()).thenReturn(false);
+            givenPath("api/v1/consent/evaluate");
 
             filter.filter(requestContext);
 
@@ -853,6 +854,7 @@ class RateLimitFilterTest {
             // --- Request phase ---
             lenient().when(rateLimitService.isAvailable()).thenReturn(true);
             lenient().when(requestHolder.isAuthenticated()).thenReturn(false);
+            givenPath("api/v1/health");
 
             filter.filter(requestContext);
 

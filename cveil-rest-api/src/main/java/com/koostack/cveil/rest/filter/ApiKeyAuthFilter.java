@@ -1027,8 +1027,9 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
         @Override
         public boolean isUserInRole(String role) {
+            if (role == null) return false;
             // Check legacy roles from IdentityContext
-            if (role != null && identity.roles() != null && identity.roles().contains(role)) {
+            if (identity.roles() != null && identity.roles().contains(role)) {
                 return true;
             }
             // Check DB-backed roles and permissions from AuthorizationContext
