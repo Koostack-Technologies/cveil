@@ -985,11 +985,10 @@ public class PlatformIamResource {
                                                     dpopProof));
             metrics.counter("iam_login", "SYSTEM");
             var authResponse = AuthResponse.from(result);
-            var cookies = com.koostack.cveil.site.util.AuthCookieHelper.setAuthCookies(
-                    result.accessToken(), result.refreshToken(), result.expiresIn());
-            return Response.ok(authResponse)
-                    .cookie(cookies)
-                    .build();
+            var cookies =
+                    com.koostack.cveil.site.util.AuthCookieHelper.setAuthCookies(
+                            result.accessToken(), result.refreshToken(), result.expiresIn());
+            return Response.ok(authResponse).cookie(cookies).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(ErrorResponse.of("unauthorized", e.getMessage()))
@@ -1015,11 +1014,10 @@ public class PlatformIamResource {
                                                     REALM, request.refreshToken(), dpopProof));
             metrics.counter("iam_token_refreshed", "SYSTEM");
             var authResponse = AuthResponse.from(result);
-            var cookies = com.koostack.cveil.site.util.AuthCookieHelper.setAuthCookies(
-                    result.accessToken(), result.refreshToken(), result.expiresIn());
-            return Response.ok(authResponse)
-                    .cookie(cookies)
-                    .build();
+            var cookies =
+                    com.koostack.cveil.site.util.AuthCookieHelper.setAuthCookies(
+                            result.accessToken(), result.refreshToken(), result.expiresIn());
+            return Response.ok(authResponse).cookie(cookies).build();
         } catch (com.koostack.cveil.core.exception.CveilAuthException e) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(ErrorResponse.of("unauthorized", e.getMessage()))
@@ -1038,9 +1036,7 @@ public class PlatformIamResource {
                 .dispatch(new LogoutCommandActuator.LogoutCommand(REALM, request.refreshToken()));
         metrics.counter("iam_logout", "SYSTEM");
         var clearCookies = com.koostack.cveil.site.util.AuthCookieHelper.clearAuthCookies();
-        return Response.ok(MessageResponse.of("Logged out"))
-                .cookie(clearCookies)
-                .build();
+        return Response.ok(MessageResponse.of("Logged out")).cookie(clearCookies).build();
     }
 
     // -----------------------------------------------------------------------

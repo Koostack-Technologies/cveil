@@ -217,20 +217,14 @@ public class SiteRedisQueryService {
     public List<PlanInfo> listPlans() {
         Set<String> allPlanIds = jedisProvider.get().smembers("site:plans:all");
         if (allPlanIds == null || allPlanIds.isEmpty()) return Collections.emptyList();
-        return allPlanIds.stream()
-                .map(this::getPlan)
-                .filter(Objects::nonNull)
-                .toList();
+        return allPlanIds.stream().map(this::getPlan).filter(Objects::nonNull).toList();
     }
 
     /** Returns only active plans with full PlanInfo objects. */
     public List<PlanInfo> listActivePlans() {
         Set<String> activePlanIds = getActivePlanIds();
         if (activePlanIds.isEmpty()) return Collections.emptyList();
-        return activePlanIds.stream()
-                .map(this::getPlan)
-                .filter(Objects::nonNull)
-                .toList();
+        return activePlanIds.stream().map(this::getPlan).filter(Objects::nonNull).toList();
     }
 
     // =======================================================================
@@ -298,10 +292,7 @@ public class SiteRedisQueryService {
     public List<OrgInfo> listOrganizations() {
         Set<String> orgIds = listAllOrganizationIds();
         if (orgIds.isEmpty()) return Collections.emptyList();
-        return orgIds.stream()
-                .map(this::getOrganization)
-                .filter(Objects::nonNull)
-                .toList();
+        return orgIds.stream().map(this::getOrganization).filter(Objects::nonNull).toList();
     }
 
     // =======================================================================
@@ -311,7 +302,9 @@ public class SiteRedisQueryService {
     /** List access tokens created by a specific user in a tenant. */
     public Set<String> listAccessTokenPrefixesByCreator(String tenantId, String createdBy) {
         Set<String> result =
-                jedisProvider.get().smembers("site:tokens-by-creator:" + tenantId + ":" + createdBy);
+                jedisProvider
+                        .get()
+                        .smembers("site:tokens-by-creator:" + tenantId + ":" + createdBy);
         return result != null ? result : Collections.emptySet();
     }
 
@@ -320,8 +313,8 @@ public class SiteRedisQueryService {
     // =======================================================================
 
     /**
-     * Resolve the effective permissions for a user in a tenant by looking up their roles,
-     * then expanding each role's permissions via the role-perms sets.
+     * Resolve the effective permissions for a user in a tenant by looking up their roles, then
+     * expanding each role's permissions via the role-perms sets.
      */
     public Set<String> resolvePermissions(String userId, String tenantId) {
         Set<String> roles = getUserRoles(userId, tenantId);
@@ -373,20 +366,21 @@ public class SiteRedisQueryService {
         if (tenantRoleIds != null) allRoleIds.addAll(tenantRoleIds);
 
         return allRoleIds.stream()
-                .map(roleId -> {
-                    Map<String, String> hash = jedis.hgetAll("site:role-def:" + roleId);
-                    if (hash == null || hash.isEmpty()) return null;
-                    Set<String> perms = jedis.smembers("site:role-perms:" + roleId);
-                    return new RoleDefinitionInfo(
-                            hash.get("roleId"),
-                            hash.get("tenantId"),
-                            hash.get("scope"),
-                            hash.get("displayName"),
-                            hash.get("description"),
-                            "true".equals(hash.get("isSystem")),
-                            "true".equals(hash.get("isAssignable")),
-                            perms != null ? List.copyOf(perms) : Collections.emptyList());
-                })
+                .map(
+                        roleId -> {
+                            Map<String, String> hash = jedis.hgetAll("site:role-def:" + roleId);
+                            if (hash == null || hash.isEmpty()) return null;
+                            Set<String> perms = jedis.smembers("site:role-perms:" + roleId);
+                            return new RoleDefinitionInfo(
+                                    hash.get("roleId"),
+                                    hash.get("tenantId"),
+                                    hash.get("scope"),
+                                    hash.get("displayName"),
+                                    hash.get("description"),
+                                    "true".equals(hash.get("isSystem")),
+                                    "true".equals(hash.get("isAssignable")),
+                                    perms != null ? List.copyOf(perms) : Collections.emptyList());
+                        })
                 .filter(Objects::nonNull)
                 .toList();
     }
@@ -400,7 +394,8 @@ public class SiteRedisQueryService {
     // Feature gate queries
     // =======================================================================
 
-    public record PlanFeature(String planId, String featureKey, boolean enabled, Integer limitValue) {}
+    public record PlanFeature(
+            String planId, String featureKey, boolean enabled, Integer limitValue) {}
 
     /** Check if a specific feature is enabled for a plan. */
     public boolean isFeatureEnabled(String planId, String featureKey) {
@@ -436,18 +431,21 @@ public class SiteRedisQueryService {
 
         ObjectMapper mapper = new ObjectMapper();
         return features.entrySet().stream()
-                .map(entry -> {
-                    try {
-                        JsonNode node = mapper.readTree(entry.getValue());
-                        boolean enabled = node.has("enabled") && node.get("enabled").asBoolean(false);
-                        Integer limitValue = (node.has("limitValue") && !node.get("limitValue").isNull())
-                                ? node.get("limitValue").asInt()
-                                : null;
-                        return new PlanFeature(planId, entry.getKey(), enabled, limitValue);
-                    } catch (Exception e) {
-                        return null;
-                    }
-                })
+                .map(
+                        entry -> {
+                            try {
+                                JsonNode node = mapper.readTree(entry.getValue());
+                                boolean enabled =
+                                        node.has("enabled") && node.get("enabled").asBoolean(false);
+                                Integer limitValue =
+                                        (node.has("limitValue") && !node.get("limitValue").isNull())
+                                                ? node.get("limitValue").asInt()
+                                                : null;
+                                return new PlanFeature(planId, entry.getKey(), enabled, limitValue);
+                            } catch (Exception e) {
+                                return null;
+                            }
+                        })
                 .filter(Objects::nonNull)
                 .toList();
     }

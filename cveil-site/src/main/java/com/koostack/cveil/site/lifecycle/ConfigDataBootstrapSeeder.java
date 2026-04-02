@@ -20,21 +20,22 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Idempotent startup task that backfills the event store with {@code iam.role-definition.created}
- * and {@code plan.feature.set} events so that the Redis site projection gets seeded with
- * historical configuration data.
+ * and {@code plan.feature.set} events so that the Redis site projection gets seeded with historical
+ * configuration data.
  *
  * <p>Idempotency: if any {@code iam.role-definition.created} events already exist in the event
  * store, the seed is skipped entirely. This avoids duplicate events on subsequent restarts.
  *
- * <p>Errors on individual rows are logged and skipped — the seeder never aborts the full batch
- * or the application startup.
+ * <p>Errors on individual rows are logged and skipped — the seeder never aborts the full batch or
+ * the application startup.
  */
 public final class ConfigDataBootstrapSeeder {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConfigDataBootstrapSeeder.class);
 
     private static final String SENTINEL_SQL =
-            "SELECT 1 FROM cveilevent.event WHERE event_type = 'iam.role-definition.created' LIMIT 1";
+            "SELECT 1 FROM cveilevent.event WHERE event_type = 'iam.role-definition.created' LIMIT"
+                    + " 1";
 
     private static final String ROLE_DEFINITIONS_SQL =
             "SELECT rd.role_id, rd.tenant_id, rd.scope, rd.display_name, rd.description,"
@@ -80,7 +81,9 @@ public final class ConfigDataBootstrapSeeder {
                 ResultSet rs = ps.executeQuery()) {
             return rs.next();
         } catch (Exception e) {
-            LOG.warn("Bootstrap seeder: sentinel check failed, proceeding with seed: {}", e.getMessage());
+            LOG.warn(
+                    "Bootstrap seeder: sentinel check failed, proceeding with seed: {}",
+                    e.getMessage());
             return false;
         }
     }

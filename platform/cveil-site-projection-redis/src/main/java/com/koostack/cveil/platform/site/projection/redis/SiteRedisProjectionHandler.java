@@ -396,7 +396,9 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
         String createdBy = textOrNull(node, "userId");
         String tenantId = textOrNull(node, "tenantId");
         if (createdBy != null && tenantId != null && tokenPrefix != null) {
-            jedisProvider.get().sadd("site:tokens-by-creator:" + tenantId + ":" + createdBy, tokenPrefix);
+            jedisProvider
+                    .get()
+                    .sadd("site:tokens-by-creator:" + tenantId + ":" + createdBy, tokenPrefix);
         }
 
         log.debug("Projected ACCESS_TOKEN_CREATED userId={} tokenPrefix={}", userId, tokenPrefix);
@@ -409,7 +411,9 @@ public class SiteRedisProjectionHandler implements StreamEventHandler {
 
         String tenantId = textOrNull(node, "tenantId");
         if (tenantId != null) {
-            jedisProvider.get().srem("site:tokens-by-creator:" + tenantId + ":" + userId, tokenPrefix);
+            jedisProvider
+                    .get()
+                    .srem("site:tokens-by-creator:" + tenantId + ":" + userId, tokenPrefix);
         }
 
         log.debug("Projected ACCESS_TOKEN_REVOKED userId={} tokenPrefix={}", userId, tokenPrefix);

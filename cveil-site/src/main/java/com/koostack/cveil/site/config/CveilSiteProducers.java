@@ -508,7 +508,8 @@ public class CveilSiteProducers {
                                     "Cveil Site: KeycloakIdpProvider wired (url={})",
                                     kc.url().get());
 
-                            // Bootstrap: wait for the cveil realm (API service is the primary provisioner)
+                            // Bootstrap: wait for the cveil realm (API service is the primary
+                            // provisioner)
                             String rootEmail = kc.rootEmail().orElse(null);
                             String rootPassword = kc.rootPassword().orElse(null);
                             if (rootEmail != null && rootPassword != null) {

@@ -292,7 +292,8 @@ public class JooqPermissionService implements PermissionService {
                         tenantId,
                         permissions.size());
 
-                publishRoleDefinitionCreated(tenantId, roleId, displayName, description, permissions);
+                publishRoleDefinitionCreated(
+                        tenantId, roleId, displayName, description, permissions);
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
@@ -582,7 +583,10 @@ public class JooqPermissionService implements PermissionService {
                             key,
                             event));
         } catch (Exception e) {
-            LOG.warn("Failed to publish role-definition.created event for {}: {}", roleId, e.getMessage());
+            LOG.warn(
+                    "Failed to publish role-definition.created event for {}: {}",
+                    roleId,
+                    e.getMessage());
         }
     }
 
@@ -602,7 +606,10 @@ public class JooqPermissionService implements PermissionService {
                             key,
                             event));
         } catch (Exception e) {
-            LOG.warn("Failed to publish role-definition.deleted event for {}: {}", roleId, e.getMessage());
+            LOG.warn(
+                    "Failed to publish role-definition.deleted event for {}: {}",
+                    roleId,
+                    e.getMessage());
         }
     }
 }
