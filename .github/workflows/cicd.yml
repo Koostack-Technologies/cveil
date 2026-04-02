@@ -138,18 +138,32 @@ jobs:
             esac
           else
             # Push event — detect changed paths
-            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "")
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+              echo "⚠️ No valid before SHA — using HEAD~1 as fallback"
+              BEFORE="HEAD~1"
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" 2>/dev/null || echo "")
+            echo "Changed files:"
+            echo "$CHANGED"
+
             SHARED_CHANGED=false
             if echo "$CHANGED" | grep -qE '^(common/|build-logic/|cveil-core/|cveil-bundle-core/|platform/|build\.gradle\.kts|settings\.gradle\.kts|gradle\.properties|gradle/)'; then
               SHARED_CHANGED=true
             fi
 
+            # Workflow file changes trigger all app services (api + site)
+            WORKFLOW_CHANGED=false
+            if echo "$CHANGED" | grep -qE '^\.github/workflows/(cicd|ci-service|cd-service)\.yml$'; then
+              WORKFLOW_CHANGED=true
+            fi
+
             API=false; SITE=false; NGINX=false; KEYCLOAK=false
 
-            if echo "$CHANGED" | grep -qE '^cveil-rest-api/' || [ "$SHARED_CHANGED" = "true" ]; then
+            if echo "$CHANGED" | grep -qE '^cveil-rest-api/' || [ "$SHARED_CHANGED" = "true" ] || [ "$WORKFLOW_CHANGED" = "true" ]; then
               API=true
             fi
-            if echo "$CHANGED" | grep -qE '^(cveil-site/|cveil-web/)' || [ "$SHARED_CHANGED" = "true" ]; then
+            if echo "$CHANGED" | grep -qE '^(cveil-site/|cveil-web/)' || [ "$SHARED_CHANGED" = "true" ] || [ "$WORKFLOW_CHANGED" = "true" ]; then
               SITE=true
             fi
             if echo "$CHANGED" | grep -qE '^docker/nginx/'; then
@@ -159,6 +173,7 @@ jobs:
               KEYCLOAK=true
             fi
 
+            echo "Detection: api=$API site=$SITE nginx=$NGINX keycloak=$KEYCLOAK (shared=$SHARED_CHANGED workflow=$WORKFLOW_CHANGED)"
             echo "api=$API" >> "$GITHUB_OUTPUT"
             echo "site=$SITE" >> "$GITHUB_OUTPUT"
             echo "nginx=$NGINX" >> "$GITHUB_OUTPUT"
