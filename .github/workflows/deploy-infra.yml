@@ -296,6 +296,7 @@ jobs:
               gql "mutation { serviceInstanceUpdate(serviceId: \\\"$SVC_ID\\\", environmentId: \\\"$ENV_ID\\\", input: { source: { image: \\\"$IMAGE\\\" } }) }"
             fi
             railway variable set \
+              "RESOLVER=1.1.1.1" \
               "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
               "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
               "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
@@ -307,6 +308,7 @@ jobs:
             sleep 5
             railway link --project "$PROJECT_ID" --environment "$ENV_ID" --service nginx
             railway variable set \
+              "RESOLVER=1.1.1.1" \
               "API_HOST=${{ vars[format('RAILWAY_{0}_API_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
               "API_PORT=${{ vars[format('RAILWAY_{0}_API_PORT', needs.gate.outputs.environment_name)] || '8080' }}" \
               "SITE_HOST=${{ vars[format('RAILWAY_{0}_SITE_PRIVATE_HOST', needs.gate.outputs.environment_name)] }}" \
