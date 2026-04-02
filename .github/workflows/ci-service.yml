@@ -1,0 +1,129 @@
+# =============================================================================
+# Reusable CI — Test + Build + Push Docker image for a Gradle/Quarkus service
+#
+# Called by cicd.yml for api and site services.
+# Runs: Gradle build → Spotless → Unit tests → Integration tests → Docker push
+# =============================================================================
+
+name: "CI: Service"
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service name (api, site)"
+        required: true
+        type: string
+      gradle_module:
+        description: "Gradle module path (e.g. :cveil-rest-api)"
+        required: true
+        type: string
+      dockerfile:
+        description: "Path to Dockerfile"
+        required: true
+        type: string
+      image_name:
+        description: "Full image name without tag (e.g. ghcr.io/koostack-technologies/cveil/api)"
+        required: true
+        type: string
+      image_tag:
+        description: "Primary image tag (e.g. api-v1.2.3 or sha-abc1234)"
+        required: true
+        type: string
+      push_latest:
+        description: "Also tag as latest"
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      image:
+        description: "Full image reference (name:tag)"
+        value: ${{ jobs.build-test.outputs.image }}
+
+jobs:
+  build-test:
+    name: "CI: ${{ inputs.service }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew ${{ inputs.gradle_module }}:build -x test --no-daemon
+
+      - name: Spotless check
+        run: ./gradlew ${{ inputs.gradle_module }}:spotlessCheck --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew ${{ inputs.gradle_module }}:test -PunitOnly --no-daemon
+
+      - name: Integration tests
+        run: ./gradlew ${{ inputs.gradle_module }}:test -PintegrationOnly --no-daemon
+        env:
+          DOCKER_API_VERSION: "1.44"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.service }}-test-reports
+          path: "**/build/reports/tests/test/"
+          retention-days: 14
+
+      - name: Upload test results (JUnit XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.service }}-test-results
+          path: "**/build/test-results/test/*.xml"
+          retention-days: 14
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.image_name }}
+          tags: |
+            type=raw,value=${{ inputs.image_tag }}
+            type=raw,value=latest,enable=${{ inputs.push_latest }}
+            type=sha,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set image output
+        id: push
+        run: echo "image=${{ inputs.image_name }}:${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
