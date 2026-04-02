@@ -1,13 +1,10 @@
-upstream api {
-    server ${API_HOST}:${API_PORT};
-}
-
-upstream site {
-    server ${SITE_HOST}:${SITE_PORT};
-}
+resolver ${RESOLVER} valid=10s ipv6=off;
 
 server {
     listen 80;
+
+    set $api_backend ${API_HOST}:${API_PORT};
+    set $site_backend ${SITE_HOST}:${SITE_PORT};
 
     # -- Health check for load balancers / Railway --------------------------
     location = /healthz {
@@ -17,25 +14,25 @@ server {
     }
 
     # -- Core API endpoints → cveil-rest-api (API-key authenticated) --------
-    location /api/v1/subjects        { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/governance      { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/catalogue       { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/consent         { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/dsar            { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/reports         { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/public          { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/metrics         { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/docs            { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/health          { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/banner          { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/webhooks        { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/platform/tenants  { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/platform/metrics  { proxy_pass http://api; include /etc/nginx/proxy_params; }
-    location /api/v1/platform/docs     { proxy_pass http://api; include /etc/nginx/proxy_params; }
+    location /api/v1/subjects        { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/governance      { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/catalogue       { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/consent         { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/dsar            { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/reports         { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/public          { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/metrics         { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/docs            { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/health          { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/banner          { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/webhooks        { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/tenants  { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/metrics  { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/docs     { proxy_pass http://$api_backend; include /etc/nginx/proxy_params; }
 
     # -- Platform admin endpoints → cveil-site (cookie/JWT authenticated) ---
-    location /api/v1/billing         { proxy_pass http://site; include /etc/nginx/proxy_params; }
-    location /api/v1/platform/iam    { proxy_pass http://site; include /etc/nginx/proxy_params; }
+    location /api/v1/billing         { proxy_pass http://$site_backend; include /etc/nginx/proxy_params; }
+    location /api/v1/platform/iam    { proxy_pass http://$site_backend; include /etc/nginx/proxy_params; }
 
     # -- SSE / WebSocket support (consent graph live updates, etc.) ---------
     proxy_http_version 1.1;
@@ -50,7 +47,7 @@ server {
 
     # -- Everything else (pages, static assets) → cveil-site ----------------
     location / {
-        proxy_pass http://site;
+        proxy_pass http://$site_backend;
         include /etc/nginx/proxy_params;
     }
 }

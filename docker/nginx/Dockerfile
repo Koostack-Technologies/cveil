@@ -10,6 +10,7 @@
 #   API_PORT   — port of the cveil-rest-api service      (default: 8080)
 #   SITE_HOST  — hostname of the cveil-site service      (default: cveil-site)
 #   SITE_PORT  — port of the cveil-site service          (default: 8081)
+#   RESOLVER   — DNS resolver for lazy upstream lookup   (default: 127.0.0.11)
 # =============================================================================
 
 FROM nginx:alpine
@@ -26,7 +27,8 @@ COPY docker/nginx/proxy_params        /etc/nginx/proxy_params
 ENV API_HOST=cveil-api \
     API_PORT=8080 \
     SITE_HOST=cveil-site \
-    SITE_PORT=8081
+    SITE_PORT=8081 \
+    RESOLVER=127.0.0.11
 
 EXPOSE 80
 
