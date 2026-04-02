@@ -312,7 +312,7 @@ jobs:
   ci-api:
     name: "CI: API"
     needs: [gate, resolve-tags]
-    if: needs.gate.outputs.deploy_api == 'true'
+    if: always() && needs.gate.result == 'success' && needs.resolve-tags.result == 'success' && needs.gate.outputs.deploy_api == 'true'
     uses: ./.github/workflows/ci-service.yml
     with:
       service: api
@@ -327,7 +327,7 @@ jobs:
   ci-site:
     name: "CI: Site"
     needs: [gate, resolve-tags]
-    if: needs.gate.outputs.deploy_site == 'true'
+    if: always() && needs.gate.result == 'success' && needs.resolve-tags.result == 'success' && needs.gate.outputs.deploy_site == 'true'
     uses: ./.github/workflows/ci-service.yml
     with:
       service: site
@@ -450,7 +450,7 @@ jobs:
   deploy-api:
     name: "Deploy: API"
     needs: [gate, ci-api]
-    if: needs.gate.outputs.deploy_api == 'true'
+    if: always() && needs.gate.result == 'success' && needs.ci-api.result == 'success' && needs.gate.outputs.deploy_api == 'true'
     uses: ./.github/workflows/cd-service.yml
     with:
       service: api
@@ -464,7 +464,7 @@ jobs:
   deploy-site:
     name: "Deploy: Site"
     needs: [gate, ci-site]
-    if: needs.gate.outputs.deploy_site == 'true'
+    if: always() && needs.gate.result == 'success' && needs.ci-site.result == 'success' && needs.gate.outputs.deploy_site == 'true'
     uses: ./.github/workflows/cd-service.yml
     with:
       service: site
