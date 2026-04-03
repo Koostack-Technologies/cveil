@@ -3,10 +3,13 @@ package com.koostack.cveil.rest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.koostack.cveil.core.exception.CveilAuthException;
 import com.koostack.cveil.core.models.IdentityContext;
 import com.koostack.cveil.core.platform.iam.AccessTokenGenerator;
 import com.koostack.cveil.core.platform.iam.AccessTokenInfo;
 import com.koostack.cveil.core.platform.iam.IamQueryService;
+import com.koostack.cveil.core.platform.iam.IdpProvider;
+import com.koostack.cveil.core.platform.iam.IdpTenantResolver;
 import com.koostack.cveil.rest.config.CveilConfig;
 import com.koostack.cveil.rest.config.PlatformCqrsHolder;
 import com.koostack.cveil.rest.context.CveilRequestHolder;
@@ -20,7 +23,9 @@ import jakarta.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -1226,6 +1231,438 @@ class ApiKeyAuthFilterTest {
 
             verify(requestContext, never()).abortWith(any());
             verify(requestHolder).set(any(IdentityContext.class), any(), any());
+        }
+    }
+
+    // =======================================================================
+    // Access token (cveil_ prefix) authentication
+    // =======================================================================
+
+    @Nested
+    @DisplayName("Access token (cveil_ prefix) authentication")
+    class AccessTokenAuthentication {
+
+        private AccessTokenGenerator.GeneratedToken generatedToken;
+
+        @SuppressWarnings("unchecked")
+        private IamQueryService<Object> iamQueryService;
+
+        @BeforeEach
+        @SuppressWarnings("unchecked")
+        void setUpAccessTokenFlow() {
+            generatedToken = AccessTokenGenerator.generate();
+            iamQueryService = mock(IamQueryService.class);
+            lenient().when(cqrsHolder.isCqrsAvailable()).thenReturn(true);
+            lenient().when(cqrsHolder.iamQueryService()).thenReturn(iamQueryService);
+        }
+
+        private AccessTokenInfo activeTokenInfo(String tenantId, String roles) {
+            return new AccessTokenInfo(
+                    1L,
+                    generatedToken.tokenPrefix(),
+                    "test-pat",
+                    tenantId,
+                    roles,
+                    "active",
+                    Instant.now().plusSeconds(3600),
+                    "test-user",
+                    null,
+                    Instant.now());
+        }
+
+        @Test
+        @DisplayName("valid active access token authenticates successfully")
+        void validActiveAccessToken() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("acme_corp", "admin,consent:write"));
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
+
+            ArgumentCaptor<IdentityContext> identityCaptor =
+                    ArgumentCaptor.forClass(IdentityContext.class);
+            verify(requestHolder).set(identityCaptor.capture(), any(), any());
+
+            IdentityContext identity = identityCaptor.getValue();
+            assertEquals("test-user", identity.subject());
+            assertEquals("acme_corp", identity.tenantId());
+            assertEquals("access-token", identity.provider());
+            assertTrue(identity.roles().contains("admin"));
+            assertTrue(identity.roles().contains("consent:write"));
+        }
+
+        @Test
+        @DisplayName("expired access token returns 401")
+        void expiredAccessToken() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+
+            AccessTokenInfo expiredToken =
+                    new AccessTokenInfo(
+                            1L,
+                            generatedToken.tokenPrefix(),
+                            "test-pat",
+                            "acme_corp",
+                            "admin",
+                            "active",
+                            Instant.now().minusSeconds(3600),
+                            "test-user",
+                            null,
+                            Instant.now());
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(expiredToken);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("revoked access token returns 401")
+        void revokedAccessToken() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+
+            AccessTokenInfo revokedToken =
+                    new AccessTokenInfo(
+                            1L,
+                            generatedToken.tokenPrefix(),
+                            "test-pat",
+                            "acme_corp",
+                            "admin",
+                            "revoked",
+                            Instant.now().plusSeconds(3600),
+                            "test-user",
+                            null,
+                            Instant.now());
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(revokedToken);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("access token with invalid checksum returns 401")
+        void invalidChecksumAccessToken() throws IOException {
+            String malformedToken = "cveil_invalidchecksum9999999999999999";
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + malformedToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(malformedToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(malformedToken)).thenReturn(false);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("access token when CQRS unavailable returns 401")
+        void cqrsUnavailableAccessToken() throws IOException {
+            when(cqrsHolder.isCqrsAvailable()).thenReturn(false);
+
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("access token not found in database returns 401")
+        void accessTokenNotFound() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(null);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("valid access token sets SecurityContext with correct roles")
+        void accessTokenSetsSecurityContext() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("acme_corp", "consent:read"));
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
+
+            ArgumentCaptor<SecurityContext> secCaptor =
+                    ArgumentCaptor.forClass(SecurityContext.class);
+            verify(requestContext).setSecurityContext(secCaptor.capture());
+
+            SecurityContext sc = secCaptor.getValue();
+            assertTrue(sc.isUserInRole("consent:read"));
+            assertFalse(sc.isUserInRole("super-admin"));
+        }
+
+        @Test
+        @DisplayName("valid access token stores IdentityContext as request property")
+        void accessTokenStoresRequestProperty() throws IOException {
+            givenAuthenticatedEndpoint("api/v1/subjects/consent/grant");
+            givenAuthHeader("Bearer " + generatedToken.plaintextToken());
+            when(bootstrapLifecycle.isActiveBootstrapKey(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(generatedToken.plaintextToken()))
+                    .thenReturn(false);
+            when(iamQueryService.findAccessTokenByHash(generatedToken.tokenHash()))
+                    .thenReturn(activeTokenInfo("acme_corp", "admin"));
+
+            filter.filter(requestContext);
+
+            verify(requestContext)
+                    .setProperty(
+                            eq(ApiKeyAuthFilter.IDENTITY_CONTEXT_PROPERTY),
+                            any(IdentityContext.class));
+        }
+    }
+
+    // =======================================================================
+    // JWT token authentication
+    // =======================================================================
+
+    @Nested
+    @DisplayName("JWT token authentication")
+    class JwtAuthentication {
+
+        @SuppressWarnings("unchecked")
+        @Mock
+        private Instance<IdpTenantResolver> idpTenantResolverInstance;
+
+        @Mock private IdpTenantResolver idpTenantResolver;
+
+        @Mock private IdpProvider<?> idpProvider;
+
+        @BeforeEach
+        void setUpJwtFlow() throws Exception {
+            injectField(filter, "idpTenantResolverInstance", idpTenantResolverInstance);
+        }
+
+        /**
+         * Builds a minimal JWT-shaped token (3 dot-separated base64url segments) with the given
+         * payload claims. The signature segment is a dummy value.
+         */
+        private String buildJwtToken(Map<String, String> claims) {
+            String header =
+                    Base64.getUrlEncoder()
+                            .withoutPadding()
+                            .encodeToString(
+                                    "{\"alg\":\"RS256\",\"typ\":\"JWT\"}"
+                                            .getBytes(StandardCharsets.UTF_8));
+            StringBuilder payload = new StringBuilder("{");
+            int i = 0;
+            for (var entry : claims.entrySet()) {
+                if (i++ > 0) payload.append(",");
+                payload.append("\"")
+                        .append(entry.getKey())
+                        .append("\":\"")
+                        .append(entry.getValue())
+                        .append("\"");
+            }
+            payload.append("}");
+            String encodedPayload =
+                    Base64.getUrlEncoder()
+                            .withoutPadding()
+                            .encodeToString(payload.toString().getBytes(StandardCharsets.UTF_8));
+            String signature =
+                    Base64.getUrlEncoder()
+                            .withoutPadding()
+                            .encodeToString("fake-signature".getBytes(StandardCharsets.UTF_8));
+            return header + "." + encodedPayload + "." + signature;
+        }
+
+        @Test
+        @DisplayName("valid JWT token routes to IdP verification and authenticates")
+        void validJwtAuthenticates() throws IOException {
+            String jwtToken =
+                    buildJwtToken(
+                            Map.of(
+                                    "sub", "user-123",
+                                    "tenant_id", "acme_corp",
+                                    "iss", "https://idp.example.com/realms/acme_corp"));
+
+            givenAuthenticatedEndpoint("api/v1/consent/evaluate");
+            givenAuthHeader("Bearer " + jwtToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(jwtToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(jwtToken)).thenReturn(false);
+
+            when(idpTenantResolverInstance.isResolvable()).thenReturn(true);
+            when(idpTenantResolverInstance.get()).thenReturn(idpTenantResolver);
+            doReturn(idpProvider).when(idpTenantResolver).defaultProvider();
+            when(idpProvider.isAvailable()).thenReturn(true);
+            doReturn(idpProvider).when(idpTenantResolver).resolve("acme_corp");
+
+            IdentityContext jwtIdentity =
+                    new IdentityContext(
+                            "user-123",
+                            jwtToken,
+                            "user@example.com",
+                            Set.of("admin"),
+                            Map.of(),
+                            "acme_corp",
+                            "keycloak");
+            when(idpProvider.verifyToken("acme_corp", jwtToken)).thenReturn(jwtIdentity);
+
+            filter.filter(requestContext);
+
+            verify(requestContext, never()).abortWith(any());
+            ArgumentCaptor<IdentityContext> identityCaptor =
+                    ArgumentCaptor.forClass(IdentityContext.class);
+            verify(requestHolder).set(identityCaptor.capture(), any(), any());
+
+            IdentityContext captured = identityCaptor.getValue();
+            assertEquals("user-123", captured.subject());
+            assertEquals("acme_corp", captured.tenantId());
+        }
+
+        @Test
+        @DisplayName("JWT with no tenant in payload returns 401")
+        void jwtNoTenantInPayload() throws IOException {
+            // JWT without tenant_id, tenantId, or realm-based issuer
+            String jwtToken =
+                    buildJwtToken(
+                            Map.of(
+                                    "sub", "user-123",
+                                    "iss", "https://generic-idp.example.com"));
+
+            givenAuthenticatedEndpoint("api/v1/consent/evaluate");
+            givenAuthHeader("Bearer " + jwtToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(jwtToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(jwtToken)).thenReturn(false);
+
+            when(idpTenantResolverInstance.isResolvable()).thenReturn(true);
+            when(idpTenantResolverInstance.get()).thenReturn(idpTenantResolver);
+            doReturn(idpProvider).when(idpTenantResolver).defaultProvider();
+            when(idpProvider.isAvailable()).thenReturn(true);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("JWT when IdP resolver unavailable returns 401")
+        void jwtIdpResolverUnavailable() throws IOException {
+            String jwtToken =
+                    buildJwtToken(
+                            Map.of(
+                                    "sub", "user-123",
+                                    "tenant_id", "acme_corp"));
+
+            givenAuthenticatedEndpoint("api/v1/consent/evaluate");
+            givenAuthHeader("Bearer " + jwtToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(jwtToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(jwtToken)).thenReturn(false);
+
+            when(idpTenantResolverInstance.isResolvable()).thenReturn(false);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("JWT when default IdP provider not available returns 401")
+        void jwtDefaultProviderNotAvailable() throws IOException {
+            String jwtToken =
+                    buildJwtToken(
+                            Map.of(
+                                    "sub", "user-123",
+                                    "tenant_id", "acme_corp"));
+
+            givenAuthenticatedEndpoint("api/v1/consent/evaluate");
+            givenAuthHeader("Bearer " + jwtToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(jwtToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(jwtToken)).thenReturn(false);
+
+            when(idpTenantResolverInstance.isResolvable()).thenReturn(true);
+            when(idpTenantResolverInstance.get()).thenReturn(idpTenantResolver);
+            doReturn(idpProvider).when(idpTenantResolver).defaultProvider();
+            when(idpProvider.isAvailable()).thenReturn(false);
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("JWT verification failure (CveilAuthException) returns 401")
+        void jwtVerificationFailure() throws IOException {
+            String jwtToken =
+                    buildJwtToken(
+                            Map.of(
+                                    "sub", "user-123",
+                                    "tenant_id", "acme_corp"));
+
+            givenAuthenticatedEndpoint("api/v1/consent/evaluate");
+            givenAuthHeader("Bearer " + jwtToken);
+            when(bootstrapLifecycle.isActiveBootstrapKey(jwtToken)).thenReturn(false);
+            when(bootstrapLifecycle.isBootstrapKeyValue(jwtToken)).thenReturn(false);
+
+            when(idpTenantResolverInstance.isResolvable()).thenReturn(true);
+            when(idpTenantResolverInstance.get()).thenReturn(idpTenantResolver);
+            doReturn(idpProvider).when(idpTenantResolver).defaultProvider();
+            when(idpProvider.isAvailable()).thenReturn(true);
+            doReturn(idpProvider).when(idpTenantResolver).resolve("acme_corp");
+            when(idpProvider.verifyToken("acme_corp", jwtToken))
+                    .thenThrow(new CveilAuthException("Token signature verification failed"));
+
+            filter.filter(requestContext);
+
+            Response abortResponse = captureAbort();
+            assertEquals(401, abortResponse.getStatus());
+            verify(requestHolder, never()).set(any(), any(), any());
         }
     }
 }
