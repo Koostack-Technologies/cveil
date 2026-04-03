@@ -45,6 +45,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Install Rust toolchain + WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
